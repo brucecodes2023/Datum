@@ -354,6 +354,16 @@ come from a \code{\#BruceWorxNavPill} block in \file{BruceWorx.qss}; dark mode h
 the toolbar. Switch on Preferences $\rightarrow$ BruceWorx, on. Tests: 20 pure-logic tests; every button clicked
 in a GUI run, light and dark captured.
 
+\paragraph{5a. Navigation pill orbit centre (done).} The pill's orbit turns either about the point the camera looks
+at (the focal point) or about the last clicked point: the point on the model under the pointer where the drag
+starts, or the focal plane there when nothing is under it. The pick is the one a mouse orbit makes
+(\code{NavigationStyle::saveCursorPosition}). It becomes FreeCAD's rotation centre, with ``Window center'' treated
+as ``Drag at cursor''. A small [BW] binding exposes \code{getRotationCenter}, \code{setRotationCenter} and
+\code{findRotationCenter} on \code{NavigationStyle} to Python. Choice on Preferences $\rightarrow$ BruceWorx
+(``Navigation pill orbits about'', \code{NavPillOrbitCenter}), default the last clicked point. Tests: 5 pure-logic
+tests for the pivoted orbit; a GUI run checked that the clicked model point stays fixed on screen in one mode and
+the focal point in the other.
+
 \paragraph{6. Document tabs on top and status-bar readouts (done).} The tab position is a preference,
 \code{MainWindow/DocumentTabPos} (stock \code{South}; the pack sets \code{North}). The tabs sit in a thin row under
 the toolbars, and the Browser and Tasks panels now start below them. A modified document shows a dot in place of

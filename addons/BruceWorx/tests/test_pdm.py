@@ -61,6 +61,7 @@ class LifecycleTests(unittest.TestCase):
         rev = self.vault.items[PART].latest
         self.assertEqual((rev.code, rev.state), ("01", WIP))
         self.assertTrue(rev.editable)
+        self.assertEqual(self.vault.items[PART].state, pdm.INITIAL_STATE)
 
     def test_reject_moves_to_next_number(self):
         self.vault.submit(PART)
@@ -121,6 +122,7 @@ class LifecycleTests(unittest.TestCase):
         self.vault.set_bom(ASSY, [])
         self.vault.retire(PART)
         self.assertEqual(self.vault.items[PART].revisions[-1].state, OBSOLETE)
+        self.assertEqual(self.vault.items[PART].state, OBSOLETE)
 
     # helpers
     def _release(self, pn):

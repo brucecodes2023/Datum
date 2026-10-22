@@ -242,6 +242,68 @@ class SyncServiceTests(_TempDir, unittest.TestCase):
         self.assertEqual(FolderVault(self.tmp).ref["vault_id"], self.vault.ref["vault_id"])
 
 
+class ListenerTests(_TempDir, unittest.TestCase):
+    """Listeners hear state changes; FreeCAD writes the part's LifecycleState from them."""
+
+    def setUp(self):
+        super().setUp()
+        self.vault = FolderVault.init(os.path.join(self.tmp, "v"), "States", actor="bruce@mac")
+        self.heard = []
+        self.vault.add_listener(self.heard.append)
+
+    def test_each_transition_is_heard_once(self):
+        self.vault.create_item(PART)
+        self.vault.submit(PART)
+        self.vault.reject(PART, "too thin")
+        self.vault.submit(PART)
+        self.vault.approve(PART)
+        self.assertEqual(self.heard, [{PART: WIP}, {PART: IN_REVIEW}, {PART: WIP}, {PART: IN_REVIEW},
+                                      {PART: RELEASED}])
+        self.assertEqual(self.vault.states(), {PART: RELEASED})
+        self.assertEqual(self.vault.state_of(PART), RELEASED)
+        self.assertIsNone(self.vault.state_of("NOPE"))
+
+    def test_file_operations_change_no_state(self):
+        self.vault.create_item(PART)
+        del self.heard[:]
+        self.vault.checkout(PART)
+        model = os.path.join(self.tmp, "plate.FCStd")
+        with open(model, "w", encoding="utf-8") as handle:
+            handle.write("v1")
+        self.vault.checkin(PART, model)
+        self.assertEqual(self.heard, [])
+
+    def test_refresh_reports_other_devices_changes(self):
+        self.vault.create_item(PART)
+        other = FolderVault(self.vault.root, actor="bruce@laptop")
+        other.submit(PART)
+        del self.heard[:]
+        self.vault.refresh()
+        self.assertEqual(self.heard, [{PART: IN_REVIEW}])
+
+    def test_failing_listener_does_not_undo_the_event(self):
+        def broken(_changes):
+            raise RuntimeError("document closed")
+
+        self.vault.add_listener(broken)
+        self.vault.create_item(PART)
+        self.assertEqual(FolderVault(self.vault.root).state_of(PART), WIP)
+        self.assertIn("state listener failed: document closed", self.vault.problems)
+        self.vault.remove_listener(broken)
+        self.vault.submit(PART)
+        self.assertEqual(len(self.vault.problems), 1)
+
+    def test_ops_open_and_release_every_item_they_touch(self):
+        self.vault.create_item(PART)
+        self.vault.submit(PART)
+        self.vault.approve(PART)
+        self.vault.raise_ecr("ECR-1", "thicker", [PART])
+        self.vault.decide_ecr("ECR-1", True)
+        del self.heard[:]
+        self.vault.open_eco("ECO-1", ["ECR-1"])
+        self.assertEqual(self.heard, [{PART: WIP}])
+
+
 class CliTests(_TempDir, unittest.TestCase):
     def _run(self, *argv):
         import contextlib

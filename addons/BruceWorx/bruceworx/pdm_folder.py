@@ -30,6 +30,11 @@ Sync-service hazards handled here:
   and renamed when complete; reads verify the SHA-256.
 * A journal entry can arrive before its object: :meth:`FolderVault.missing_objects`
   lists them and :meth:`FolderVault.fetch` says so instead of failing oddly.
+
+Listeners (:meth:`FolderVault.add_listener`) hear which items changed
+lifecycle state, after an operation is recorded or a refresh replays new
+events. FreeCAD uses this to write the part's ``LifecycleState`` property
+(``bruceworx.partprops.attach_vault``); this module stays free of FreeCAD.
 """
 
 from __future__ import annotations
@@ -166,6 +171,8 @@ class FolderVault:
             )
         self.actor = _ACTOR_SAFE.sub("-", actor) if actor else default_actor()
         self.journal_path = os.path.join(self.root, JOURNAL, f"{self.actor}.jsonl")
+        self.listeners: list = []
+        self.model = None
         self.refresh()
 
     # ----- creation -----------------------------------------------------
@@ -195,6 +202,7 @@ class FolderVault:
 
     def refresh(self):
         """Rebuild all state from the journal (after a sync, or on open)."""
+        before = self.states() if self.model is not None else None
         self.model = pdm.Vault()
         self.versions: dict[str, list[FileVersion]] = {}
         self.locks: dict[str, str] = {}
@@ -210,6 +218,8 @@ class FolderVault:
                 self._apply(event)
             except (LifecycleError, ValueError, KeyError) as exc:
                 self.problems.append(f"{event.at} {event.actor} {event.op}: {exc}")
+        if before is not None:
+            self._notify(before)
 
     def _read_events(self) -> list[Event]:
         folder = os.path.join(self.root, JOURNAL)
@@ -293,6 +303,7 @@ class FolderVault:
         A refused operation writes nothing."""
         self._seq += 1
         event = Event(str(uuid.uuid4()), self.actor, self._seq, _now(), op, _jsonable(args))
+        before = self.states()
         try:
             result = self._apply(event)
         except Exception:
@@ -304,7 +315,37 @@ class FolderVault:
             handle.flush()
             os.fsync(handle.fileno())
         self._seen.add(event.id)
+        self._notify(before)
         return result
+
+    # ----- lifecycle state listeners ---------------------------------------
+
+    def add_listener(self, listener):
+        """Call ``listener({part_number: state})`` whenever items change state."""
+        if listener not in self.listeners:
+            self.listeners.append(listener)
+
+    def remove_listener(self, listener):
+        if listener in self.listeners:
+            self.listeners.remove(listener)
+
+    def states(self) -> dict:
+        """Every item's lifecycle state (:attr:`pdm.Item.state`), by part number."""
+        return {pn: item.state for pn, item in self.model.items.items()}
+
+    def state_of(self, part_number) -> str | None:
+        item = self.model.items.get(part_number)
+        return item.state if item is not None else None
+
+    def _notify(self, before: dict):
+        changes = {pn: state for pn, state in self.states().items() if before.get(pn) != state}
+        if not changes:
+            return
+        for listener in list(self.listeners):
+            try:
+                listener(dict(changes))
+            except Exception as exc:  # noqa: BLE001 -- the event is recorded; a listener cannot undo it
+                self.problems.append(f"state listener failed: {exc}")
 
     # pdm.Vault surface: same names and arguments, so the contract tests run
     # unchanged against a folder.
@@ -449,7 +490,7 @@ class FolderVault:
                 "type": item.item_type,
                 "description": item.description,
                 "revision": rev.code,
-                "state": rev.state,
+                "state": item.state,
                 "released": item.released.code if item.released else None,
                 "display": pdm.display_part_number(pn, rev.code),
                 "checked_out_by": self.locks.get(pn),

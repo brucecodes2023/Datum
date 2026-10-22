@@ -126,6 +126,20 @@ class RowInfoTests(unittest.TestCase):
         part = Obj("App::Part", "Bracket", PartNumber="X", Revision="A", State="WIP")
         self.assertEqual(bb.row_info(part)[1], [("X", ""), ("WIP A", "warn")])
 
+    def test_vault_state_wins_over_the_revision_guess(self):
+        # The vault's LifecycleState, whatever the revision code suggests.
+        cases = (("02", "In Review", ("REVIEW 02", "accent")), ("A", "WIP", ("WIP A", "warn")),
+                 ("01", "Released", ("REV 01", "")), ("B", "Obsolete", ("OBSOLETE B", "dim")))
+        for rev, state, badge in cases:
+            part = Obj("App::Part", "Bracket", PartNumber="X", Revision=rev, LifecycleState=state)
+            self.assertEqual(bb.row_info(part)[1], [("X", ""), badge], state)
+
+    def test_revision_guess_only_without_a_state(self):
+        part = Obj("App::Part", "Bracket", PartNumber="X", Revision="A")
+        self.assertEqual(bb.row_info(part)[1], [("X", ""), ("REV A", "")])
+        part = Obj("App::Part", "Bracket", PartNumber="X", Revision="03", LifecycleState="")
+        self.assertEqual(bb.row_info(part)[1], [("X", ""), ("WIP 03", "warn")])
+
     def test_part_without_values_gets_nothing(self):
         part = Obj("App::Part", "Bracket", PartNumber="", Revision="")
         self.assertEqual(bb.row_info(part), ("", []))
@@ -142,6 +156,15 @@ class RowInfoTests(unittest.TestCase):
         pad = Obj("PartDesign::Pad", "Base", Type="Length", Length=Q(8))
         self.assertEqual(bb.row_info(pad, summary=False), ("", []))
         self.assertEqual(bb.row_info(pad), ("Pad 8 mm", []))
+
+    def test_pattern_with_held_instances(self):
+        part = Obj("App::Part", "Bolt", PartNumber="", Revision="")
+        pattern = Obj("App::Link", "Bolt pattern", HeldInstances=["Pattern_i1"])
+        pattern.getLinkedObject = lambda recursive=True: part
+        self.assertEqual(bb.row_info(pattern), ("", [("1 held", "warn")]))
+        self.assertEqual(bb.row_info(pattern, badges=False), ("", []))
+        pattern.HeldInstances = []
+        self.assertEqual(bb.row_info(pattern), ("", []))
 
     def test_hook_never_raises(self):
         class Broken:

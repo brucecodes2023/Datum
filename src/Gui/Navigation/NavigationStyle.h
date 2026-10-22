@@ -230,6 +230,10 @@ public:
     void setViewing(SbBool);
 
     SbVec3f getRotationCenter(SbBool&) const;
+    /// [BW] Set the rotation center as a mouse orbit starting at pixel pos would (origin bottom
+    /// left), picking at the cursor when the rotation mode is "Window center". Used by the
+    /// navigation pill from Python.
+    void findRotationCenter(const SbVec2s& pos);
 
     std::optional<SbVec2s>& getRightClickPosition();
 

@@ -270,6 +270,19 @@ def refMissing(ref):
     return ""
 
 
+def heldOffPattern(joint):
+    """[BW] True when the joint holds a BruceWorx pattern instance away from its
+    place in the pattern (the pattern lists it in HeldInstances)."""
+    try:
+        import bruceworx_pattern
+    except ImportError:
+        return False
+    try:
+        return bool(bruceworx_pattern.held_by(joint))
+    except Exception:
+        return False
+
+
 def readingText(value, decimals):
     """[BW] A reading as text; one that rounds to zero shows 0.0, not -0.0."""
     return f"{round(value, decimals) + 0.0:.{decimals}f}"
@@ -1467,6 +1480,9 @@ class ViewProviderJoint:
             if part is not None and not assembly.isPartConnected(part):
                 overlays[Gui.IconPosition.BottomLeft] = "Part_Detached"
 
+        if heldOffPattern(self.app_obj):  # [BW]
+            overlays[Gui.IconPosition.BottomRight] = "Warning"
+
         return overlays
 
     def dumps(self):
@@ -1702,6 +1718,12 @@ class ViewProviderGroundedJoint:
 
     def getIcon(self):
         return ":/icons/Assembly_ToggleGrounded.svg"
+
+    def getOverlayIcons(self):
+        """[BW] A warning when this holds a pattern instance off its place."""
+        if heldOffPattern(self.app_obj):
+            return {Gui.IconPosition.BottomRight: "Warning"}
+        return {}
 
     def dumps(self):
         """When saving the document this object gets stored using Python's json module.\

@@ -31,7 +31,7 @@ from bruceworx.tree import document_tree
 COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault")
 VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
-    "submit", "approve", "reject", "fetch",
+    "submit", "approve", "reject", "fetch", "sync",
 )
 _ENTRY_NAMES = {"hooks.py", "hooks"}
 
@@ -112,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--type", default="part", help="create: part, assembly, drawing or cots")
     vault.add_argument("--description", default="")
     vault.add_argument("--drawing-of", default="", help="create: the part a drawing documents")
-    vault.add_argument("--file", default="", help="checkin: the saved .FCStd")
+    vault.add_argument("--file", default="", help="checkin: the saved .FCStd; sync: the .FCStd to update")
     vault.add_argument("--workspace", default="", help="checkout/fetch: copy the file here")
     vault.add_argument("--comment", default="", help="checkin comment or reject reason")
     vault.add_argument("--actor", default="", help="Who is acting (default: user@host)")
@@ -321,7 +321,14 @@ def _vault_command(args) -> int:
         emit({"ok": True, "command": "vault init", "ref": vault.ref_path, "vault_id": vault.ref["vault_id"]})
         return 0
     vault = FolderVault(args.vault, actor=actor)
+    if freecad_io.freecad_available():
+        # Inside FreeCAD: open parts follow their lifecycle state.
+        from bruceworx import partprops  # noqa: PLC0415
+
+        partprops.attach_vault(vault)
     payload = {"ok": True, "command": f"vault {args.action}"}
+    if args.action == "sync":
+        return _vault_sync(vault, args, payload)
     if args.action != "status":
         if not args.pn:
             raise ValueError(f"vault {args.action} needs --pn")
@@ -348,7 +355,27 @@ def _vault_command(args) -> int:
         payload.update(vault.status())
     elif args.pn in vault.items:
         payload["revision"] = vault.items[args.pn].latest.code
-        payload["state"] = vault.items[args.pn].latest.state
+        payload["state"] = vault.items[args.pn].state
+    emit(payload)
+    return 0
+
+
+def _vault_sync(vault, args, payload) -> int:
+    """Write the vault's lifecycle states into a saved document (FreeCAD needed)."""
+    freecad_io.require_freecad()
+    if not args.file:
+        raise ValueError("vault sync needs --file")
+    _require_fcstd(args.file)
+    from bruceworx import partprops  # noqa: PLC0415
+
+    doc = freecad_io.open_document(args.file)
+    try:
+        changed = partprops.sync_states(doc, vault.states())
+        if changed:
+            doc.save()
+    finally:
+        freecad_io.close_document(doc)
+    payload.update({"file": os.path.abspath(args.file), "changed": changed})
     emit(payload)
     return 0
 

@@ -26,6 +26,14 @@ Computed values (material name, mass) follow the part: a document observer
 when a body's material, shape or a part's contents change, so ``apply`` is
 needed once, not after every change. FreeCAD's "Default" material counts as
 no material: no name and no mass.
+
+``LifecycleState`` is the vault's: an enumeration of the lifecycle states in
+``bruceworx/pdm.py``, read-only in the property editor. Only the vault
+writes it (:func:`set_state`): :func:`attach_vault` makes a vault opened in
+FreeCAD write it on every transition, and the observer syncs it from the
+vault named by ``BruceWorx/VaultPath`` when a document is opened. It is not
+called ``State``: that name is FreeCAD's ``obj.State`` (Touched, Invalid,
+...), and a property of that name would hide it.
 """
 
 from __future__ import annotations
@@ -134,6 +142,9 @@ class Schema:
                 raise SchemaError(
                     f"{layer}: {name} is {existing.type} in {existing.layer}; a layer cannot change its type"
                 )
+            if existing.source == "pdm" and existing.type == "enum" and \
+                    list(entry.get("values", existing.values)) != list(existing.values):
+                raise SchemaError(f"{layer}: {name} lists the vault's states; a layer cannot change them")
             existing._update(entry, layer)
         self.layers.append(layer)
         return self
@@ -188,10 +199,15 @@ class Schema:
                     continue
                 if prop.type == "enum":
                     _set_enum(obj, prop, keep=True)
+            elif hasattr(obj, prop.name):
+                report["conflicts"].append(f"{prop.name} would hide FreeCAD's {type(obj).__name__}.{prop.name}")
+                continue
             else:
                 self._add(obj, prop)
                 report["added"].append(prop.name)
             obj.setEditorMode(prop.name, ["ReadOnly"] if prop.readonly else [])
+            if prop.name == STATE:
+                _no_touch(obj)
         watch(self)
         if compute:
             conflicted = _conflicted(report)
@@ -224,6 +240,111 @@ def load_schema(extra_layers: list[str] | None = None, user_layer: bool = True) 
             schema = Schema(raw.get("group", "BruceWorx"))
         schema.add_layer(raw, path)
     return schema
+
+
+# ----- lifecycle state (written by the vault only) ---------------------------------
+
+STATE = "LifecycleState"
+PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
+
+
+def set_state(obj, state: str, schema: Schema | None = None) -> bool:
+    """Write the vault's lifecycle ``state`` into ``obj``, adding the property
+    if the part does not have it yet. Returns whether anything changed (an
+    unchanged value is not written, so the document is not marked modified)."""
+    schema = schema or load_schema()
+    prop = schema.properties.get(STATE)
+    if prop is None:
+        raise SchemaError(f"the part-property schema has no {STATE}")
+    if state not in prop.values:
+        raise ValueError(f"{state!r} is not a lifecycle state ({', '.join(prop.values)})")
+    added = STATE not in obj.PropertiesList
+    if added:
+        if hasattr(obj, STATE):
+            raise SchemaError(f"{STATE} would hide FreeCAD's {type(obj).__name__}.{STATE}")
+        schema._add(obj, prop)
+        obj.setEditorMode(STATE, ["ReadOnly"])
+    elif obj.getTypeIdOfProperty(STATE) != prop.freecad_type:
+        raise SchemaError(f"{STATE} is {obj.getTypeIdOfProperty(STATE)}, schema says {prop.freecad_type}")
+    else:
+        choices = getattr(obj, "getEnumerationsOfProperty", lambda _name: None)(STATE)
+        if choices is not None and list(choices) != list(prop.values):
+            _set_enum(obj, prop, keep=True)
+    if getattr(obj, STATE) == state:
+        return added
+    _no_touch(obj)
+    setattr(obj, STATE, state)
+    return True
+
+
+def _no_touch(obj):
+    """A state change needs no recompute: mark the property Output, so writing
+    it does not touch the part (the document still counts as modified)."""
+    if hasattr(obj, "setPropertyStatus"):
+        obj.setPropertyStatus(STATE, "Output")
+
+
+def part_number_of(obj) -> str:
+    if "PartNumber" not in getattr(obj, "PropertiesList", ()):
+        return ""
+    return str(getattr(obj, "PartNumber", "") or "").strip()
+
+
+def sync_states(doc, states: dict, schema: Schema | None = None) -> list[str]:
+    """Set ``LifecycleState`` on every object in ``doc`` whose PartNumber is in
+    ``states`` (part number -> state). Returns the names of objects changed."""
+    targets = [(obj, states[pn]) for obj in doc.Objects if (pn := part_number_of(obj)) in states]
+    if not targets:
+        return []
+    schema = schema or load_schema()
+    return [obj.Name for obj, state in targets if set_state(obj, state, schema)]
+
+
+def attach_vault(vault):
+    """Have ``vault`` (a FolderVault in this FreeCAD session) write the state of
+    every open part whose number changes state. Returns the listener."""
+    vault.add_listener(_write_open_documents)
+    return _write_open_documents
+
+
+def _write_open_documents(changes: dict):
+    import FreeCAD  # noqa: PLC0415
+
+    if not _sync_on(FreeCAD):
+        return
+    for doc in FreeCAD.listDocuments().values():
+        sync_states(doc, changes)
+
+
+def _sync_on(FreeCAD) -> bool:  # noqa: N803
+    """Preferences/BruceWorx/VaultStateSync (default on)."""
+    try:
+        return bool(FreeCAD.ParamGet(PREFS_PATH).GetBool("VaultStateSync", True))
+    except AttributeError:  # no parameters (tests)
+        return True
+
+
+def vault_path() -> str:
+    """The vault FreeCAD syncs from (Preferences/BruceWorx/VaultPath), or ""."""
+    import FreeCAD  # noqa: PLC0415
+
+    if not _sync_on(FreeCAD):
+        return ""
+    return FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
+
+
+def sync_from_vault(doc, path: str | None = None) -> list[str]:
+    """Set the state of ``doc``'s parts from the vault's record (default: the
+    VaultPath preference). Parts the vault does not know are left alone."""
+    if not any(part_number_of(obj) for obj in doc.Objects):
+        return []  # no vault read for documents without part numbers
+    path = vault_path() if path is None else path
+    if not path:
+        return []
+    from bruceworx.pdm_folder import FolderVault  # noqa: PLC0415
+
+    vault = FolderVault(os.path.expanduser(path))
+    return sync_states(doc, vault.states())
 
 
 # ----- computed values ---------------------------------------------------------
@@ -328,6 +449,30 @@ class _Observer:
 
     def __init__(self):
         self.busy = False
+        self.synced = set()  # (document name, file) whose states came from the vault
+
+    def slotActivateDocument(self, _doc):
+        """After a file opens FreeCAD activates it: sync the lifecycle states of
+        every opened document not synced yet (the parts an assembly loaded too)."""
+        import FreeCAD  # noqa: PLC0415
+
+        for doc in list(FreeCAD.listDocuments().values()):
+            key = (doc.Name, doc.FileName)
+            if not doc.FileName or key in self.synced or doc.Restoring:
+                continue
+            self.synced.add(key)
+            try:
+                changed = sync_from_vault(doc)
+            except Exception as exc:  # noqa: BLE001 -- vault offline or unreadable: keep the saved states
+                FreeCAD.Console.PrintLog(f"BruceWorx lifecycle state: {doc.Name}: {exc}\n")
+                continue
+            if changed:
+                FreeCAD.Console.PrintMessage(
+                    f"BruceWorx: lifecycle state of {', '.join(changed)} in {doc.Label} updated from the vault\n"
+                )
+
+    def slotDeletedDocument(self, doc):
+        self.synced = {key for key in self.synced if key[0] != doc.Name}
 
     def slotChangedObject(self, obj, prop):
         if prop not in self.WATCH or self.busy or not _WATCHED:
@@ -357,7 +502,8 @@ _OBSERVER = None
 
 def install_observer():
     """Start refreshing computed properties (once per session). Watches the
-    built-in and user layers now, and every schema applied later."""
+    built-in and user layers now, and every schema applied later. Also takes
+    parts' lifecycle states from the vault when a document opens."""
     global _OBSERVER
     if _OBSERVER is not None:
         return _OBSERVER

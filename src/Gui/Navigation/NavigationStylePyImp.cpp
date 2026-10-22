@@ -24,6 +24,8 @@
 #include "Navigation/NavigationStylePy.h"
 #include "Navigation/NavigationStylePy.cpp"
 
+#include <Base/VectorPy.h>  // [BW]
+
 
 using namespace Gui;
 
@@ -37,6 +39,50 @@ using namespace Gui;
 std::string NavigationStylePy::representation() const
 {
     return {"<NavigationStyle object>"};
+}
+
+// [BW] Rotation center access for the BruceWorx navigation pill.
+namespace
+{
+PyObject* rotationCenterOrNone(const NavigationStyle* style)
+{
+    SbBool found = false;
+    SbVec3f center = style->getRotationCenter(found);
+    if (!found) {
+        Py_Return;
+    }
+    return new Base::VectorPy(Base::Vector3d(center[0], center[1], center[2]));
+}
+}  // namespace
+
+PyObject* NavigationStylePy::getRotationCenter(PyObject* args) const
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+    return rotationCenterOrNone(getNavigationStylePtr());
+}
+
+PyObject* NavigationStylePy::setRotationCenter(PyObject* args)
+{
+    PyObject* point = nullptr;
+    if (!PyArg_ParseTuple(args, "O!", &Base::VectorPy::Type, &point)) {
+        return nullptr;
+    }
+    Base::Vector3d v = *static_cast<Base::VectorPy*>(point)->getVectorPtr();
+    getNavigationStylePtr()->setRotationCenter(SbVec3f(float(v.x), float(v.y), float(v.z)));
+    Py_Return;
+}
+
+PyObject* NavigationStylePy::findRotationCenter(PyObject* args)
+{
+    int x = 0;
+    int y = 0;
+    if (!PyArg_ParseTuple(args, "ii", &x, &y)) {
+        return nullptr;
+    }
+    getNavigationStylePtr()->findRotationCenter(SbVec2s(short(x), short(y)));
+    return rotationCenterOrNone(getNavigationStylePtr());
 }
 
 PyObject* NavigationStylePy::getCustomAttributes(const char* /*attr*/) const

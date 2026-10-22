@@ -99,6 +99,26 @@ existing ones:
 The panel itself (checkbox, \emph{Pick datums}, reading) needs the screen: steps 14 and 16 of
 section~\ref{sec:tonight}.
 
+\paragraph{A jointed pattern instance (built 22 Oct).} Your answer: the joint wins, and the conflict says what holds
+the instance. Before, when a bolt pattern went from 6 to 8, the pattern moved instance \#2 to its new place
+(90\,$^\circ$). The next recompute ran the assembly solver (\code{SolveOnRecompute}), which pulled it back to the hole its
+joint names (120\,$^\circ$) and kept the pattern's rotation. The joint itself moves nothing. Now a BruceWorx pattern
+does not move an instance that a joint holds: an active joint on it that the solver applies (the instance is connected
+to the grounded parts), or a grounding of the instance. The other instances move as usual, so the pattern and the
+solver never pull against each other. When a held instance is away from its place in the pattern (more than
+$10^{-4}$\,mm or about $0.01^\circ$ off), BruceWorx says so in four places:
+\begin{itemize}[nosep]
+  \item a red line in the pattern panel while it is open;
+  \item a Report view warning when it appears (\emph{Bolt pattern: instance \#2 (Pattern\_i1) is held by joint
+        Revolute and cannot follow the pattern});
+  \item the read-only pattern property \code{HeldInstances} (\code{\#2 Pattern\_i1: Joint});
+  \item FreeCAD's warning overlay on the joint's tree icon (small, and greyed like the hidden joint).
+\end{itemize}
+The conflict clears when the instance is back in its place (quantity back to 6), or when the joint is deleted or
+suppressed. The instance then returns to its place, and the Report view says \emph{instance \#2 (Pattern\_i1) follows
+the pattern again}. If the instance goes away (quantity 2), the joint shows its broken-link error instead. Verified by 5 new
+tests in \file{TestBruceWorxPattern.py} and the step~15 scenario replayed in the GUI.
+
 \paragraph{Still in \eref{ASM-03}.} Quick joint with type inference, pin-slot, limit sliders in the 3D view, datums on
 the assembly origin or a third part (today both datums are on the joint's own two parts), and continuous angles past
 $\pm 180\,^\circ$ (today a limit range lies within one turn).

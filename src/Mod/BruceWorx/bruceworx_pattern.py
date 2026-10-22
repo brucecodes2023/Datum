@@ -17,6 +17,10 @@ Instance keys are index tuples: ``(i, j)`` for rectangular patterns and
   hidden with ``setElementVisible``, which also drops them from the shape.
 * Instance placement is ``g_k * P0`` (world-frame transform times the seed
   placement), computed in the seed's parent coordinate system.
+* An instance held by an assembly joint (or grounded) stays where the joint
+  holds it; the pattern does not move it. When that is away from its place in
+  the pattern, the pattern lists it in ``HeldInstances`` and says so in the
+  Report view.
 
 Independent copies are not parametric: bodies and solids become
 ``Part::Feature`` solids; components and App::Part containers become
@@ -86,6 +90,30 @@ def circular_angles(params):
 
 def seed_key(kind):
     return (0, 0) if kind == RECTANGULAR else (0,)
+
+
+def instance_name(key):
+    """How messages name an instance: ``#2`` (circular) or ``(1, 0)``."""
+    if len(key) == 1:
+        return f"#{key[0]}"
+    return "(" + ", ".join(str(v) for v in key) + ")"
+
+
+def held_entry(key, element, joints):
+    """One ``HeldInstances`` line: ``#2 Pattern_i1: Joint, Joint001``."""
+    return f"{instance_name(key)} {element}: {', '.join(joints)}"
+
+
+def parse_held_entry(text):
+    """``(element name, [joint names])`` from a ``held_entry`` line."""
+    head, _sep, tail = text.partition(": ")
+    words = head.split()
+    return (words[-1] if words else ""), [j for j in tail.split(", ") if j]
+
+
+def held_changes(old, new):
+    """Lines that appeared and lines that went, between two ``HeldInstances``."""
+    return [e for e in new if e not in old], [e for e in old if e not in new]
 
 
 def key_to_text(key):
@@ -235,6 +263,10 @@ _PROPS = [
     ("InstanceKeys", "App::PropertyStringList", None, "Key of each array element, in element order."),
 ]
 
+HELD = "HeldInstances"
+HELD_TIP = ("Instances a joint holds away from their place in the pattern, with the joints holding them. "
+            "The pattern leaves them where the joints hold them.")
+
 
 def is_pattern(obj):
     return obj is not None and hasattr(obj, "PropertiesList") and "PatternType" in obj.PropertiesList \
@@ -281,8 +313,11 @@ def read_params(array):
     return params
 
 
-def apply(array):
-    """Recompute element count, placements and visibility from the parameters."""
+def apply(array, check=True):
+    """Recompute element count, placements and visibility from the parameters.
+
+    Instances held by a joint keep their placement. ``check``: update
+    ``HeldInstances`` and report changes (see ``update_held``)."""
     params = read_params(array)
     seed = array.PatternSeed
     if seed is None:
@@ -294,7 +329,7 @@ def apply(array):
     elements = array.ElementList
     for index, (key, placement) in enumerate(placed):
         element = elements[index]
-        if not element.Placement.isSame(placement, 1e-9):
+        if not element.Placement.isSame(placement, 1e-9) and not holding_joints(element):
             element.Placement = placement
         visible = key not in suppressed
         if bool(array.isElementVisible(str(index))) != visible:
@@ -302,7 +337,149 @@ def apply(array):
     keys = [key_to_text(k) for k, _p in placed]
     if list(array.InstanceKeys) != keys:
         array.InstanceKeys = keys
+    if check:
+        update_held(array)
     return placed
+
+
+# ---------------------------------------------------------------------------
+# Instances held by assembly joints.
+
+# "In its place": within 1e-4 mm (the solver lands within about 1e-5) and about
+# 0.01 degrees (Rotation.isSame takes 1 - cos(angle / 2), doubled).
+HELD_TOLERANCE = 1e-4
+HELD_ROTATION_TOLERANCE = 1e-8
+
+
+def _holds(joint, element):
+    """True when ``joint`` keeps ``element`` where it is: a grounded joint on
+    it, or an active joint on it that the solver applies (the element is
+    connected to the grounded parts)."""
+    try:
+        if "Invalid" in joint.State or getattr(joint, "Suppressed", False):
+            return False
+        if "ObjectToGround" in joint.PropertiesList:
+            return joint.ObjectToGround == element
+        if "JointType" not in joint.PropertiesList:
+            return False
+        parts = []
+        for name in ("Reference1", "Reference2"):
+            ref = getattr(joint, name, None)
+            parts.append(ref[0] if ref and len(ref) == 2 else None)
+        if element not in parts or parts[0] == parts[1] or None in parts:
+            return False
+    except Exception:
+        return False
+    try:
+        assembly = joint.Proxy.getAssembly(joint)
+        return assembly is None or bool(assembly.isPartConnected(element))
+    except Exception:
+        return True
+
+
+def holding_joints(element):
+    """The joints that hold ``element`` in place, by name."""
+    try:
+        users = element.InList
+    except Exception:
+        return []
+    return sorted((o for o in users if _holds(o, element)), key=lambda o: o.Name)
+
+
+def in_place(placement, slot):
+    """True when ``placement`` is ``slot`` within the tolerances above."""
+    return (placement.Base - slot.Base).Length <= HELD_TOLERANCE \
+        and placement.Rotation.isSame(slot.Rotation, HELD_ROTATION_TOLERANCE)
+
+
+def find_held(array):
+    """``[(key, element, [joints])]``: instances that joints hold away from
+    their place in the pattern."""
+    try:
+        params = read_params(array)
+        seed = array.PatternSeed
+        placed = instance_placements(params, seed.Placement) if seed is not None else []
+    except Exception:
+        return []
+    found = []
+    for (key, placement), element in zip(placed, array.ElementList):
+        joints = holding_joints(element)
+        if joints and not in_place(element.Placement, placement):
+            found.append((key, element, joints))
+    return found
+
+
+def held_message(array, key, element, joints):
+    """Report view text for one held instance."""
+    word = "joint" if len(joints) == 1 else "joints"
+    names = ", ".join(j.Label for j in joints)
+    return (f"{array.Label}: instance {instance_name(key)} ({element.Name}) is held by {word} {names} "
+            f"and cannot follow the pattern")
+
+
+def update_held(array, report=True):
+    """Store the held instances in ``HeldInstances`` and, with ``report``, say
+    in the Report view which appeared and which follow the pattern again.
+    Returns ``find_held(array)``."""
+    held = find_held(array)
+    entries = [held_entry(k, e.Name, [j.Name for j in js]) for k, e, js in held]
+    old = list(getattr(array, HELD, None) or [])
+    if old == entries:
+        return held
+    if HELD not in array.PropertiesList:
+        array.addProperty("App::PropertyStringList", HELD, GROUP, HELD_TIP)
+        array.setEditorMode(HELD, 1)
+        array.setPropertyStatus(HELD, "Output")
+    array.HeldInstances = entries
+    added, gone = held_changes(old, entries)
+    if report:
+        App = _app()
+        for key, element, joints in held:
+            if held_entry(key, element.Name, [j.Name for j in joints]) in added:
+                App.Console.PrintWarning(held_message(array, key, element, joints) + "\n")
+        names = {e.Name for e in array.ElementList}
+        for entry in gone:
+            element = parse_held_entry(entry)[0]
+            if element in names and element not in {e.Name for _k, e, _j in held}:
+                # Not when the instance went: the joint reports that itself.
+                instance = entry.partition(": ")[0].rpartition(" ")[0]
+                App.Console.PrintMessage(f"{array.Label}: instance {instance} ({element}) follows the pattern again\n")
+    _refresh_joint_icons(array.Document, old + entries)
+    return held
+
+
+def _refresh_joint_icons(doc, entries):
+    """Redraw the tree icons of the joints named in ``entries`` (warning overlay)."""
+    for entry in entries:
+        for name in parse_held_entry(entry)[1]:
+            joint = doc.getObject(name)
+            try:
+                joint.ViewObject.signalChangeIcon()
+            except Exception:  # no GUI, or the joint is gone
+                pass
+
+
+def held_by(joint):
+    """``[(pattern, element name)]`` for the instances ``joint`` holds away
+    from their place in a pattern (read from ``HeldInstances``)."""
+    found = []
+    for name in ("Reference1", "Reference2", "ObjectToGround"):
+        ref = getattr(joint, name, None)
+        obj = ref[0] if isinstance(ref, (list, tuple)) else ref
+        if obj is None:
+            continue
+        try:
+            users = obj.InList
+        except Exception:
+            continue
+        for array in users:
+            if not is_pattern(array):
+                continue
+            for entry in getattr(array, HELD, None) or []:
+                element, joints = parse_held_entry(entry)
+                if element == obj.Name and joint.Name in joints:
+                    found.append((array, element))
+    return found
 
 
 def create_linked(seed, params, doc=None):

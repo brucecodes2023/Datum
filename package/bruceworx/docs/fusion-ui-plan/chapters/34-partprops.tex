@@ -13,7 +13,7 @@ vault pick it up without a new build.
 \toprule
 Layer (read in this order) & Holds\\
 \midrule
-1. Built in: \file{addons/BruceWorx/config/part\_properties.json} & The nine BruceWorx properties below. Ships with
+1. Built in: \file{addons/BruceWorx/config/part\_properties.json} & The ten BruceWorx properties below. Ships with
   the build; not edited by hand.\\
 2. Company or vault: e.g.\ \file{<vault>/part\_properties.json} & What your company adds: supplier, lead time,
   RoHS, cost centre\ldots\\
@@ -31,6 +31,7 @@ Property & Type & BOM column & Comes from & Needed at\\
 \midrule
 \code{PartNumber} & text & \code{.PartNumber} & vault (read-only) & ---\\
 \code{Revision} & text & \code{.Revision} & vault (read-only) & ---\\
+\code{LifecycleState} & choice & on request & vault (read-only) & ---\\
 \code{Description} & text & \code{.Description} & you & submit\\
 \code{ItemType} & choice & --- & you (part, assy, COTS, dwg) & ---\\
 \code{MaterialName} & text & \code{.MaterialName} & computed: bodies' material & submit\\
@@ -54,8 +55,24 @@ Property & Type & BOM column & Comes from & Needed at\\
   \item ``Needed at'' feeds the lifecycle: \code{submit} lists what is still empty before a part can go to review.
 \end{itemize}
 
+\paragraph{Lifecycle state (built 22 Oct 2026).} A part's state is a property the vault sets, not a guess from
+its revision code. \code{LifecycleState} is a choice of exactly the vault's states (\code{WIP}, \code{In Review},
+\code{Released}, \code{Obsolete}; section~\ref{sec:pdm}), starts at \code{WIP} and is read-only in the property
+editor. A layer may restyle it (description, BOM flag) but not change its states. Two paths write it, both through
+one function, \code{partprops.set\_state}: a vault opened in FreeCAD tells every open part whose number changes
+state (submit, reject, approve, an ECO opening or releasing, retire), and a document opened while
+\code{BruceWorx/VaultPath} names a vault takes each known part's state from the vault's journal (also from
+the command line: \code{bw-hooks vault sync -{}-file part.FCStd}). The vault model itself stays free of FreeCAD: it
+only calls listeners with \code{\{P/N: state\}}. The property is not named \code{State}: that is FreeCAD's own
+\code{obj.State} (Touched, Invalid\ldots), and a property of that name would hide it from every macro and
+workbench that reads it; applying the schema now refuses any property that would hide an attribute. The Browser
+badge reads the property (WIP in the warning colour, In Review in the accent, Released quiet, Obsolete faded) and
+guesses from the revision only for parts without it. Switch: Preferences \textrightarrow{} BruceWorx \textrightarrow{}
+\emph{Lifecycle state of parts follows the vault}.
+
 \paragraph{BOM.} The Assembly BOM prints any property whose column is named \code{.Property}, so the schema
-just lists those names. Running it for real exposed an upstream bug: the BOM spreadsheet turned the text
+just lists those names. A choice prints its text, so \code{.LifecycleState} works as a column; it is not one of the
+default columns. Running it for real exposed an upstream bug: the BOM spreadsheet turned the text
 ``01'' into the number 1, so revision 01 printed as ``1'' (and a P/N with leading zeros would lose them).
 \file{BomObject.cpp} now stores text values as text, the same way it already stores the Index column.
 

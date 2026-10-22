@@ -99,6 +99,25 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="VaultStateSync">
+        <property name="toolTip">
+         <string>On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by BruceWorx/VaultPath when a document opens. Needs the hooks add-on.</string>
+        </property>
+        <property name="text">
+         <string>Lifecycle state of parts follows the vault</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>VaultStateSync</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="PatternCommands">
         <property name="toolTip">
          <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
@@ -292,6 +311,50 @@
          <cstring>BruceWorx</cstring>
         </property>
        </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layoutNavPillOrbitCenter">
+        <item>
+         <widget class="QLabel" name="labelNavPillOrbitCenter">
+          <property name="text">
+           <string>Navigation pill orbits about</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Gui::PrefComboBox" name="NavPillOrbitCenter">
+          <property name="toolTip">
+           <string>Last clicked point: the point on the model under the pointer where the orbit drag starts (on the focal plane when nothing is there); it also becomes FreeCAD's rotation centre. Point the camera looks at: the centre of the view at the camera's focal distance.</string>
+          </property>
+          <property name="currentIndex">
+           <number>1</number>
+          </property>
+          <property name="prefEntry" stdset="0">
+           <cstring>NavPillOrbitCenter</cstring>
+          </property>
+          <property name="prefPath" stdset="0">
+           <cstring>BruceWorx</cstring>
+          </property>
+          <item>
+           <property name="text">
+            <string>Point the camera looks at</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Last clicked point</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacerNavPillOrbitCenter">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>

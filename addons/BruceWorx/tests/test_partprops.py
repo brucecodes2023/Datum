@@ -4,13 +4,16 @@ FreeCAD itself is covered by tests/freecad_partprops_smoke.py."""
 
 import json
 import os
+import shutil
 import sys
 import tempfile
+import types
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bruceworx import partprops  # noqa: E402
+from bruceworx import partprops, pdm  # noqa: E402
+from bruceworx.pdm_folder import FolderVault  # noqa: E402
 from bruceworx.partprops import Schema, SchemaError, load_schema  # noqa: E402
 
 
@@ -41,6 +44,9 @@ class FakePropObj:
 
     def getTypeIdOfProperty(self, name):
         return self._types[name]
+
+    def getEnumerationsOfProperty(self, name):
+        return self._enums.get(name)
 
     def setEditorMode(self, name, mode):
         self._modes[name] = list(mode)
@@ -165,6 +171,125 @@ class LayerTests(unittest.TestCase):
             schema = load_schema([path], user_layer=False)
         self.assertIn(".Coating", schema.bom_columns())
         self.assertEqual(schema.layers[-1], path)
+
+
+class FakeDoc:
+    def __init__(self, *objects):
+        self.Objects = list(objects)
+
+
+def _part(name, part_number, **existing):
+    obj = FakePropObj(PartNumber=("App::PropertyString", part_number), **existing)
+    obj.Name = name
+    return obj
+
+
+class LifecycleStateTests(unittest.TestCase):
+    """LifecycleState: the vault's states, read-only, written by the vault only."""
+
+    def setUp(self):
+        self.schema = load_schema(user_layer=False)
+
+    def test_builtin_property_is_the_vaults_states(self):
+        prop = self.schema.properties[partprops.STATE]
+        self.assertEqual(prop.freecad_type, "App::PropertyEnumeration")
+        self.assertEqual(tuple(prop.values), pdm.STATES)
+        self.assertEqual(prop.default, pdm.INITIAL_STATE)
+        self.assertEqual((prop.source, prop.readonly, prop.bom), ("pdm", True, False))
+
+    def test_apply_gives_existing_parts_the_initial_state_read_only(self):
+        obj = FakePropObj(PartNumber=("App::PropertyString", "P1"))
+        report = self.schema.apply(obj, compute=False)
+        self.assertIn(partprops.STATE, report["added"])
+        self.assertEqual(obj.LifecycleState, pdm.WIP)
+        self.assertEqual(obj._modes[partprops.STATE], ["ReadOnly"])
+        obj.LifecycleState = pdm.RELEASED  # as the vault left it
+        self.schema.apply(obj, compute=False)
+        self.assertEqual(obj.LifecycleState, pdm.RELEASED)
+
+    def test_layer_may_restyle_but_not_change_the_states(self):
+        self.schema.add_layer(_layer({"name": partprops.STATE, "bom": True, "doc": "Ours"}), "company")
+        self.assertIn("." + partprops.STATE, self.schema.bom_columns())
+        for bad in ({"name": partprops.STATE, "values": ["Draft", "Done"]},
+                    {"name": partprops.STATE, "type": "string"}):
+            with self.assertRaises(SchemaError):
+                self.schema.add_layer(_layer(bad), "bad")
+
+    def test_property_hiding_a_freecad_attribute_is_refused(self):
+        class WithStatus(FakePropObj):
+            State = ["Touched"]  # FreeCAD's obj.State
+
+        self.schema.add_layer(_layer({"name": "State", "type": "enum", "values": ["a", "b"]}), "company")
+        obj = WithStatus()
+        report = self.schema.apply(obj, compute=False)
+        self.assertNotIn("State", obj.PropertiesList)
+        self.assertTrue(report["conflicts"][0].startswith("State would hide"))
+
+    def test_set_state_adds_writes_and_skips_unchanged(self):
+        obj = FakePropObj()
+        self.assertTrue(partprops.set_state(obj, pdm.IN_REVIEW, self.schema))
+        self.assertEqual(obj.LifecycleState, pdm.IN_REVIEW)
+        self.assertEqual(obj._modes[partprops.STATE], ["ReadOnly"])
+        self.assertFalse(partprops.set_state(obj, pdm.IN_REVIEW, self.schema))
+        with self.assertRaises(ValueError):
+            partprops.set_state(obj, "Frozen", self.schema)
+        self.assertTrue(partprops.set_state(FakePropObj(), pdm.WIP, self.schema))  # added counts
+        clash = FakePropObj(LifecycleState=("App::PropertyString", "x"))
+        with self.assertRaises(SchemaError):
+            partprops.set_state(clash, pdm.WIP, self.schema)
+
+    def test_set_state_brings_old_choices_up_to_date(self):
+        obj = FakePropObj(LifecycleState=("App::PropertyEnumeration", None))
+        obj.LifecycleState = ["WIP", "Released"]
+        obj.LifecycleState = "Released"
+        partprops.set_state(obj, pdm.OBSOLETE, self.schema)
+        self.assertEqual(obj._enums[partprops.STATE], list(pdm.STATES))
+        self.assertEqual(obj.LifecycleState, pdm.OBSOLETE)
+
+    def test_sync_touches_only_parts_the_vault_knows(self):
+        known, unknown, plain = _part("Plate", "P1"), _part("Bolt", "P9"), FakePropObj()
+        plain.Name = "Origin"
+        doc = FakeDoc(known, unknown, plain)
+        self.assertEqual(partprops.sync_states(doc, {"P1": pdm.RELEASED}, self.schema), ["Plate"])
+        self.assertEqual(known.LifecycleState, pdm.RELEASED)
+        self.assertNotIn(partprops.STATE, unknown.PropertiesList)
+        self.assertNotIn(partprops.STATE, plain.PropertiesList)
+        self.assertEqual(partprops.sync_states(doc, {"P1": pdm.RELEASED}, self.schema), [])
+
+
+class VaultWritesStateTests(unittest.TestCase):
+    """The folder vault drives LifecycleState: on each transition, and on open."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bw-state-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.vault = FolderVault.init(os.path.join(self.tmp, "v"), "States", actor="bruce@mac")
+        self.part = _part("Plate", "P1")
+        self.doc = FakeDoc(self.part)
+        # attach_vault writes every open document: a stand-in FreeCAD with one.
+        fake = types.SimpleNamespace(listDocuments=lambda: {"Doc": self.doc})
+        saved = sys.modules.get("FreeCAD")
+        sys.modules["FreeCAD"] = fake
+        self.addCleanup(lambda: sys.modules.pop("FreeCAD") if saved is None
+                        else sys.modules.__setitem__("FreeCAD", saved))
+
+    def test_transitions_write_the_open_part(self):
+        partprops.attach_vault(self.vault)
+        self.vault.create_item("P1")
+        self.assertEqual(self.part.LifecycleState, pdm.WIP)
+        self.vault.submit("P1")
+        self.assertEqual(self.part.LifecycleState, pdm.IN_REVIEW)
+        self.vault.approve("P1")
+        self.assertEqual(self.part.LifecycleState, pdm.RELEASED)
+        self.assertEqual(self.vault.problems, [])
+
+    def test_opening_a_document_takes_the_vaults_record(self):
+        self.vault.create_item("P1")
+        self.vault.submit("P1")
+        self.assertEqual(partprops.sync_from_vault(self.doc, self.vault.root), ["Plate"])
+        self.assertEqual(self.part.LifecycleState, pdm.IN_REVIEW)
+        self.assertEqual(partprops.sync_from_vault(self.doc, ""), [])  # no vault set
+        self.assertEqual(partprops.sync_from_vault(FakeDoc(), self.vault.root), [])
 
 
 class FakeMaterial:

@@ -31,6 +31,7 @@ IN_REVIEW = "In Review"
 RELEASED = "Released"
 OBSOLETE = "Obsolete"
 STATES = (WIP, IN_REVIEW, RELEASED, OBSOLETE)
+INITIAL_STATE = WIP  # a new item's first revision
 
 ITEM_TYPES = ("part", "assembly", "drawing", "cots")
 
@@ -141,6 +142,11 @@ class Item:
         return self.revisions[-1]
 
     @property
+    def state(self) -> str:
+        """The state a part shows: its latest revision's, Obsolete once retired."""
+        return OBSOLETE if self.obsolete else self.latest.state
+
+    @property
     def released(self) -> Revision | None:
         for rev in reversed(self.revisions):
             if rev.state == RELEASED and not rev.superseded:
@@ -184,7 +190,7 @@ class Vault:
         if item_type == "drawing" and drawing_of not in self.items:
             raise LifecycleError("a drawing must name the part it documents")
         item = Item(part_number, item_type, description, drawing_of)
-        item.revisions.append(Revision(first_prerelease(), history=["created"]))
+        item.revisions.append(Revision(first_prerelease(), INITIAL_STATE, history=["created"]))
         self.items[part_number] = item
         return item
 

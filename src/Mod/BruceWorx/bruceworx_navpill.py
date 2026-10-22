@@ -11,8 +11,12 @@ in the theme's secondary text colour.
 Orbit, pan and zoom are modes, as in Fusion: click one, then drag in the view
 with the left button. Click the button again, press Esc or right-click to
 stop. The mouse wheel and the navigation style's own buttons keep working
-meanwhile. Orbit is a turntable around the world Z axis through the focal
-point.
+meanwhile. Orbit is a turntable around the world Z axis through a pivot set
+by Preferences/BruceWorx/NavPillOrbitCenter: 1 (default) the point under the
+pointer where the drag starts (on the model, else on the focal plane), picked
+by the navigation style as a mouse orbit does and kept as FreeCAD's rotation
+centre (Rotation mode "Object center" is honoured; "Window center" picks at
+the pointer, as it would equal 0); 0 the camera's focal point.
 
 The pill sits 12 px above the bottom of the view, centred, or centred in the
 space between the floating Browser and task card when the view is too narrow.
@@ -30,6 +34,9 @@ import math
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 THEME_PATH = "User parameter:BaseApp/Preferences/MainWindow"
 PREF_NAME = "NavigationPill"
+CENTER_PREF = "NavPillOrbitCenter"
+CENTER_FOCAL = 0  # the point the camera looks at
+CENTER_ROTATION = 1  # FreeCAD's rotation centre, picked where the drag starts
 OBJECT_NAME = "BruceWorxNavPill"
 VIEW_CLASS = "Gui::View3DInventor"
 
@@ -185,18 +192,34 @@ def focal_point(q, position, focal_distance):
     return _add(position, _scale(view_direction(q), focal_distance))
 
 
-def orbit(q, position, focal_distance, dx, dy, up=(0.0, 0.0, 1.0), speed=ORBIT_SPEED):
-    """Turntable orbit about the focal point. Returns (orientation, position).
+def orbit(q, position, focal_distance, dx, dy, up=(0.0, 0.0, 1.0), speed=ORBIT_SPEED, pivot=None):
+    """Turntable orbit about ``pivot`` (default: the focal point).
 
+    Returns (orientation, position); the focal distance does not change.
     Dragging right turns the model right (about ``up``); dragging down tips its
     top towards the viewer (about the camera's right axis).
     """
-    pivot = focal_point(q, position, focal_distance)
+    if pivot is None:
+        pivot = focal_point(q, position, focal_distance)
     right = qrotate(q, (1.0, 0.0, 0.0))
     turn = qmul(qaxis(up, -dx * speed), qaxis(right, -dy * speed))
     new_q = qnormalize(qmul(turn, q))
     new_pos = _add(pivot, qrotate(turn, _sub(position, pivot)))
     return new_q, new_pos
+
+
+def orbit_center_mode(value):
+    """CENTER_FOCAL or CENTER_ROTATION from the stored preference value."""
+    return CENTER_FOCAL if value == CENTER_FOCAL else CENTER_ROTATION
+
+
+def inventor_pixel(x, y, height, dpr=1.0):
+    """Qt widget position (logical, origin top left) to Coin viewport pixels.
+
+    Coin counts device pixels from the bottom left, as the trackpad orbit in
+    NavigationStyle::processTrackpadScroll does.
+    """
+    return int(round(x * dpr)), int(round((height - y - 1) * dpr))
 
 
 def units_per_pixel(orthographic, size, focal_distance, width, height):
@@ -240,6 +263,12 @@ def enabled():
     import FreeCAD
 
     return bool(FreeCAD.ParamGet(PREFS_PATH).GetBool(PREF_NAME, True))
+
+
+def orbit_center():
+    import FreeCAD
+
+    return orbit_center_mode(FreeCAD.ParamGet(PREFS_PATH).GetInt(CENTER_PREF, CENTER_ROTATION))
 
 
 def _theme():
@@ -304,6 +333,7 @@ def _make_classes():
             self.mode = None
             self._py_view = None
             self._drag = None
+            self._pivot = None
             self._cursor = None
             self._refreshing = False
             self.setObjectName(OBJECT_NAME)
@@ -513,6 +543,7 @@ def _make_classes():
                 viewport.setCursor(self._cursor)
             self.mode = mode
             self._drag = None
+            self._pivot = None
             for name in MODES:
                 self.buttons[name].setChecked(name == mode)
             if mode and viewport is not None:
@@ -548,6 +579,7 @@ def _make_classes():
                     return True
                 if event.button() == QtCore.Qt.LeftButton:
                     self._drag = event.position().toPoint()
+                    self._pivot = self.find_pivot(self._drag) if self.mode == "orbit" else None
                     return True
                 return False
             if kind == QtCore.QEvent.MouseButtonDblClick and event.button() == QtCore.Qt.LeftButton:
@@ -560,8 +592,29 @@ def _make_classes():
                 return True
             if kind == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
                 self._drag = None
+                self._pivot = None
                 return True
             return False
+
+        def find_pivot(self, point):
+            """Orbit pivot for a drag starting at ``point`` (viewport position).
+
+            None means the focal point: chosen in the preference, or when the
+            navigation style cannot pick (older build, no 3D view).
+            """
+            if orbit_center() != CENTER_ROTATION:
+                return None
+            view = self.py_view()
+            viewport = self.viewport()
+            if view is None or viewport is None:
+                return None
+            try:
+                style = view.getViewer().getNavigationStyle()
+                x, y = inventor_pixel(point.x(), point.y(), viewport.height(), viewport.devicePixelRatioF())
+                center = style.findRotationCenter(x, y)
+            except Exception:
+                return None
+            return None if center is None else (center.x, center.y, center.z)
 
         def drag(self, dx, dy):
             """Move the camera of this view by a drag of (dx, dy) pixels."""
@@ -578,7 +631,7 @@ def _make_classes():
             viewport = self.viewport()
             w, h = (viewport.width(), viewport.height()) if viewport is not None else (800, 600)
             if self.mode == "orbit":
-                q, pos = orbit(q, pos, fd, dx, dy)
+                q, pos = orbit(q, pos, fd, dx, dy, pivot=self._pivot)
                 cam.orientation.setValue(coin.SbRotation(*q))
                 cam.position.setValue(coin.SbVec3f(*pos))
             elif self.mode == "pan":

@@ -22,6 +22,10 @@ def close(a, b, tol=1e-6):
     return all(abs(x - y) < tol for x, y in zip(a, b))
 
 
+def conjugate(q):
+    return (-q[0], -q[1], -q[2], q[3])
+
+
 class TestPlacement(unittest.TestCase):
     def test_centred_at_the_bottom(self):
         self.assertEqual(nav.place(1000, 600, 260, 34), (370, 600 - 12 - 34))
@@ -66,6 +70,32 @@ class TestCamera(unittest.TestCase):
     def test_orbit_turntable_keeps_the_horizon(self):
         q, _p = nav.orbit(FRONT, (0.0, -100.0, 0.0), 100.0, 80, 0)
         self.assertAlmostEqual(nav.qrotate(q, (1.0, 0.0, 0.0))[2], 0.0)
+
+    def test_orbit_about_a_pivot_keeps_it_in_place_on_screen(self):
+        pos, pivot = (0.0, -100.0, 0.0), (30.0, 20.0, -10.0)
+        q, p = nav.orbit(FRONT, pos, 100.0, 37, -21, pivot=pivot)
+        self.assertAlmostEqual(math.dist(p, pivot), math.dist(pos, pivot), places=6)
+        # Same place in camera space, so the pivot stays put on screen.
+        before = nav.qrotate(conjugate(FRONT), nav._sub(pivot, pos))
+        after = nav.qrotate(conjugate(q), nav._sub(pivot, p))
+        self.assertTrue(close(before, after))
+
+    def test_orbit_about_an_off_centre_pivot_moves_the_focal_point(self):
+        pos, pivot = (0.0, -100.0, 0.0), (30.0, 20.0, -10.0)
+        q, p = nav.orbit(FRONT, pos, 100.0, 40, 0, pivot=pivot)
+        self.assertFalse(close(nav.focal_point(q, p, 100.0), (0.0, 0.0, 0.0), 1e-3))
+        same = nav.orbit(FRONT, pos, 100.0, 40, 0)
+        self.assertEqual(same, nav.orbit(FRONT, pos, 100.0, 40, 0, pivot=(0.0, 0.0, 0.0)))
+
+    def test_orbit_center_preference(self):
+        self.assertEqual(nav.orbit_center_mode(0), nav.CENTER_FOCAL)
+        self.assertEqual(nav.orbit_center_mode(1), nav.CENTER_ROTATION)
+        self.assertEqual(nav.orbit_center_mode(7), nav.CENTER_ROTATION)
+
+    def test_inventor_pixel_counts_from_the_bottom_in_device_pixels(self):
+        self.assertEqual(nav.inventor_pixel(10, 0, 600), (10, 599))
+        self.assertEqual(nav.inventor_pixel(10, 599, 600), (10, 0))
+        self.assertEqual(nav.inventor_pixel(10, 100, 600, 2.0), (20, 998))
 
     def test_pan_moves_the_model_with_the_pointer(self):
         p = nav.pan(FRONT, (0.0, -100.0, 0.0), 10, 0, 0.5)
@@ -125,6 +155,18 @@ class TestSmallRules(unittest.TestCase):
                 self.assertEqual(props["prefPath"].findtext("cstring"), "BruceWorx")
                 return
         self.fail("NavigationPill checkbox missing")
+
+    def test_orbit_centre_combo_defaults_to_the_rotation_centre(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        ui = ET.parse(os.path.join(here, "preferences-bruceworx.ui"))
+        for widget in ui.iter("widget"):
+            if widget.get("name") == nav.CENTER_PREF:
+                props = {p.get("name"): p for p in widget.findall("property")}
+                self.assertEqual(int(props["currentIndex"].findtext("number")), nav.CENTER_ROTATION)
+                self.assertEqual(props["prefPath"].findtext("cstring"), "BruceWorx")
+                self.assertEqual(len(widget.findall("item")), 2)
+                return
+        self.fail("NavPillOrbitCenter combo missing")
 
     def test_stylesheet_block_present(self):
         here = os.path.dirname(os.path.abspath(__file__))

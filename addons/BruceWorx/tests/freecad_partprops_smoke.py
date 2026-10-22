@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """FreeCADCmd check: schema properties on a real part, computed mass and
-material, and the Assembly BOM printing them.
+material, the Assembly BOM printing them, and the vault writing the part's
+LifecycleState (on each transition, and when the file is opened).
 
     FreeCADCmd addons/BruceWorx/tests/freecad_partprops_smoke.py
 """
@@ -8,7 +9,9 @@ material, and the Assembly BOM printing them.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
+import tempfile
 import traceback
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,7 +64,7 @@ def run() -> None:
     link = assembly.newObject("App::Link", "PlateLink")
     link.LinkedObject = part
     bom = UtilsAssembly.getBomGroup(assembly).newObject("Assembly::BomObject", "BOM")
-    bom.columnsNames = ["Index", "Name", "Quantity"] + schema.bom_columns()
+    bom.columnsNames = ["Index", "Name", "Quantity"] + schema.bom_columns() + [".LifecycleState"]
     doc.recompute()
     header = [bom.getContents(f"{chr(65 + i)}1") for i in range(len(bom.columnsNames))]
     row = {h.lstrip("'"): bom.getContents(f"{chr(65 + i)}2").lstrip("'") for i, h in enumerate(header)}
@@ -70,6 +73,7 @@ def run() -> None:
     assert row[".Revision"] == "01", row
     assert row[".MaterialName"] == "Aluminum-6061-T6", row
     assert row[".Mass"].lstrip("=").replace(" ", "") in ("135g", "0.135kg"), row  # a unit expression
+    assert row[".LifecycleState"] == "WIP", row  # an enumeration prints its text
 
     # Material picked after apply: the computed values follow without
     # applying again. FreeCAD's "Default" material means none: no mass.
@@ -94,7 +98,54 @@ def run() -> None:
     doc.recompute()
     assert part2.MaterialName == "" and part2.Mass.Value == 0, (part2.MaterialName, part2.Mass)
     FreeCAD.closeDocument(doc.Name)
+    lifecycle_state(schema)
     print("BW_PARTPROPS_SMOKE PASS")
+
+
+def lifecycle_state(schema) -> None:
+    """LifecycleState: read-only, FreeCAD's obj.State untouched, written by the
+    vault on each transition and taken from the vault when a file opens."""
+    import FreeCAD  # noqa: PLC0415
+
+    from bruceworx import partprops  # noqa: PLC0415
+    from bruceworx.pdm_folder import FolderVault  # noqa: PLC0415
+
+    tmp = tempfile.mkdtemp(prefix="bw-state-smoke-")
+    prefs = FreeCAD.ParamGet(partprops.PREFS_PATH)
+    old_path = prefs.GetString("VaultPath", "")
+    try:
+        doc = FreeCAD.newDocument("StateSmoke")
+        part = doc.addObject("App::Part", "Plate")
+        schema.apply(part, compute=False)
+        part.PartNumber = "LE-01-01001-001"
+        assert part.LifecycleState == "WIP", part.LifecycleState
+        assert part.getEnumerationsOfProperty("LifecycleState") == ["WIP", "In Review", "Released", "Obsolete"]
+        assert "ReadOnly" in part.getEditorMode("LifecycleState")
+        assert isinstance(part.State, list), part.State  # FreeCAD's status list is not hidden
+        doc.recompute()
+
+        vault = FolderVault.init(os.path.join(tmp, "vault"), "Smoke", actor="smoke@test")
+        partprops.attach_vault(vault)
+        vault.create_item("LE-01-01001-001", "part", "Base plate")
+        vault.submit("LE-01-01001-001")
+        assert part.LifecycleState == "In Review", part.LifecycleState
+        assert "Touched" not in part.State, part.State  # a state change needs no recompute
+        path = os.path.join(tmp, "plate.FCStd")
+        doc.saveAs(path)
+        FreeCAD.closeDocument(doc.Name)
+
+        # Approved while the file was closed: opening it takes the vault's record.
+        vault.approve("LE-01-01001-001")
+        prefs.SetString("VaultPath", vault.root)
+        partprops.install_observer()
+        doc = FreeCAD.openDocument(path)
+        part = doc.getObject("Plate")
+        assert part.LifecycleState == "Released", part.LifecycleState
+        assert "ReadOnly" in part.getEditorMode("LifecycleState")
+        FreeCAD.closeDocument(doc.Name)
+    finally:
+        prefs.SetString("VaultPath", old_path)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 try:

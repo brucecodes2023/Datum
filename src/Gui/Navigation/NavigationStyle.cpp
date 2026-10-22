@@ -1137,6 +1137,21 @@ SbVec3f NavigationStyle::getRotationCenter(SbBool& found) const
     return this->rotationCenter;
 }
 
+// [BW] Same pick as at the start of a mouse orbit. "Window center" would just give the focal
+// point, so it picks at the cursor instead ("Drag at cursor"); "Object center" is kept.
+void NavigationStyle::findRotationCenter(const SbVec2s& pos)
+{
+    const RotationCenterModes mode = rotationCenterMode;
+    if (!mode) {
+        rotationCenterMode = RotationCenterMode::ScenePointAtCursor
+            | RotationCenterMode::FocalPointAtCursor;
+    }
+    SoLocation2Event location;
+    location.setPosition(pos);
+    saveCursorPosition(&location);
+    rotationCenterMode = mode;
+}
+
 std::optional<SbVec2s>& NavigationStyle::getRightClickPosition()
 {
     return rightClickPosition;

@@ -66,6 +66,18 @@ class MathTests(unittest.TestCase):
         self.assertEqual(bp.text_to_key(bp.key_to_text((-1, 2))), (-1, 2))
         self.assertEqual(bp.text_to_key("3"), (3,))
 
+    def test_held_entries(self):
+        self.assertEqual(bp.instance_name((2,)), "#2")
+        self.assertEqual(bp.instance_name((1, -1)), "(1, -1)")
+        entry = bp.held_entry((1, 0), "Pattern_i0", ["Joint", "Joint001"])
+        self.assertEqual(entry, "(1, 0) Pattern_i0: Joint, Joint001")
+        self.assertEqual(bp.parse_held_entry(entry), ("Pattern_i0", ["Joint", "Joint001"]))
+        self.assertEqual(bp.parse_held_entry("#2 Pattern_i1: Joint"), ("Pattern_i1", ["Joint"]))
+        added, gone = bp.held_changes(["#2 Pattern_i1: Joint"], ["#2 Pattern_i1: Joint, Joint001"])
+        self.assertEqual(added, ["#2 Pattern_i1: Joint, Joint001"])
+        self.assertEqual(gone, ["#2 Pattern_i1: Joint"])
+        self.assertEqual(bp.held_changes(["a"], ["a"]), ([], []))
+
 
 @unittest.skipIf(App is None, "needs FreeCAD")
 class DocumentTests(unittest.TestCase):
@@ -240,6 +252,125 @@ class DocumentTests(unittest.TestCase):
         self.assertTrue(UtilsAssembly.isLinkGroup(array))
         # The component itself plus the five generated instances.
         self.assertEqual(UtilsAssembly.number_of_components_in(assembly), 6)
+
+    # ----- instances held by joints (step 15) ------------------------------
+
+    def _bolt_assembly(self):
+        """A grounded plate and a 6-bolt circular pattern of a component in an
+        assembly; returns (assembly, array, JointObject)."""
+        try:
+            import JointObject
+        except ImportError:
+            self.skipTest("Assembly module not available")
+        assembly = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        self.joints = assembly.newObject("Assembly::JointGroup", "Joints")
+        plate = assembly.newObject("Part::Box", "Plate")
+        plate.Length = plate.Width = 80
+        plate.Height = 5
+        plate.Placement.Base = App.Vector(-40, -40, -5)
+        ground = self.joints.newObject("App::FeaturePython", "GroundedJoint")
+        JointObject.GroundedJoint(ground, plate)
+        bolt = self.doc.addObject("Part::Cylinder", "BoltShape")
+        bolt.Radius, bolt.Height = 3, 20
+        component = self.doc.addObject("App::Link", "Bolt")
+        component.LinkedObject = bolt
+        component.Placement = App.Placement(App.Vector(25, 0, 0), App.Rotation())
+        assembly.addObject(component)
+        self.doc.recompute()
+        array = bp.create_linked(component, self._params(bp.CIRCULAR, count1=6))
+        self.doc.recompute()
+        self.plate = plate
+        return assembly, array, JointObject
+
+    def _fix(self, JointObject, element):
+        """A Fixed joint from the plate to ``element`` where it is now."""
+        joint = self.joints.newObject("App::FeaturePython", "Fixed")
+        JointObject.Joint(joint, JointObject.JointTypes.index("Fixed"))
+        joint.KeepPosition = True
+        joint.Proxy.setJointConnectors(joint, [[self.plate, ["Face6", "Vertex6"]], [element, ["Face1", "Edge1"]]])
+        self.doc.recompute()
+        return joint
+
+    def _set_count(self, array, count):
+        params = bp.read_params(array)
+        params["count1"] = count
+        bp.write_params(array, params)
+        bp.apply(array)
+        self.doc.recompute()
+
+    def test_jointed_instance_stays_and_is_reported(self):
+        assembly, array, JointObject = self._bolt_assembly()
+        element = array.ElementList[1]  # instance #2, at 120 degrees
+        before = App.Placement(element.Placement)
+        joint = self._fix(JointObject, element)
+        self.assertEqual(bp.holding_joints(element), [joint])
+        self.assertEqual(bp.find_held(array), [])  # still in its place
+
+        self._set_count(array, 8)  # #2 belongs at 90 degrees now
+        self.assertTrue(element.Placement.isSame(before, 1e-6), element.Placement)
+        held = bp.find_held(array)
+        self.assertEqual([(k, e.Name, [j.Name for j in js]) for k, e, js in held],
+                         [((2,), element.Name, [joint.Name])])
+        self.assertEqual(list(array.HeldInstances), [f"#2 {element.Name}: {joint.Name}"])
+        self.assertEqual(bp.held_message(array, *held[0]),
+                         f"{array.Label}: instance #2 ({element.Name}) is held by joint {joint.Label} "
+                         "and cannot follow the pattern")
+        self.assertEqual(bp.held_by(joint), [(array, element.Name)])
+        self.assertTrue(JointObject.heldOffPattern(joint))
+        # The other instances moved to their new places.
+        for (key, placement), other in zip(bp.instance_placements(bp.read_params(array), array.PatternSeed.Placement),
+                                           array.ElementList):
+            if other != element:
+                self.assertTrue(bp.in_place(other.Placement, placement), key)
+        # The solver agrees: nothing moves on solve, no fight.
+        self.assertEqual(assembly.solve(), 0)
+        self.assertTrue(element.Placement.isSame(before, 1e-5))
+        bp.apply(array)
+        self.assertTrue(element.Placement.isSame(before, 1e-5))
+
+        self._set_count(array, 6)  # its place again
+        self.assertEqual(bp.find_held(array), [])
+        self.assertEqual(list(array.HeldInstances), [])
+        self.assertFalse(JointObject.heldOffPattern(joint))
+
+    def test_instance_follows_once_the_joint_is_gone(self):
+        assembly, array, JointObject = self._bolt_assembly()
+        element = array.ElementList[1]
+        joint = self._fix(JointObject, element)
+        self._set_count(array, 8)
+        self.assertEqual(len(array.HeldInstances), 1)
+        self.doc.removeObject(joint.Name)
+        bp.apply(array)
+        slot = dict(bp.instance_placements(bp.read_params(array), array.PatternSeed.Placement))[(2,)]
+        self.assertTrue(bp.in_place(element.Placement, slot))
+        self.assertEqual(list(array.HeldInstances), [])
+
+    def test_suppressed_or_unconnected_joint_does_not_hold(self):
+        assembly, array, JointObject = self._bolt_assembly()
+        element = array.ElementList[1]
+        joint = self._fix(JointObject, element)
+        joint.Suppressed = True
+        self.assertEqual(bp.holding_joints(element), [])
+        # A joint between two instances that nothing grounds: the solver leaves them alone.
+        free = self.joints.newObject("App::FeaturePython", "Free")
+        JointObject.Joint(free, JointObject.JointTypes.index("Fixed"))
+        free.KeepPosition = True
+        free.Proxy.setJointConnectors(free, [[array.ElementList[2], ["Face1", "Edge1"]],
+                                             [array.ElementList[3], ["Face1", "Edge1"]]])
+        self.doc.recompute()
+        self.assertEqual(bp.holding_joints(array.ElementList[2]), [])
+        self._set_count(array, 8)
+        self.assertEqual(bp.find_held(array), [])
+
+    def test_grounded_instance_is_held(self):
+        assembly, array, JointObject = self._bolt_assembly()
+        element = array.ElementList[0]
+        before = App.Placement(element.Placement)
+        ground = self.joints.newObject("App::FeaturePython", "GroundedJoint")
+        JointObject.GroundedJoint(ground, element)
+        self._set_count(array, 4)
+        self.assertTrue(element.Placement.isSame(before, 1e-9))
+        self.assertEqual(list(array.HeldInstances), [f"#1 {element.Name}: {ground.Name}"])
 
     def test_feature_body(self):
         body = self.doc.addObject("PartDesign::Body", "Body")

@@ -8,6 +8,11 @@
   updates it live; Cancel aborts the transaction, so nothing is left behind.
 * An existing BruceWorx pattern selected: the same panel, editing it.
 
+An instance held by an assembly joint stays where the joint holds it. The
+panel lists such instances in red, the pattern's HeldInstances property names
+them with their joints, the joints get a warning overlay in the tree and the
+Report view says when one appears or follows the pattern again.
+
 Off switch: Preferences > BruceWorx > "Rectangular and Circular Pattern
 commands" (BaseApp/Preferences/BruceWorx/PatternCommands).
 """
@@ -32,7 +37,8 @@ PARTDESIGN = {
 }
 
 _state = {"installed": False, "manipulator": None, "observer": None, "pending": set(),
-          "prefs": None, "pref_observer": None, "enabled": True}
+          "prefs": None, "pref_observer": None, "enabled": True, "editing": set()}
+RED = "<span style='color:#c0392b'>{}</span>"
 
 
 def _qt():
@@ -119,12 +125,16 @@ class PatternTaskPanel:
             self._original = []
         self.params = params
         self.custom = {"direction1": None, "direction2": None, "axis": None}
+        # The panel shows held instances itself; the observer leaves these alone.
+        self._keys = [(self.doc.Name, a.Name) for a in self.arrays]
+        _state["editing"].update(self._keys)
         self._building = True
         self.form = self._build(QtWidgets, title)
         self._load(params)
         self._building = False
         self._refresh_suppress_list()
         self.doc.recompute()
+        self._show_held()
 
     # ----- construction ----------------------------------------------------
 
@@ -219,6 +229,11 @@ class PatternTaskPanel:
         self.status = QtWidgets.QLabel("")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        self.held = QtWidgets.QLabel("")
+        self.held.setObjectName("patternHeld")
+        self.held.setWordWrap(True)
+        self.held.setVisible(False)
+        layout.addWidget(self.held)
         layout.addStretch(1)
 
         # Signals.
@@ -376,10 +391,23 @@ class PatternTaskPanel:
         self.params = params
         for array in self.arrays:
             bp.write_params(array, params)
-            bp.apply(array)
+            bp.apply(array, check=False)
         self.doc.recompute()
+        self._show_held()
         if not self.sender_is_list():
             self._refresh_suppress_list()
+
+    def _show_held(self):
+        """One red line per instance a joint holds away from its place."""
+        lines = []
+        for array in self.arrays:
+            try:
+                held = bp.find_held(array)
+            except Exception:  # removed by an undo
+                continue
+            lines += [bp.held_message(array, *found) for found in held]
+        self.held.setText("<br>".join(RED.format(_html(line)) for line in lines))
+        self.held.setVisible(bool(lines))
 
     def sender_is_list(self):
         return getattr(self, "_from_list", False)
@@ -449,6 +477,7 @@ class PatternTaskPanel:
     def accept(self):
         import FreeCADGui as Gui
 
+        _state["editing"].difference_update(self._keys)
         try:
             if self.copies.currentText() == "Independent":
                 for array in list(self.arrays):
@@ -459,7 +488,18 @@ class PatternTaskPanel:
             self.doc.abortTransaction()
         Gui.Control.closeDialog()
         self.doc.recompute()
+        self._report_held()
         return True
+
+    def _report_held(self):
+        """Store and report the held instances now the panel is closed."""
+        for name in {key[1] for key in self._keys}:
+            array = self.doc.getObject(name)
+            if array is not None and bp.is_pattern(array):
+                try:
+                    bp.update_held(array)
+                except Exception as exc:
+                    _warn(f"{array.Label}: {exc}")
 
     def reject(self):
         import FreeCADGui as Gui
@@ -470,13 +510,14 @@ class PatternTaskPanel:
 
     def cancel(self):
         """Undo everything the panel did, with or without document undo."""
+        _state["editing"].difference_update(self._keys)
         self.doc.abortTransaction()
         if self.editing:
             for name, params in self._original:
                 array = self.doc.getObject(name)
                 if array is not None:
                     bp.write_params(array, params)
-                    bp.apply(array)
+                    bp.apply(array, check=False)
         else:
             for array in self.arrays:
                 try:
@@ -486,6 +527,8 @@ class PatternTaskPanel:
                 if self.doc.getObject(name) is not None:
                     self.doc.removeObject(name)
         self.doc.recompute()
+        if self.editing:
+            self._report_held()
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +607,10 @@ def _patternable(obj):
     return obj.isDerivedFrom("Part::Feature") or obj.isDerivedFrom("App::Part")
 
 
+def _html(text):
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _message(text):
     _QtCore, _QtGui, QtWidgets = _qt()
     import FreeCADGui as Gui
@@ -586,36 +633,78 @@ class _Manipulator:
 
 class _SeedObserver:
     """Re-place linked patterns when their seed moves or a pattern property is
-    edited in the property view. Deferred to the event loop, outside recompute."""
+    edited in the property view, and re-check held instances when the solver
+    moves an instance or a joint changes. Deferred to the event loop, outside
+    recompute."""
 
     def slotChangedObject(self, obj, prop):
         try:
-            if prop == "Placement" and not obj.isDerivedFrom("App::LinkElement"):
+            if obj.Document.Restoring:
+                return
+            if prop == "Placement" and obj.isDerivedFrom("App::LinkElement"):
+                for array in _patterns_of_element(obj):
+                    _schedule(array, check_only=True)
+            elif prop == "Placement":
                 for array in bp.patterns_of(obj):
                     _schedule(array)
+            elif prop in JOINT_PROPS and _is_joint(obj):
+                _schedule_document(obj.Document)
             elif bp.is_pattern(obj) and prop not in ("InstanceKeys", "ElementCount", "ElementList",
-                                                     "Placement", "Label", "Visibility"):
+                                                     "Placement", "Label", "Visibility", bp.HELD):
                 if obj.getGroupOfProperty(prop) == bp.GROUP:
                     _schedule(obj)
         except Exception:
             pass
 
+    def slotDeletedObject(self, obj):
+        # A joint removed: its instance is free to follow the pattern again.
+        try:
+            if _is_joint(obj):
+                _schedule_document(obj.Document)
+        except Exception:
+            pass
 
-def _schedule(array):
+
+# Joint properties that change what a joint holds.
+JOINT_PROPS = ("Reference1", "Reference2", "Suppressed", "ObjectToGround")
+
+
+def _is_joint(obj):
+    props = obj.PropertiesList
+    return "ObjectToGround" in props or ("JointType" in props and "Reference1" in props)
+
+
+def _patterns_of_element(element):
+    return [o for o in element.InList if bp.is_pattern(o)]
+
+
+def _schedule_document(doc):
+    for obj in doc.Objects:
+        if bp.is_pattern(obj):
+            _schedule(obj)
+
+
+def _schedule(array, check_only=False):
+    """Run ``bp.apply`` (or only the held-instance check) on the event loop."""
     QtCore, _QtGui, _QtWidgets = _qt()
     key = (array.Document.Name, array.Name)
-    if key in _state["pending"]:
+    job = key + (check_only,)
+    if job in _state["pending"]:
         return
-    _state["pending"].add(key)
+    _state["pending"].add(job)
 
     def run():
-        _state["pending"].discard(key)
+        _state["pending"].discard(job)
         doc = App.getDocument(key[0]) if key[0] in App.listDocuments() else None
         obj = doc.getObject(key[1]) if doc else None
         if obj is None or not bp.is_pattern(obj):
             return
+        editing = key in _state["editing"]  # the open panel shows held instances
         try:
-            bp.apply(obj)
+            if not check_only:
+                bp.apply(obj, check=not editing)
+            elif not editing:
+                bp.update_held(obj)
         except Exception as exc:
             _warn(f"{obj.Label}: {exc}")
 

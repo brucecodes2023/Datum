@@ -6,7 +6,9 @@
 * BrowserBadges: a part or assembly carrying the BruceWorx part properties
   (bruceworx/partprops.py) shows its part number and lifecycle state as badges
   after its name ("LE-01-01001", "WIP 02"); a link to one (an assembly
-  component) shows them as quiet text ("LE-01-02001 · 01").
+  component) shows them as quiet text ("LE-01-02001 · 01"). The state is the
+  part's LifecycleState property, which the vault sets; only a part without
+  one has its state guessed from the revision (01, 02: WIP; A, B: released).
 * BrowserSummary: a quiet feature summary after the name ("Pad 8 mm", "R5",
   "Ø9 × 4"). The feature's type is named only when the label does not already.
 * BrowserIconPlates: a faint plate behind tree icons in dark mode.
@@ -26,10 +28,12 @@ MODEL_DOCK = "Model"
 HEADER_TITLE = "Browser"
 SWITCHES = ("BrowserHeader", "BrowserBadges", "BrowserSummary", "BrowserIconPlates", "BrowserGroupCaptions")
 
-# Lifecycle states (bruceworx/pdm.py) -> (badge word, kind).
+# Lifecycle states (bruceworx/pdm.py) -> (badge word, kind): work in progress in the
+# warning colour (the mock's .badge.wip), review in the accent, released quiet, obsolete faded.
 WIP, IN_REVIEW, RELEASED, OBSOLETE = "WIP", "In Review", "Released", "Obsolete"
 STATE_BADGES = {WIP: ("WIP", "warn"), IN_REVIEW: ("REVIEW", "accent"), RELEASED: ("REV", ""), OBSOLETE: ("OBSOLETE", "dim")}
-STATE_PROPERTIES = ("State", "LifecycleState")
+# The vault's property (part_properties.json) first; "State" for files from elsewhere.
+STATE_PROPERTIES = ("LifecycleState", "State")
 
 # Feature type -> the word shown when the label does not already say it.
 TYPE_WORDS = {
@@ -214,8 +218,19 @@ def linked_part(obj):
     return target if target is not None and target is not obj else None
 
 
+def held_badges(obj):
+    """[("N held", "warn")] for a pattern with instances its joints keep in place."""
+    held = _prop(obj, "HeldInstances")
+    return [(f"{len(held)} held", "warn")] if held else []
+
+
 def row_info(obj, badges=True, summary=True):
     """(summary text, [(badge, kind)]) for one tree row."""
+    meta, marks = _row_info(obj, badges, summary)
+    return meta, marks + held_badges(obj) if badges else marks
+
+
+def _row_info(obj, badges, summary):
     values = part_values(obj) if badges else None
     if values:
         return "", part_badges(*values)
