@@ -5,3 +5,5 @@ import FreeCAD
 
 FreeCAD.__unit_test__.append("TestBruceWorx")
 FreeCAD.__unit_test__.append("TestBruceWorxPattern")
+FreeCAD.__unit_test__.append("TestBruceWorxBrowser")
+FreeCAD.__unit_test__.append("TestBruceWorxNavPill")

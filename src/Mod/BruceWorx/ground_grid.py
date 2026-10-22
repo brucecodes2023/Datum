@@ -103,7 +103,15 @@ def _active_scene():
     view = getattr(doc, "ActiveView", None)
     if view is None or not hasattr(view, "getSceneGraph"):
         return None, None
-    return view, view.getSceneGraph()
+    # getSceneGraph() wraps the node with pivy's SWIG types, so pivy.coin must
+    # be imported first. With a file on the command line the document is
+    # activated before anything else has imported it.
+    try:
+        from pivy import coin  # noqa: F401
+
+        return view, view.getSceneGraph()
+    except (ImportError, RuntimeError):
+        return None, None
 
 
 def _detach():

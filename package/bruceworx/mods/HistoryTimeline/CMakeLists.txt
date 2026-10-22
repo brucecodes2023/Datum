@@ -10,6 +10,7 @@ SET(HistoryTimeline_SRCS
     InitGui.py
     README.md
     history_timeline/__init__.py
+    history_timeline/assembly.py
     history_timeline/bar.py
     history_timeline/dock.py
     history_timeline/model.py
@@ -29,6 +30,7 @@ INSTALL(
 INSTALL(
     FILES
         history_timeline/__init__.py
+        history_timeline/assembly.py
         history_timeline/bar.py
         history_timeline/dock.py
         history_timeline/model.py

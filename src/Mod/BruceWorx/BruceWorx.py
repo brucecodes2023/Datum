@@ -12,13 +12,12 @@ overlay reload puts those docks back where they were.
 
 The task panel ("Tasks" dock) floats on OverlayRight as the command dialog
 card while FloatingTaskPanel is on (default, roadmap §13.3). It shows while a
-command is open and hides otherwise (TaskShow). Same snapshot, same off switch
+command is open and hides otherwise (TaskShow; [BW] OverlayWidgets.cpp hides a
+panel that holds only the task view). Same snapshot, same off switch
 behaviour.
 
-Spike gap (FCB-P1F-11, not done here): the left overlay is pinned to the
-edge. OverlayTabWidget::setRect moves a left panel to x=0, so Offset3 (the
-left inset preference) is stored and not applied. A free-floating panel,
-not attached to an edge, needs a small OverlayManager change. Height of a
+Offset3 insets each panel from its window edge. The left one used to be pinned
+to x=0 by OverlayTabWidget::setRect; a [BW] change there now keeps the inset. Height of a
 side panel is also computed to fill the viewport minus the top offset and
 bottom inset; a free height is the same later change.
 """
@@ -43,6 +42,7 @@ DEFAULT_LEFT_INSET = 8
 MIN_WIDTH = 120
 TASK_DOCK = "Tasks"
 TASK_WIDTH = 380
+TASK_RIGHT_INSET = 8
 
 # Keys we rewrite on OverlayLeft. Sizes is cleared while the feature is on
 # so a previous splitter layout is not applied to the model tree alone.
@@ -241,6 +241,7 @@ def _apply_tasks(prefs, overlay_root):
     right.SetInt("Width", TASK_WIDTH)
     right.SetInt("Offset1", DEFAULT_TOP_OFFSET)
     right.SetInt("Offset2", DEFAULT_BOTTOM_INSET)
+    right.SetInt("Offset3", TASK_RIGHT_INSET)
     right.SetBool("AutoHide", 0)
     right.SetBool("Transparent", 0)
     right.SetBool("EditHide", 0)
@@ -357,7 +358,9 @@ def install():
         import FreeCAD
         import FreeCADGui
 
-        ui = os.path.join(os.path.dirname(os.path.abspath(__file__)), "preferences-bruceworx.ui")
+        here = os.path.dirname(os.path.abspath(__file__))
+        FreeCADGui.addIconPath(here)  # preferences-bruceworx.svg, the page icon
+        ui = os.path.join(here, "preferences-bruceworx.ui")
         FreeCADGui.addPreferencePage(ui, "BruceWorx")
         _observer = _PrefObserver()
         # Keep the group handle: ParamGet returns a new Python wrapper each

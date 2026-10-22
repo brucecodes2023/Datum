@@ -647,8 +647,13 @@ public:
         int w = mdi->geometry().width();
         int h = mdi->geometry().height();
         auto tabbar = mdi->findChild<QTabBar*>();
+        // [BW] Document tabs may sit on top (MainWindow/DocumentTabPos): start the panels below them
+        int top = 0;
         if (tabbar) {
             h -= tabbar->height();
+            if (tabbar->isVisible() && tabbar->geometry().center().y() < mdi->height() / 2) {
+                top = tabbar->height();
+            }
         }
 
         int naviCubeSize = NaviCube::getNaviCubeSize();
@@ -682,7 +687,7 @@ public:
         // Bottom width is maintain the same to reduce QTextEdit re-layout
         // which may be expensive if there are lots of text, e.g. for
         // ReportView or PythonConsole.
-        _bottom.tabWidget->setRect(QRect(ofs.width(), h - rect.height(), bw, rect.height()));
+        _bottom.tabWidget->setRect(QRect(ofs.width(), top + h - rect.height(), bw, rect.height()));
 
         if (_bottom.tabWidget->count() && _bottom.tabWidget->isVisible()
             && _bottom.tabWidget->getState() <= OverlayTabWidget::State::Normal) {
@@ -702,7 +707,7 @@ public:
         }
         int lh = std::max(h - ofs.width() - delta, 10);
 
-        _left.tabWidget->setRect(QRect(ofs.height(), ofs.width(), rect.width(), lh));
+        _left.tabWidget->setRect(QRect(ofs.height(), top + ofs.width(), rect.width(), lh));
 
         if (_left.tabWidget->count() && _left.tabWidget->isVisible()
             && _left.tabWidget->getState() <= OverlayTabWidget::State::Normal) {
@@ -723,7 +728,7 @@ public:
         int rh = std::max(h - ofs.width() - delta, 10);
         w -= ofs.height();
 
-        _right.tabWidget->setRect(QRect(w - rect.width(), ofs.width(), rect.width(), rh));
+        _right.tabWidget->setRect(QRect(w - rect.width(), top + ofs.width(), rect.width(), rh));
 
         if (_right.tabWidget->count() && _right.tabWidget->isVisible()
             && _right.tabWidget->getState() <= OverlayTabWidget::State::Normal) {
@@ -742,7 +747,9 @@ public:
         }
         int tw = w - rectLeft.width() - rectRight.width() - ofs.width() - delta;
 
-        _top.tabWidget->setRect(QRect(rectLeft.width() - ofs.width(), ofs.height(), tw, rect.height()));
+        _top.tabWidget->setRect(
+            QRect(rectLeft.width() - ofs.width(), top + ofs.height(), tw, rect.height())
+        );
     }
 
     void setOverlayMode(OverlayMode mode)
@@ -1692,8 +1699,13 @@ void OverlayManager::onTaskViewUpdate()
     }
     if (dock) {
         auto it = d->_overlayMap.find(dock);
-        if (it == d->_overlayMap.end() || it->second->tabWidget->count() < 2
+        if (it == d->_overlayMap.end()
             || it->second->tabWidget->getAutoMode() != OverlayTabWidget::AutoMode::TaskShow) {
+            return;
+        }
+        if (it->second->tabWidget->count() < 2) {
+            // [BW] alone in its panel: OverlayTabWidget::checkAutoHide shows or hides it
+            refresh(dock);
             return;
         }
         d->onToggleDockWidget(dock, taskview->isEmpty() ? -2 : 2);

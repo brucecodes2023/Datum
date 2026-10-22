@@ -29,6 +29,15 @@ Read-only order from `Body.Group`, rollback marker after `Body.Tip`.
 * Right-click: edit, roll the tip, suppress / unsuppress.
 * **Move earlier** and **Move later** are present and disabled. Reorder is not safe yet. See `docs/SPIKE.md`.
 
+For an assembly (the active one, else the first top-level assembly) the bar lists its components and joints in
+the order they were created, sorted by `obj.ID`. No marker and no rollback: a click selects the object (in its
+assembly, as the tree does), a double-click on a joint opens it for editing. The chip of the object being edited
+is lit; a suppressed joint is struck through. The active body wins over an assembly.
+
+The dock hides itself while the active document has nothing to show (no document, no body with features, no
+assembly with components or joints) and comes back when it has. `Mod/HistoryTimeline/HideWhenEmpty` (default
+`true`, **Preferences → BruceWorx**) keeps it visible with a short message instead.
+
 ## Headless test
 
 From a source build:
@@ -38,6 +47,12 @@ FreeCADCmd package/bruceworx/mods/HistoryTimeline/tests/test_timeline_access.py
 ```
 
 From the conda package the binary is `freecadcmd`. Exit 0 means every check passed. The test does not load the GUI.
+
+Assembly order and visibility (set `BW_CHECKLIST` to the checklist folder to also read copies of its files):
+
+```text
+FreeCADCmd package/bruceworx/mods/HistoryTimeline/tests/test_assembly_timeline.py
+```
 
 ## Docs
 

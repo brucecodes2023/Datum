@@ -106,6 +106,14 @@ INVENTORY = [
     ),
     _e(
         "BaseApp/Preferences/General",
+        "ShowTaskWatcher",
+        "bool",
+        True,
+        False,
+        note="No workbench command lists in the task panel: it shows only the open command.",
+    ),
+    _e(
+        "BaseApp/Preferences/General",
         "ToolbarIconSize",
         "int",
         0,
@@ -247,6 +255,14 @@ INVENTORY = [
         "Freecad Overlay.qss",
         note="Keep the stock overlay sheet so dock overlays still theme.",
     ),
+    _e(
+        "BaseApp/Preferences/MainWindow",
+        "DocumentTabPos",
+        "int",
+        1,
+        0,
+        note="Document tabs on top (0 North); stock is 1, South. [BW] MainWindow.cpp.",
+    ),
     _e("BaseApp/Preferences/Themes", "ThemeAccentColor1", "uint", None, rgba(0, 122, 255), rgba(10, 132, 255)),
     _e("BaseApp/Preferences/Themes", "ThemeAccentColor2", "uint", None, rgba(90, 200, 250), rgba(64, 156, 255)),
     _e("BaseApp/Preferences/Themes", "ThemeAccentColor3", "uint", None, rgba(0, 122, 255), rgba(10, 132, 255)),
@@ -372,8 +388,9 @@ INVENTORY = [
         "DefaultShapeLineWidth",
         "int",
         2,
-        1,
-        note="Thinner edges. DrawStyle stays the compiled Solid default.",
+        2,
+        note="2 px: line widths are device pixels, so 1 px is a half-point hairline on Retina. "
+        "Body edges and sketches outside edit mode. DrawStyle stays the compiled Solid default.",
     ),
     _e("BaseApp/Preferences/View", "DefaultShapePointSize", "int", 2, 2),
     _e(
@@ -717,6 +734,22 @@ INVENTORY = [
         False,
         True,
         note="Toggle the ground grid without leaving the pack. Off removes the key.",
+    ),
+    _e(
+        APPLIED_GROUP,
+        "DocumentTabDot",
+        "bool",
+        False,
+        True,
+        note="Modified document tabs show a dot, x on hover. [BW] MainWindow.cpp.",
+    ),
+    _e(
+        APPLIED_GROUP,
+        "StatusReadouts",
+        "bool",
+        False,
+        True,
+        note="Status bar as text: Report, units, navigation, view size, vault.",
     ),
 ]
 

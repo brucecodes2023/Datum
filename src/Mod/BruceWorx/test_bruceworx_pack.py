@@ -21,6 +21,8 @@ import ground_grid  # noqa: E402
 import bruceworx_toolbars as toolbars  # noqa: E402
 import bruceworx_grid as grid  # noqa: E402
 import bruceworx_appearance as appearance  # noqa: E402
+import bruceworx_taskcard as taskcard  # noqa: E402
+import bruceworx_statusbar as statusbar  # noqa: E402
 
 
 ROOT = pack.repo_root()
@@ -131,6 +133,12 @@ class PackContentsTest(unittest.TestCase):
         for name in pack.REQUIRED_WORKBENCHES:
             self.assertNotIn(name, disabled.split(","))
 
+    def test_no_task_watchers(self):
+        # The task panel shows only the open command, not the workbench's command lists.
+        for mode in ("light", "dark"):
+            entries = {(e["path"], e["name"]): e["value"] for e in pack.pack_entries(mode)}
+            self.assertFalse(entries[("BaseApp/Preferences/General", "ShowTaskWatcher")])
+
     def test_fusion_nav_and_millimetres(self):
         entries = {(e["path"], e["name"]): e["value"] for e in pack.pack_entries("light")}
         self.assertEqual(entries[("BaseApp/Preferences/Units", "UserSchema")], 0)
@@ -141,7 +149,7 @@ class PackContentsTest(unittest.TestCase):
         self.assertEqual(entries[("BaseApp/Preferences/General", "AutoloadModule")], "PartDesignWorkbench")
         self.assertTrue(entries[("BaseApp/Preferences/View", "Perspective")])
         self.assertFalse(entries[("BaseApp/Preferences/View", "Orthographic")])
-        self.assertEqual(entries[("BaseApp/Preferences/View", "DefaultShapeLineWidth")], 1)
+        self.assertEqual(entries[("BaseApp/Preferences/View", "DefaultShapeLineWidth")], 2)
         self.assertEqual(entries[("BaseApp/Preferences/View", "DefaultShapeShininess")], 40)
         self.assertEqual(entries[("BaseApp/Preferences/NaviCube", "CornerNaviCube")], 1)
         self.assertEqual(entries[("BaseApp/Preferences/NaviCube", "CubeSize")], 96)
@@ -383,6 +391,11 @@ class DefaultsOnTest(unittest.TestCase):
 
 
 class ToolbarRowsTest(unittest.TestCase):
+    def test_all_hidden(self):
+        self.assertTrue(toolbars.all_hidden([False, False]))
+        self.assertFalse(toolbars.all_hidden([False, True]))
+        self.assertFalse(toolbars.all_hidden([]))
+
     def test_first_workbench_toolbar_starts_row_two(self):
         names = ["File", "Workbench", "View", "Part Design Helper Features", "Part Design Modeling Features"]
         self.assertEqual(toolbars.plan_breaks(names), {"Part Design Helper Features"})
@@ -428,6 +441,66 @@ class AppearanceTest(unittest.TestCase):
         self.assertIn(("BaseApp/Preferences/View", "BackgroundColor2"), names)
         self.assertNotIn(("BaseApp/Preferences/Units", "UserSchema"), names)
         self.assertNotIn(("BaseApp/Preferences/View", "NavigationStyle"), names)
+
+
+class TaskCardTest(unittest.TestCase):
+    def test_first_titled_box_names_the_card(self):
+        self.assertEqual(taskcard.pick_title([("", False), ("Fillet Parameters", True), ("Preview", True)]),
+                         ("Fillet Parameters", 1))
+
+    def test_no_titles_keeps_tasks(self):
+        self.assertEqual(taskcard.pick_title([("", False), ("  ", True)]), ("Tasks", None))
+
+
+class DocumentTabsAndStatusTest(unittest.TestCase):
+    def test_pack_puts_tabs_on_top_with_dots_and_readouts(self):
+        entries = {(e["path"], e["name"]): e for e in pack.INVENTORY}
+        tab = entries[("BaseApp/Preferences/MainWindow", "DocumentTabPos")]
+        self.assertEqual((tab["stock"], tab["light"], tab["dark"]), (1, 0, 0))  # stock South, pack North
+        for name in ("DocumentTabDot", "StatusReadouts"):
+            entry = entries[(pack.APPLIED_GROUP, name)]
+            self.assertEqual((entry["stock"], entry["light"], entry["dark"]), (False, True, True), name)
+
+    def test_preference_page_has_the_switches(self):
+        ui = ET.parse(os.path.join(ROOT, "src", "Mod", "BruceWorx", "preferences-bruceworx.ui"))
+        found = {}
+        for widget in ui.iter("widget"):
+            props = {p.get("name"): p for p in widget.findall("property")}
+            if "prefEntry" in props:
+                found[props["prefEntry"].findtext("cstring")] = (widget.get("class"), props)
+        for name in ("DocumentTabDot", "StatusReadouts"):
+            cls, props = found[name]
+            self.assertEqual(cls, "Gui::PrefCheckBox")
+            self.assertEqual(props["checked"].findtext("bool"), "true", name)
+            self.assertEqual(props["prefPath"].findtext("cstring"), "BruceWorx")
+        cls, props = found["DocumentTabPos"]
+        self.assertEqual(cls, "Gui::PrefComboBox")
+        self.assertEqual(props["prefPath"].findtext("cstring"), "MainWindow")
+        self.assertEqual(props["currentIndex"].findtext("number"), "0")
+
+    def test_stylesheet_styles_the_new_widgets(self):
+        qss = _read(os.path.join(ROOT, "src", "Gui", "Stylesheets", "BruceWorx.qss"))
+        for selector in ("#documentTabButton", "#reportReadout", "#vaultReadout"):
+            self.assertTrue(selector in qss, selector)
+
+    def test_navigation_label(self):
+        self.assertEqual(statusbar.navigation_label("Revit  "), "Navigation Revit")
+        self.assertEqual(statusbar.navigation_label("", "Gui::TouchpadNavigationStyle"), "Navigation Touchpad")
+        self.assertEqual(statusbar.navigation_label("", ""), "Navigation")
+
+    def test_vault_label(self):
+        self.assertIsNone(statusbar.vault_label(""))
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(statusbar.vault_label(os.path.join(tmp, "gone"))[0], "Vault offline")
+            self.assertEqual(statusbar.vault_label(tmp)[0], "Vault not set up")
+            ref = os.path.join(tmp, "Shop.bwvault")
+            with open(ref, "w", encoding="utf-8") as handle:
+                handle.write('{"format": "bruceworx.vault", "version": 1, "name": "Shop"}')
+            self.assertEqual(statusbar.vault_label(tmp), ("Vault Shop", tmp))
+            self.assertEqual(statusbar.vault_label(ref)[0], "Vault Shop")
+            with open(ref, "w", encoding="utf-8") as handle:
+                handle.write("{not json")
+            self.assertEqual(statusbar.vault_label(tmp)[0], "Vault unreadable")
 
 
 if __name__ == "__main__":

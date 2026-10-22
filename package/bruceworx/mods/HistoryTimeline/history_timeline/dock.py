@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """FreeCAD dock that shows ``read_timeline`` and rolls ``Body.Tip``.
 
+For an assembly it lists the components and joints in creation order
+(``assembly.read_assembly``); a click selects, nothing rolls back. The dock
+hides itself while the active document has no history to show and comes back
+when it has (``Mod/HistoryTimeline/HideWhenEmpty``, default true).
+
 BruceWorx ships this on by default: ``Mod/HistoryTimeline/Enabled`` defaults to
 true, so the dock shows on a normal start. The off switches are the
 BruceWorx → History Timeline menu item, the "History timeline" box on
@@ -12,6 +17,7 @@ from __future__ import annotations
 
 import FreeCAD
 
+from history_timeline import assembly as asm
 from history_timeline import model
 from history_timeline.bar import RIBBON_HEIGHT, TimelineBar
 from history_timeline.qtcompat import load_qt, qt_enum
@@ -38,10 +44,18 @@ def prefs():
 
 
 ENABLED_DEFAULT = True
+HIDE_WHEN_EMPTY_DEFAULT = True
+# How often the dock checks the active body / assembly / object in edit.
+# None of those changes reaches a document observer.
+POLL_MS = 400
 
 
 def is_enabled() -> bool:
     return bool(prefs().GetBool("Enabled", ENABLED_DEFAULT))
+
+
+def hide_when_empty() -> bool:
+    return bool(prefs().GetBool("HideWhenEmpty", HIDE_WHEN_EMPTY_DEFAULT))
 
 
 def _bottom_area():
@@ -62,33 +76,76 @@ def _view_icon(obj):
     return icon
 
 
+def _active_object(key):
+    """``ActiveView.getActiveObject(key)`` or None (no GUI, no view, a 2D view)."""
+    if not FreeCAD.GuiUp:
+        return None
+    import FreeCADGui
+
+    gui_doc = FreeCADGui.ActiveDocument
+    view = getattr(gui_doc, "ActiveView", None) if gui_doc is not None else None
+    getter = getattr(view, "getActiveObject", None)
+    if getter is None:
+        return None
+    try:
+        obj = getter(key)
+    except (RuntimeError, TypeError, AttributeError):
+        return None
+    if isinstance(obj, tuple):
+        obj = obj[0] if obj else None
+    return obj
+
+
+def _in_edit_name():
+    if not FreeCAD.GuiUp:
+        return None
+    import FreeCADGui
+
+    gui_doc = FreeCADGui.ActiveDocument
+    try:
+        vp = gui_doc.getInEdit() if gui_doc is not None else None
+    except (RuntimeError, AttributeError):
+        return None
+    obj = getattr(vp, "Object", None) if vp is not None else None
+    return getattr(obj, "Name", None)
+
+
+def _active_assembly():
+    for key in ("assembly", "part"):
+        obj = _active_object(key)
+        if asm.is_assembly(obj):
+            return obj
+    return None
+
+
+def active_source():
+    """What the bar shows: ``(kind, obj, how)``, see ``assembly.pick_source``."""
+    doc = FreeCAD.ActiveDocument
+    if doc is None:
+        return None, None, "none"
+    body = _active_object("pdbody")
+    return asm.pick_source(doc.Objects, body, _active_assembly())
+
+
 def active_body():
-    """Active PartDesign body (``pdbody``), else the first body in the document.
+    """Body the bar shows, or None when it shows an assembly or nothing.
 
     Returns ``(body, source)`` where source is ``"active"``, ``"first"``, or ``"none"``.
     """
+    kind, obj, how = active_source()
+    if kind != "body":
+        return None, "none"
+    return obj, how
+
+
+def _poll_key():
     doc = FreeCAD.ActiveDocument
     if doc is None:
-        return None, "none"
-    if FreeCAD.GuiUp:
-        import FreeCADGui
-
-        gui_doc = FreeCADGui.ActiveDocument
-        view = getattr(gui_doc, "ActiveView", None) if gui_doc is not None else None
-        getter = getattr(view, "getActiveObject", None)
-        if getter is not None:
-            try:
-                body = getter("pdbody")
-            except (RuntimeError, TypeError):
-                body = None
-            if isinstance(body, tuple):
-                body = body[0] if body else None
-            if body is not None and getattr(body, "TypeId", "") == "PartDesign::Body":
-                return body, "active"
-    for obj in doc.Objects:
-        if getattr(obj, "TypeId", "") == "PartDesign::Body":
-            return obj, "first"
-    return None, "none"
+        return None
+    names = []
+    for obj in (_active_object("pdbody"), _active_assembly()):
+        names.append(getattr(obj, "Name", None))
+    return (doc.Name, tuple(names), _in_edit_name())
 
 
 class _DocumentObserver:
@@ -123,9 +180,9 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self.setObjectName(DOCK_OBJECT_NAME)
         self.setAllowedAreas(_bottom_area())
         self._bar = TimelineBar(self)
-        self._bar.tipRequested.connect(self._roll_to)
-        self._bar.editRequested.connect(self._edit)
-        self._bar.contextMenuRequested.connect(self._popup)
+        self._bar.tipRequested.connect(self._on_click)
+        self._bar.editRequested.connect(self._on_double)
+        self._bar.contextMenuRequested.connect(self._on_context)
         self.setWidget(self._bar)
         # One row, no dock title: the bar is the only header (roadmap §13.3).
         # The menu item and the preference still show and hide it. A restored
@@ -146,6 +203,27 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self._refresh_timer.setInterval(0)
         self._refresh_timer.timeout.connect(self.refresh)
         self._suspend = False
+        self._live = False
+        self._kind = None
+        self._poll_key = None
+        self._want_visible = True
+        self._poll_timer = QtCore.QTimer(self)
+        self._poll_timer.setInterval(POLL_MS)
+        self._poll_timer.timeout.connect(self._poll)
+
+    def set_live(self, live):
+        """Follow the documents (enabled) or stay hidden (disabled)."""
+        self._live = bool(live)
+        if self._live:
+            self._poll_timer.start()
+        else:
+            self._poll_timer.stop()
+
+    def _poll(self):
+        key = _poll_key()
+        # A restored window state can show the dock behind our back.
+        if key != self._poll_key or self.isHidden() == self._want_visible:
+            self.schedule_refresh()
 
     def schedule_refresh(self):
         if not self._suspend:
@@ -154,17 +232,88 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
     def refresh(self):
         if self._suspend:
             return
-        body, source = active_body()
-        if body is None:
+        self._poll_key = _poll_key()
+        kind, obj, source = active_source()
+        self._kind = kind
+        if kind == "assembly":
+            timeline = asm.read_assembly(obj, _in_edit_name())
+            for entry in timeline.entries:
+                entry.icon = _view_icon(entry.obj)
+            self._bar.setToolTip("Creation order · click selects · double-click edits a joint")
+            self._bar.set_timeline(
+                timeline.label, timeline.entries, marker=False, note=timeline.note()
+            )
+        elif kind == "body":
+            timeline = model.read_timeline(obj)
+            for entry in timeline.entries:
+                entry.icon = _view_icon(entry.obj)
+            label = timeline.body_label
+            if source == "first":
+                label += " (not active)"
+            self._bar.setToolTip("Click rolls the tip · double-click edits · right-click to suppress")
+            self._bar.set_timeline(label, timeline.entries)
+        else:
             self._bar.set_timeline(None, [], "No feature history in this document.")
+        self._update_visibility(asm.has_history(kind, obj))
+
+    def _update_visibility(self, has_history):
+        if not self._live:
             return
-        timeline = model.read_timeline(body)
-        for entry in timeline.entries:
-            entry.icon = _view_icon(entry.obj)
-        label = timeline.body_label
-        if source == "first":
-            label += " (not active)"
-        self._bar.set_timeline(label, timeline.entries)
+        show = has_history or not hide_when_empty()
+        self._want_visible = show
+        if show == self.isHidden():
+            self.setVisible(show)
+
+    def _assembly_object(self, name):
+        kind, assembly, _how = active_source()
+        if kind != "assembly":
+            return None
+        doc = assembly.Document
+        obj = doc.getObject(name)
+        return obj
+
+    def _select(self, name):
+        obj = self._assembly_object(name)
+        if obj is None or not FreeCAD.GuiUp:
+            return
+        import FreeCADGui
+
+        root, sub = asm.selection_path(obj)
+        try:
+            FreeCADGui.Selection.clearSelection()
+            if sub:
+                FreeCADGui.Selection.addSelection(root.Document.Name, root.Name, sub)
+            else:
+                FreeCADGui.Selection.addSelection(obj)
+        except Exception as exc:
+            FreeCAD.Console.PrintError(f"History timeline: cannot select {name}: {exc}\n")
+
+    def _on_click(self, name):
+        if self._kind == "assembly":
+            self._select(name)
+        else:
+            self._roll_to(name)
+
+    def _on_double(self, name):
+        if self._kind != "assembly":
+            self._edit(name)
+            return
+        self._select(name)
+        obj = self._assembly_object(name)
+        if obj is None or not asm.is_joint(obj) or not FreeCAD.GuiUp:
+            return
+        import FreeCADGui
+
+        try:
+            # Same as a double-click on the joint in the tree.
+            FreeCADGui.ActiveDocument.setEdit(obj)
+        except Exception as exc:
+            FreeCAD.Console.PrintError(f"History timeline: cannot edit {name}: {exc}\n")
+
+    def _on_context(self, name, global_pos):
+        # Assemblies have nothing to roll back or suppress from here.
+        if self._kind != "assembly":
+            self._popup(name, global_pos)
 
     def _feature(self, name):
         body, _source = active_body()
@@ -286,7 +435,7 @@ class _ToggleCommand:
             "CmdType": "ForEdit",
             "MenuText": "Toggle history timeline",
             "ToolTip": (
-                "Show or hide the PartDesign history timeline. "
+                "Show or hide the history timeline (PartDesign history, assembly order). "
                 "On by default. Preference: Mod/HistoryTimeline/Enabled."
             ),
         }
@@ -345,12 +494,16 @@ def set_enabled(enabled: bool, hide_widget: bool = True):
     if enabled:
         dock = _ensure_dock()
         _ensure_observer(dock)
+        dock.set_live(True)
         dock.show()
         dock.raise_()
+        # Hides the dock again when there is no history to show.
         dock.refresh()
     else:
         _drop_observer()
         dock = _state["dock"]
+        if dock is not None:
+            dock.set_live(False)
         if hide_widget and dock is not None:
             dock.hide()
 
@@ -359,6 +512,11 @@ class _PrefObserver:
     """Follows ``Enabled`` when it is changed elsewhere (the preference page)."""
 
     def onChange(self, _group, name):
+        if name == "HideWhenEmpty":
+            dock = _state["dock"]
+            if dock is not None:
+                QtCore.QTimer.singleShot(0, dock.refresh)
+            return
         if name != "Enabled" or _state["syncing"]:
             return
         QtCore.QTimer.singleShot(0, _follow_pref)
@@ -366,9 +524,10 @@ class _PrefObserver:
 
 def _follow_pref():
     enabled = is_enabled()
-    dock = _state["dock"]
-    visible = dock is not None and dock.isVisible()
-    if enabled != visible:
+    # The dock may be hidden for lack of history while enabled, so compare
+    # with the observer, which is attached exactly while enabled.
+    live = _state["observer"] is not None
+    if enabled != live:
         set_enabled(enabled)
 
 
@@ -409,7 +568,8 @@ def install():
     action.setCheckable(True)
     action.setChecked(is_enabled())
     action.setToolTip(
-        "Bottom PartDesign history bar. On by default. "
+        "Bottom history bar: PartDesign features, or assembly components and joints. "
+        "On by default. Hidden while there is no history. "
         "Uncheck, close the dock, or turn it off on Preferences → BruceWorx."
     )
     action.toggled.connect(set_enabled)

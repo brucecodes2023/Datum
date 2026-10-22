@@ -178,6 +178,24 @@ macro(SetupShibokenAndPyside)
 endmacro(SetupShibokenAndPyside)
 
 
+# [BW] Files listed in a .qrc, as absolute paths. Entries that do not exist
+# at configure time are left out (rcc reports them when it runs).
+function(PYSIDE_QRC_DEPENDS outvar qrcfile)
+  set(result)
+  get_filename_component(qrcdir "${qrcfile}" DIRECTORY)
+  file(READ "${qrcfile}" content)
+  string(REGEX MATCHALL "<file[^>]*>[^<]+</file>" entries "${content}")
+  foreach(entry IN LISTS entries)
+    string(REGEX REPLACE "<file[^>]*>([^<]+)</file>" "\\1" path "${entry}")
+    string(STRIP "${path}" path)
+    get_filename_component(path "${path}" ABSOLUTE BASE_DIR "${qrcdir}")
+    if(EXISTS "${path}" AND NOT IS_DIRECTORY "${path}")
+      list(APPEND result "${path}")
+    endif()
+  endforeach()
+  set(${outvar} ${result} PARENT_SCOPE)
+endfunction()
+
 MACRO(PYSIDE_WRAP_RC outfiles)
   if (NOT PYSIDE_RCC_EXECUTABLE)
     message(FATAL_ERROR "Qt rcc is required for generating ${ARGN}")
@@ -186,6 +204,11 @@ MACRO(PYSIDE_WRAP_RC outfiles)
     GET_FILENAME_COMPONENT(outfile ${it} NAME_WE)
     GET_FILENAME_COMPONENT(infile ${it} ABSOLUTE)
     SET(outfile "${CMAKE_CURRENT_BINARY_DIR}/${outfile}_rc.py")
+    # [BW] Rebuild the _rc.py when a file listed in the .qrc changes (a .ui,
+    # an icon), not only the .qrc itself. The list is read at configure time;
+    # editing the .qrc re-runs CMake so new entries are picked up.
+    PYSIDE_QRC_DEPENDS(_pwr_depends "${infile}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${infile}")
     #ADD_CUSTOM_TARGET(${it} ALL
     #  DEPENDS ${outfile}
     #)
@@ -193,6 +216,7 @@ MACRO(PYSIDE_WRAP_RC outfiles)
         ADD_CUSTOM_COMMAND(OUTPUT ${outfile}
           COMMAND ${PYSIDE_RCC_EXECUTABLE} ${RCCOPTIONS} ${infile} -o ${outfile}
           MAIN_DEPENDENCY ${infile}
+          DEPENDS ${_pwr_depends}
         )
     else()
         # Especially on Open Build Service we don't want changing date like
@@ -204,6 +228,7 @@ MACRO(PYSIDE_WRAP_RC outfiles)
           # anymore with Qt5 RCC, so commenting it out for now...
           #COMMAND sed "/^# /d" "${outfile}" >"${outfile}.tmp" && mv "${outfile}.tmp" "${outfile}"
           MAIN_DEPENDENCY "${infile}"
+          DEPENDS ${_pwr_depends}
         )
     endif()
     list(APPEND ${outfiles} ${outfile})

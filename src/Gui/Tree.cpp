@@ -41,6 +41,7 @@
 
 
 #include <Base/Console.h>
+#include <Base/Interpreter.h>
 #include <Base/Reader.h>
 #include <Base/Sequencer.h>
 #include <Base/Tools.h>
@@ -87,6 +88,7 @@ std::unique_ptr<QPixmap> TreeWidget::documentPixmap;
 std::unique_ptr<QPixmap> TreeWidget::documentPartialPixmap;
 static QBrush _TreeItemBackground;
 std::set<TreeWidget*> TreeWidget::Instances;
+unsigned TreeWidget::rowInfoGeneration = 1;  // [BW]
 static TreeWidget* _LastSelectedTreeWidget;
 const int TreeWidget::DocumentType = 1000;
 const int TreeWidget::ObjectType = 1001;
@@ -467,7 +469,16 @@ class TreeWidgetItemDelegate: public QStyledItemDelegate
     // More information: https://github.com/FreeCAD/FreeCAD/pull/13807
     QTreeView* artificial;
 
-    QRect calculateItemRect(const QStyleOptionViewItem& option) const;
+    QRect calculateItemRect(const QStyleOptionViewItem& option, int extra = 0) const;
+    // [BW] Browser row extras: summary and badges after the name, icon plate
+    int rowExtrasWidth(const QStyleOptionViewItem& option, const DocumentObjectItem::RowInfo& info) const;
+    void paintRowExtras(
+        QPainter* painter,
+        const QStyleOptionViewItem& option,
+        const DocumentObjectItem::RowInfo& info,
+        int x
+    ) const;
+    QIcon platedIcon(const QIcon& icon, const QSize& size, const QColor& plate) const;
 
 public:
     explicit TreeWidgetItemDelegate(QObject* parent = nullptr);
@@ -500,7 +511,7 @@ TreeWidgetItemDelegate::TreeWidgetItemDelegate(QObject* parent)
 }
 
 
-QRect TreeWidgetItemDelegate::calculateItemRect(const QStyleOptionViewItem& option) const
+QRect TreeWidgetItemDelegate::calculateItemRect(const QStyleOptionViewItem& option, int extra) const
 {
     auto tree = static_cast<TreeWidget*>(parent());
     auto style = tree->style();
@@ -511,7 +522,7 @@ QRect TreeWidgetItemDelegate::calculateItemRect(const QStyleOptionViewItem& opti
 
     // 2 margin for text, 2 margin for decoration (icon) = 4 times margin
     int width = 4 * margin + option.fontMetrics.boundingRect(option.text).width()
-        + option.decorationSize.width() + TreeParams::getItemBackgroundPadding();
+        + option.decorationSize.width() + TreeParams::getItemBackgroundPadding() + extra;  // [BW] extra
 
     if (TreeParams::getCheckBoxesSelection()) {
         // another 2 margin for checkbox
@@ -538,6 +549,47 @@ void TreeWidgetItemDelegate::paint(
     auto tree = static_cast<TreeWidget*>(parent());
     auto style = tree->style();
 
+    // [BW] Browser row extras after the name; the name is shortened first to make room.
+    DocumentObjectItem::RowInfo info;
+    int extrasX = -1;
+    int extrasWidth = 0;
+    if (index.column() == 0) {
+        auto item = tree->itemFromIndex(index);
+        if (item && item->type() == TreeWidget::ObjectType) {
+            info = static_cast<DocumentObjectItem*>(item)->rowInfo();
+        }
+        if (tree->iconPlateColor.isValid() && tree->iconPlateColor.alpha() > 0 && !opt.icon.isNull()) {
+            opt.icon = platedIcon(opt.icon, opt.decorationSize, tree->iconPlateColor);
+        }
+    }
+    if (!info.empty()) {
+        QStyleOptionViewItem full = option;
+        initStyleOption(&full, index);
+        full.rect = option.rect;  // the whole column, not the trimmed name background
+        const int margin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, &full, artificial) + 1;
+        QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &full, artificial);
+        int avail = textRect.width() - 2 * margin;
+        int nameWidth = opt.fontMetrics.horizontalAdvance(opt.text);
+        extrasWidth = rowExtrasWidth(opt, info);
+        if (nameWidth + extrasWidth > avail && !info.meta.isEmpty()) {
+            info.meta.clear();  // the summary goes first, then the badges
+            extrasWidth = rowExtrasWidth(opt, info);
+        }
+        if (nameWidth + extrasWidth > avail && avail - extrasWidth < std::min(nameWidth, 60)) {
+            info = DocumentObjectItem::RowInfo();
+            extrasWidth = 0;
+        }
+        if (!info.empty()) {
+            QString name = opt.fontMetrics.elidedText(opt.text, Qt::ElideMiddle, avail - extrasWidth);
+            opt.text = name;
+            extrasX = textRect.left() + margin + opt.fontMetrics.horizontalAdvance(name);
+            if (isOnlyNameColumnDisplayed()) {
+                opt.rect = calculateItemRect(full, extrasWidth);
+                opt.rect.setWidth(opt.rect.width() + 3 * 2);
+            }
+        }
+    }
+
     // If only the first column is shown, we'll trim the color background when
     // rendering as transparent overlay.
     bool trimColumnSize = isOnlyNameColumnDisplayed();
@@ -547,7 +599,7 @@ void TreeWidgetItemDelegate::paint(
             && (trimColumnSize
                 || (opt.backgroundBrush.style() == Qt::NoBrush
                     && _TreeItemBackground.style() != Qt::NoBrush))) {
-            QRect rect = calculateItemRect(option);
+            QRect rect = calculateItemRect(option, extrasWidth);
 
             if (trimColumnSize && opt.backgroundBrush.style() == Qt::NoBrush) {
                 painter->fillRect(rect, _TreeItemBackground);
@@ -558,6 +610,153 @@ void TreeWidgetItemDelegate::paint(
         }
     }
     style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, artificial);
+    if (extrasX >= 0) {
+        paintRowExtras(painter, opt, info, extrasX);
+    }
+}
+
+// [BW] Browser row extras --------------------------------------------------------------
+namespace
+{
+const int extrasGap = 6;      // between the name, the summary and each badge
+const int badgePadding = 5;   // inside a badge, left and right
+
+QFont scaledFont(const QFont& base, double factor, bool bold)
+{
+    QFont font(base);
+    if (base.pixelSize() > 0) {
+        font.setPixelSize(std::max(7, qRound(base.pixelSize() * factor)));
+    }
+    else if (base.pointSizeF() > 0) {
+        font.setPointSizeF(std::max(6.0, base.pointSizeF() * factor));
+    }
+    if (bold) {
+        font.setWeight(QFont::DemiBold);
+    }
+    return font;
+}
+
+QFont metaFont(const QFont& base)
+{
+    return scaledFont(base, 11.0 / 12.0, false);
+}
+
+QFont badgeFont(const QFont& base)
+{
+    return scaledFont(base, 9.5 / 12.0, true);
+}
+
+QColor withAlpha(QColor color, int alpha)
+{
+    color.setAlpha(alpha);
+    return color;
+}
+}  // namespace
+
+int TreeWidgetItemDelegate::rowExtrasWidth(
+    const QStyleOptionViewItem& option,
+    const DocumentObjectItem::RowInfo& info
+) const
+{
+    int width = 0;
+    if (!info.meta.isEmpty()) {
+        width += extrasGap + QFontMetrics(metaFont(option.font)).horizontalAdvance(info.meta);
+    }
+    QFontMetrics fm(badgeFont(option.font));
+    for (const auto& badge : info.badges) {
+        width += extrasGap + 2 * badgePadding + fm.horizontalAdvance(badge.first);
+    }
+    return width;
+}
+
+void TreeWidgetItemDelegate::paintRowExtras(
+    QPainter* painter,
+    const QStyleOptionViewItem& option,
+    const DocumentObjectItem::RowInfo& info,
+    int x
+) const
+{
+    auto tree = static_cast<TreeWidget*>(parent());
+    const QColor text = option.palette.color(QPalette::Text);
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    const QRect row = option.rect;
+    if (!info.meta.isEmpty()) {
+        QFont font = metaFont(option.font);
+        painter->setFont(font);
+        painter->setPen(tree->rowMetaColor.isValid() ? tree->rowMetaColor : withAlpha(text, 130));
+        x += extrasGap;
+        int width = QFontMetrics(font).horizontalAdvance(info.meta);
+        painter->drawText(QRect(x, row.top(), width + 1, row.height()), Qt::AlignLeft | Qt::AlignVCenter, info.meta);
+        x += width;
+    }
+    QFont font = badgeFont(option.font);
+    QFontMetrics fm(font);
+    painter->setFont(font);
+    const int height = std::min(row.height() - 2, fm.height() + 2);
+    for (const auto& [label, kind] : info.badges) {
+        x += extrasGap;
+        QRect box(x, row.top() + (row.height() - height) / 2, fm.horizontalAdvance(label) + 2 * badgePadding, height);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(tree->badgeBackground.isValid() ? tree->badgeBackground : withAlpha(text, 22));
+        painter->drawRoundedRect(QRectF(box), 4, 4);
+        QColor color = tree->badgeTextColor.isValid() ? tree->badgeTextColor : withAlpha(text, 170);
+        if (kind == QLatin1String("warn")) {
+            color = tree->badgeWarnColor.isValid() ? tree->badgeWarnColor : QColor(0xc2, 0x7c, 0x00);
+        }
+        else if (kind == QLatin1String("accent")) {
+            color = tree->badgeAccentColor.isValid() ? tree->badgeAccentColor
+                                                     : option.palette.color(QPalette::Highlight);
+        }
+        else if (kind == QLatin1String("dim")) {
+            color = withAlpha(color, color.alpha() / 2);
+        }
+        painter->setPen(color);
+        painter->drawText(box, Qt::AlignCenter, label);
+        x = box.right() + 1;
+    }
+    painter->restore();
+}
+
+// A faint rounded plate behind the icon (dark themes), cached per icon and colour.
+QIcon TreeWidgetItemDelegate::platedIcon(const QIcon& icon, const QSize& size, const QColor& plate) const
+{
+    // never freed: pixmaps must not outlive the application at exit
+    static auto& cache = *new QHash<QString, QIcon>();
+    if (size.isEmpty()) {
+        return icon;
+    }
+    const QString key = QStringLiteral("%1/%2x%3/%4")
+                            .arg(icon.cacheKey())
+                            .arg(size.width())
+                            .arg(size.height())
+                            .arg(plate.rgba());
+    auto it = cache.find(key);
+    if (it != cache.end()) {
+        return it.value();
+    }
+    if (cache.size() > 2000) {
+        cache.clear();
+    }
+    const qreal dpr = static_cast<TreeWidget*>(parent())->devicePixelRatioF();
+    QIcon result;
+    for (auto mode : {QIcon::Normal, QIcon::Disabled, QIcon::Selected}) {
+        QPixmap pixmap(size * dpr);
+        pixmap.setDevicePixelRatio(dpr);
+        pixmap.fill(Qt::transparent);
+        QPainter p(&pixmap);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setPen(Qt::NoPen);
+        p.setBrush(plate);
+        // Only behind the object's own icon: the decoration may start with the visibility eye.
+        const int side = std::min(size.width(), size.height());
+        p.drawRoundedRect(QRectF(size.width() - side, 0, side, side), 3, 3);
+        icon.paint(&p, QRect(QPoint(0, 0), size), Qt::AlignCenter, mode);
+        p.end();
+        result.addPixmap(pixmap, mode);
+    }
+    cache.insert(key, result);
+    return result;
 }
 
 void TreeWidgetItemDelegate::initStyleOption(QStyleOptionViewItem* option, const QModelIndex& index) const
@@ -3598,6 +3797,9 @@ void TreeWidget::onUpdateStatus()
 
     updateGeometries();
     statusTimer->stop();
+    // [BW] Redraw the Browser row extras (summary, badges) with the new values.
+    ++rowInfoGeneration;
+    viewport()->update();
 
     FC_LOG("done update status");
 }
@@ -4953,6 +5155,9 @@ void TreeWidget::slotChangeObject(const Gui::ViewProviderDocumentObject& view, c
         return;
     }
 
+    // [BW] Any other change may change a Browser row's summary or badges (also on links to it).
+    ++rowInfoGeneration;
+
     if (&prop == &obj->Label) {
         const char* label = obj->Label.getValue();
         auto firstData = *itEntry->second.begin();
@@ -6082,6 +6287,74 @@ const char* DocumentObjectItem::getTreeName() const
 Gui::ViewProviderDocumentObject* DocumentObjectItem::object() const
 {
     return myData->viewObject;
+}
+
+// [BW] Browser row extras. The Python side (BruceWorx) sets FreeCADGui.BrowserRowInfo to a
+// callable taking the document object and returning (summary, [(badge text, kind), ...]).
+// Asked again only after something changed (TreeWidget::rowInfoGeneration).
+const DocumentObjectItem::RowInfo& DocumentObjectItem::rowInfo()
+{
+    static PyObject* lastHook = nullptr;  // owned; a new hook (preference change) redraws all rows
+    if (bwRowInfoGeneration == TreeWidget::rowInfoGeneration) {
+        return bwRowInfo;
+    }
+    bwRowInfo = RowInfo();
+    auto vp = object();
+    App::DocumentObject* obj = vp ? vp->getObject() : nullptr;
+    if (!obj || !obj->isAttachedToDocument() || App::GetApplication().isRestoring()
+        || !Py_IsInitialized()) {
+        return bwRowInfo;
+    }
+    Base::PyGILStateLocker lock;
+    PyObject* module = PyImport_AddModule("FreeCADGui");  // borrowed
+    PyObject* hook = module ? PyObject_GetAttrString(module, "BrowserRowInfo") : nullptr;
+    if (!hook || hook == Py_None) {
+        PyErr_Clear();
+        Py_XDECREF(hook);
+        bwRowInfoGeneration = TreeWidget::rowInfoGeneration;
+        return bwRowInfo;
+    }
+    if (hook != lastHook) {
+        Py_XDECREF(lastHook);
+        lastHook = hook;
+        Py_INCREF(lastHook);
+        ++TreeWidget::rowInfoGeneration;
+    }
+    bwRowInfoGeneration = TreeWidget::rowInfoGeneration;
+    PyObject* pyObj = obj->getPyObject();
+    PyObject* res = PyObject_CallOneArg(hook, pyObj);
+    Py_DECREF(pyObj);
+    Py_DECREF(hook);
+    auto text = [](PyObject* o) {
+        const char* str = (o && PyUnicode_Check(o)) ? PyUnicode_AsUTF8(o) : nullptr;
+        return str ? QString::fromUtf8(str) : QString();
+    };
+    if (res && PyTuple_Check(res) && PyTuple_Size(res) >= 2) {
+        bwRowInfo.meta = text(PyTuple_GetItem(res, 0));
+        PyObject* badges = PySequence_Fast(PyTuple_GetItem(res, 1), "badges");
+        if (badges) {
+            for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(badges); ++i) {
+                PyObject* b = PySequence_Fast_GET_ITEM(badges, i);
+                if (PyTuple_Check(b) && PyTuple_Size(b) >= 2) {
+                    QString label = text(PyTuple_GetItem(b, 0));
+                    if (!label.isEmpty()) {
+                        bwRowInfo.badges.emplace_back(label, text(PyTuple_GetItem(b, 1)));
+                    }
+                }
+            }
+            Py_DECREF(badges);
+        }
+    }
+    if (PyErr_Occurred()) {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            PyErr_Print();
+        }
+        PyErr_Clear();
+    }
+    Py_XDECREF(res);
+    return bwRowInfo;
 }
 
 void DocumentObjectItem::testStatus(bool resetStatus)

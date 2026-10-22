@@ -1244,6 +1244,13 @@ bool OverlayTabWidget::checkAutoHide() const
         }
     }
 
+    // [BW] TaskShow folds the task view inside a shared panel; a panel that holds only
+    // the task view hides as a whole while no command is open.
+    if (autoMode == AutoMode::TaskShow && count() == 1 && dockWidget(0)
+        && dockWidget(0)->findChild<TaskView::TaskView*>()) {
+        return !Control().taskPanel() || Control().taskPanel()->isEmpty();
+    }
+
     if (autoMode == AutoMode::EditShow) {
         return !Application::Instance->editDocument()
             && (!Control().taskPanel() || Control().taskPanel()->isEmpty(false));
@@ -1666,7 +1673,11 @@ void OverlayTabWidget::setRect(QRect rect)
 
     switch (dockArea) {
         case Qt::LeftDockWidgetArea:
-            rect.moveLeft(0);
+            // [BW] Keep the inset OverlayManager passes in (Offset3), so the panel can
+            // float off the window edge like the right one. Only a negative x is clamped.
+            if (rect.left() < 0) {
+                rect.moveLeft(0);
+            }
             if (rect.width() < OverlayParams::getDockOverlayMinimumSize()) {
                 rect.setWidth(OverlayParams::getDockOverlayMinimumSize());
             }
@@ -2207,6 +2218,21 @@ void OverlayTitleBar::paintEvent(QPaintEvent*)
             timerId = 0;
         }
         title = dock->windowTitle();
+    }
+    // [BW] Horizontal side panels: the dock's icon, then its title, from the left
+    // (a header like a dialog's, roadmap §13.3). BruceWorx sets both on the task panel.
+    if (!vertical) {
+        flags = Qt::AlignLeft | Qt::AlignVCenter;
+        const QIcon icon = dock->windowIcon();
+        const int size = std::min(16, r.height());
+        if (!icon.isNull() && size > 0) {
+            QRect iconRect(r.left() + 4, r.top() + (r.height() - size) / 2, size, size);
+            icon.paint(&painter, iconRect);
+            r.setLeft(iconRect.right() + 6);
+        }
+        else {
+            r.setLeft(r.left() + 4);
+        }
     }
     QString text = painter.fontMetrics().elidedText(title, Qt::ElideRight, r.width());
     painter.drawText(r, flags, text);

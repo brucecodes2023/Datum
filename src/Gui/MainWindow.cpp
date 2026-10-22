@@ -53,6 +53,10 @@
 #include <QWhatsThis>
 #include <QWindow>
 #include <QPushButton>
+#include <QAbstractButton>  // [BW] document tab button
+#include <QCursor>
+#include <QStyleOption>
+#include <QTabBar>
 
 
 #if defined(Q_OS_WIN)
@@ -297,6 +301,261 @@ private:
 };
 
 // -------------------------------------
+// [BW] Document tabs (roadmap §13.3): the close button of a tab shows a dot while the
+// document is modified and a thin x on hover. Unmodified tabs show the x on the current
+// or hovered tab only. Colours come from the stylesheet (#documentTabButton).
+class DocumentTabButton: public QAbstractButton
+{
+public:
+    explicit DocumentTabButton(QWidget* parent)
+        : QAbstractButton(parent)
+    {
+        setObjectName(QStringLiteral("documentTabButton"));
+        setAttribute(Qt::WA_Hover);
+        setFocusPolicy(Qt::NoFocus);
+        setCursor(Qt::ArrowCursor);
+        setFixedSize(16, 16);
+    }
+
+    void setState(bool modified, bool shown)
+    {
+        if (modified != this->modified || shown != this->shown) {
+            this->modified = modified;
+            this->shown = shown;
+            update();
+        }
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        QStyleOption opt;
+        opt.initFrom(this);
+        // Stylesheet background and corners (e.g. a hover plate)
+        style()->drawPrimitive(QStyle::PE_Widget, &opt, &painter, this);
+
+        const bool hover = opt.state & QStyle::State_MouseOver;
+        const QColor color = palette().color(foregroundRole());
+        const QPointF c = QRectF(rect()).center();
+        painter.setRenderHint(QPainter::Antialiasing);
+        if (modified && !hover) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(color);
+            painter.drawEllipse(c, 3.0, 3.0);
+        }
+        else if (hover || shown) {
+            QPen pen(color, 1.2);
+            pen.setCapStyle(Qt::RoundCap);
+            painter.setPen(pen);
+            const qreal r = 3.5;
+            painter.drawLine(c + QPointF(-r, -r), c + QPointF(r, r));
+            painter.drawLine(c + QPointF(-r, r), c + QPointF(r, -r));
+        }
+    }
+
+private:
+    bool modified = false;
+    bool shown = false;
+};
+
+// [BW] Puts a DocumentTabButton on every document tab and keeps it in step with the
+// documents. Switched by BruceWorx/DocumentTabDot.
+class DocumentTabs: public QObject
+{
+public:
+    explicit DocumentTabs(QMdiArea* area)
+        : QObject(area)
+        , area(area)
+    {
+        connect(area, &QMdiArea::subWindowActivated, this, [this]() { schedule(); });
+    }
+
+    void setEnabled(bool on)
+    {
+        if (on == enabled) {
+            return;
+        }
+        enabled = on;
+        auto tabs = tabBar();
+        if (!on && tabs) {
+            // Qt makes its own close buttons again
+            tabs->setTabsClosable(false);
+            tabs->setTabsClosable(true);
+            // QMdiArea writes the titles again (with their "*")
+            for (auto sub : area->subWindowList()) {
+                QEvent ev(QEvent::WindowTitleChange);
+                QApplication::sendEvent(sub, &ev);
+            }
+        }
+        schedule();
+    }
+
+    void schedule()
+    {
+        if (!pending) {
+            pending = true;
+            QTimer::singleShot(0, this, [this]() {
+                pending = false;
+                refresh();
+            });
+        }
+    }
+
+protected:
+    // Only cheap work here: this also sees the events of a closing window.
+    bool eventFilter(QObject* obj, QEvent* ev) override
+    {
+        if (bar && obj == bar.data()) {
+            switch (ev->type()) {
+                case QEvent::MouseMove:
+                case QEvent::HoverMove:
+                    setHovered(bar->tabAt(bar->mapFromGlobal(QCursor::pos())));
+                    break;
+                case QEvent::Leave:
+                case QEvent::HoverLeave:
+                    setHovered(-1);
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if (ev->type() == QEvent::ModifiedChange || ev->type() == QEvent::WindowTitleChange) {
+            schedule();
+        }
+        return false;
+    }
+
+private:
+    QTabBar* tabBar() const
+    {
+        return area->findChild<QTabBar*>();
+    }
+
+    void setHovered(int index)
+    {
+        if (index != hovered) {
+            hovered = index;
+            schedule();
+        }
+    }
+
+    void refresh()
+    {
+        bar = tabBar();
+        if (!enabled || !bar) {
+            return;
+        }
+        bar->setMouseTracking(true);
+        bar->installEventFilter(this);  // installing twice keeps one filter
+
+        auto side = static_cast<QTabBar::ButtonPosition>(
+            bar->style()->styleHint(QStyle::SH_TabBar_CloseButtonPosition, nullptr, bar)
+        );
+        // Tab order is the creation order (QMdiArea moves both together)
+        const auto subs = area->subWindowList(QMdiArea::CreationOrder);
+        for (int i = 0; i < bar->count(); ++i) {
+            QMdiSubWindow* sub = i < subs.size() ? subs[i] : nullptr;
+            bool modified = false;
+            if (sub) {
+                sub->installEventFilter(this);
+                modified = sub->isWindowModified()
+                    || (sub->widget() && sub->widget()->isWindowModified());
+            }
+
+            auto button = dynamic_cast<DocumentTabButton*>(bar->tabButton(i, side));
+            if (!button) {
+                button = new DocumentTabButton(bar);
+                connect(button, &QAbstractButton::clicked, this, [this, button, side]() {
+                    auto tabs = tabBar();
+                    for (int j = 0; tabs && j < tabs->count(); ++j) {
+                        if (tabs->tabButton(j, side) == button) {
+                            Q_EMIT tabs->tabCloseRequested(j);
+                            break;
+                        }
+                    }
+                });
+                QWidget* old = bar->tabButton(i, side);
+                bar->setTabButton(i, side, button);
+                if (old) {
+                    old->deleteLater();
+                }
+            }
+            button->setState(modified, i == bar->currentIndex() || i == hovered);
+
+            // The dot replaces the "*" that QMdiArea appends to the title
+            QString text = bar->tabText(i);
+            if (modified && text.endsWith(QLatin1Char('*'))) {
+                bar->setTabText(i, text.chopped(1));
+            }
+        }
+    }
+
+    QMdiArea* area;
+    QPointer<QTabBar> bar;
+    bool enabled = false;
+    bool pending = false;
+    int hovered = -1;
+};
+
+// [BW] Status-bar readout: warnings and errors in the Report view since it was last
+// opened from here. A click opens the Report view and starts the count again.
+class ReportReadout: public QPushButton
+{
+public:
+    explicit ReportReadout(QWidget* parent)
+        : QPushButton(parent)
+    {
+        setObjectName(QStringLiteral("reportReadout"));
+        setFlat(true);
+        setFocusPolicy(Qt::NoFocus);
+        setToolTip(QApplication::translate("Gui::MainWindow", "Open the Report view"));
+        connect(this, &QPushButton::clicked, this, [this]() {
+            if (auto report = DockWindowManager::instance()->getDockWindow("Report view")) {
+                DockWindowManager::instance()->activate(report);
+            }
+            warnings = errors = 0;
+            updateText();
+        });
+        updateText();
+    }
+
+    void add(bool error)
+    {
+        (error ? errors : warnings)++;
+        updateText();
+    }
+
+    void updateText()
+    {
+        auto tr = [](const char* s) {
+            return QApplication::translate("Gui::MainWindow", s);
+        };
+        QStringList parts;
+        if (errors > 0) {
+            parts << (errors == 1 ? tr("1 error") : tr("%1 errors").arg(errors));
+        }
+        if (warnings > 0 || errors == 0) {
+            parts << (warnings == 1 ? tr("1 warning") : tr("%1 warnings").arg(warnings));
+        }
+        setText(tr("Report %1").arg(parts.join(QStringLiteral(", "))));
+        // The stylesheet colours the readout by level
+        const char* level = errors > 0 ? "error" : warnings > 0 ? "warning" : "none";
+        if (property("level").toString() != QLatin1String(level)) {
+            setProperty("level", QLatin1String(level));
+            style()->unpolish(this);
+            style()->polish(this);
+        }
+    }
+
+private:
+    int warnings = 0;
+    int errors = 0;
+};
+
+static QPointer<ReportReadout> reportReadout;
+
+// -------------------------------------
 // Pimpl class
 struct MainWindowP
 {
@@ -323,10 +582,67 @@ struct MainWindowP
     std::string hiddenDockWindows;
     boost::signals2::scoped_connection connParam;
     ParameterGrp::handle hGrp;
+    // [BW] Document tabs and status-bar readouts (roadmap §13.3)
+    ParameterGrp::handle bwGrp;
+    DocumentTabs* documentTabs = nullptr;
+    QPushButton* unitsReadout = nullptr;
+    QString paneText;
+    bool readouts = false;
     bool _restoring = false;
     QTime _showNormal;
     void restoreWindowState(const QByteArray&);
 };
+
+// [BW] Units and view size as plain text while BruceWorx/StatusReadouts is on.
+static void updateReadouts(MainWindowP* d)
+{
+    if (!d->readouts) {
+        d->sizeLabel->setText(d->paneText);
+        return;
+    }
+    d->unitsReadout->setText(
+        MainWindow::tr("Units %1").arg(QString::fromStdString(Base::UnitsApi::getBasicLengthUnit()))
+    );
+    QString size = d->paneText;
+    if (size == MainWindow::tr("Dimension") || !qobject_cast<View3DInventor*>(d->activeView.data())) {
+        size.clear();  // no 3D view (yet), e.g. the Start page
+    }
+    size.replace(QLatin1String(" x "), QStringLiteral(" \u00D7 "));
+    d->sizeLabel->setText(size.isEmpty() ? QString() : MainWindow::tr("View %1").arg(size));
+    d->sizeLabel->setVisible(!size.isEmpty());
+}
+
+// [BW] Preferences read live: MainWindow/DocumentTabPos (0..3 = North, South, West, East;
+// South is stock), BruceWorx/DocumentTabDot and BruceWorx/StatusReadouts (off unless set,
+// the BruceWorx pack turns them on).
+static void applyBruceWorxChrome(MainWindowP* d)
+{
+    const QTabWidget::TabPosition positions[]
+        = {QTabWidget::North, QTabWidget::South, QTabWidget::West, QTabWidget::East};
+    long pos = d->hGrp->GetInt("DocumentTabPos", 1);
+    QTabWidget::TabPosition position = pos >= 0 && pos < 4 ? positions[pos] : QTabWidget::South;
+    if (d->mdiArea->tabPosition() != position) {
+        d->mdiArea->setTabPosition(position);
+        // QMdiArea passes its own closable flag (false) to the bar again
+        if (auto tab = d->mdiArea->findChild<QTabBar*>()) {
+            tab->setTabsClosable(true);
+        }
+        d->documentTabs->schedule();
+        OverlayManager::instance()->refresh();  // panels start below top tabs
+    }
+    d->documentTabs->setEnabled(d->bwGrp->GetBool("DocumentTabDot", false));
+
+    d->readouts = d->bwGrp->GetBool("StatusReadouts", false);
+    if (reportReadout) {
+        reportReadout->setVisible(d->readouts);
+    }
+    d->unitsReadout->setVisible(d->readouts);
+    d->sizeLabel->setMinimumWidth(d->readouts ? 0 : 120);
+    if (!d->readouts) {
+        d->sizeLabel->setVisible(true);
+    }
+    updateReadouts(d);
+}
 
 }  // namespace Gui
 
@@ -355,10 +671,23 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
 
     d->connParam = App::GetApplication().GetUserParameter().signalParamChanged.connect(
         [this](ParameterGrp* Param, ParameterGrp::ParamType, const char* Name, const char*) {
-            if (Param != d->hGrp || !Name) {
+            if (!Name) {
                 return;
             }
-            if (boost::equals(Name, "StatusBar")) {
+            // [BW] BruceWorx switches read here
+            if (Param == d->bwGrp) {
+                if (boost::equals(Name, "DocumentTabDot") || boost::equals(Name, "StatusReadouts")) {
+                    applyBruceWorxChrome(d);
+                }
+                return;
+            }
+            if (Param != d->hGrp) {
+                return;
+            }
+            if (boost::equals(Name, "DocumentTabPos")) {
+                applyBruceWorxChrome(d);
+            }
+            else if (boost::equals(Name, "StatusBar")) {
                 if (auto sb = getMainWindow()->statusBar()) {
                     sb->setVisible(d->hGrp->GetBool("StatusBar", sb->isVisible()));
                 }
@@ -375,6 +704,9 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
 
     d->hGrp = App::GetApplication().GetParameterGroupByPath(
         "User parameter:BaseApp/Preferences/MainWindow"
+    );
+    d->bwGrp = App::GetApplication().GetParameterGroupByPath(
+        "User parameter:BaseApp/Preferences/BruceWorx"
     );
     d->saveStateTimer.setSingleShot(true);
     connect(&d->saveStateTimer, &QTimer::timeout, [this]() { this->saveWindowSettings(); });
@@ -394,6 +726,7 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
     d->mdiArea = new QMdiArea();
     // Movable tabs
     d->mdiArea->setTabsMovable(true);
+    // [BW] Position from MainWindow/DocumentTabPos, see applyBruceWorxChrome()
     d->mdiArea->setTabPosition(QTabWidget::South);
     d->mdiArea->setViewMode(QMdiArea::TabbedView);
     auto tab = d->mdiArea->findChild<QTabBar*>();
@@ -425,6 +758,8 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
     QProgressBar* progressBar = Gui::SequencerBar::instance()->getProgressBar(statusBar());
     statusBar()->addPermanentWidget(progressBar, 0);
     statusBar()->addPermanentWidget(d->sizeLabel, 0);
+    d->sizeLabel->setObjectName(QStringLiteral("sizeLabel"));  // [BW]
+    d->paneText = d->sizeLabel->text();
 
     // hint label
     d->hintLabel = new InputHintWidget(statusBar());
@@ -456,6 +791,20 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
         notificationArea->setStyleSheet(QStringLiteral("text-align:center;"));
         statusBar()->addPermanentWidget(notificationArea);
     }
+
+    // [BW] Text readouts (BruceWorx/StatusReadouts): Report, then units. The NavigationIndicator
+    // (Tux) and the view size follow; Tux re-adds those two at the end.
+    reportReadout = new ReportReadout(statusBar());
+    statusBar()->addPermanentWidget(reportReadout);
+    d->unitsReadout = new QPushButton(statusBar());
+    d->unitsReadout->setObjectName(QStringLiteral("unitsReadout"));
+    d->unitsReadout->setFlat(true);
+    d->unitsReadout->setFocusPolicy(Qt::NoFocus);
+    d->unitsReadout->setToolTip(tr("Unit system"));
+    d->unitsReadout->setMenu(d->sizeLabel->menu());
+    connect(d->sizeLabel->menu(), &QMenu::triggered, this, [this]() { updateReadouts(d); },
+            Qt::QueuedConnection);
+    statusBar()->addPermanentWidget(d->unitsReadout);
 
     // clears the action label
     d->actionTimer = new QTimer(this);
@@ -500,6 +849,10 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
     // [BW] Before the window is shown. Toolbars are created later; reapplied
     // from activateWorkbench and loadWindowSettings.
     applyMacUnifiedTitleBar();
+
+    // [BW] Document tab position, tab dots and status-bar readouts
+    d->documentTabs = new DocumentTabs(d->mdiArea);
+    applyBruceWorxChrome(d);
 }
 
 MainWindow::~MainWindow()
@@ -1445,6 +1798,7 @@ void MainWindow::setActiveWindow(MDIView* view)
 
     d->activeView = view;
     Application::Instance->viewActivated(view);
+    updateReadouts(d);  // [BW] the view size belongs to 3D views only
 
     // activate/remember workbench by tab (if enabled)
 
@@ -1673,7 +2027,16 @@ void MainWindow::closeEvent(QCloseEvent* e)
         if (this->property("QuitOnClosed").isValid()) {
             QApplication::closeAllWindows();
             qApp->processEvents();  // flush all pending deferredDelete events
-            qApp->quit();           // stop the event loop
+#ifdef Q_OS_MACOS
+            // [BW] Quit once this close returns. On macOS QApplication::quit() calls
+            // [NSApp terminate:]; when the close itself came from a terminate request
+            // (Dock > Quit, logout, QApplication::quit()), that nested terminate makes
+            // AppKit call exit() at once: the user settings are never saved and the
+            // static destructors crash.
+            QMetaObject::invokeMethod(qApp, &QCoreApplication::quit, Qt::QueuedConnection);
+#else
+            qApp->quit();  // stop the event loop
+#endif
         }
     }
 }
@@ -2452,7 +2815,8 @@ void MainWindow::loadUrls(App::Document* doc, const QList<QUrl>& urls)
 void MainWindow::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::LanguageChange) {
-        d->sizeLabel->setText(tr("Dimension"));
+        d->paneText = tr("Dimension");  // [BW] reworded by the readouts
+        updateReadouts(d);
 
         CommandManager& rclMan = Application::Instance->commandManager();
         std::vector<Command*> cmd = rclMan.getAllCommands();
@@ -2552,7 +2916,11 @@ void MainWindow::showStatus(int type, const QString& message)
             statusBar()->setStyleSheet(QStringLiteral("#statusBar{}"));
             break;
         default:
-            statusBar()->setStyleSheet(d->status->msg);
+            // [BW] With the readouts the stylesheet colours messages (the Report view's
+            // text colour can be black on a dark bar)
+            statusBar()->setStyleSheet(
+                d->readouts ? QStringLiteral("#statusBar{}") : d->status->msg
+            );
             break;
     }
     d->currentStatusType = -type;
@@ -2576,7 +2944,9 @@ void MainWindow::setPaneText(int i, QString text)
         showStatus(MainWindow::Pane, text);
     }
     else if (i == 2) {
-        d->sizeLabel->setText(text);
+        // [BW] Kept for the readouts, which reword it
+        d->paneText = text;
+        updateReadouts(d);
     }
 }
 
@@ -2584,6 +2954,7 @@ void MainWindow::setPaneText(int i, QString text)
 void MainWindow::setUserSchema(int userSchema)
 {
     d->sizeLabel->setUserSchema(userSchema);
+    updateReadouts(d);  // [BW]
 }
 
 
@@ -2722,6 +3093,22 @@ void StatusBarObserver::sendLog(
 )
 {
     (void)notifiername;
+
+    // [BW] Count warnings and errors for the Report readout, as the Report view shows them
+    if (recipient != Base::IntendedRecipient::Developer
+        && (level == Base::LogStyle::Warning || level == Base::LogStyle::Error
+            || level == Base::LogStyle::Critical)) {
+        bool error = level != Base::LogStyle::Warning;
+        QMetaObject::invokeMethod(
+            qApp,
+            [error]() {
+                if (reportReadout) {
+                    reportReadout->add(error);
+                }
+            },
+            Qt::QueuedConnection
+        );
+    }
 
     // Do not log untranslated messages, or messages intended only to a developer to status bar
     if (recipient == Base::IntendedRecipient::Developer || content == Base::ContentType::Untranslated

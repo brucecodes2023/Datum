@@ -29,6 +29,7 @@
 #include <QTimer>
 #include <QKeyEvent>
 
+#include <App/Application.h>
 #include <Base/Tools.h>
 
 #include "PropertyItemDelegate.h"
@@ -68,6 +69,49 @@ void PropertyItemDelegate::paint(
     QStyleOptionViewItem option = opt;
 
     auto property = static_cast<PropertyItem*>(index.internalPointer());
+
+    // [BW] Quiet group captions: small caps in the caption colour, no bar, no rule below.
+    if (property && property->isSeparator() && parent()
+        && parent()->property("quietGroupCaptions").toBool()) {
+        static ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath(
+            "User parameter:BaseApp/Preferences/BruceWorx"
+        );
+        if (hGrp->GetBool("BrowserGroupCaptions", true)) {
+            QVariant background = parent()->property("groupBackground");
+            if (background.canConvert<QBrush>()) {
+                painter->fillRect(option.rect, background.value<QBrush>());
+            }
+            if (index.column() == 0) {
+                QColor color = option.palette.color(QPalette::Text);
+                QVariant value = parent()->property("groupTextColor");
+                if (value.canConvert<QColor>()) {
+                    color = value.value<QColor>();
+                }
+                QFont font = option.font;
+                if (font.pixelSize() > 0) {
+                    font.setPixelSize(std::max(8, font.pixelSize() * 10 / 12));
+                }
+                else {
+                    font.setPointSizeF(std::max(6.0, font.pointSizeF() * 10 / 12));
+                }
+                font.setWeight(QFont::Bold);
+                font.setCapitalization(QFont::AllUppercase);
+                font.setLetterSpacing(QFont::PercentageSpacing, 106);
+                painter->save();
+                painter->setFont(font);
+                painter->setPen(color);
+                QRect rect = option.rect.adjusted(2, 0, -2, -2);
+                QString text = QFontMetrics(font).elidedText(
+                    index.data(Qt::DisplayRole).toString(),
+                    Qt::ElideRight,
+                    rect.width()
+                );
+                painter->drawText(rect, Qt::AlignLeft | Qt::AlignBottom, text);
+                painter->restore();
+            }
+            return;
+        }
+    }
 
     if (property && property->isSeparator()) {
         QColor color = option.palette.color(QPalette::BrightText);

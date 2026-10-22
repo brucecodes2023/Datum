@@ -11,7 +11,10 @@ Preferences → BruceWorx. This file:
 * creates the shared top-level BruceWorx menu (bruceworx_menu),
 * keeps the toolbars on two rows (bruceworx_toolbars),
 * keeps the sketch grid at the chosen strength (bruceworx_grid),
-* follows the macOS appearance and accent colour (bruceworx_appearance).
+* follows the macOS appearance and accent colour (bruceworx_appearance),
+* gives the floating task panel a dialog-style header (bruceworx_taskcard),
+* draws the Browser header, part badges and feature summaries (bruceworx_browser).
+* puts the navigation pill on every 3D view (bruceworx_navpill).
 
 It runs before the startup workbench is activated, so the first-run pack's
 startup workbench (PartDesign) is already used on that first start.
@@ -80,3 +83,31 @@ try:
     bruceworx_appearance.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx could not follow the macOS appearance: {exc}")
+
+try:
+    import bruceworx_taskcard
+
+    bruceworx_taskcard.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx task card header was not installed: {exc}")
+
+try:
+    import bruceworx_navpill
+
+    bruceworx_navpill.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx navigation pill was not installed: {exc}")
+
+try:
+    import bruceworx_browser
+
+    bruceworx_browser.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Browser extras were not installed: {exc}")
+
+try:
+    import bruceworx_statusbar
+
+    bruceworx_statusbar.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx status-bar readouts were not installed: {exc}")

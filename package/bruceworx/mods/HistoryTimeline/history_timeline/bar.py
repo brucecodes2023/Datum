@@ -3,7 +3,7 @@
 
 Entries are duck-typed: ``name``, ``label``, ``kind``, ``is_tip``, ``after_tip``,
 ``suppressed``, and optional ``icon`` (QIcon). ``type_id`` and ``base_name`` are
-optional tooltip fields.
+optional tooltip fields; an entry's own ``tooltip`` replaces them.
 """
 
 from history_timeline.qtcompat import load_qt, qt_enum
@@ -190,8 +190,9 @@ class FeatureButton(QtWidgets.QWidget):
         if entry.suppressed:
             state.append("suppressed")
         state_text = ", ".join(state) if state else "in history"
+        tooltip = getattr(entry, "tooltip", None)
         self.setToolTip(
-            f"{entry.label}\n{type_id}\nbase: {base or '—'}\n{state_text}"
+            tooltip or f"{entry.label}\n{type_id}\nbase: {base or '—'}\n{state_text}"
         )
         icon = getattr(entry, "icon", None)
         if icon is not None:
@@ -318,6 +319,11 @@ class TimelineBar(QtWidgets.QWidget):
         outer.setSpacing(6)
         outer.addWidget(self._title)
         outer.addWidget(scroll, 1)
+        # Right-hand note (assembly order); empty and hidden for PartDesign.
+        self._note = QtWidgets.QLabel()
+        self._note.setObjectName("HistoryTimelineHint")
+        self._note.hide()
+        outer.addWidget(self._note)
 
         self._pending_name = None
         self._click_timer = QtCore.QTimer(self)
@@ -326,7 +332,9 @@ class TimelineBar(QtWidgets.QWidget):
         self._click_timer.timeout.connect(self._emit_single_click)
         self._buttons = {}
 
-    def set_timeline(self, body_label, entries, empty_message=None):
+    def set_timeline(self, body_label, entries, empty_message=None, marker=True, note=None):
+        """Rebuild the row. ``marker=False`` drops the rollback marker
+        (assemblies have no tip); ``note`` is shown at the right end."""
         self._click_timer.stop()
         self._pending_name = None
         self._buttons = {}
@@ -337,6 +345,8 @@ class TimelineBar(QtWidgets.QWidget):
                 widget.deleteLater()
 
         self._title.setText(body_label or "History")
+        self._note.setText(note or "")
+        self._note.setVisible(bool(note))
 
         if not entries:
             message = empty_message or "No feature history in this document."
@@ -346,9 +356,9 @@ class TimelineBar(QtWidgets.QWidget):
             self._row.addStretch(1)
             return
 
-        marker_placed = False
+        marker_placed = not marker
         # Tip cleared, or tip is the external base feature: marker before the row.
-        if all(entry.after_tip for entry in entries):
+        if not marker_placed and all(entry.after_tip for entry in entries):
             self._row.addWidget(MarkerWidget())
             marker_placed = True
 
@@ -361,7 +371,7 @@ class TimelineBar(QtWidgets.QWidget):
             )
             self._buttons[entry.name] = button
             self._row.addWidget(button)
-            if entry.is_tip:
+            if marker and entry.is_tip:
                 self._row.addWidget(MarkerWidget())
                 marker_placed = True
 

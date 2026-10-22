@@ -1,5 +1,13 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""PartDesign history-timeline helpers (BruceWorx spike)."""
+"""History-timeline helpers: PartDesign history and assembly creation order."""
+
+from history_timeline.assembly import (
+    AssemblyEntry,
+    AssemblyTimeline,
+    has_history,
+    pick_source,
+    read_assembly,
+)
 
 from history_timeline.model import (
     Timeline,
@@ -18,6 +26,11 @@ from history_timeline.model import (
 )
 
 __all__ = [
+    "AssemblyEntry",
+    "AssemblyTimeline",
+    "has_history",
+    "pick_source",
+    "read_assembly",
     "Timeline",
     "TimelineEntry",
     "assign_group_order",

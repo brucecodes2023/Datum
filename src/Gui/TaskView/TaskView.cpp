@@ -351,7 +351,8 @@ bool TaskView::isEmpty(bool includeWatcher) const
         return false;
     }
 
-    if (includeWatcher) {
+    // [BW] Hidden watchers (ShowTaskWatcher off) are not content.
+    if (includeWatcher && showTaskWatcher) {
         for (auto* watcher : ActiveWatcher) {
             if (watcher->shouldShow()) {
                 return false;
@@ -713,6 +714,10 @@ void TaskView::removeDialog()
 
     tryRestoreWidth();
     triggerMinimumSizeHint();
+
+    // [BW] With task watchers off, updateWatcher() returns before it signals, so
+    // nothing would tell the overlay that the panel is empty again.
+    Q_EMIT taskUpdate();
 }
 void TaskView::setShowTaskWatcher(bool show)
 {

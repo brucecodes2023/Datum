@@ -4,7 +4,7 @@
    replaceVariablesInQss), so this one sheet serves light and dark. Token colours carry no alpha.
    This file replaces the stock overlay sheet while it is active. */
 
-/* Both panels: a card inset from the window edge. */
+/* Both panels: a card. The inset from the window edge is Offset3 (BruceWorx.py). */
 Gui--OverlayTabWidget {
   background-color: @CardBackgroundColor;
   border: 1px solid @GeneralBorderColor;
@@ -16,14 +16,6 @@ Gui--OverlayTabWidget {
   qproperty-effectWidth: 1;
   qproperty-effectHeight: 1;
   qproperty-enableEffect: 1;
-}
-
-Gui--OverlayTabWidget#OverlayLeft {
-  margin-left: 8px;
-}
-
-Gui--OverlayTabWidget#OverlayRight {
-  margin-right: 8px;
 }
 
 /* A floating panel draws its children translucent, so the card is painted by the tab pane. */
@@ -59,6 +51,20 @@ Gui--OverlayTabWidget QTreeView::item:hover {
 Gui--OverlayTabWidget QTreeView::item:selected {
   background-color: @AccentSoftColor;
   color: @TextForegroundColor;
+}
+
+/* Browser row extras and property group captions (as in BruceWorx.qss, which this sheet may replace). */
+Gui--OverlayTabWidget Gui--TreeWidget {
+  qproperty-rowMetaColor: @TextDisabledColor;
+  qproperty-badgeBackground: @HoverColor;
+  qproperty-badgeTextColor: @TextSecondaryColor;
+  qproperty-badgeWarnColor: @WarnColor;
+  qproperty-badgeAccentColor: @AccentColor;
+}
+
+Gui--OverlayTabWidget Gui--PropertyEditor--PropertyEditor {
+  qproperty-quietGroupCaptions: 1;
+  qproperty-groupTextColor: @TextDisabledColor;
 }
 
 Gui--OverlayTabWidget QHeaderView::section {

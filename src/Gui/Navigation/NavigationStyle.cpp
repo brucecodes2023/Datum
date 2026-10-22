@@ -38,6 +38,7 @@
 #include <QByteArray>
 #include <QCursor>
 #include <QMenu>
+#include <QWheelEvent>
 
 
 #include <cmath>
@@ -819,6 +820,84 @@ void NavigationStyle::panCamera(
     if (this->currentmode != NavigationStyle::IDLE) {
         hasPanned = true;
     }
+}
+
+bool NavigationStyle::processTrackpadScroll(const QWheelEvent* event)
+{
+    const Qt::ScrollPhase phase = event->phase();
+#ifdef Q_OS_MACOS
+    if (phase == Qt::NoScrollPhase && event->pixelDelta().isNull()) {
+        return false;  // a mouse wheel
+    }
+#else
+    if (phase == Qt::NoScrollPhase) {
+        return false;  // a mouse wheel; high-resolution wheels send pixel deltas too
+    }
+#endif
+    static ParameterGrp::handle prefs = App::GetApplication().GetParameterGroupByPath(
+        "User parameter:BaseApp/Preferences/BruceWorx"
+    );
+    if (!prefs->GetBool("TrackpadGestures", true)) {
+        return false;
+    }
+
+    QWidget* widget = viewer;
+    const QPointF pos = event->position();
+    const double width = std::max(widget->width(), 1);
+    const double height = std::max(widget->height(), 1);
+    const SbVec2f here(float(pos.x() / width), float(1.0 - pos.y() / height));
+
+    if (phase == Qt::ScrollBegin || phase == Qt::NoScrollPhase) {
+        // macOS begins a scroll as soon as the fingers rest on the pad, so the
+        // mode is chosen on the first event that moves.
+        trackpadPending = true;
+        trackpadMode = TrackpadMode::Zoom;
+    }
+    if (trackpadPending && !event->pixelDelta().isNull()) {
+        trackpadPending = false;
+        const Qt::KeyboardModifiers mods = event->modifiers();
+        if (mods & Qt::ShiftModifier) {
+            trackpadMode = TrackpadMode::Pan;
+        }
+        else if (mods & Qt::ControlModifier) {  // Cmd on macOS
+            trackpadMode = TrackpadMode::Orbit;
+        }
+        else {
+            trackpadMode = TrackpadMode::Zoom;
+        }
+        if (trackpadMode == TrackpadMode::Orbit) {
+            // Orbit about the point under the pointer, as a mouse drag would.
+            SoLocation2Event location;
+            const double ratio = widget->devicePixelRatio();
+            location.setPosition(
+                SbVec2s(short(pos.x() * ratio), short((height - pos.y() - 1) * ratio))
+            );
+            saveCursorPosition(&location);
+        }
+    }
+    if (trackpadMode == TrackpadMode::Zoom) {
+        return false;
+    }
+
+    // The view follows the fingers (pixelDelta already honours natural scrolling).
+    const QPoint delta = event->pixelDelta();
+    if (delta.isNull()) {
+        return true;
+    }
+    const SbVec2f moved(here[0] + float(delta.x() / width), here[1] - float(delta.y() / height));
+    SoCamera* camera = viewer->getSoRenderManager()->getCamera();
+    if (!camera) {
+        return true;
+    }
+    if (trackpadMode == TrackpadMode::Pan) {
+        const float ratio = viewer->getSoRenderManager()->getViewportRegion().getViewportAspectRatio();
+        setupPanningPlane(camera);
+        panCamera(camera, ratio, panningplane, moved, here);
+    }
+    else {
+        spinInternal(moved, here);
+    }
+    return true;
 }
 
 void NavigationStyle::setupPanningPlane(const SoCamera* camera)

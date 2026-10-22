@@ -68,6 +68,8 @@ class GuiExport PropertyEditor: public QTreeView
     Q_PROPERTY(QBrush groupBackground READ groupBackground WRITE setGroupBackground DESIGNABLE true SCRIPTABLE true)  // clazy:exclude=qproperty-without-notify
     Q_PROPERTY(QColor groupTextColor  READ groupTextColor  WRITE setGroupTextColor  DESIGNABLE true SCRIPTABLE true)  // clazy:exclude=qproperty-without-notify
     Q_PROPERTY(QBrush itemBackground  READ itemBackground  WRITE setItemBackground  DESIGNABLE true SCRIPTABLE true)  // clazy:exclude=qproperty-without-notify
+    // [BW] Group rows as quiet small-caps captions (BruceWorx theme; off by Preferences/BruceWorx/BrowserGroupCaptions)
+    Q_PROPERTY(bool quietGroupCaptions MEMBER quietGroupCaptions)  // clazy:exclude=qproperty-without-notify
     // clang-format on
 
 public:
@@ -101,6 +103,7 @@ public:
     void setGroupTextColor(const QColor& c);
     QBrush itemBackground() const;
     void setItemBackground(const QBrush& c);
+    bool quietGroupCaptions = false;  // [BW]
 
     bool isBinding() const
     {

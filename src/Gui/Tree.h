@@ -60,6 +60,14 @@ GuiExport bool isTreeViewDragging();
 class TreeWidget: public QTreeWidget, public SelectionObserver
 {
     Q_OBJECT
+    // [BW] Colours of the Browser row extras (summary text, P/N and state badges, icon plate);
+    // set from the stylesheet. Unset ones follow the palette; the icon plate is off when unset.
+    Q_PROPERTY(QColor rowMetaColor MEMBER rowMetaColor)  // clazy:exclude=qproperty-without-notify
+    Q_PROPERTY(QColor badgeBackground MEMBER badgeBackground)  // clazy:exclude=qproperty-without-notify
+    Q_PROPERTY(QColor badgeTextColor MEMBER badgeTextColor)  // clazy:exclude=qproperty-without-notify
+    Q_PROPERTY(QColor badgeWarnColor MEMBER badgeWarnColor)  // clazy:exclude=qproperty-without-notify
+    Q_PROPERTY(QColor badgeAccentColor MEMBER badgeAccentColor)  // clazy:exclude=qproperty-without-notify
+    Q_PROPERTY(QColor iconPlateColor MEMBER iconPlateColor)  // clazy:exclude=qproperty-without-notify
 
 public:
     explicit TreeWidget(const char* name, QWidget* parent = nullptr);
@@ -295,6 +303,19 @@ private:
     std::string myName;  // for debugging purpose
     int updateBlocked = 0;
 
+    // [BW] Browser row extras (see rowMetaColor above)
+    QColor rowMetaColor;
+    QColor badgeBackground;
+    QColor badgeTextColor;
+    QColor badgeWarnColor;
+    QColor badgeAccentColor;
+    QColor iconPlateColor;
+
+public:
+    // [BW] Bumped on every object change; a row's cached extras are rebuilt when it moves on.
+    static unsigned rowInfoGeneration;
+private:
+
     friend class DocumentItem;
     friend class DocumentObjectItem;
     friend class TreeParams;
@@ -520,7 +541,23 @@ public:
     DocumentObjectItem* getPreviousSibling() const;
     TreeWidget* getTree() const;
 
+    // [BW] Extras drawn after the name in the Browser: a quiet summary ("Pad 8 mm") and badges
+    // (text, kind), from the Python callable FreeCADGui.BrowserRowInfo(obj) when one is set.
+    struct RowInfo
+    {
+        QString meta;
+        std::vector<std::pair<QString, QString>> badges;
+        bool empty() const
+        {
+            return meta.isEmpty() && badges.empty();
+        }
+    };
+    const RowInfo& rowInfo();
+
 private:
+    RowInfo bwRowInfo;
+    unsigned bwRowInfoGeneration = 0;
+
     void setCheckState(bool checked);
     void getExpandedSnapshot(std::vector<bool>& snapshot) const;
     void applyExpandedSnapshot(

@@ -47,13 +47,32 @@
          <string>On by default. Same switch as BruceWorx &gt; History Timeline. Closing the dock also turns it off.</string>
         </property>
         <property name="text">
-         <string>History timeline (bottom PartDesign history bar)</string>
+         <string>History timeline (bottom bar: PartDesign history, assembly order)</string>
         </property>
         <property name="checked">
          <bool>true</bool>
         </property>
         <property name="prefEntry" stdset="0">
          <cstring>Enabled</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>Mod/HistoryTimeline</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="HistoryTimelineHideWhenEmpty">
+        <property name="toolTip">
+         <string>On by default. The timeline hides while the active document has no history (no body with features, no assembly) and comes back when it has. Uncheck to keep it visible with a short message.</string>
+        </property>
+        <property name="text">
+         <string>Hide the history timeline when there is no history</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>HideWhenEmpty</cstring>
         </property>
         <property name="prefPath" stdset="0">
          <cstring>Mod/HistoryTimeline</cstring>
@@ -217,6 +236,63 @@
         </item>
        </layout>
       </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="SketchGridOnEdit">
+        <property name="toolTip">
+         <string>FreeCAD saves the grid setting in each sketch. On: every sketch shows the grid when it opens for editing, including sketches made before. The sketch panel can still hide it.</string>
+        </property>
+        <property name="text">
+         <string>Show the grid when a sketch opens</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>SketchGridOnEdit</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="TrackpadGestures">
+        <property name="toolTip">
+         <string>Two-finger swipe on a trackpad: plain swipe zooms, Shift + swipe pans in any direction, Cmd + swipe orbits. A mouse wheel is not affected.</string>
+        </property>
+        <property name="text">
+         <string>Trackpad: Shift + swipe pans, Cmd + swipe orbits</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>TrackpadGestures</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="NavigationPill">
+        <property name="toolTip">
+         <string>A small bar at the bottom of each 3D view: orbit, pan, zoom (click, then drag in the view; Esc stops), fit all, display style, orthographic/perspective, clipping planes, measure.</string>
+        </property>
+        <property name="text">
+         <string>Navigation pill at the bottom of the 3D view</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>NavigationPill</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -252,6 +328,90 @@
         </property>
         <property name="prefPath" stdset="0">
          <cstring>MainWindow</cstring>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupDocumentTabs">
+     <property name="title">
+      <string>Document tabs and status bar</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayoutDocumentTabs">
+      <item>
+       <layout class="QHBoxLayout" name="layoutDocumentTabPos">
+        <item>
+         <widget class="QLabel" name="labelDocumentTabPos">
+          <property name="text">
+           <string>Document tabs</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Gui::PrefComboBox" name="DocumentTabPos">
+          <property name="toolTip">
+           <string>MainWindow/DocumentTabPos. The BruceWorx pack puts the tabs on top, under the toolbars; stock FreeCAD has them at the bottom.</string>
+          </property>
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <property name="prefEntry" stdset="0">
+           <cstring>DocumentTabPos</cstring>
+          </property>
+          <property name="prefPath" stdset="0">
+           <cstring>MainWindow</cstring>
+          </property>
+          <item>
+           <property name="text">
+            <string>On top</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>At the bottom</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="DocumentTabDot">
+        <property name="toolTip">
+         <string>On by default. A modified document shows a dot on its tab instead of the close button; the close button appears on hover. Unmodified tabs show it on the current tab only.</string>
+        </property>
+        <property name="text">
+         <string>Dot on modified document tabs</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>DocumentTabDot</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="StatusReadouts">
+        <property name="toolTip">
+         <string>On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by BruceWorx/VaultPath.</string>
+        </property>
+        <property name="text">
+         <string>Status bar as text readouts</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>StatusReadouts</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
         </property>
        </widget>
       </item>
@@ -309,6 +469,120 @@
         </property>
         <property name="prefPath" stdset="0">
          <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserHeader">
+        <property name="toolTip">
+         <string>On by default. The model tree card is titled BROWSER in small capitals instead of Model.</string>
+        </property>
+        <property name="text">
+         <string>Browser header in small caps</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserHeader</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserBadges">
+        <property name="toolTip">
+         <string>On by default. A part with the BruceWorx part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.</string>
+        </property>
+        <property name="text">
+         <string>Part number and state badges in the Browser</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserBadges</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserSummary">
+        <property name="toolTip">
+         <string>On by default. Quiet text after a feature's name with its main dimension: Pad 8 mm, R5, Ø9 × 4.</string>
+        </property>
+        <property name="text">
+         <string>Feature summary in the Browser</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserSummary</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserIconPlates">
+        <property name="toolTip">
+         <string>On by default. In dark mode, a faint light plate behind each tree icon keeps dark-outlined icons readable.</string>
+        </property>
+        <property name="text">
+         <string>Icon plates in the Browser (dark mode)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserIconPlates</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserGroupCaptions">
+        <property name="toolTip">
+         <string>On by default. Property groups are small-caps captions instead of grey bars (BruceWorx theme).</string>
+        </property>
+        <property name="text">
+         <string>Quiet property group captions</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserGroupCaptions</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="ShowTaskWatcher">
+        <property name="toolTip">
+         <string>The BruceWorx pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.</string>
+        </property>
+        <property name="text">
+         <string>Show workbench command lists in the task panel</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>ShowTaskWatcher</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>General</cstring>
         </property>
        </widget>
       </item>
@@ -458,7 +732,7 @@
         <item row="3" column="1">
          <widget class="Gui::PrefSpinBox" name="FloatingModelTreeLeftInset">
           <property name="toolTip">
-           <string>Saved as OverlayLeft Offset3. The current overlay pins the left panel to the edge, so this inset is stored and not applied yet.</string>
+           <string>OverlayLeft Offset3: the gap between the Browser and the left window edge.</string>
           </property>
           <property name="suffix">
            <string> px</string>
@@ -504,6 +778,11 @@
   <customwidget>
    <class>Gui::PrefCheckBox</class>
    <extends>QCheckBox</extends>
+   <header>Gui/PrefWidgets.h</header>
+  </customwidget>
+  <customwidget>
+   <class>Gui::PrefComboBox</class>
+   <extends>QComboBox</extends>
    <header>Gui/PrefWidgets.h</header>
   </customwidget>
   <customwidget>

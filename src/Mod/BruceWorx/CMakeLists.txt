@@ -10,7 +10,9 @@ SET(BruceWorx_SRCS
     BruceWorx.py
     TestBruceWorx.py
     TestBruceWorxPattern.py
+    TestBruceWorxNavPill.py
     preferences-bruceworx.ui
+    preferences-bruceworx.svg
     BruceWorxModelTree.qss
     bruceworx_pack.py
     bruceworx_defaults.py
@@ -21,6 +23,11 @@ SET(BruceWorx_SRCS
     bruceworx_toolbars.py
     bruceworx_grid.py
     bruceworx_appearance.py
+    bruceworx_taskcard.py
+    bruceworx_statusbar.py
+    bruceworx_browser.py
+    TestBruceWorxBrowser.py
+    bruceworx_navpill.py
     BruceWorx_RectangularPattern.svg
     BruceWorx_CircularPattern.svg
 )

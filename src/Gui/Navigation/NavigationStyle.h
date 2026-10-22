@@ -36,6 +36,8 @@
 #include <Inventor/SbVec3f.h>
 #include <Inventor/events/SoEvents.h>
 
+class QWheelEvent;
+
 #include <QEvent>
 #include <QAction>
 #include <Base/BaseClass.h>
@@ -148,6 +150,12 @@ public:
     SbBool isSpinningAnimationEnabled() const;
     SbBool isAnimating() const;
     SbBool isSpinning() const;
+
+    /// [BW] A trackpad swipe (two-finger scroll). Shift + swipe pans, Cmd (Ctrl elsewhere) +
+    /// swipe orbits; a plain swipe returns false and zooms as before. The modifier held when
+    /// the swipe starts holds for the whole swipe, momentum included. Mouse wheels (no scroll
+    /// phase, no pixel delta) are not handled. Preferences/BruceWorx/TrackpadGestures.
+    bool processTrackpadScroll(const QWheelEvent* event);
     void startAnimating(const std::shared_ptr<NavigationAnimation>& animation, bool wait = false) const;
     void stopAnimating() const;
 
@@ -337,6 +345,16 @@ protected:
 
 private:
     friend class NavigationAnimator;
+
+    // [BW] what the current trackpad swipe does (see processTrackpadScroll)
+    enum class TrackpadMode
+    {
+        Zoom,
+        Pan,
+        Orbit
+    };
+    TrackpadMode trackpadMode = TrackpadMode::Zoom;
+    bool trackpadPending = false;
 
     SbVec3f rotationCenter;
     SbBool rotationCenterFound;

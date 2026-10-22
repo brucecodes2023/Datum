@@ -14,6 +14,11 @@ Change it on Preferences > BruceWorx, or from the Python console:
 
 Open sketches update at once. Only applies while the BruceWorx preference pack
 is applied, so a user's own grid colours are left alone otherwise.
+
+FreeCAD stores "show grid" in each sketch when it is created, so sketches made
+before the pack (or in stock FreeCAD) open without a grid. While
+Preferences/BruceWorx/SketchGridOnEdit is on (default), the grid is switched on
+whenever a sketch opens for editing; the sketch panel can still hide it.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 SKETCHER_PATH = "User parameter:BaseApp/Preferences/Mod/Sketcher/General"
 THEME_PATH = "User parameter:BaseApp/Preferences/MainWindow"
 PREF_NAME = "SketchGridStrength"
+ON_EDIT_PREF = "SketchGridOnEdit"
 DEFAULT_STRENGTH = 10
 MIN_STRENGTH = 2
 MAX_STRENGTH = 40
@@ -75,6 +81,25 @@ def set_strength(percent) -> int:
     return value
 
 
+def show_grid_on_edit(view_provider) -> None:
+    """Switch the grid on for a sketch that opens for editing."""
+    import FreeCAD
+
+    prefs = FreeCAD.ParamGet(PREFS_PATH)
+    if not prefs.GetBool("Applied", False) or not prefs.GetBool(ON_EDIT_PREF, True):
+        return
+    obj = getattr(view_provider, "Object", None)
+    if obj is None or obj.TypeId != "Sketcher::SketchObject":
+        return
+    if hasattr(view_provider, "ShowGrid") and not view_provider.ShowGrid:
+        view_provider.ShowGrid = True
+
+
+class _EditObserver:
+    def slotInEdit(self, view_provider):
+        show_grid_on_edit(view_provider)
+
+
 class _Observer:
     def onChange(self, _group, name):
         if name in (PREF_NAME, "Theme", "Applied"):
@@ -82,15 +107,20 @@ class _Observer:
 
 
 _observer = None
+_edit_observer = None
 _groups = []
 
 
 def install() -> None:
-    """Apply now, and again whenever the strength or the theme changes."""
-    global _observer
+    """Apply now, again whenever the strength or the theme changes, and show the grid on edit."""
+    global _observer, _edit_observer
     if _observer is not None:
         return
     import FreeCAD
+    import FreeCADGui
+
+    _edit_observer = _EditObserver()
+    FreeCADGui.addDocumentObserver(_edit_observer)
 
     _observer = _Observer()
     for path in (PREFS_PATH, THEME_PATH):
