@@ -66,6 +66,8 @@ def step():
             v.viewIsometric()
             v.setCameraType("Perspective")
             Gui.SendMsgToActiveView("ViewFit")
+            from pivy import coin  # noqa: F401  (getCameraNode needs pivy's SWIG types)
+
             cam = v.getCameraNode()
             # Leave room: zoom out a little so the part sits in the middle of the viewport
             cam.scaleHeight(1.35) if hasattr(cam, "scaleHeight") else None

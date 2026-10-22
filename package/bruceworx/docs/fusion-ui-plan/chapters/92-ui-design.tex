@@ -220,7 +220,8 @@ Step & Work & Size\\
   buttons at the bottom. Navigation pill. One-row timeline, hidden without history. Status-bar readouts.
   & medium\\
 \textbf{C. Structure} & Workspace menu and tabs (\eref{UIX-05}), captioned groups (\eref{UIX-06}), tabs in the
-  title bar, search, Start page, Browser badges. & large\\
+  title bar, search, Start page. Planned in section~\ref{sec:ui-stepC}, for approval (Browser badges moved to
+  step B). & large\\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -304,7 +305,7 @@ shows an empty strip); an inset from the right window edge (the overlay pins pan
 there is no history; follow the macOS appearance and accent live; sketch colours (free geometry blue,
 constrained in text colour, dimensions quiet); document tabs on top; the property group captions.
 
-\subsubsection*{Step B, in progress}
+\subsubsection*{Step B: built (21 Oct 2026), for your check}
 
 \paragraph{1. Follow macOS appearance and accent (done).} \file{bruceworx\_appearance.py} listens for Qt's
 \code{colorSchemeChanged} and for palette or activation events (macOS has no accent signal). On a light/dark
@@ -315,3 +316,123 @@ view-cube highlight. Text and ticks on the accent follow the contrast rule above
 accent gets dark text and dark ticks, blue gets white. Two switches on Preferences $\rightarrow$ BruceWorx, both on.
 Theme tokens from \emph{Themes/UserParameters} take precedence over the yaml, so the computed
 \code{AccentTextColor} wins over the yaml default.
+
+\paragraph{2. Sketch colours (done).} In the pack, light and dark: free (under-constrained) geometry is blue
+(\code{EditedEdgeColor}), a constrained element and a fully constrained sketch turn the text colour instead of
+green, dimensions are a quiet text colour and constraint symbols the secondary text colour instead of red.
+Construction lines are a lighter blue, grey once constrained; reference dimensions soft blue, dimensions driven by
+an expression amber, external geometry purple. Sketches outside edit mode are drawn in a dark or light grey.
+All in \file{bruceworx\_pack.py}.
+
+\paragraph{3. Task card (done).} \file{bruceworx\_taskcard.py} gives the floating task panel a dialog header:
+while a command is open the panel takes the title and icon of the dialog's first task box (``Fillet
+Parameters'', ``Revolute joint''), read from the dialog itself, not from the workbench's command lists. That
+box's own header is hidden so the title is not shown twice, and boxes with an empty header lose the empty strip;
+later boxes keep their headers as section captions. When the command closes the panel is ``Tasks'' again with
+every header back. The overlay title bar now draws the icon, then the title, from the left (\code{[BW]} in
+\file{OverlayWidgets.cpp}). The panel has an 8\,px inset from the right window edge (\code{OverlayRight/Offset3}).
+Only while \emph{Float the task panel} is on.
+
+\paragraph{4. Timeline for assemblies, hidden without history (done).} For an assembly the timeline lists its
+components and joints in the order they were created, sorted by \code{obj.ID}, as the same icon chips, with the
+assembly's name on the left and ``5 items in the order they were added'' on the right. There is no marker and
+nothing rolls back: a click selects the object in its assembly, a double-click on a joint opens it, the object
+being edited is lit and a suppressed joint is struck through. The active body wins, then the active assembly,
+then the document's assembly, then its first body with features. When there is nothing to show (no document, an
+empty body or assembly) the bar hides and comes back as soon as there is. New switch on Preferences
+$\rightarrow$ BruceWorx, on: \emph{Hide the history timeline when there is no history}
+(\code{Mod/HistoryTimeline/HideWhenEmpty}). The PartDesign timeline is unchanged. Tests: 36 new headless checks
+(\file{test\_assembly\_timeline.py}), the 71 existing ones pass.
+
+\paragraph{5. Navigation pill (done).} \file{bruceworx\_navpill.py} puts a small card at the bottom centre of
+every 3D view, as in the mock: orbit, pan, zoom and fit, then display style, camera, section and measure. The right
+group runs FreeCAD's own commands (\code{Std\_DrawStyle} as a menu, orthographic/perspective in one button,
+\code{Std\_ToggleClipPlane}, \code{Std\_Measure}) with their icons. Orbit, pan and zoom are modes as in Fusion:
+click, drag in the view, Esc to stop; orbit turns about the vertical axis through the focal point. The pill moves
+into the space between the Browser and the task card when the view is narrow, and closes with its view. Colours
+come from a \code{\#BruceWorxNavPill} block in \file{BruceWorx.qss}; dark mode has the same faint icon plate as
+the toolbar. Switch on Preferences $\rightarrow$ BruceWorx, on. Tests: 20 pure-logic tests; every button clicked
+in a GUI run, light and dark captured.
+
+\paragraph{6. Document tabs on top and status-bar readouts (done).} The tab position is a preference,
+\code{MainWindow/DocumentTabPos} (stock \code{South}; the pack sets \code{North}). The tabs sit in a thin row under
+the toolbars, and the Browser and Tasks panels now start below them. A modified document shows a dot in place of
+the close button, with the $\times$ on hover; unmodified tabs show it on the current tab only
+(\code{BruceWorx/DocumentTabDot}). The status bar reads as text (\code{BruceWorx/StatusReadouts}): the prompt on the
+left; on the right \emph{Report} (warnings in orange, errors in red; a click opens the Report view), \emph{Units} (the
+unit menu), \emph{Navigation}, \emph{View} (3D views only) and \emph{Vault}, read from the folder vault's ref file named
+by \code{BruceWorx/VaultPath} and hidden until one is set. The check-out state waits for a cached vault status.
+Status messages no longer turn black on the dark bar. Three switches on Preferences $\rightarrow$ BruceWorx, on
+through the pack; stock FreeCAD is unchanged. \file{MainWindow.cpp}, \file{OverlayManager.cpp},
+\file{bruceworx\_statusbar.py}, \file{BruceWorx.qss}.
+
+\paragraph{7. Browser header, badges and captions (done).} The left card is titled \textsc{Browser}. A part or assembly
+with the part properties (\S\ref{sec:partprops}) shows its part number and state as badges after its name
+(``LE-01-01001'', ``WIP 02'' in the warning colour); a component in an assembly shows them as quiet text. Features
+get a quiet summary of their main dimension (``Pad 8 mm'', ``R5'', ``\O 9 $\times$ 4''); the type is named only when
+the label does not say it. Badges and summaries follow every change. In dark mode a 10\,\% white plate sits behind
+each tree icon. Property groups are quiet small-caps captions instead of grey bars. The state comes from a
+\code{State} property when there is one, otherwise from the revision code (numeric = WIP, letter = released). The
+tree draws the extras itself and asks \code{FreeCADGui.BrowserRowInfo} once per change (\file{Tree.cpp},
+\file{bruceworx\_browser.py}, \file{PropertyItemDelegate.cpp}). Five switches on Preferences $\rightarrow$
+BruceWorx, all on. Tests: 18 new.
+
+\paragraph{Found while testing (20--21 Oct).}
+\begin{itemize}[nosep]
+  \item \textbf{Quit crash on macOS.} Quitting (Dock $\rightarrow$ Quit, logout, \code{QApplication::quit()})
+        crashed and the settings were not saved: \code{MainWindow::closeEvent} called \code{quit()} again, the
+        nested \code{[NSApp terminate:]} made AppKit call \code{exit()} at once, and the static destructors
+        crashed. The quit is now queued until the close returns (macOS only, \file{MainWindow.cpp}).
+  \item \textbf{No top toolbar.} FreeCAD-Ribbon hides FreeCAD's own toolbars and FreeCAD stores that per toolbar,
+        so with the Ribbon replaced the window could start with no toolbar at all.
+        \code{bruceworx\_toolbars.show\_if\_all\_hidden} runs after every workbench switch: when all app-wide
+        toolbars, or all of the workbench's, are hidden it shows them again. A toolbar hidden on purpose stays
+        hidden while another of its group shows.
+  \item \textbf{Task watchers off.} The workbench command lists FreeCAD shows in the task panel (Insert,
+        Constraints, \ldots) repeat the toolbar; the pack turns them off (\code{General/ShowTaskWatcher}), with a
+        checkbox on Preferences $\rightarrow$ BruceWorx.
+  \item \textbf{Trackpad gestures.} A plain two-finger swipe zooms as before; Shift + swipe pans in any direction,
+        Cmd + swipe orbits about the point under the pointer. The view follows the fingers (natural scrolling
+        honoured); a mouse wheel is not affected. \code{NavigationStyle::processTrackpadScroll}, called from the
+        viewer's wheel filter; switch \code{BruceWorx/TrackpadGestures}, on.
+  \item \textbf{2\,px lines.} \code{DefaultShapeLineWidth} is 2 again: Coin line widths are device pixels, so
+        1\,px is a half-point hairline on Retina. Body edges and sketches outside edit mode.
+  \item \textbf{Grid when a sketch opens.} FreeCAD stores ``show grid'' in each sketch when it is created, so
+        older sketches opened without one. \file{bruceworx\_grid.py} switches it on whenever a sketch opens for
+        editing; the sketch panel can still hide it. Switch \code{BruceWorx/SketchGridOnEdit}, on.
+  \item \textbf{Pattern while another command is open.} Rectangular or Circular Pattern did nothing when another
+        task dialog was open; it now says ``Another command is open in the task panel. Close it (OK or Cancel)
+        first.''
+  \item \textbf{Checkable sections.} A group box that can be switched on (``Direction~2'') showed no checkbox.
+        \file{BruceWorx.qss} now styles \code{QGroupBox::indicator} like a checkbox, caption in the text colour.
+  \item \textbf{Checklist files.} \file{scripts/checklist\_files.py} builds, in the GUI and with a saved view,
+        the starting file for each group of steps of the test session (section~\ref{sec:tonight}). The files go
+        to \file{\textasciitilde/Developer/BruceWorx-checklist/}.
+  \item \textbf{Start-up traceback.} With a file on the command line the ground grid asked for the scene graph
+        before \code{pivy.coin} was imported (``No SWIG wrapped library loaded''). \file{ground\_grid.py} imports
+        it first; the grid now appears on that file too.
+  \item \textbf{Stale \file{\_rc.py} fixed.} The rule from step A (``Found on the way'') is fixed: \code{PYSIDE\_WRAP\_RC}
+        reads the files listed in the \file{.qrc} at configure time and rebuilds \file{X\_rc.py} when any of
+        them changes; editing the \file{.qrc} re-runs CMake. No more deleting \file{\_rc.py} by hand.
+  \item \textbf{Review fixes (21 Oct).} A code review of the items above found four things, now fixed:
+        \code{Structure} counts as an app-wide toolbar, so the toolbar restore fires again; the trackpad mode is
+        chosen on the first swipe event that moves (macOS starts a scroll as soon as the fingers rest, before
+        Shift or Cmd is pressed), and off macOS a wheel event without a scroll phase is never a swipe
+        (high-resolution mice); the task card follows boxes a dialog shows later (Sketcher's tool box) and keeps
+        the translated ``Tasks'' title.
+  \item \textbf{Empty task card stayed on screen.} With task watchers off and the task view alone in its panel, the
+        card never hid: \emph{Auto task} only folds a dock that shares its panel, the task view counted hidden
+        watchers as content, and closing a dialog sent no update. All three fixed (\code{[BW]} in
+        \file{OverlayWidgets.cpp}, \file{OverlayManager.cpp}, \file{TaskView.cpp}); the card now shows only while
+        a command is open.
+  \item \textbf{Checklist steps 8--17 run by script first (21 Oct).} Steps 8, 9, 12, 13, 14 and 16 passed; the
+        failures are fixed and pass on a re-run. Step 10: the BOM counts the visible elements of a link array
+        (6 bolts, not 1; \code{[BW]} in \file{BomObject.cpp}). Step 11: independent copies no longer leave the
+        old array's \code{Pattern\_i\ldots} objects behind. Step 12: the feature's body is activated before
+        PartDesign's own dialog, so no ``Active Body Required'' prompt. Step 13: the preferences page has an
+        icon, and the pattern buttons go away without a workbench switch. Step 14: ``Now at 0.0\,$^\circ$'', not
+        $-0.0$. Step 15: a joint whose part or face no longer exists shows an error in the tree and takes the
+        part back when it returns. Step 17: Material name and Mass follow a material change at once; FreeCAD's
+        placeholder ``Default'' material counts as no material. BOM cells for a property a row does not have
+        stay empty instead of ``N/A'' with a warning each.
+\end{itemize}

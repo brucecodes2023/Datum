@@ -84,6 +84,13 @@ Keep open & View $\rightarrow$ Panels $\rightarrow$ Report view, so warnings sho
 \end{longtable}
 \end{center}
 
+\paragraph{Results (20--21 Oct).} Steps 1--7 passed (step 4: all 12 boxes). Steps 8--17 are still to do. What
+was found and fixed on the way is in section~\ref{sec:ui-design}, ``Found while testing''. The starting files are
+now generated: \file{scripts/checklist\_files.py} (run in the GUI on a copy of the config) writes one file per
+group of steps into \file{\textasciitilde/Developer/BruceWorx-checklist/}, each saved with an isometric view:
+\file{04-old-two-direction-pattern}, \file{05-13-patterns}, \file{10-15-bolt-assembly}, \file{14-revolute-limits},
+\file{16-keep-position} and \file{17-part-properties} (all \file{.FCStd}; the number is the step).
+
 \paragraph{Report back.} For anything that is not as expected: a screenshot, the Report view text, and the step
 number. Saving the test document (\code{File $\rightarrow$ Save}) helps reproduce it here.
 
