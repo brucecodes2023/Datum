@@ -197,6 +197,24 @@ class DocumentTests(unittest.TestCase):
         copies = bp.make_independent(array)
         self.assertIsNone(self.doc.getObject(name))
         self.assertEqual(len(copies), 2)
+        # No element objects of the old array are left behind.
+        self.assertEqual([o.Name for o in self.doc.Objects if o.isDerivedFrom("App::LinkElement")], [])
+
+    def test_make_independent_undoes_in_one_step(self):
+        seed = self._box()
+        self.doc.UndoMode = 1
+        self.doc.openTransaction("Pattern")
+        name = bp.create_linked(seed, self._params(count1=3)).Name
+        self.doc.commitTransaction()
+        before = sorted(o.Name for o in self.doc.Objects)
+        self.doc.openTransaction("Independent")
+        bp.make_independent(self.doc.getObject(name))
+        self.doc.commitTransaction()
+        self.doc.undo()
+        self.assertEqual(sorted(o.Name for o in self.doc.Objects), before)
+        array = self.doc.getObject(name)
+        self.assertEqual(array.ElementCount, 2)
+        self.assertEqual(len(array.ElementList), 2)
 
     def test_parallel_directions_rejected(self):
         with self.assertRaises(ValueError):
@@ -222,6 +240,19 @@ class DocumentTests(unittest.TestCase):
         self.assertTrue(UtilsAssembly.isLinkGroup(array))
         # The component itself plus the five generated instances.
         self.assertEqual(UtilsAssembly.number_of_components_in(assembly), 6)
+
+    def test_feature_body(self):
+        body = self.doc.addObject("PartDesign::Body", "Body")
+        other = self.doc.addObject("PartDesign::Body", "Other")
+        pad = self.doc.addObject("PartDesign::AdditiveBox", "Box")
+        cyl = self.doc.addObject("PartDesign::AdditiveCylinder", "Cylinder")
+        far = self.doc.addObject("PartDesign::AdditiveBox", "Far")
+        body.addObject(pad)
+        body.addObject(cyl)
+        other.addObject(far)
+        self.assertEqual(bp.feature_body([pad, cyl]).Name, body.Name)
+        self.assertIsNone(bp.feature_body([pad, far]))
+        self.assertIsNone(bp.feature_body([self._box()]))
 
     def test_classify_selection(self):
         body = self.doc.addObject("PartDesign::Body", "Body")

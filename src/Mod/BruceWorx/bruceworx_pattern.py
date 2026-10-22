@@ -109,6 +109,19 @@ def classify_selection(objects):
     return "mixed"
 
 
+def feature_body(features):
+    """The one body holding all ``features``, or None (none, or several)."""
+    bodies = set()
+    for feature in features:
+        body = parent_of(feature)
+        if body is None or not body.isDerivedFrom("PartDesign::Body"):
+            return None
+        bodies.add(body.Name)
+    if len(bodies) != 1:
+        return None
+    return parent_of(features[0])
+
+
 def _is_partdesign_feature(obj):
     try:
         return obj.isDerivedFrom("PartDesign::Feature") and not obj.isDerivedFrom("PartDesign::Body")
@@ -342,7 +355,13 @@ def make_independent(array):
     seed = array.PatternSeed
     doc = array.Document
     copies = create_independent(seed, params, doc)
+    # Removing the array alone leaves its element objects at the root.
+    elements = [e.Name for e in array.ElementList]
+    array.ElementCount = 0
     doc.removeObject(array.Name)
+    for name in elements:
+        if doc.getObject(name) is not None:
+            doc.removeObject(name)
     return copies
 
 

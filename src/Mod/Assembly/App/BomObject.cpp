@@ -186,9 +186,25 @@ void BomObject::addObjectChildrenToBom(
         if (!child) {
             continue;
         }
+        int count = 1;  // [BW] how many of the child this entry stands for
         if (auto* asmLink = freecad_cast<AssemblyLink*>(child)) {
             child = asmLink->getLinkedAssembly();
             if (!child) {
+                continue;
+            }
+        }
+        else if (auto* link = freecad_cast<App::Link*>(child);
+                 link && link->_getElementCountValue() > 0) {
+            // [BW] A link array (e.g. a pattern) counts its visible elements:
+            // getLinkedObject() returns the array itself, so resolve the target.
+            count = 0;
+            for (int i = 0; i < link->_getElementCountValue(); ++i) {
+                if (link->isElementVisible(std::to_string(i).c_str()) != 0) {
+                    ++count;
+                }
+            }
+            child = link->getTrueLinkedObject(true);
+            if (!child || count == 0) {
                 continue;
             }
         }
@@ -213,7 +229,7 @@ void BomObject::addObjectChildrenToBom(
                 size_t idInList = i - 1;  // -1 for the header
                 if (idInList < obj_list.size() && child == obj_list[idInList]) {
 
-                    int qty = std::stoi(getText(i, quantityColIndex)) + 1;
+                    int qty = std::stoi(getText(i, quantityColIndex)) + count;  // [BW]
                     setCell(App::CellAddress(i, quantityColIndex), std::to_string(qty).c_str());
                     found = true;
                     break;
@@ -228,6 +244,9 @@ void BomObject::addObjectChildrenToBom(
         ++sub_i;
 
         addObjectToBom(child, row, sub_index);
+        if (hasQuantityCol && count != 1) {  // [BW]
+            setCell(App::CellAddress(row, quantityColIndex), std::to_string(count).c_str());
+        }
         ++row;
 
         if ((child->isDerivedFrom<AssemblyObject>() && detailSubAssemblies.getValue())
@@ -283,8 +302,10 @@ std::string BomObject::getBomPropertyValue(App::DocumentObject* obj, const std::
     App::Property* prop = obj->getPropertyByName(baseName.c_str());
 
     if (!prop) {
-        Base::Console().warning("Property not found: %s\n", baseName.c_str());
-        return QObject::tr("N/A").toStdString();
+        // [BW] Rows without the column's property (a part's bodies, for a part
+        // property column) stay empty instead of "N/A" with a warning per cell.
+        Base::Console().log("Property not found: %s\n", baseName.c_str());
+        return {};
     }
 
     // [BW] Text goes in with a leading quote, as Index does above, so the

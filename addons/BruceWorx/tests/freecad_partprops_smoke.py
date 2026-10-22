@@ -28,6 +28,7 @@ def _material(name):
 def run() -> None:
     import FreeCAD  # noqa: PLC0415
 
+    from bruceworx import partprops  # noqa: PLC0415
     from bruceworx.partprops import load_schema  # noqa: PLC0415
 
     schema = load_schema(user_layer=False)
@@ -69,6 +70,29 @@ def run() -> None:
     assert row[".Revision"] == "01", row
     assert row[".MaterialName"] == "Aluminum-6061-T6", row
     assert row[".Mass"].lstrip("=").replace(" ", "") in ("135g", "0.135kg"), row  # a unit expression
+
+    # Material picked after apply: the computed values follow without
+    # applying again. FreeCAD's "Default" material means none: no mass.
+    partprops.install_observer()
+    part2 = doc.addObject("App::Part", "Part2")
+    box2 = doc.addObject("Part::Box", "Bracket")  # 10 mm cube, 1000 mm^3
+    part2.addObject(box2)
+    doc.recompute()
+    default = box2.ShapeMaterial
+    assert default.Name == "Default", default.Name
+    schema.apply(part2)
+    assert part2.MaterialName == "" and part2.Mass.Value == 0, (part2.MaterialName, part2.Mass)
+    box2.ShapeMaterial = _material("Aluminum-6061-T6")
+    doc.recompute()
+    assert part2.MaterialName == "Aluminum-6061-T6", part2.MaterialName
+    assert abs(part2.Mass.getValueAs("kg").Value - 1000 * density) < 1e-12, part2.Mass
+    box2.Length = 20
+    doc.recompute()
+    assert abs(part2.Mass.getValueAs("kg").Value - 2000 * density) < 1e-12, part2.Mass
+    assert "Touched" not in part2.State, part2.State
+    box2.ShapeMaterial = default
+    doc.recompute()
+    assert part2.MaterialName == "" and part2.Mass.Value == 0, (part2.MaterialName, part2.Mass)
     FreeCAD.closeDocument(doc.Name)
     print("BW_PARTPROPS_SMOKE PASS")
 

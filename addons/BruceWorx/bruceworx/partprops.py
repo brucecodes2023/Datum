@@ -20,6 +20,12 @@ it.
 
 The Assembly BOM reads a column named ``.<Property>`` from each part
 (``BomObject.cpp``), so :meth:`Schema.bom_columns` is all the BOM needs.
+
+Computed values (material name, mass) follow the part: a document observer
+(:func:`install_observer`, started by the add-on's Init.py) refreshes them
+when a body's material, shape or a part's contents change, so ``apply`` is
+needed once, not after every change. FreeCAD's "Default" material counts as
+no material: no name and no mass.
 """
 
 from __future__ import annotations
@@ -186,13 +192,11 @@ class Schema:
                 self._add(obj, prop)
                 report["added"].append(prop.name)
             obj.setEditorMode(prop.name, ["ReadOnly"] if prop.readonly else [])
+        watch(self)
         if compute:
-            for prop in self.properties.values():
-                if prop.source.startswith("computed:") and prop.name not in _conflicted(report):
-                    value = COMPUTED[prop.source](obj)
-                    if value is not None:
-                        setattr(obj, prop.name, value)
-                        report["computed"].append(prop.name)
+            conflicted = _conflicted(report)
+            computed = [p for p in self.properties.values() if p.source.startswith("computed:")]
+            report["computed"] = refresh(obj, [p for p in computed if p.name not in conflicted])
         return report
 
     def _add(self, obj, prop: PropertyDef):
@@ -243,29 +247,129 @@ def _density_kg_per_mm3(material) -> float | None:
     return FreeCAD.Units.Quantity(str(text)).getValueAs("kg/mm^3").Value
 
 
+def _chosen(material) -> bool:
+    """False for FreeCAD's "Default" placeholder: no material picked yet."""
+    return getattr(material, "Name", "Default") != "Default"
+
+
 def computed_mass(obj):
-    total, found = 0.0, False
-    for body in _bodies(obj):
+    """Mass of the bodies that have a material; 0 kg when none has one (the
+    "Default" placeholder's density is not the part's). None: no bodies."""
+    bodies = _bodies(obj)
+    if not bodies:
+        return None
+    total = 0.0
+    for body in bodies:
         shape = getattr(body, "Shape", None)
-        if shape is None or shape.isNull() or not shape.Solids:
+        if shape is None or shape.isNull() or not shape.Solids or not _chosen(body.ShapeMaterial):
             continue
         density = _density_kg_per_mm3(body.ShapeMaterial)
         if density is None:
             continue
         total += shape.Volume * density
-        found = True
-    return f"{total} kg" if found else None
+    return f"{total} kg"
 
 
 def computed_material(obj):
-    names = {body.ShapeMaterial.Name for body in _bodies(obj)}
-    names.discard("Default")  # FreeCAD's placeholder means "not chosen"
+    names = {body.ShapeMaterial.Name for body in _bodies(obj) if _chosen(body.ShapeMaterial)}
     if not names:
         return "" if _bodies(obj) else None
     return names.pop() if len(names) == 1 else "Mixed: " + ", ".join(sorted(names))
 
 
 COMPUTED = {"computed:mass": computed_mass, "computed:material": computed_material}
+
+# Computed properties of every schema applied (or loaded by the observer):
+# name -> (PropertyDef, property group). The observer refreshes these.
+_WATCHED: dict[str, tuple[PropertyDef, str]] = {}
+
+
+def watch(schema: Schema):
+    """Have the observer keep ``schema``'s computed properties current."""
+    for prop in schema.properties.values():
+        if prop.source.startswith("computed:"):
+            _WATCHED[prop.name] = (prop, schema.group)
+
+
+def refresh(obj, props=None) -> list[str]:
+    """Recompute the computed properties ``obj`` carries (default: every
+    watched one) and set those whose value changed. Returns the names that
+    have a value. A property of another type or group is left alone."""
+    out = []
+    for prop in list(props if props is not None else (p for p, _group in _WATCHED.values())):
+        if prop.name not in obj.PropertiesList or obj.getTypeIdOfProperty(prop.name) != prop.freecad_type:
+            continue
+        value = COMPUTED[prop.source](obj)
+        if value is None:
+            continue
+        out.append(prop.name)
+        if not _same(getattr(obj, prop.name), value):
+            setattr(obj, prop.name, value)
+    return out
+
+
+def _same(current, value) -> bool:
+    """Whether ``current`` already holds ``value`` (a mass as "<x> kg")."""
+    if isinstance(value, str) and value.endswith(" kg") and hasattr(current, "getValueAs"):
+        try:
+            have, want = current.getValueAs("kg").Value, float(value[:-3])
+        except (ValueError, TypeError):
+            return False
+        return abs(have - want) <= 1e-12 * max(1.0, abs(want))
+    return type(current) is type(value) and current == value
+
+
+class _Observer:
+    """Refreshes computed properties when a body's material or shape, or a
+    part's contents, change. Owners are the changed object and the objects
+    whose Group holds it (an App::Part and its bodies)."""
+
+    WATCH = ("ShapeMaterial", "Shape", "Group")
+
+    def __init__(self):
+        self.busy = False
+
+    def slotChangedObject(self, obj, prop):
+        if prop not in self.WATCH or self.busy or not _WATCHED:
+            return
+        try:
+            doc = obj.Document
+            if doc.Restoring or doc.Transacting:
+                return  # file load, undo/redo: the saved values come back too
+            owners = [obj] + [p for p in obj.InList if obj in (getattr(p, "Group", None) or [])]
+            self.busy = True
+            for owner in owners:
+                present = set(owner.PropertiesList)
+                props = [p for name, (p, group) in _WATCHED.items()
+                         if name in present and owner.getGroupOfProperty(name) == group]
+                if props:
+                    refresh(owner, props)
+        except Exception as exc:  # noqa: BLE001 -- never break the edit that triggered this
+            import FreeCAD  # noqa: PLC0415
+
+            FreeCAD.Console.PrintLog(f"BruceWorx part properties: refresh failed: {exc}\n")
+        finally:
+            self.busy = False
+
+
+_OBSERVER = None
+
+
+def install_observer():
+    """Start refreshing computed properties (once per session). Watches the
+    built-in and user layers now, and every schema applied later."""
+    global _OBSERVER
+    if _OBSERVER is not None:
+        return _OBSERVER
+    import FreeCAD  # noqa: PLC0415
+
+    try:
+        watch(load_schema())
+    except (OSError, SchemaError) as exc:
+        FreeCAD.Console.PrintWarning(f"BruceWorx part properties: {exc}\n")
+    _OBSERVER = _Observer()
+    FreeCAD.addDocumentObserver(_OBSERVER)
+    return _OBSERVER
 
 
 def _set_enum(obj, prop: PropertyDef, keep: bool):

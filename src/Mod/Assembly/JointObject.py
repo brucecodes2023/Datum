@@ -22,6 +22,7 @@
 # **************************************************************************/
 
 import math
+import re
 
 import FreeCAD as App
 import Part
@@ -226,6 +227,52 @@ def limitReading(joint):
     zeroAngle = joint.LimitAngleZero.Value if hasattr(joint, "LimitAngleZero") else 0.0
     zeroLength = joint.LimitLengthZero.Value if hasattr(joint, "LimitLengthZero") else 0.0
     return wrapAngle(angle - zeroAngle), length - zeroLength
+
+
+def refRecord(ref):
+    """[BW] A reference as names, [document, object, sub, ...]; [] for none."""
+    if ref is None or len(ref) != 2 or ref[0] is None:
+        return []
+    return [ref[0].Document.Name, ref[0].Name] + list(ref[1])
+
+
+def recordedObject(record):
+    """[BW] The object a refRecord() names, if it still exists."""
+    if len(record) < 2:
+        return None
+    doc = App.listDocuments().get(record[0])
+    obj = doc.getObject(record[1]) if doc else None
+    if obj is None or obj.Removing:
+        return None
+    return obj
+
+
+def refMissing(ref):
+    """[BW] The part of a reference that no longer exists ("Pattern_i1" or
+    "Plate.Body.Edge13"), or "" when it all resolves."""
+    obj = ref[0]
+    if obj is None:
+        return ""
+    if obj.Removing or not obj.isAttachedToDocument():
+        return obj.Name
+    for sub in ref[1]:
+        if not sub:
+            continue
+        try:
+            found = obj.getSubObject(sub)
+        except Exception:
+            found = None
+        if re.search(r"(Face|Edge|Vertex)\d+$", sub):
+            # A face, edge or vertex past the shape's count comes back as a null shape
+            found = found if isinstance(found, Part.Shape) and not found.isNull() else None
+        if found is None:
+            return f"{obj.Name}.{sub}"
+    return ""
+
+
+def readingText(value, decimals):
+    """[BW] A reading as text; one that rounds to zero shows 0.0, not -0.0."""
+    return f"{round(value, decimals) + 0.0:.{decimals}f}"
 
 
 def solveIfAllowed(assembly, storePrev=False):
@@ -492,6 +539,25 @@ class Joint:
 
         joint.setEditorMode("LimitAngleZero", ["ReadOnly"])
         joint.setEditorMode("LimitLengthZero", ["ReadOnly"])
+
+        # Each reference by name, so a joint whose part is deleted (a pattern
+        # instance the pattern no longer makes) reports it, and takes the part
+        # back if it comes back.
+        for index in (1, 2):
+            name = f"LastReference{index}"
+            if not hasattr(joint, name):
+                joint.addProperty(
+                    "App::PropertyStringList",
+                    name,
+                    f"Joint Connector {index}",
+                    QT_TRANSLATE_NOOP(
+                        "App::Property",
+                        "The reference by name: document, object, elements. Kept when the object is deleted",
+                    ),
+                    locked=True,
+                )
+                joint.setPropertyStatus(name, ["Hidden", "Output"])
+                setattr(joint, name, refRecord(getattr(joint, f"Reference{index}", None)))
 
         if not hasattr(joint, "KeepPosition"):
             joint.addProperty(
@@ -927,7 +993,9 @@ class Joint:
                     break
 
         if prop == "Reference1" or prop == "Reference2":
-            joint.recompute()
+            self.recordReference(joint, int(prop[-1]))  # [BW]
+            if not getattr(self, "restoringReference", False):  # [BW]
+                joint.recompute()
 
         if (
             not hasattr(joint, "Reference1")
@@ -979,7 +1047,60 @@ class Joint:
         ):
             raise Exception(errStr + "Reference2")
 
+        for index in (1, 2):  # [BW]
+            self.checkReference(joint, index, errStr)
+
         self.updateJCSPlacements(joint)
+
+    def recordReference(self, joint, index):
+        """[BW] Keep LastReference<index> in step with Reference<index>. Cleared
+        when the reference is cleared on purpose; kept when it was cleared
+        because its object is being deleted."""
+        name = f"LastReference{index}"
+        if not hasattr(joint, name):
+            return
+        ref = getattr(joint, f"Reference{index}")
+        if ref is not None:
+            record = refRecord(ref)
+            if not record:
+                return
+        elif recordedObject(joint.getPropertyByName(name)) is not None:
+            record = []
+        else:
+            return
+        if list(joint.getPropertyByName(name)) != record:
+            setattr(joint, name, record)
+
+    def checkReference(self, joint, index, errStr):
+        """[BW] Raise when Reference<index> points at an object or element that
+        no longer exists, so the joint shows as broken in the tree. A reference
+        cleared because its object was deleted is put back once an object of
+        that name exists again (a pattern instance that comes back)."""
+        prop = f"Reference{index}"
+        ref = getattr(joint, prop, None)
+        if ref is None:
+            record = list(getattr(joint, f"LastReference{index}", None) or [])
+            if len(record) < 3:
+                return  # never set, or cleared on purpose
+            obj = recordedObject(record)
+            if obj is not None and "Touched" in obj.State:
+                # New since the recompute started, so not ordered before the
+                # joint: give it its shape before the joint reads it.
+                obj.recompute()
+            ref = [obj, record[2:]]
+            missing = refMissing(ref) if obj is not None else record[1]
+            if not missing:
+                self.restoringReference = True
+                try:
+                    setattr(joint, prop, ref)
+                finally:
+                    self.restoringReference = False
+                return
+        else:
+            missing = refMissing(ref)
+        if missing:
+            gone = QT_TRANSLATE_NOOP("Assembly", "{} no longer exists").format(missing)
+            raise Exception(errStr + prop + " (" + gone + ")")
 
     def setJointConnectors(self, joint, refs):
         # current selection is a vector of strings like "Assembly.Assembly1.Assembly2.Body.Pad.Edge16" including both what selection return as obj_name and obj_sub
@@ -1702,6 +1823,7 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         self.jForm.jointType.setCurrentIndex(jointTypeIndex)
         self.jType = JointTypes[self.jForm.jointType.currentIndex()]
         self.jForm.jointType.currentIndexChanged.connect(self.onJointTypeChanged)
+        self.updateFormTitle()
 
         if jointObj:
             Gui.Selection.clearSelection()
@@ -1921,6 +2043,16 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         self.jType = JointTypes[self.jForm.jointType.currentIndex()]
         self.joint.Proxy.setJointType(self.joint, self.jType)
         self.adaptUi()
+        self.updateFormTitle()
+
+    def updateFormTitle(self):
+        """[BW] Title and icon of the task box: "Revolute joint" with the joint icon.
+        The floating task panel shows them as its header (roadmap §13.3)."""
+        if self.activeType == "Part":
+            return
+        name = self.jForm.jointType.currentText()
+        self.form.setWindowTitle(translate("Assembly", "{} joint").format(name))
+        self.form.setWindowIcon(QtGui.QIcon(f":/icons/Assembly_CreateJoint{self.jType}.svg"))
 
     def onAngleChanged(self, quantity):
         self.joint.Angle = self.jForm.angleSpinbox.property("rawValue")
@@ -2043,10 +2175,10 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         elif len(self.refs) == 2:
             angle, length = limitReading(self.joint)
             if self.jType in JointUsingLimitAngle:
-                text += "\n" + translate("Assembly", "Now at") + f" {angle:.1f}°"
+                text += "\n" + translate("Assembly", "Now at") + f" {readingText(angle, 1)}°"
             if self.jType in JointUsingLimitLength:
                 text += ("" if self.jType in JointUsingLimitAngle else "\n" + translate("Assembly", "Now at"))
-                text += f" {length:.2f} mm"
+                text += f" {readingText(length, 2)} mm"
         self.jForm.limitDatumInfo.setText(text.strip())
 
     def fillLimitDatumList(self, datums):

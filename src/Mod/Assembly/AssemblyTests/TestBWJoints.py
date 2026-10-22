@@ -155,6 +155,76 @@ class TestBWJoints(unittest.TestCase):
         plc2 = UtilsAssembly.getJcsGlobalPlc(joint.Placement2, joint.Reference2)
         self.assertLess((plc1.Base - plc2.Base).Length, 1e-6)
 
+    def test_reading_text_has_no_negative_zero(self):
+        self.assertEqual(JointObject.readingText(-0.0, 1), "0.0")
+        self.assertEqual(JointObject.readingText(-0.04, 1), "0.0")
+        self.assertEqual(JointObject.readingText(-1e-12, 2), "0.00")
+        self.assertEqual(JointObject.readingText(-0.06, 1), "-0.1")
+        self.assertEqual(JointObject.readingText(90.0, 1), "90.0")
+
+    # ----- references that go away ------------------------------------------------
+
+    def isBroken(self, joint):
+        return "Invalid" in joint.State or "Error" in joint.State
+
+    def test_deleted_part_breaks_the_joint_until_it_is_back(self):
+        joint = self.makeRevolute()
+        self.assertFalse(self.isBroken(joint))
+        self.doc.removeObject("Arm")
+        self.doc.recompute()
+        self.assertIsNotNone(self.doc.getObject(joint.Name))  # the joint stays
+        self.assertIsNone(joint.Reference2)
+        self.assertTrue(self.isBroken(joint), joint.State)
+        self.assertIn("Reference2 (Arm no longer exists)", joint.getStatusString())
+
+        arm = self.assembly.newObject("Part::Box", "Arm")
+        self.assertEqual(arm.Name, "Arm")
+        self.doc.recompute()
+        self.assertFalse(self.isBroken(joint), joint.State)
+        self.assertEqual(joint.Reference2[0], arm)
+        self.assertEqual(self.assembly.solve(), 0)
+
+    def test_pattern_instance_that_goes_and_comes_back(self):
+        array = self.assembly.newObject("App::Link", "Pattern")
+        array.LinkedObject = self.arm
+        array.ElementCount = 3
+        self.doc.recompute()
+        element = array.ElementList[2]
+        name = element.Name
+        joint = self.jointgroup.newObject("App::FeaturePython", "Revolute")
+        JointObject.Joint(joint, JointObject.JointTypes.index("Revolute"))
+        refs = [[self.base, ["Face6", "Vertex6"]], [element, ["Face5", "Vertex1"]]]
+        joint.Proxy.setJointConnectors(joint, refs)
+        self.doc.recompute()
+        self.assertFalse(self.isBroken(joint), joint.State)
+
+        array.ElementCount = 1  # the jointed instance goes
+        self.doc.recompute()
+        self.assertIsNone(self.doc.getObject(name))
+        self.assertTrue(self.isBroken(joint), joint.State)
+        self.assertIn(f"{name} no longer exists", joint.getStatusString())
+
+        array.ElementCount = 3  # and comes back
+        self.doc.recompute()
+        self.assertFalse(self.isBroken(joint), joint.State)
+        self.assertEqual(joint.Reference2[0].Name, name)
+        self.assertEqual(list(joint.Reference2[1]), ["Face5", "Vertex1"])
+
+    def test_missing_element_breaks_the_joint(self):
+        joint = self.makeRevolute()
+        joint.Reference2 = [self.arm, ["Face99", "Vertex1"]]
+        self.doc.recompute()
+        self.assertTrue(self.isBroken(joint), joint.State)
+        self.assertIn("Arm.Face99 no longer exists", joint.getStatusString())
+
+    def test_reference_cleared_on_purpose_is_not_an_error(self):
+        joint = self.makeRevolute()
+        joint.Proxy.setJointConnectors(joint, [[self.base, ["Face6", "Vertex6"]]])
+        self.doc.recompute()
+        self.assertIsNone(joint.Reference2)
+        self.assertEqual(list(joint.LastReference2), [])
+        self.assertFalse(self.isBroken(joint), joint.State)
+
 
 if __name__ == "__main__":
     unittest.main()

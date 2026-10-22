@@ -31,7 +31,8 @@ PARTDESIGN = {
     bp.CIRCULAR: "PartDesign_PolarPattern",
 }
 
-_state = {"installed": False, "manipulator": None, "observer": None, "pending": set()}
+_state = {"installed": False, "manipulator": None, "observer": None, "pending": set(),
+          "prefs": None, "pref_observer": None, "enabled": True}
 
 
 def _qt():
@@ -515,6 +516,10 @@ class _PatternCommand:
     def Activated(self):
         import FreeCADGui as Gui
 
+        if Gui.Control.activeDialog():
+            # Only one task panel at a time; showDialog would fail without a word.
+            _message("Another command is open in the task panel. Close it (OK or Cancel) first.")
+            return
         selection = Gui.Selection.getSelection()
         patterns = [o for o in selection if bp.is_pattern(o)]
         if patterns and len(patterns) == len(selection):
@@ -522,6 +527,7 @@ class _PatternCommand:
             return
         kind = bp.classify_selection(selection)
         if kind == "features":
+            _activate_body(bp.feature_body(selection))
             Gui.runCommand(PARTDESIGN[self.kind])
             return
         if kind == "empty":
@@ -535,6 +541,21 @@ class _PatternCommand:
             _message("These cannot be patterned: " + ", ".join(unusable))
             return
         Gui.Control.showDialog(PatternTaskPanel(self.kind, seeds=selection))
+
+
+def _activate_body(body):
+    """Make ``body`` the active body, as PartDesign does, so its pattern command
+    does not first ask which body to use."""
+    import FreeCADGui as Gui
+
+    if body is None:
+        return
+    try:
+        view = Gui.ActiveDocument.ActiveView
+        if view.getActiveObject("pdbody") != body:
+            view.setActiveObject("pdbody", body)
+    except Exception:  # no 3D view (e.g. a spreadsheet tab is active)
+        pass
 
 
 def _patternable(obj):
@@ -615,8 +636,38 @@ def install():
     observer = _SeedObserver()
     App.addDocumentObserver(observer)
     _state["observer"] = observer
+    # Keep the group handle: its observers detach when the wrapper is collected.
+    _state["prefs"] = App.ParamGet(PREFS_PATH)
+    _state["pref_observer"] = _PrefObserver()
+    _state["enabled"] = enabled()
+    _state["prefs"].Attach(_state["pref_observer"])
     _state["installed"] = True
     _add_menu_entries()
+
+
+class _PrefObserver:
+    """Add or drop the toolbar buttons as soon as the switch changes."""
+
+    def onChange(self, _group, name):
+        # Called on every write (the preferences dialog writes all keys on OK).
+        if name == ENABLED_KEY and enabled() != _state["enabled"]:
+            _state["enabled"] = enabled()
+            QtCore, _QtGui, _QtWidgets = _qt()
+            QtCore.QTimer.singleShot(0, _reload_workbench)
+
+
+def _reload_workbench():
+    import FreeCADGui as Gui
+
+    try:
+        workbench = Gui.activeWorkbench()
+        if workbench is not None:
+            workbench.reloadActive()  # re-runs the manipulators
+            import bruceworx_toolbars
+
+            bruceworx_toolbars._after_switch()  # the two-row layout, as after a switch
+    except Exception as exc:
+        _warn(f"toolbars not refreshed: {exc}")
 
 
 def _add_menu_entries():

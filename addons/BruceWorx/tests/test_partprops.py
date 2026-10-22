@@ -167,5 +167,73 @@ class LayerTests(unittest.TestCase):
         self.assertEqual(schema.layers[-1], path)
 
 
+class FakeMaterial:
+    def __init__(self, name):
+        self.Name = name
+
+    def getPhysicalValue(self, key):
+        raise KeyError(key)  # no density: mass needs FreeCAD's units, see the smoke test
+
+
+class FakeShape:
+    Solids = [object()]
+    Volume = 1000.0
+
+    def isNull(self):
+        return False
+
+
+class FakeBody:
+    PropertiesList = ["ShapeMaterial", "Shape"]
+
+    def __init__(self, material):
+        self.ShapeMaterial = FakeMaterial(material)
+        self.Shape = FakeShape()
+
+
+class ComputedTests(unittest.TestCase):
+    def setUp(self):
+        schema = load_schema(user_layer=False)
+        self.computed = [p for p in schema.properties.values() if p.source.startswith("computed:")]
+
+    def part(self, material, **props):
+        obj = FakePropObj(**(props or {
+            "MaterialName": ("App::PropertyString", "stale"),
+            "Mass": ("App::PropertyMass", "12 mg"),
+        }))
+        obj.Group = [FakeBody(material)]
+        return obj
+
+    def test_default_material_counts_as_none(self):
+        obj = self.part("Default")
+        self.assertEqual(partprops.computed_material(obj), "")
+        self.assertEqual(partprops.computed_mass(obj), "0.0 kg")  # not the placeholder's density
+
+    def test_no_bodies_computes_nothing(self):
+        obj = FakePropObj()
+        obj.Group = []
+        self.assertIsNone(partprops.computed_material(obj))
+        self.assertIsNone(partprops.computed_mass(obj))
+
+    def test_refresh_follows_the_material(self):
+        obj = self.part("Default")
+        self.assertEqual(sorted(partprops.refresh(obj, self.computed)), ["Mass", "MaterialName"])
+        self.assertEqual((obj.MaterialName, obj.Mass), ("", "0.0 kg"))
+        obj.Group[0].ShapeMaterial = FakeMaterial("Aluminum-6061-T6")
+        partprops.refresh(obj, self.computed)
+        self.assertEqual(obj.MaterialName, "Aluminum-6061-T6")
+
+    def test_refresh_leaves_other_types_alone(self):
+        obj = self.part("Steel", Mass=("App::PropertyFloat", 1.5))
+        self.assertEqual(partprops.refresh(obj, self.computed), [])
+        self.assertEqual(obj.Mass, 1.5)
+
+    def test_apply_registers_its_computed_properties(self):
+        schema = load_schema(user_layer=False)
+        schema.apply(FakePropObj(), compute=False)
+        self.assertIn("Mass", partprops._WATCHED)
+        self.assertEqual(partprops._WATCHED["MaterialName"][1], schema.group)
+
+
 if __name__ == "__main__":
     unittest.main()

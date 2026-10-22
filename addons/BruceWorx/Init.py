@@ -7,7 +7,9 @@ BruceWorx → Assign Part Number… are available by default.
 
 Off switch: ``BaseApp/Preferences/BruceWorx/LoadHooks`` (the "Hooks add-on"
 box on Preferences → BruceWorx). Off takes effect on the next start: the
-folder is taken back off ``sys.path`` and InitGui.py adds nothing.
+folder is taken back off ``sys.path`` and InitGui.py adds nothing. When on,
+it also starts the observer that keeps computed part properties current
+(``bruceworx.partprops.install_observer``).
 ``--disable-addon BruceWorxHooks`` also works.
 
 Headless use does not need any of this. Run hooks.py under FreeCADCmd; see
@@ -47,6 +49,15 @@ def _bw_hooks_init():
     if enabled:
         if here not in sys.path:
             sys.path.insert(0, here)
+        # Keep computed part properties (material, mass) current.
+        try:
+            from bruceworx import partprops
+
+            partprops.install_observer()
+        except Exception as exc:
+            import FreeCAD
+
+            FreeCAD.Console.PrintWarning(f"BruceWorx part properties observer not started: {exc}\n")
     else:
         while here in sys.path:
             sys.path.remove(here)
