@@ -335,6 +335,14 @@ INVENTORY = [
         rgba(100, 210, 255),
         note="Preselection. Stock runtime default is SbColor(0.8, 0.1, 0.1), a red.",
     ),
+    _e(
+        "BaseApp/Preferences/View",
+        "RotationMode",
+        "int",
+        1,
+        1,
+        note="Drag at cursor: orbit about the point under the pointer. Unset reads as 1 in the view but 0 in the dialog.",
+    ),
     _e("BaseApp/Preferences/View", "EnableSelection", "bool", True, True),
     _e("BaseApp/Preferences/View", "EnablePreselection", "bool", True, True),
     # --- navigation (FCB-P1-04) ---
@@ -504,7 +512,8 @@ INVENTORY = [
     _e("BaseApp/Preferences/NaviCube", "CubeSize", "int", 132, 96, note="Compact cube, as in the §13.3 mock."),
     _e("BaseApp/Preferences/NaviCube", "OffsetX", "int", 0, 12),
     _e("BaseApp/Preferences/NaviCube", "OffsetY", "int", 0, 12),
-    _e("BaseApp/Preferences/NaviCube", "FontString", "text", "", "Noto Sans"),
+    # Empty = the app font. A missing family (e.g. Noto Sans on macOS) makes Qt warn on every start.
+    _e("BaseApp/Preferences/NaviCube", "FontString", "text", "", ""),
     _e("BaseApp/Preferences/NaviCube", "FontZoom", "float", 0.3, 0.34),
     _e(
         "BaseApp/Preferences/NaviCube",

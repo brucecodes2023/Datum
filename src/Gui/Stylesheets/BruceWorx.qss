@@ -773,6 +773,12 @@ QLabel {
   color: @TextForegroundColor;
 }
 
+/* The notification popup is a top-level QLabel; the rule above would make it see-through. */
+QLabel#NotificationBox_label {
+  background-color: @MenuBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+}
+
 QLabel[link="true"],
 a {
   color: @TextUrlColor;

@@ -84,8 +84,8 @@ def show_if_all_hidden():
     toolbar (BaseApp/MainWindow/Toolbars). While BruceWorx replaces the Ribbon
     (Preferences/BruceWorx/UseBruceWorxBar) those toolbars would stay hidden and
     the window would have no top bar at all. The app-wide toolbars and the active
-    workbench's toolbars are checked apart, each time a workbench is activated: a
-    toolbar hidden on purpose is left alone as long as one of its group shows.
+    workbench's toolbars are checked apart, once each (the move away from the Ribbon);
+    after that a whole group can be hidden on purpose.
     """
     import FreeCAD
     import FreeCADGui
@@ -102,9 +102,13 @@ def show_if_all_hidden():
         if tb.parent() is mw and tb.toggleViewAction().isVisible()
     ]
     group = FreeCAD.ParamGet(TOOLBARS_PATH)
+    done = FreeCAD.ParamGet(PREFS_PATH + "/ToolbarsRestored")
     app = [tb for tb in bars if tb.objectName() in ALWAYS_SHOWN]
     workbench = [tb for tb in bars if tb.objectName() not in ALWAYS_SHOWN]
-    for part in (app, workbench):
+    for key, part in (("App", app), (FreeCADGui.activeWorkbench().name(), workbench)):
+        if not part or done.GetBool(key, False):
+            continue
+        done.SetBool(key, True)
         if all_hidden(not tb.isHidden() for tb in part):
             for tb in part:
                 tb.show()

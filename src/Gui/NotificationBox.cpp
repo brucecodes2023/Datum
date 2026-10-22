@@ -121,6 +121,8 @@ NotificationLabel::NotificationLabel(
     setForegroundRole(QPalette::ToolTipText);  // defaults to ToolTip QPalette
     setBackgroundRole(QPalette::ToolTipBase);  // defaults to ToolTip QPalette
     setPalette(NotificationBox::palette());
+    // [BW] Named before polishing so stylesheet rules on the name apply.
+    setObjectName(QLatin1String("NotificationBox_label"));
     ensurePolished();
     setMargin(1 + style()->pixelMetric(QStyle::PM_ToolTipLabelFrameWidth, nullptr, this));
     setFrameStyle(QFrame::NoFrame);
