@@ -1,0 +1,1357 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""The BruceWorx Start page (roadmap §13.4, step C5; UIX-06, PDM-04).
+
+FreeCAD's Start page is the C++ StartGui::StartView: an MDI view named
+"StartView" whose central widget is a QStackedWidget. Page 0 is the
+first-start page, page 1 the documents page (Mod/Start/Gui/StartView.cpp).
+This module adds the BruceWorx page to that stack and shows it instead of
+page 1, so the Start tab, its close button and ShowOnStartup stay stock.
+
+* Left: New (Part, Assembly, Drawing, Sketch, Simulation study), Open and
+  Import, then the vault box. The New buttons do what the stock buttons do:
+  Std_New, the workbench, then its first command. The vault box reads the
+  folder vault named by Preferences/BruceWorx/VaultPath
+  (addons/BruceWorx/bruceworx/pdm_folder.py): checked out to me, waiting for
+  review, released this week, with links to Import files… and Settings…
+  (task dialogs in bruceworx_vaultwizard). Without one it says "No vault
+  open" and links to Create Vault and to picking the vault folder; picking a
+  folder that is not a vault opens Create Vault on it.
+* Right: the recent files (BaseApp/Preferences/RecentFiles, MRU0...) as cards
+  with the thumbnail from the .FCStd zip, then as a table with part number,
+  revision, lifecycle state, date and location. P/N, revision and state are
+  the part properties in the file's Document.xml (bruceworx/partprops.py);
+  the vault's own record wins when the part is in the open vault. Files are
+  read on a worker thread and cached by modification time.
+* Foot: the examples (the stock page's examples folder) and the stock
+  "show at startup" switch (Mod/Start/ShowOnStartup).
+
+The page is selected again whenever Start_Start makes a new view
+(QMdiArea.subWindowActivated) and whenever the view goes back to page 1 by
+itself (first-start page dismissed). The first-start page (page 0) is left
+alone; "Getting started" opens it.
+
+Preferences/BruceWorx/StartPage (default on). Off shows the stock page again.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import os
+import re
+import threading
+import zipfile
+import xml.etree.ElementTree as ET
+
+PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
+PREF_NAME = "StartPage"
+START_PATH = "User parameter:BaseApp/Preferences/Mod/Start"
+RECENT_PATH = "User parameter:BaseApp/Preferences/RecentFiles"
+VIEW_NAME = "StartView"
+PAGE_NAME = "BruceWorxStart"
+DOCUMENTS_PAGE = 1  # the stock documents page in StartView's stack
+FIRST_START_PAGE = 0
+CARD_COUNT = 5
+THUMBNAIL = "thumbnails/Thumbnail.png"
+STATES = ("WIP", "In Review", "Released", "Obsolete")  # bruceworx/pdm.py
+REF_SUFFIX = ".bwvault"
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+KINDS = ("part", "assembly", "drawing", "simulation", "other")
+FILTERS = (("All", None), ("Parts", "part"), ("Assemblies", "assembly"), ("Drawings", "drawing"))
+
+
+# ----- recent files -----------------------------------------------------------
+
+
+def recent_files(group, limit: int = 50) -> list[str]:
+    """MRU0, MRU1 ... from the RecentFiles group, in order, without blanks or
+    repeats. The group's RecentFiles value is how many it keeps."""
+    count = group.GetInt("RecentFiles", 0)
+    out = []
+    for i in range(max(count, 0) or limit):
+        path = group.GetString(f"MRU{i}", "")
+        if not path:
+            break
+        if path not in out:
+            out.append(path)
+    return out
+
+
+# ----- reading a .FCStd -------------------------------------------------------
+
+
+def _value(prop):
+    """A string, enumeration or integer property's value from Document.xml."""
+    node = prop.find("String")
+    if node is not None:
+        return node.get("value", "")
+    node = prop.find("Integer")
+    if node is not None:
+        try:
+            index = int(node.get("value", "0"))
+        except ValueError:
+            return ""
+        names = [e.get("value", "") for e in prop.findall("CustomEnumList/Enum")]
+        names = names or list(STATES)
+        return names[index] if 0 <= index < len(names) else ""
+    return ""
+
+
+def _kind(types, item_type) -> str:
+    if item_type in ("assembly", "drawing"):
+        return item_type
+    if any(t.startswith("Assembly::") for t in types):
+        return "assembly"
+    if any(t.startswith("Fem::FemAnalysis") for t in types):
+        return "simulation"
+    solid = any(t.startswith(("PartDesign::", "Part::", "Sketcher::")) for t in types)
+    if any(t == "TechDraw::DrawPage" for t in types) and not solid:
+        return "drawing"
+    if solid or "App::Part" in types:
+        return "part"
+    return "other"
+
+
+def _rank(type_name) -> int:
+    """Which object's part properties stand for the file: the assembly, then
+    an App::Part, then a body, then anything else."""
+    if type_name.startswith("Assembly::"):
+        return 0
+    if type_name == "App::Part":
+        return 1
+    if type_name == "PartDesign::Body":
+        return 2
+    return 3
+
+
+def parse_document_xml(data: bytes) -> dict:
+    """Part number, revision, lifecycle state and kind from Document.xml."""
+    root = ET.fromstring(data)
+    types = {}
+    for obj in root.findall("Objects/Object"):
+        types[obj.get("name", "")] = obj.get("type", "")
+    found = []
+    for order, obj in enumerate(root.findall("ObjectData/Object")):
+        props = {}
+        for prop in obj.findall("Properties/Property"):
+            name = prop.get("name")
+            if name in ("PartNumber", "Revision", "LifecycleState", "ItemType"):
+                props[name] = _value(prop).strip()
+        if props.get("PartNumber"):
+            found.append((_rank(types.get(obj.get("name", ""), "")), order, props))
+    best = min(found, key=lambda f: f[:2])[2] if found else {}
+    item_type = best.get("ItemType", "")
+    return {
+        "pn": best.get("PartNumber", ""),
+        "rev": best.get("Revision", ""),
+        "state": best.get("LifecycleState", ""),
+        "item_type": item_type,
+        "kind": _kind(set(types.values()), item_type),
+    }
+
+
+def read_fcstd(path: str) -> dict:
+    """What the page shows about a file: parse_document_xml's fields plus the
+    thumbnail PNG bytes (or None). Unreadable files give empty fields."""
+    info = {"pn": "", "rev": "", "state": "", "item_type": "", "kind": "other", "thumbnail": None}
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = set(zf.namelist())
+            if "Document.xml" in names:
+                info.update(parse_document_xml(zf.read("Document.xml")))
+            if THUMBNAIL in names:
+                info["thumbnail"] = zf.read(THUMBNAIL)
+    except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError, ValueError) as exc:
+        info["error"] = str(exc)
+    return info
+
+
+class InfoCache:
+    """read_fcstd results by path, kept while the file's mtime and size match."""
+
+    def __init__(self, reader=read_fcstd):
+        self.reader = reader
+        self._lock = threading.Lock()
+        self._items = {}
+
+    @staticmethod
+    def key(path):
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        return (st.st_mtime, st.st_size)
+
+    def get(self, path):
+        """The cached info if the file has not changed since, else None."""
+        key = self.key(path)
+        with self._lock:
+            hit = self._items.get(path)
+        return hit[1] if hit and key is not None and hit[0] == key else None
+
+    def load(self, path):
+        """The info, read only when the file changed (or was never read)."""
+        key = self.key(path)
+        if key is None:
+            return None
+        with self._lock:
+            hit = self._items.get(path)
+        if hit and hit[0] == key:
+            return hit[1]
+        info = self.reader(path)
+        with self._lock:
+            self._items[path] = (key, info)
+        return info
+
+
+# ----- the vault --------------------------------------------------------------
+
+
+def parse_time(text: str):
+    try:
+        when = _dt.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=_dt.timezone.utc)
+
+
+def week_start(now: _dt.datetime) -> _dt.datetime:
+    """Monday 00:00 of ``now``'s week, in ``now``'s time zone."""
+    day = now - _dt.timedelta(days=now.weekday())
+    return day.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def vault_summary(items, events, actor: str, now: _dt.datetime, eco_items=None) -> dict:
+    """The vault box counts.
+
+    ``items``: the rows of FolderVault.status() (state, checked_out_by,
+    part_number). ``events``: (op, at, args) from the journal; approve and
+    release_eco release parts. ``eco_items``: ECO number -> its part numbers.
+    ``now`` must carry a time zone.
+    """
+    eco_items = eco_items or {}
+    since = week_start(now)
+    released = set()
+    for op, at, args in events:
+        when = parse_time(at)
+        if when is None or when < since or when > now:
+            continue
+        if op == "approve":
+            released.add(args.get("part_number"))
+        elif op == "release_eco":
+            released.update(eco_items.get(args.get("number"), ()))
+    return {
+        "checked_out": sum(1 for row in items if row.get("checked_out_by") == actor),
+        "in_review": sum(1 for row in items if row.get("state") == "In Review"),
+        "released_week": len(released - {None}),
+        "items": len(items),
+    }
+
+
+def vault_signature(root: str):
+    """Changes whenever a journal file changes: the cache key for the vault."""
+    folder = os.path.join(root, "journal")
+    try:
+        names = sorted(n for n in os.listdir(folder) if n.endswith(".jsonl"))
+        return tuple((n, os.stat(os.path.join(folder, n)).st_mtime, os.stat(os.path.join(folder, n)).st_size)
+                     for n in names)
+    except OSError:
+        return ()
+
+
+def find_vault_ref(path: str) -> str:
+    """The vault's ref file for a folder or ref file, or "" if it is not one."""
+    path = os.path.abspath(os.path.expanduser(path or ""))
+    if os.path.isfile(path):
+        return path if path.endswith(REF_SUFFIX) else ""
+    if not os.path.isdir(path):
+        return ""
+    refs = sorted(n for n in os.listdir(path) if n.endswith(REF_SUFFIX))
+    return os.path.join(path, refs[0]) if refs else ""
+
+
+def read_vault(path: str) -> dict:
+    """A snapshot of the vault for the page (replays the journal; worker thread)."""
+    from bruceworx.pdm_folder import FolderVault  # the hooks add-on
+
+    vault = FolderVault(os.path.expanduser(path))
+    status = vault.status()
+    events = [(e.op, e.at, e.args) for e in vault._read_events()]
+    ecos = {num: list(eco.items) for num, eco in vault.ecos.items()}
+    summary = vault_summary(status["items"], events, vault.actor,
+                            _dt.datetime.now().astimezone(), ecos)
+    return {
+        "name": status.get("vault") or os.path.basename(vault.root),
+        "root": vault.root,
+        "summary": summary,
+        "parts": {row["part_number"]: {"rev": row["revision"], "state": row["state"]}
+                  for row in status["items"]},
+        "missing": len(status.get("missing_objects", [])),
+        "problems": len(status.get("problems", [])),
+    }
+
+
+def storage_name(root: str) -> str:
+    """Where the vault folder lives, as the box's second line says it."""
+    low = root.replace("\\", "/").lower()
+    if "/mobile documents/com~apple~clouddocs" in low or "/icloud" in low:
+        return "iCloud Drive"
+    for name in ("Dropbox", "OneDrive", "Google Drive", "Box"):
+        if f"/{name.lower()}" in low:
+            return name
+    return shorten_path(root)
+
+
+# ----- text ---------------------------------------------------------------------
+
+
+def _local(ts):
+    return _dt.datetime.fromtimestamp(ts)
+
+
+def format_modified(ts: float, now: _dt.datetime) -> str:
+    """Table date: "Today 14:52", "Yesterday", "Oct 16", "Oct 16, 2025"."""
+    when = _local(ts)
+    days = (now.date() - when.date()).days
+    if days == 0:
+        return f"Today {when:%H:%M}"
+    if days == 1:
+        return "Yesterday"
+    text = f"{MONTHS[when.month - 1]} {when.day}"
+    return text if when.year == now.year else f"{text}, {when.year}"
+
+
+def format_edited(ts: float, now: _dt.datetime) -> str:
+    """Card date: "Edited 12 min ago" within the hour, else as the table."""
+    seconds = (now - _local(ts)).total_seconds()
+    if 0 <= seconds < 60:
+        return "Edited just now"
+    if 0 <= seconds < 3600:
+        return f"Edited {int(seconds // 60)} min ago"
+    return format_modified(ts, now)
+
+
+def badge(state: str, rev: str = "", short: bool = False):
+    """(style key, text) for a lifecycle state badge, or None for no state.
+    Cards (short=False) add the revision: "WIP 02", "Rev A", "In review 03"."""
+    key = {"WIP": "wip", "In Review": "rev", "Released": "rel", "Obsolete": "obs"}.get(state)
+    if key is None:
+        return None
+    text = {"wip": "WIP", "rev": "In review", "rel": "Released", "obs": "Obsolete"}[key]
+    if not short and rev:
+        text = f"Rev {rev}" if key == "rel" else (f"{text} {rev}" if key != "obs" else text)
+    return key, text
+
+
+def shorten_path(folder: str, home: str | None = None) -> str:
+    home = home if home is not None else os.path.expanduser("~")
+    if home and (folder == home or folder.startswith(home.rstrip(os.sep) + os.sep)):
+        return "~" + folder[len(home.rstrip(os.sep)):]
+    return folder
+
+
+def location_text(path: str, vault_root: str = "", home: str | None = None) -> str:
+    """"Vault / Fixtures" inside the vault folder, else the folder, with ~."""
+    folder = os.path.dirname(os.path.abspath(path))
+    if vault_root:
+        root = os.path.abspath(vault_root)
+        if folder == root:
+            return "Vault"
+        if folder.startswith(root + os.sep):
+            return "Vault / " + os.path.relpath(folder, root).replace(os.sep, " / ")
+    return shorten_path(folder, home)
+
+
+def merge_vault(info: dict, parts=None) -> dict:
+    """P/N, revision and state to show: the vault's record when the part is in
+    the open vault, else the file's. ``in_vault`` is None without a vault."""
+    pn = info.get("pn", "")
+    out = {"pn": pn, "rev": info.get("rev", ""), "state": info.get("state", ""), "in_vault": None}
+    if parts is not None:
+        record = parts.get(pn) if pn else None
+        out["in_vault"] = record is not None
+        if record:
+            out["rev"], out["state"] = record.get("rev", out["rev"]), record.get("state", out["state"])
+    return out
+
+
+def matches(name: str, pn: str, kind: str, kind_filter=None, text: str = "") -> bool:
+    if kind_filter and kind != kind_filter:
+        return False
+    text = (text or "").strip().lower()
+    return not text or text in name.lower() or text in (pn or "").lower()
+
+
+def example_title(filename: str) -> str:
+    """"EngineBlock.FCStd" -> "Engine block", "FEMExample.FCStd" -> "FEM"."""
+    stem = os.path.splitext(os.path.basename(filename))[0].replace("_", " ")
+    stem = re.sub(r"Example$", "", stem).strip() or stem
+    words = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", stem).split()
+    out = []
+    for i, word in enumerate(words):
+        if len(word) > 1 and word.isupper():
+            out.append(word)
+        else:
+            out.append(word.capitalize() if i == 0 else word.lower())
+    return " ".join(out)
+
+
+# ----- GUI ---------------------------------------------------------------------
+
+_installed = False
+_observer = None
+_groups = []  # the observers live on these wrappers; keep them
+_bridge = None
+_loader = None
+_classes = None
+_icons = {}
+
+
+def enabled() -> bool:
+    import FreeCAD
+
+    return bool(FreeCAD.ParamGet(PREFS_PATH).GetBool(PREF_NAME, True))
+
+
+def _alive(obj):
+    try:
+        import shiboken6
+
+        return obj is not None and shiboken6.isValid(obj)
+    except Exception:
+        return obj is not None
+
+
+def _log(message):
+    try:
+        import FreeCAD
+
+        FreeCAD.Console.PrintLog(f"BruceWorx Start page: {message}\n")
+    except Exception:
+        pass
+
+
+def _icon(names, workbench=""):
+    """The first of ``names`` found in the Qt resources, else the workbench's icon."""
+    from PySide import QtCore, QtGui
+
+    key = (tuple(names), workbench)
+    if key in _icons and not _icons[key].isNull():
+        return _icons[key]
+    icon = QtGui.QIcon()
+    for name in names:
+        path = f":/icons/{name}.svg"
+        if QtCore.QFile.exists(path):
+            icon = QtGui.QIcon(path)
+            break
+    if icon.isNull() and workbench:
+        try:
+            import FreeCADGui
+
+            wb = FreeCADGui.listWorkbenches().get(workbench)
+            path = getattr(wb, "Icon", "") if wb else ""
+            if isinstance(path, str) and os.path.isfile(path):
+                icon = QtGui.QIcon(path)
+        except Exception:
+            pass
+    _icons[key] = icon
+    return icon
+
+
+KIND_ICONS = {
+    "part": (("PartDesign_Body", "PartDesignWorkbench"), "PartDesignWorkbench"),
+    "assembly": (("AssemblyWorkbench", "Assembly_CreateAssembly"), "AssemblyWorkbench"),
+    "drawing": (("actions/TechDraw_PageDefault", "TechDraw_PageDefault", "TechDrawWorkbench"), "TechDrawWorkbench"),
+    "simulation": (("FemWorkbench", "FEM_Analysis"), "FemWorkbench"),
+    "other": (("document-new",), ""),
+}
+
+
+def _kind_icon(kind):
+    names, wb = KIND_ICONS.get(kind, KIND_ICONS["other"])
+    return _icon(names, wb)
+
+
+# Actions --------------------------------------------------------------------------
+
+
+def _run(*commands):
+    import FreeCADGui
+
+    for name in commands:
+        FreeCADGui.runCommand(name)
+
+
+def _post_start():
+    """As StartView::postStart: close the Start tab if Mod/Start/closeStart says so."""
+    import FreeCAD
+
+    if not FreeCAD.ParamGet(START_PATH).GetBool("closeStart", False):
+        return
+    for view in _views():
+        sub = view.parentWidget()
+        while sub is not None and sub.metaObject().className() != "QMdiSubWindow":
+            sub = sub.parentWidget()
+        if sub is not None:
+            sub.close()
+
+
+def _new_in(workbench, *commands):
+    """Std_New, then the workbench and its first commands (StartView::new*File)."""
+    import FreeCADGui
+
+    _run("Std_New")
+    try:
+        FreeCADGui.activateWorkbench(workbench)
+    except Exception as exc:
+        _log(f"{workbench}: {exc}")
+        return
+    _run(*commands)
+    _post_start()
+
+
+NEW_ITEMS = (
+    ("Part", KIND_ICONS["part"], lambda: _new_in("PartDesignWorkbench", "PartDesign_Body")),
+    ("Assembly", KIND_ICONS["assembly"],
+     lambda: _new_in("AssemblyWorkbench", "Assembly_CreateAssembly", "Std_Refresh")),
+    ("Drawing", KIND_ICONS["drawing"], lambda: _new_in("TechDrawWorkbench", "TechDraw_PageDefault")),
+    ("Sketch", (("Sketcher_NewSketch", "general/Sketcher_NewSketch", "SketcherWorkbench"), "SketcherWorkbench"),
+     lambda: _new_in("SketcherWorkbench", "Sketcher_NewSketch")),
+    ("Simulation study", KIND_ICONS["simulation"], lambda: _new_in("FemWorkbench", "FEM_Analysis")),
+)
+
+
+def open_file(path: str) -> None:
+    """Open a recent or example file as the stock cards do (ModuleIO::openFile)."""
+    import FreeCADGui
+    from PySide import QtWidgets
+
+    if not os.path.isfile(path):
+        QtWidgets.QMessageBox.critical(FreeCADGui.getMainWindow(), "File not found",
+                                       f"The file '{path}' cannot be opened.")
+        return
+    try:
+        FreeCADGui.loadFile(path)
+    except Exception as exc:
+        import FreeCAD
+
+        FreeCAD.Console.PrintError(f"{exc}\n")
+
+
+def _shortcut(command):
+    from PySide import QtGui
+
+    try:
+        import FreeCADGui
+
+        text = FreeCADGui.Command.get(command).getShortcut()
+    except Exception:
+        return ""
+    return QtGui.QKeySequence(text).toString(QtGui.QKeySequence.NativeText) if text else ""
+
+
+def create_vault(parent=None, folder: str = "") -> None:
+    """The Create Vault task dialog (bruceworx_vaultwizard); it sets VaultPath itself."""
+    import bruceworx_vaultwizard
+
+    bruceworx_vaultwizard.show_create(folder=folder)
+
+
+def import_files(parent=None) -> None:
+    """The Import Files into Vault task dialog for the open vault."""
+    import bruceworx_vaultwizard
+
+    bruceworx_vaultwizard.show_import()
+
+
+def vault_settings(parent=None) -> None:
+    """The Vault Settings task dialog for the open vault."""
+    import bruceworx_vaultwizard
+
+    bruceworx_vaultwizard.show_settings()
+
+
+def open_vault(parent=None) -> None:
+    """Pick the vault folder and make it the open vault (BruceWorx/VaultPath).
+    A folder that is not a vault yet opens the Create Vault wizard on it."""
+    import FreeCAD
+    from PySide import QtWidgets
+
+    prefs = FreeCAD.ParamGet(PREFS_PATH)
+    start = prefs.GetString("VaultPath", "") or os.path.expanduser("~")
+    folder = QtWidgets.QFileDialog.getExistingDirectory(parent, "Open vault", os.path.expanduser(start))
+    if not folder:
+        return
+    if not find_vault_ref(folder):
+        try:
+            import bruceworx_vaultwizard  # noqa: F401
+        except ImportError:
+            pass
+        else:
+            create_vault(parent, folder)
+            return
+        answer = QtWidgets.QMessageBox.question(
+            parent, "Open vault",
+            f"{folder} is not a BruceWorx vault: it has no {REF_SUFFIX} file.\n\n"
+            "Make it a new vault? Its files, journal and ref file are written into this folder.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Cancel)
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            from bruceworx.pdm_folder import FolderVault
+
+            FolderVault.init(folder, os.path.basename(folder.rstrip(os.sep)) or "Vault")
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(parent, "Open vault", f"The vault was not created: {exc}")
+            return
+    prefs.SetString("VaultPath", folder)
+
+
+# Background reading ----------------------------------------------------------------
+
+
+class _Loader:
+    """One worker thread: reads files and the vault, hands results to the GUI
+    thread through the bridge's signals. Requests are coalesced by key."""
+
+    def __init__(self):
+        self.cache = InfoCache()
+        self.vault_cache = {}  # path -> (signature, snapshot)
+        self._cond = threading.Condition()
+        self._queue = []
+        self._thread = None
+
+    def request_file(self, path):
+        self._put(("file", path))
+
+    def request_vault(self, path):
+        self._put(("vault", path))
+
+    def cached_vault(self, path):
+        hit = self.vault_cache.get(path)
+        ref = find_vault_ref(path)
+        if hit and ref and hit[0] == vault_signature(os.path.dirname(ref)):
+            return hit[1]
+        return None
+
+    def _put(self, job):
+        with self._cond:
+            if job not in self._queue:
+                self._queue.append(job)
+            self._cond.notify()
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(target=self._work, name="BruceWorxStart", daemon=True)
+                self._thread.start()
+
+    def _work(self):
+        while True:
+            with self._cond:
+                if not self._queue:
+                    self._cond.wait(30)
+                    if not self._queue:
+                        self._thread = None
+                        return
+                kind, path = self._queue.pop(0)
+            try:
+                if kind == "file":
+                    info = self.cache.load(path)
+                    if info is not None and _alive(_bridge):
+                        _bridge.fileRead.emit(path, info)
+                else:
+                    snap = self._vault(path)
+                    if _alive(_bridge):
+                        _bridge.vaultRead.emit(path, snap)
+            except Exception as exc:  # never let the worker die
+                _log(f"{path}: {exc}")
+
+    def _vault(self, path):
+        ref = find_vault_ref(path)
+        if not ref:
+            return {"error": "No vault found at " + path}
+        sig = vault_signature(os.path.dirname(ref))
+        hit = self.vault_cache.get(path)
+        if hit and hit[0] == sig:
+            return hit[1]
+        try:
+            snap = read_vault(path)
+        except ImportError:
+            snap = {"error": "The vault needs the BruceWorx hooks add-on"}
+        except Exception as exc:
+            snap = {"error": f"Vault unreadable: {exc}"}
+        self.vault_cache[path] = (sig, snap)
+        return snap
+
+
+def _make_classes():
+    global _classes
+    if _classes is not None:
+        return _classes
+    from PySide import QtCore, QtGui, QtWidgets
+
+    class Bridge(QtCore.QObject):
+        fileRead = QtCore.Signal(str, object)
+        vaultRead = QtCore.Signal(str, object)
+
+    class ItemButton(QtWidgets.QPushButton):
+        """A row on the left: icon, text and, at the right, the shortcut."""
+
+        def __init__(self, text, icon=None, key="", parent=None):
+            super().__init__(text, parent)
+            self.setObjectName("bwStartItem")
+            self.setCursor(QtCore.Qt.PointingHandCursor)
+            self.setFlat(True)
+            if icon is not None:
+                self.setIcon(icon)
+            self.setIconSize(QtCore.QSize(20, 20))
+            if key:
+                lay = QtWidgets.QHBoxLayout(self)
+                lay.setContentsMargins(0, 0, 10, 0)
+                lay.addStretch(1)
+                label = QtWidgets.QLabel(key, self)
+                label.setObjectName("bwStartKey")
+                label.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+                lay.addWidget(label)
+
+    def link(text, slot, parent=None):
+        button = QtWidgets.QPushButton(text, parent)
+        button.setObjectName("bwStartLink")
+        button.setFlat(True)
+        button.setCursor(QtCore.Qt.PointingHandCursor)
+        button.clicked.connect(slot)
+        return button
+
+    def label(text, name, parent=None):
+        lab = QtWidgets.QLabel(text, parent)
+        lab.setObjectName(name)
+        return lab
+
+    def badge_label(state, rev, short, parent=None):
+        b = badge(state, rev, short)
+        if b is None:
+            return None
+        lab = label(b[1], "bwStartBadge", parent)
+        lab.setProperty("state", b[0])
+        lab.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+        return lab
+
+    class Card(QtWidgets.QFrame):
+        """A recent file: thumbnail, name, P/N with state badge, date."""
+
+        def __init__(self, path, parent=None):
+            super().__init__(parent)
+            self.path = path
+            self.setObjectName("bwStartCard")
+            self.setAttribute(QtCore.Qt.WA_Hover)
+            self.setCursor(QtCore.Qt.PointingHandCursor)
+            self.setToolTip(path)
+            self.setMinimumWidth(120)
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.setContentsMargins(1, 1, 1, 1)
+            lay.setSpacing(0)
+            self.thumb = label("", "bwStartThumb", self)
+            self.thumb.setAlignment(QtCore.Qt.AlignCenter)
+            self.thumb.setFixedHeight(128)
+            self.thumb.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
+            lay.addWidget(self.thumb)
+            info = QtWidgets.QWidget(self)
+            info.setObjectName("bwStartCardInfo")
+            self.info = QtWidgets.QVBoxLayout(info)
+            self.info.setContentsMargins(10, 7, 10, 9)
+            self.info.setSpacing(2)
+            lay.addWidget(info)
+            self._pixmap = None
+
+        def fill(self, name, pn, state, rev, when, pixmap, kind, missing):
+            self.name = label(name, "bwStartCardName", self)
+            self.name.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self.info.addWidget(self.name)
+            row = QtWidgets.QHBoxLayout()
+            row.setSpacing(6)
+            row.addWidget(label(pn or ("Not found" if missing else "No part number"), "bwStartMuted", self))
+            b = badge_label(state, rev, False, self)
+            if b is not None:
+                row.addWidget(b)
+            row.addStretch(1)
+            self.info.addLayout(row)
+            self.info.addWidget(label(when, "bwStartMuted", self))
+            self._pixmap = pixmap
+            if pixmap is None:
+                self.thumb.setPixmap(_kind_icon(kind).pixmap(48, 48))
+            self.setEnabled(not missing)
+            if missing:
+                self.setToolTip(f"Not found: {self.path}")
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            if self._pixmap is not None and not self._pixmap.isNull():
+                ratio = self.devicePixelRatioF()
+                size = QtCore.QSize(self.thumb.width() - 2, self.thumb.height() - 2) * ratio
+                pm = self._pixmap.scaled(size, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                pm.setDevicePixelRatio(ratio)
+                self.thumb.setPixmap(pm)
+
+        def mouseReleaseEvent(self, event):
+            if event.button() == QtCore.Qt.LeftButton and self.rect().contains(event.pos()):
+                QtCore.QTimer.singleShot(0, lambda p=self.path: open_file(p))
+            super().mouseReleaseEvent(event)
+
+    class Table(QtWidgets.QTreeWidget):
+        """Recent files as rows; columns share the width as in the mock."""
+
+        COLUMNS = ("NAME", "PART NUMBER", "REV", "STATE", "MODIFIED", "LOCATION")
+        WEIGHTS = (2.3, 1.3, 0.6, 0.9, 1.1, 1.4)
+        ROW = 30
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setObjectName("bwStartTable")
+            self.setColumnCount(len(self.COLUMNS))
+            self.setHeaderLabels(list(self.COLUMNS))
+            self.setRootIsDecorated(False)
+            self.setUniformRowHeights(True)
+            self.setIndentation(0)
+            self.setIconSize(QtCore.QSize(16, 16))
+            self.setFocusPolicy(QtCore.Qt.StrongFocus)
+            self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+            self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.header().setStretchLastSection(False)
+            self.header().setSectionsMovable(False)
+            self.header().setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+            self.header().setDefaultAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            self.itemActivated.connect(self._open)
+            self.itemDoubleClicked.connect(self._open)
+
+        def _open(self, item, _col=0):
+            path = item.data(0, QtCore.Qt.UserRole)
+            if path:
+                QtCore.QTimer.singleShot(0, lambda: open_file(path))
+
+        def fit(self):
+            rows = self.topLevelItemCount()
+            height = self.header().sizeHint().height() + rows * self.ROW + 2 * self.frameWidth() + 1
+            self.setFixedHeight(height)
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            width = self.viewport().width()
+            total = sum(self.WEIGHTS)
+            used = 0
+            for col, weight in enumerate(self.WEIGHTS[:-1]):
+                w = int(width * weight / total)
+                self.setColumnWidth(col, w)
+                used += w
+            self.setColumnWidth(len(self.WEIGHTS) - 1, max(width - used, 40))
+
+    class Page(QtWidgets.QWidget):
+        """The BruceWorx page in StartView's stack."""
+
+        def __init__(self, stack, parent=None):
+            super().__init__(parent)
+            self.stack = stack
+            self.setObjectName(PAGE_NAME)
+            self.kind_filter = None
+            self.entries = []  # (path, exists, mtime)
+            self.infos = {}
+            self.pixmaps = {}  # (path, mtime) -> QPixmap
+            self.vault = None
+            self._timer = QtCore.QTimer(self)
+            self._timer.setSingleShot(True)
+            self._timer.setInterval(60)
+            self._timer.timeout.connect(self._render)
+            self._build()
+
+        # layout
+        def _build(self):
+            outer = QtWidgets.QHBoxLayout(self)
+            outer.setContentsMargins(0, 0, 0, 0)
+            outer.setSpacing(0)
+
+            side = QtWidgets.QFrame(self)
+            side.setObjectName("bwStartSide")
+            side.setFixedWidth(248)
+            s = QtWidgets.QVBoxLayout(side)
+            s.setContentsMargins(14, 18, 14, 14)
+            s.setSpacing(2)
+            s.addWidget(label("NEW", "bwStartCaption", side))
+            for text, (names, wb), action in NEW_ITEMS:
+                button = ItemButton(text, _icon(names, wb), "", side)
+                button.clicked.connect(lambda _c=False, a=action: QtCore.QTimer.singleShot(0, a))
+                s.addWidget(button)
+            s.addSpacing(10)
+            s.addWidget(label("OPEN", "bwStartCaption", side))
+            opener = ItemButton("Open file…", _icon(("document-open",)), _shortcut("Std_Open"), side)
+            opener.clicked.connect(lambda: QtCore.QTimer.singleShot(0, self._open))
+            s.addWidget(opener)
+            importer = ItemButton("Import STEP / STL…", _icon(("Std_Import",)), "", side)
+            importer.clicked.connect(lambda: QtCore.QTimer.singleShot(0, lambda: _run("Std_Import")))
+            s.addWidget(importer)
+            s.addSpacing(10)
+            s.addWidget(label("VAULT", "bwStartCaption", side))
+            self.vault_box = QtWidgets.QFrame(side)
+            self.vault_box.setObjectName("bwStartVault")
+            self.vault_lay = QtWidgets.QVBoxLayout(self.vault_box)
+            self.vault_lay.setContentsMargins(12, 10, 12, 10)
+            self.vault_lay.setSpacing(3)
+            s.addWidget(self.vault_box)
+            s.addStretch(1)
+            started = ItemButton("Getting started", _icon(("help-browser",)), "", side)
+            started.clicked.connect(lambda: self.stack.setCurrentIndex(FIRST_START_PAGE))
+            s.addWidget(started)
+            settings = ItemButton("Settings", _icon(("preferences-system",)), "", side)
+            settings.clicked.connect(lambda: QtCore.QTimer.singleShot(0, lambda: _run("Std_DlgPreferences")))
+            s.addWidget(settings)
+            outer.addWidget(side)
+
+            scroll = QtWidgets.QScrollArea(self)
+            scroll.setObjectName("bwStartScroll")
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            main = QtWidgets.QWidget(scroll)
+            main.setObjectName("bwStartMain")
+            m = QtWidgets.QVBoxLayout(main)
+            m.setContentsMargins(24, 18, 24, 18)
+            m.setSpacing(14)
+
+            head = QtWidgets.QHBoxLayout()
+            head.setSpacing(10)
+            head.addWidget(label("Recent", "bwStartTitle", main))
+            head.addSpacing(4)
+            seg = QtWidgets.QFrame(main)
+            seg.setObjectName("bwStartSegments")
+            seg_lay = QtWidgets.QHBoxLayout(seg)
+            seg_lay.setContentsMargins(0, 0, 0, 0)
+            seg_lay.setSpacing(0)
+            self.seg_group = QtWidgets.QButtonGroup(self)
+            for i, (text, kind) in enumerate(FILTERS):
+                b = QtWidgets.QPushButton(text, seg)
+                b.setObjectName("bwStartSegment")
+                b.setCheckable(True)
+                b.setChecked(i == 0)
+                b.setProperty("position", "first" if i == 0 else ("last" if i == len(FILTERS) - 1 else "mid"))
+                b.clicked.connect(lambda _c=False, k=kind: self._set_filter(k))
+                self.seg_group.addButton(b)
+                seg_lay.addWidget(b)
+            head.addWidget(seg)
+            head.addStretch(1)
+            self.filter_edit = QtWidgets.QLineEdit(main)
+            self.filter_edit.setObjectName("bwStartFilter")
+            self.filter_edit.setPlaceholderText("Filter by name or P/N")
+            self.filter_edit.setClearButtonEnabled(True)
+            self.filter_edit.setFixedWidth(260)
+            self.filter_edit.textChanged.connect(lambda _t: self._timer.start())
+            head.addWidget(self.filter_edit)
+            m.addLayout(head)
+
+            self.cards_box = QtWidgets.QWidget(main)
+            self.cards = QtWidgets.QGridLayout(self.cards_box)
+            self.cards.setContentsMargins(0, 0, 0, 0)
+            self.cards.setHorizontalSpacing(14)
+            for col in range(CARD_COUNT):
+                self.cards.setColumnStretch(col, 1)
+            m.addWidget(self.cards_box)
+
+            self.table = Table(main)
+            m.addWidget(self.table)
+            self.empty = label("No recent files yet. Files you open or save are listed here.",
+                               "bwStartMuted", main)
+            m.addWidget(self.empty)
+
+            foot = QtWidgets.QHBoxLayout()
+            foot.setSpacing(4)
+            self.count_label = label("", "bwStartMuted", main)
+            foot.addWidget(self.count_label)
+            self.examples_box = QtWidgets.QWidget(main)
+            ex = QtWidgets.QHBoxLayout(self.examples_box)
+            ex.setContentsMargins(0, 0, 0, 0)
+            ex.setSpacing(4)
+            ex.addWidget(label("·  Examples:", "bwStartMuted", self.examples_box))
+            examples = self._examples()
+            for i, path in enumerate(examples):
+                if i:
+                    ex.addWidget(label("·", "bwStartMuted", self.examples_box))
+                ex.addWidget(link(example_title(path), lambda _c=False, p=path: open_file(p), self.examples_box))
+            self.examples_box.setVisible(bool(examples))
+            foot.addWidget(self.examples_box)
+            foot.addStretch(1)
+            self.show_box = QtWidgets.QCheckBox("Show this page at startup", main)
+            self.show_box.setObjectName("bwStartShowOnStartup")
+            self.show_box.toggled.connect(self._show_on_startup)
+            foot.addWidget(self.show_box)
+            m.addLayout(foot)
+            m.addStretch(1)
+            scroll.setWidget(main)
+            outer.addWidget(scroll, 1)
+
+        def _examples(self):
+            import FreeCAD
+
+            if not FreeCAD.ParamGet(START_PATH).GetBool("ShowExamples", True):
+                return []
+            folder = os.path.join(FreeCAD.getResourceDir(), "examples")
+            try:
+                names = sorted(n for n in os.listdir(folder) if n.lower().endswith(".fcstd"))
+            except OSError:
+                return []
+            return [os.path.join(folder, n) for n in names]
+
+        # actions
+        def _open(self):
+            _run("Std_Open")
+
+        def _set_filter(self, kind):
+            self.kind_filter = kind
+            self._timer.start()
+
+        def _show_on_startup(self, checked):
+            import FreeCAD
+
+            FreeCAD.ParamGet(START_PATH).SetBool("ShowOnStartup", bool(checked))
+            # Keep the stock page's (inverted) box in step.
+            stock = self.stack.widget(DOCUMENTS_PAGE) if _alive(self.stack) else None
+            if stock is not None:
+                for box in stock.findChildren(QtWidgets.QCheckBox):
+                    box.blockSignals(True)
+                    box.setChecked(not checked)
+                    box.blockSignals(False)
+
+        # data
+        def refresh(self):
+            """Read the recent list and the vault again; parse on the worker."""
+            import FreeCAD
+
+            self.show_box.blockSignals(True)
+            self.show_box.setChecked(FreeCAD.ParamGet(START_PATH).GetBool("ShowOnStartup", True))
+            self.show_box.blockSignals(False)
+            entries = []
+            for path in recent_files(FreeCAD.ParamGet(RECENT_PATH)):
+                key = InfoCache.key(path)
+                entries.append((path, key is not None, key[0] if key else 0))
+                if key is not None:
+                    info = _loader.cache.get(path)
+                    if info is not None:
+                        self.infos[path] = info
+                    else:
+                        self.infos.pop(path, None)
+                        _loader.request_file(path)
+            self.entries = entries
+            path = FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
+            if path:
+                snap = _loader.cached_vault(path)
+                self.vault = dict(snap, path=path) if snap else {"path": path, "loading": True}
+                if snap is None:
+                    _loader.request_vault(path)
+            else:
+                self.vault = None
+            self._render()
+
+        def file_read(self, path, info):
+            if any(p == path for p, _e, _m in self.entries):
+                self.infos[path] = info
+                self._timer.start()
+
+        def vault_read(self, path, snap):
+            if self.vault is not None and self.vault.get("path") == path:
+                self.vault = dict(snap, path=path)
+                self._timer.start()
+
+        # drawing
+        def _render(self):
+            import datetime
+
+            now = datetime.datetime.now()
+            self._render_vault()
+            parts = self.vault.get("parts") if self.vault and "parts" in self.vault else None
+            vault_root = self.vault.get("root", "") if self.vault else ""
+            rows = []
+            text = self.filter_edit.text()
+            for path, exists, mtime in self.entries:
+                info = self.infos.get(path, {})
+                shown = merge_vault(info, parts)
+                name = os.path.basename(path)
+                if not matches(name, shown["pn"], info.get("kind", "other"), self.kind_filter, text):
+                    continue
+                rows.append((path, exists, mtime, info, shown))
+
+            while self.cards.count():
+                item = self.cards.takeAt(0)
+                if item.widget() is not None:
+                    item.widget().deleteLater()
+            for col, (path, exists, mtime, info, shown) in enumerate(rows[:CARD_COUNT]):
+                card = Card(path, self.cards_box)
+                when = format_edited(mtime, now) if exists else "Not found"
+                card.fill(os.path.splitext(os.path.basename(path))[0], shown["pn"], shown["state"],
+                          shown["rev"], when, self._pixmap(path, mtime, info), info.get("kind", "other"),
+                          not exists)
+                self.cards.addWidget(card, 0, col)
+            self.cards_box.setVisible(bool(rows))
+
+            self.table.clear()
+            for path, exists, mtime, info, shown in rows:
+                item = QtWidgets.QTreeWidgetItem(self.table)
+                item.setText(0, os.path.basename(path))
+                item.setIcon(0, _kind_icon(info.get("kind", "other")))
+                item.setText(1, shown["pn"] or "—")
+                item.setText(2, shown["rev"])
+                item.setText(4, format_modified(mtime, now) if exists else "Not found")
+                item.setText(5, location_text(path, vault_root))
+                item.setToolTip(0, path if exists else f"Not found: {path}")
+                item.setToolTip(5, os.path.dirname(path))
+                item.setData(0, QtCore.Qt.UserRole, path if exists else "")
+                item.setSizeHint(0, QtCore.QSize(0, Table.ROW))
+                if not exists:
+                    item.setDisabled(True)
+                b = badge_label(shown["state"], shown["rev"], True)
+                if b is not None and exists:
+                    cell = QtWidgets.QWidget()
+                    cell.setObjectName("bwStartCell")
+                    lay = QtWidgets.QHBoxLayout(cell)
+                    lay.setContentsMargins(4, 0, 0, 0)
+                    lay.addWidget(b)
+                    lay.addStretch(1)
+                    self.table.setItemWidget(item, 3, cell)
+                elif shown["in_vault"] is False:
+                    item.setText(3, "Not in vault")
+            self.table.fit()
+            self.table.setVisible(bool(rows))
+            self.empty.setVisible(not rows)
+            self.empty.setText("No recent files yet. Files you open or save are listed here."
+                               if not self.entries else "No recent file matches the filter.")
+            total = len(self.entries)
+            self.count_label.setText(f"Showing {len(rows)} of {total} recent file{'s' if total != 1 else ''}")
+
+        def _pixmap(self, path, mtime, info):
+            data = info.get("thumbnail")
+            if not data:
+                return None
+            key = (path, mtime)
+            if key not in self.pixmaps:
+                pm = QtGui.QPixmap()
+                pm.loadFromData(data, "PNG")
+                self.pixmaps[key] = pm if not pm.isNull() else None
+            return self.pixmaps[key]
+
+        def _render_vault(self):
+            lay = self.vault_lay
+            while lay.count():
+                item = lay.takeAt(0)
+                if item.widget() is not None:
+                    item.widget().deleteLater()
+                elif item.layout() is not None:
+                    sub = item.layout()
+                    while sub.count():
+                        w = sub.takeAt(0).widget()
+                        if w is not None:
+                            w.deleteLater()
+            box = self.vault_box
+
+            def pair(left, right, left_name="bwStartVaultText", right_name="bwStartVaultCount"):
+                row = QtWidgets.QHBoxLayout()
+                row.setSpacing(6)
+                row.addWidget(left if isinstance(left, QtWidgets.QWidget) else label(left, left_name, box))
+                row.addStretch(1)
+                if right is not None:
+                    row.addWidget(right if isinstance(right, QtWidgets.QWidget) else label(right, right_name, box))
+                lay.addLayout(row)
+
+            vault = self.vault
+            if vault is None:
+                pair(label("No vault open", "bwStartVaultName", box), None)
+                lay.addWidget(label("Part numbers, check-out and release live in a vault folder.",
+                                    "bwStartMuted", box))
+                lay.itemAt(lay.count() - 1).widget().setWordWrap(True)
+                links = QtWidgets.QHBoxLayout()
+                links.setSpacing(14)
+                links.addWidget(link("Create vault…", lambda: create_vault(self), box))
+                links.addWidget(link("Open vault…", lambda: open_vault(self), box))
+                links.addStretch(1)
+                lay.addLayout(links)
+                return
+            name = vault.get("name") or os.path.basename(vault.get("path", "").rstrip(os.sep)) or "Vault"
+            pair(label(name, "bwStartVaultName", box), link("Change…", lambda: open_vault(self), box))
+            if vault.get("loading"):
+                lay.addWidget(label("Reading the vault…", "bwStartMuted", box))
+                return
+            if vault.get("error"):
+                err = label(vault["error"], "bwStartMuted", box)
+                err.setWordWrap(True)
+                lay.addWidget(err)
+                return
+            summary = vault["summary"]
+            items = summary["items"]
+            pair(label(storage_name(vault.get("root", "")), "bwStartMuted", box),
+                 label(f"{items} item{'s' if items != 1 else ''}", "bwStartMuted", box))
+            lay.addSpacing(6)
+            pair("Checked out to me", str(summary["checked_out"]))
+            pair("Waiting for review", str(summary["in_review"]))
+            pair("Released this week", str(summary["released_week"]))
+            if vault.get("missing"):
+                warn = label(f"{vault['missing']} file(s) still syncing", "bwStartWarn", box)
+                lay.addWidget(warn)
+            links = QtWidgets.QHBoxLayout()
+            links.setSpacing(14)
+            links.addWidget(link("Import files…", lambda: import_files(self), box))
+            links.addWidget(link("Settings…", lambda: vault_settings(self), box))
+            links.addStretch(1)
+            lay.addSpacing(4)
+            lay.addLayout(links)
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            QtCore.QTimer.singleShot(0, self.refresh)
+
+    _classes = {"Bridge": Bridge, "Page": Page, "Card": Card, "Table": Table}
+    return _classes
+
+
+# Attaching to StartView -------------------------------------------------------------
+
+
+def _main_window():
+    import FreeCADGui
+
+    return FreeCADGui.getMainWindow()
+
+
+def _views():
+    from PySide import QtWidgets
+
+    mw = _main_window()
+    return [v for v in mw.findChildren(QtWidgets.QWidget, VIEW_NAME)] if mw else []
+
+
+def _stack(view):
+    from PySide import QtWidgets
+
+    central = view.centralWidget() if hasattr(view, "centralWidget") else None
+    if isinstance(central, QtWidgets.QStackedWidget):
+        return central
+    return view.findChild(QtWidgets.QStackedWidget)
+
+
+def _page(stack):
+    for i in range(stack.count()):
+        if stack.widget(i).objectName() == PAGE_NAME:
+            return stack.widget(i)
+    return None
+
+
+def _on_page_changed(stack, index):
+    """StartView went back to its documents page by itself: show ours."""
+    if index == DOCUMENTS_PAGE and _alive(stack) and enabled():
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, lambda: _select(stack))
+
+
+def _select(stack):
+    if not _alive(stack) or not enabled():
+        return
+    page = _page(stack)
+    if page is not None and stack.currentIndex() == DOCUMENTS_PAGE:
+        stack.setCurrentWidget(page)
+
+
+def attach(view) -> bool:
+    """Add the page to ``view``'s stack (once) and select it unless the
+    first-start page is showing. Returns False if the view is not as expected."""
+    stack = _stack(view)
+    if stack is None or stack.count() < 2:
+        _log("StartView has no page stack; the stock page stays")
+        return False
+    page = _page(stack)
+    if page is None:
+        page = _make_classes()["Page"](stack)
+        stack.addWidget(page)
+        stack.currentChanged.connect(lambda index, s=stack: _on_page_changed(s, index))
+    if stack.currentIndex() == DOCUMENTS_PAGE:
+        stack.setCurrentWidget(page)
+    return True
+
+
+def detach(view) -> None:
+    """Show the stock documents page again (the page stays in the stack)."""
+    stack = _stack(view)
+    if stack is not None and _page(stack) is not None and stack.currentWidget() is _page(stack):
+        stack.setCurrentIndex(DOCUMENTS_PAGE)
+
+
+def update(*_args) -> None:
+    for view in _views():
+        if not _alive(view):
+            continue
+        if enabled():
+            attach(view)
+        else:
+            detach(view)
+
+
+def _pages():
+    out = []
+    for view in _views():
+        stack = _stack(view)
+        page = _page(stack) if stack is not None else None
+        if page is not None and _alive(page):
+            out.append(page)
+    return out
+
+
+def _refresh_pages():
+    for page in _pages():
+        if page.isVisible():
+            page.refresh()
+
+
+class _PrefObserver:
+    def __init__(self):
+        self._timer = None
+
+    def onChange(self, _group, name):
+        from PySide import QtCore
+
+        if name == PREF_NAME:
+            QtCore.QTimer.singleShot(0, update)
+        elif name in ("VaultPath", "ShowOnStartup") or name.startswith("MRU") or name == "RecentFiles":
+            # RecentFiles is cleared and written one key at a time: coalesce.
+            if self._timer is None:
+                self._timer = QtCore.QTimer()
+                self._timer.setSingleShot(True)
+                self._timer.setInterval(150)
+                self._timer.timeout.connect(_refresh_pages)
+            self._timer.start()
+
+
+def install() -> None:
+    """Watch for StartView (made by Start_Start shortly after start-up, and
+    again whenever the Start tab is reopened) and put the page in."""
+    global _installed, _observer, _bridge, _loader
+    if _installed:
+        return
+    import FreeCAD
+    from PySide import QtCore, QtWidgets
+
+    classes = _make_classes()
+    _bridge = classes["Bridge"]()
+    _loader = _Loader()
+    _bridge.fileRead.connect(lambda path, info: [p.file_read(path, info) for p in _pages()])
+    _bridge.vaultRead.connect(lambda path, snap: [p.vault_read(path, snap) for p in _pages()])
+
+    _observer = _PrefObserver()
+    for path in (PREFS_PATH, RECENT_PATH, START_PATH):
+        group = FreeCAD.ParamGet(path)
+        # Keep the handle: a collected wrapper detaches its observer.
+        group.Attach(_observer)
+        _groups.append(group)
+
+    def start(tries=50):
+        mw = _main_window()
+        area = mw.findChild(QtWidgets.QMdiArea) if mw else None
+        if area is None:
+            if tries:
+                QtCore.QTimer.singleShot(200, lambda: start(tries - 1))
+            return
+        area.subWindowActivated.connect(lambda _sub: QtCore.QTimer.singleShot(0, update))
+        update()
+
+    QtCore.QTimer.singleShot(0, start)
+    _installed = True

@@ -175,6 +175,101 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="GroupCaptions">
+        <property name="toolTip">
+         <string>On by default. Each workbench toolbar gets a small caption under it (CREATE, PATTERN, ...). Click a caption for a menu with every command of the group, named.</string>
+        </property>
+        <property name="text">
+         <string>Captioned tool groups</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>GroupCaptions</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="WorkspaceBar">
+        <property name="toolTip">
+         <string>On by default. A workspace menu (Design, Simulation, Manufacture, Drawing; Ctrl+1 to Ctrl+4) and tabs (Solid, Surface, Mesh, Utilities) replace the workbench selector. Opening a sketch adds a SKETCH tab. Off brings back the stock toolbars and selector.</string>
+        </property>
+        <property name="text">
+         <string>Workspaces and tabs</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>WorkspaceBar</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="CommandSearch">
+        <property name="toolTip">
+         <string>On by default. A search field on the first toolbar row (Cmd-K) finds commands, objects in the document and settings. The SearchBar add-on's toolbar is hidden while it is on.</string>
+        </property>
+        <property name="text">
+         <string>Search field (Cmd-K)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>CommandSearch</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="TabsInTitleBar">
+        <property name="toolTip">
+         <string>On by default (macOS). The title bar becomes the first toolbar row: traffic lights, save, undo, redo, the document tabs and the search field. Off brings back the title bar and the tab row under the toolbars.</string>
+        </property>
+        <property name="text">
+         <string>Document tabs in the title bar (macOS)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>TabsInTitleBar</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="StartPage">
+        <property name="toolTip">
+         <string>On by default. The Start tab shows the BruceWorx page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off brings back FreeCAD's own Start page.</string>
+        </property>
+        <property name="text">
+         <string>BruceWorx Start page</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>StartPage</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="FollowSystemAppearance">
         <property name="toolTip">
          <string>On by default. Switches between the BruceWorx and BruceWorx Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences &gt; General.</string>

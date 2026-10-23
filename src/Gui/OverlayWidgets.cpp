@@ -1228,6 +1228,16 @@ bool OverlayTabWidget::checkAutoHide() const
         return true;
     }
 
+    // [BW] While a command is open, the panel holding the task view shows on any view,
+    // also one that takes no overlays (the vault dialogs open on the Start page).
+    if (Control().activeDialog()) {
+        for (int i = 0; i < count(); ++i) {
+            if (dockWidget(i) && dockWidget(i)->findChild<TaskView::TaskView*>()) {
+                return false;
+            }
+        }
+    }
+
     if (OverlayParams::getDockOverlayAutoView()) {
         auto view = getMainWindow()->activeWindow();
 

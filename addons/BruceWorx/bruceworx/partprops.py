@@ -5,7 +5,8 @@ The properties every part carries (P/N, revision, description, material,
 mass, ...) are listed in JSON, not in code. Layers are merged in order:
 
 1. ``config/part_properties.json`` -- built in, ships with BruceWorx.
-2. A company or vault layer, for example ``<vault>/part_properties.json``.
+2. A company or vault layer: ``<vault>/part_properties.json`` of the open
+   vault (``BruceWorx/VaultPath``) unless the caller passes its own layers.
 3. A user layer, ``~/.config/bruceworx/part_properties.json``.
 
 A later layer may add properties, and may change an existing property's
@@ -224,8 +225,12 @@ class Schema:
 
 
 def load_schema(extra_layers: list[str] | None = None, user_layer: bool = True) -> Schema:
-    """Built-in layer, then ``extra_layers`` (e.g. a vault's), then the user's."""
-    paths = [os.path.join(config_dir(), BUILTIN_NAME)] + list(extra_layers or [])
+    """Built-in layer, then ``extra_layers``, then the user's. ``extra_layers``
+    None means the open vault's layer (:func:`vault_layers`); pass ``[]`` for
+    none."""
+    if extra_layers is None:
+        extra_layers = vault_layers()
+    paths = [os.path.join(config_dir(), BUILTIN_NAME)] + list(extra_layers)
     user = os.path.expanduser(USER_LAYER)
     if user_layer and os.path.isfile(user):
         paths.append(user)
@@ -240,6 +245,30 @@ def load_schema(extra_layers: list[str] | None = None, user_layer: bool = True) 
             schema = Schema(raw.get("group", "BruceWorx"))
         schema.add_layer(raw, path)
     return schema
+
+
+def vault_layers(path: str | None = None) -> list[str]:
+    """``[<vault>/part_properties.json]`` when the vault has that company layer
+    (written by the Create Vault wizard), else ``[]``. ``path`` is a vault
+    folder or its ref file; default the open vault (:func:`open_vault_path`)."""
+    path = open_vault_path() if path is None else path
+    if not path:
+        return []
+    path = os.path.abspath(os.path.expanduser(path))
+    root = os.path.dirname(path) if os.path.isfile(path) else path
+    layer = os.path.join(root, BUILTIN_NAME)
+    return [layer] if os.path.isfile(layer) else []
+
+
+def open_vault_path() -> str:
+    """Preferences/BruceWorx/VaultPath, or "" outside FreeCAD. Unlike
+    :func:`vault_path` it does not depend on the state-sync switch."""
+    try:
+        import FreeCAD  # noqa: PLC0415
+
+        return FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
+    except Exception:  # noqa: BLE001 -- no FreeCAD, or a stand-in without parameters
+        return ""
 
 
 # ----- lifecycle state (written by the vault only) ---------------------------------

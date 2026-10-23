@@ -145,6 +145,46 @@ QToolBar QToolButton:checked {
   border-color: @AccentColor;
 }
 
+/* Captioned tool groups (BruceWorx step C1): a divider after each group, a caption under it. */
+QToolBar[bwGroup="true"] {
+  border-right: 1px solid @GeneralBorderColor;
+}
+
+QToolButton#BruceWorxGroupCaption {
+  background-color: transparent;
+  border: none;
+  padding: 0px 4px;
+  margin: 0px;
+  font-size: 10px;
+  font-weight: 600;
+  color: @TextSecondaryColor;
+}
+
+QToolButton#BruceWorxGroupCaption:hover {
+  background-color: transparent;
+  border: none;
+  color: @TextForegroundColor;
+}
+
+QToolButton#BruceWorxGroupCaption:open,
+QToolButton#BruceWorxGroupCaption:pressed {
+  background-color: transparent;
+  border: none;
+  color: @AccentColor;
+}
+
+QLabel#BruceWorxGroupCaptionMenuTitle {
+  color: @TextSecondaryColor;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 6px 12px 2px 12px;
+}
+
+QToolButton#BruceWorxGroupCaption::menu-indicator {
+  image: none;
+  width: 0px;
+}
+
 QToolButton:disabled {
   color: @TextDisabledColor;
 }
@@ -206,6 +246,234 @@ QToolButton::menu-arrow:hover {
 
 #WbTabBar QTabBar::tab:hover:!selected {
   color: @TextForegroundColor;
+}
+
+/* Workspace bar (BruceWorx step C2): the workspace button, its tabs and Finish Sketch. */
+QToolBar#BruceWorxWorkspaces {
+  padding: 2px 8px 0px 8px;
+  spacing: 12px;
+}
+
+QToolButton#BruceWorxWorkspaceButton {
+  background-color: @CardBackgroundColor;
+  color: @TextForegroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+QToolButton#BruceWorxWorkspaceButton:hover {
+  background-color: @HoverColor;
+}
+
+QToolButton#BruceWorxWorkspaceButton::menu-indicator {
+  image: none;
+  width: 0px;
+}
+
+QTabBar#BruceWorxWorkspaceTabs {
+  background: transparent;
+}
+
+QTabBar#BruceWorxWorkspaceTabs::tab {
+  background: transparent;
+  color: @TextSecondaryColor;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0px;
+  padding: 5px 12px;
+  margin: 0px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 18px;
+}
+
+QTabBar#BruceWorxWorkspaceTabs::tab:selected {
+  color: @TextForegroundColor;
+  border-bottom-color: @AccentColor;
+}
+
+QTabBar#BruceWorxWorkspaceTabs::tab:hover:!selected {
+  color: @TextForegroundColor;
+}
+
+/* The contextual SKETCH tab is always the last one. */
+QTabBar#BruceWorxWorkspaceTabs[sketch="true"]::tab:last {
+  color: @AccentColor;
+  border-bottom-color: @AccentColor;
+}
+
+QToolButton#BruceWorxFinishSketch {
+  background-color: @AccentColor;
+  color: @AccentTextColor;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+QToolButton#BruceWorxFinishSketch:hover {
+  background-color: @AccentHoverColor;
+  color: @AccentColor;
+}
+
+/* Search (BruceWorx step C3): the Cmd-K field and its results. */
+QLineEdit#BruceWorxSearch {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 7px;
+  padding: 3px 8px;
+  min-height: 20px;
+}
+
+QLineEdit#BruceWorxSearch:focus {
+  border-color: @AccentColor;
+}
+
+QLabel#BruceWorxSearchHint {
+  color: @TextSecondaryColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 4px;
+  padding: 0px 4px;
+  font-size: 10px;
+}
+
+QFrame#BruceWorxSearchResults {
+  background-color: @MenuBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+QListWidget#BruceWorxSearchList {
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+QListWidget#BruceWorxSearchList::item {
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+QListWidget#BruceWorxSearchList::item:disabled {
+  color: @TextSecondaryColor;
+  padding-top: 8px;
+}
+
+QListWidget#BruceWorxSearchList::item:selected {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+}
+
+/* Cmd-Return in search flashes the command's button or group caption. */
+QToolButton[bwFlash="true"] {
+  background-color: @AccentSoftColor;
+  border-color: @AccentColor;
+}
+
+/* Search (BruceWorx step C3): the Cmd-K field and its results. */
+QLineEdit#BruceWorxSearch {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 7px;
+  padding: 3px 8px;
+  min-height: 20px;
+}
+
+QLineEdit#BruceWorxSearch:focus {
+  border-color: @AccentColor;
+}
+
+QLabel#BruceWorxSearchHint {
+  color: @TextSecondaryColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 4px;
+  padding: 0px 4px;
+  font-size: 10px;
+}
+
+QFrame#BruceWorxSearchResults {
+  background-color: @MenuBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+QListWidget#BruceWorxSearchList {
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+QListWidget#BruceWorxSearchList::item {
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+QListWidget#BruceWorxSearchList::item:disabled {
+  color: @TextSecondaryColor;
+  padding-top: 8px;
+}
+
+QListWidget#BruceWorxSearchList::item:selected {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+}
+
+/* Cmd-Return in search flashes the command's button or group caption. */
+QToolButton[bwFlash="true"] {
+  background-color: @AccentSoftColor;
+  border-color: @AccentColor;
+}
+
+/* Title row (BruceWorx step C4, macOS): the title bar as the first toolbar row, with the
+   document tabs. The tabs look like the step B tabs on top. */
+QToolBar#BruceWorxTitleRow {
+  background-color: @ChromeColor;
+  border: none;
+  border-bottom: 1px solid @GeneralBorderColor;
+  padding: 0px 8px 0px 0px;
+  spacing: 4px;
+}
+
+QTabBar#BruceWorxTitleTabs {
+  background: transparent;
+}
+
+QTabBar#BruceWorxTitleTabs::tab {
+  background: transparent;
+  color: @TextSecondaryColor;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 4px 8px 4px 10px;
+  margin: 5px 1px;
+  min-width: 100px;
+  max-width: 200px;
+}
+
+QTabBar#BruceWorxTitleTabs::tab:selected {
+  background: @GeneralBackgroundColor;
+  color: @TextForegroundColor;
+  border-color: @GeneralBorderColor;
+}
+
+QTabBar#BruceWorxTitleTabs::tab:hover:!selected {
+  color: @TextForegroundColor;
+}
+
+QToolButton#BruceWorxNewTab {
+  background: transparent;
+  color: @TextSecondaryColor;
+  border: none;
+  font-size: 16px;
+  padding: 0px 6px;
+}
+
+QToolButton#BruceWorxNewTab:hover {
+  color: @TextForegroundColor;
+  background-color: @HoverColor;
 }
 
 /* Docks ------------------------------------------------------------------------------------------ */
@@ -855,6 +1123,236 @@ QWidget#thumbnailWidget[state="pressed"] {
   border-color: @AccentColor;
 }
 
+/* BruceWorx Start page (bruceworx_start.py, step C5): New / Open / vault on the left, recent files
+   as cards and a table on the right. The page is the third page of StartView's stack. */
+#BruceWorxStart,
+#BruceWorxStart QScrollArea#bwStartScroll,
+#BruceWorxStart QWidget#bwStartMain {
+  background-color: @GeneralBackgroundColor;
+  border: none;
+}
+
+#BruceWorxStart QFrame#bwStartSide {
+  background-color: @GeneralBackgroundColor;
+  border: none;
+  border-right: 1px solid @GeneralBorderColor;
+}
+
+#BruceWorxStart QLabel#bwStartCaption {
+  color: @TextDisabledColor;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  padding: 0px 4px 4px 4px;
+}
+
+#BruceWorxStart QLabel#bwStartTitle {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+#BruceWorxStart QLabel#bwStartMuted,
+#BruceWorxStart QLabel#bwStartKey {
+  color: @TextSecondaryColor;
+}
+
+#BruceWorxStart QLabel#bwStartKey {
+  color: @TextDisabledColor;
+  font-size: 11px;
+}
+
+#BruceWorxStart QPushButton#bwStartItem {
+  background-color: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 0px 8px;
+  min-height: 32px;
+  max-height: 32px;
+  text-align: left;
+  color: @TextForegroundColor;
+}
+
+#BruceWorxStart QPushButton#bwStartItem:hover {
+  background-color: @HoverColor;
+}
+
+#BruceWorxStart QPushButton#bwStartItem:pressed {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+}
+
+#BruceWorxStart QPushButton#bwStartLink {
+  background-color: transparent;
+  border: none;
+  padding: 0px;
+  min-height: 0px;
+  color: @AccentColor;
+}
+
+#BruceWorxStart QPushButton#bwStartLink:hover {
+  text-decoration: underline;
+}
+
+#BruceWorxStart QPushButton#bwStartLink:pressed {
+  background-color: transparent;
+  color: @AccentColor;
+}
+
+#BruceWorxStart QFrame#bwStartVault {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 9px;
+}
+
+#BruceWorxStart QLabel#bwStartVaultName,
+#BruceWorxStart QLabel#bwStartVaultCount {
+  font-weight: 600;
+}
+
+#BruceWorxStart QLabel#bwStartWarn {
+  color: @WarnColor;
+}
+
+/* Segmented filter: All / Parts / Assemblies / Drawings */
+#BruceWorxStart QFrame#bwStartSegments {
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 6px;
+  background-color: @CardBackgroundColor;
+}
+
+#BruceWorxStart QPushButton#bwStartSegment {
+  background-color: transparent;
+  border: none;
+  border-left: 1px solid @GeneralBorderColor;
+  border-radius: 0px;
+  padding: 0px 8px;
+  min-height: 22px;
+  max-height: 22px;
+  color: @TextSecondaryColor;
+}
+
+#BruceWorxStart QPushButton#bwStartSegment[position="first"] {
+  border-left: none;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+#BruceWorxStart QPushButton#bwStartSegment[position="last"] {
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+#BruceWorxStart QPushButton#bwStartSegment:hover {
+  background-color: @HoverColor;
+}
+
+#BruceWorxStart QPushButton#bwStartSegment:checked {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+  font-weight: 600;
+}
+
+#BruceWorxStart QLineEdit#bwStartFilter {
+  min-height: 22px;
+}
+
+/* Cards */
+#BruceWorxStart QFrame#bwStartCard {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+#BruceWorxStart QFrame#bwStartCard:hover {
+  border-color: @AccentColor;
+}
+
+#BruceWorxStart QLabel#bwStartThumb {
+  background-color: @CardBackgroundColor;
+  border: none;
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+}
+
+#BruceWorxStart QWidget#bwStartCardInfo {
+  background-color: transparent;
+}
+
+#BruceWorxStart QLabel#bwStartCardName {
+  font-weight: 600;
+}
+
+#BruceWorxStart QFrame#bwStartCard:disabled QLabel {
+  color: @TextDisabledColor;
+}
+
+/* Lifecycle state badges: the state colour as text and outline. */
+#BruceWorxStart QLabel#bwStartBadge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0px 4px;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 4px;
+  color: @TextSecondaryColor;
+  background-color: transparent;
+}
+
+#BruceWorxStart QLabel#bwStartBadge[state="wip"] {
+  color: @WarnColor;
+  border-color: @WarnColor;
+}
+
+#BruceWorxStart QLabel#bwStartBadge[state="rel"] {
+  color: @OkColor;
+  border-color: @OkColor;
+}
+
+#BruceWorxStart QLabel#bwStartBadge[state="rev"] {
+  color: @AccentColor;
+  border-color: @AccentColor;
+  background-color: @AccentSoftColor;
+}
+
+/* Table */
+#BruceWorxStart QTreeWidget#bwStartTable {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+  padding: 0px;
+}
+
+#BruceWorxStart QTreeWidget#bwStartTable QHeaderView::section {
+  background-color: @HoverColor;
+  color: @TextDisabledColor;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border: none;
+  border-bottom: 1px solid @GeneralBorderColor;
+}
+
+#BruceWorxStart QTreeWidget#bwStartTable QHeaderView::section:first {
+  border-top-left-radius: 9px;
+}
+
+#BruceWorxStart QTreeWidget#bwStartTable QHeaderView::section:last {
+  border-top-right-radius: 9px;
+}
+
+#BruceWorxStart QTreeWidget#bwStartTable::item {
+  padding: 0px 4px;
+  border: none;
+  border-bottom: 1px solid @GeneralGridLinesColor;
+}
+
+#BruceWorxStart QTreeWidget#bwStartTable::item:disabled {
+  color: @TextDisabledColor;
+}
+
+#BruceWorxStart QWidget#bwStartCell {
+  background-color: transparent;
+}
+
 /* Navigation pill (bruceworx_navpill.py): a small card at the bottom of each 3D view ------------- */
 #BruceWorxNavPill {
   background-color: @CardBackgroundColor;
@@ -898,4 +1396,18 @@ QWidget#thumbnailWidget[state="pressed"] {
 #BruceWorxNavPillSeparator {
   background-color: @GeneralBorderColor;
   border: none;
+}
+
+/* Vault task dialogs (bruceworx_vaultwizard.py): problems at the foot of each task box. Errors block OK. */
+QLabel#bwVaultHint,
+QLabel#bwVaultIssue {
+  color: @TextSecondaryColor;
+}
+
+QLabel#bwVaultIssue[level="error"] {
+  color: @ErrorColor;
+}
+
+QLabel#bwVaultIssue[level="warning"] {
+  color: @WarnColor;
 }

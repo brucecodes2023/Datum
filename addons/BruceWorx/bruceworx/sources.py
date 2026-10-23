@@ -13,6 +13,10 @@ Counters:
 Document type codes live in ``config/document_types.json`` (or an embedded
 ``document_types`` object). The shipped table is placeholder data for Bruce.
 
+A program or document type entry with ``"retired": true`` (Vault Settings)
+is not listed by :meth:`JsonNumberSource.programs` / ``document_types``, so
+pickers stop offering it; numbers under it still allocate when it is named.
+
 Ops source shape, accepted by :func:`open_number_source` and rejected until
 FCB-P2-03 lands::
 
@@ -130,10 +134,13 @@ class JsonNumberSource(NumberSource):
         return formatted
 
     def programs(self) -> list[str]:
-        return sorted(self._load()["programs"])
+        """Program codes offered for new numbers: retired ones (``"retired": true``,
+        set by Vault Settings) are left out but still allocate when named."""
+        return sorted(name for name, entry in self._load()["programs"].items() if not _retired(entry))
 
     def document_types(self) -> list[str]:
-        return sorted(self._document_types(self._load()))
+        """Document type codes offered for new numbers, without retired ones."""
+        return sorted(code for code, entry in self._document_types(self._load()).items() if not _retired(entry))
 
     def _issue(self, data, program, document_type, revision, parent, write: bool):
         entry, key = self._program(data, program)
@@ -332,6 +339,10 @@ def _coerce_document_types(raw) -> dict:
     if not cleaned:
         raise ValueError("document type table is empty")
     return cleaned
+
+
+def _retired(entry) -> bool:
+    return isinstance(entry, dict) and bool(entry.get("retired"))
 
 
 def _as_int(value, label: str) -> int:

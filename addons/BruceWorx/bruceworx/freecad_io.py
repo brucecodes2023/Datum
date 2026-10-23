@@ -62,6 +62,61 @@ def close_document(doc) -> None:
     FreeCAD.closeDocument(doc.Name)
 
 
+# Which object's part properties stand for the file (as on the Start page):
+# the assembly, then an App::Part, then a body, then a drawing page.
+_MAIN_RANK = {"Assembly::AssemblyObject": 0, "App::Part": 1, "PartDesign::Body": 2, "TechDraw::DrawPage": 3}
+
+
+def main_object(doc):
+    """The object that carries the file's part number, or None. Among equal
+    kinds a top-level one (not inside a part or assembly) wins, then the first."""
+    best = None
+    for order, obj in enumerate(doc.Objects):
+        rank = _MAIN_RANK.get(getattr(obj, "TypeId", ""))
+        if rank is None:
+            continue
+        nested = any(getattr(p, "TypeId", "") in ("App::Part", "Assembly::AssemblyObject")
+                     for p in getattr(obj, "InList", []) or [])
+        key = (rank, nested, order)
+        if best is None or key < best[0]:
+            best = (key, obj)
+    return best[1] if best else None
+
+
+def write_part_number(path: str, part_number: str, revision: str | None = None) -> str:
+    """Give the file's main object (:func:`main_object`) the schema's part
+    properties (``partprops.Schema.apply``) and set ``PartNumber``, and
+    ``Revision`` (default the first pre-release, ``01``); save and close.
+    Returns the object's name. The vault import passes this as its writer."""
+    require_freecad()
+    import FreeCAD  # noqa: PLC0415
+
+    from bruceworx import partprops, pdm  # noqa: PLC0415
+
+    path = os.path.abspath(path)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(path)
+    try:
+        doc = FreeCAD.openDocument(path, hidden=True)
+    except TypeError:
+        doc = FreeCAD.openDocument(path)
+    try:
+        obj = main_object(doc)
+        if obj is None:
+            raise ValueError(f"{os.path.basename(path)} has no assembly, part, body or drawing page to number")
+        report = partprops.load_schema().apply(obj)
+        clash = [text for text in report["conflicts"] if text.split(" ", 1)[0] in ("PartNumber", "Revision")]
+        if clash:
+            raise ValueError(f"{obj.Name}: {'; '.join(clash)}")
+        obj.PartNumber = part_number
+        obj.Revision = pdm.first_prerelease() if revision is None else revision
+        name = obj.Name
+        doc.save()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+    return name
+
+
 def export_step(objects, output_path: str) -> None:
     """Write STEP. Prefer the Import workbench, then Part."""
     require_freecad()

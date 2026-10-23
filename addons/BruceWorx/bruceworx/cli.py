@@ -15,6 +15,7 @@ of:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import shlex
@@ -31,7 +32,7 @@ from bruceworx.tree import document_tree
 COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault")
 VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
-    "submit", "approve", "reject", "fetch", "sync",
+    "submit", "approve", "reject", "fetch", "sync", "import", "settings",
 )
 _ENTRY_NAMES = {"hooks.py", "hooks"}
 
@@ -116,6 +117,19 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--workspace", default="", help="checkout/fetch: copy the file here")
     vault.add_argument("--comment", default="", help="checkin comment or reject reason")
     vault.add_argument("--actor", default="", help="Who is acting (default: user@host)")
+    # init: numbering and company properties (vault_setup); without them init makes a bare vault.
+    vault.add_argument("--program", default="", help="init: program codes, e.g. BW,LE; import: the program")
+    vault.add_argument("--document-types", default="", help='init: e.g. "01=Part,02=Assembly,03=Drawing"')
+    vault.add_argument("--first-parent", type=int, default=None, help="init: first PPPPP (default 1001)")
+    vault.add_argument("--first-revision", default="", help="init: revision in new numbers (default A)")
+    vault.add_argument("--properties-file", default="", help="init: company part properties (JSON list or layer)")
+    vault.add_argument("--from", dest="source_folder", default="", help="import: folder of .FCStd files")
+    vault.add_argument("--dry-run", action="store_true",
+                       help="import: show the plan, change nothing; settings --import: check only")
+    # settings: the vault's programs, document types and company properties as one CSV file.
+    vault.add_argument("--export", dest="export_csv", default="", help="settings: write the tables to this CSV")
+    vault.add_argument("--import", dest="import_csv", default="",
+                       help="settings: add, rename or retire rows from this CSV")
     return parser
 
 
@@ -317,9 +331,21 @@ def _vault_command(args) -> int:
     actor = args.actor or None
     if args.action == "init":
         name = args.name or os.path.basename(os.path.abspath(args.vault))
-        vault = FolderVault.init(args.vault, name, actor=actor)
-        emit({"ok": True, "command": "vault init", "ref": vault.ref_path, "vault_id": vault.ref["vault_id"]})
+        payload = {"ok": True, "command": "vault init"}
+        if _has_setup_options(args):
+            from bruceworx import vault_setup  # noqa: PLC0415
+
+            setup = _vault_setup(args, name)
+            vault = vault_setup.create_vault(setup, actor=actor)
+            payload["numbering"] = vault_setup.numbering_path(vault.root)
+            payload["example"] = vault_setup.example_number(setup.numbering)
+        else:
+            vault = FolderVault.init(args.vault, name, actor=actor)
+        payload.update({"ref": vault.ref_path, "vault_id": vault.ref["vault_id"]})
+        emit(payload)
         return 0
+    if args.action == "settings":
+        return _vault_settings(args)
     vault = FolderVault(args.vault, actor=actor)
     if freecad_io.freecad_available():
         # Inside FreeCAD: open parts follow their lifecycle state.
@@ -329,6 +355,8 @@ def _vault_command(args) -> int:
     payload = {"ok": True, "command": f"vault {args.action}"}
     if args.action == "sync":
         return _vault_sync(vault, args, payload)
+    if args.action == "import":
+        return _vault_import(vault, args, payload)
     if args.action != "status":
         if not args.pn:
             raise ValueError(f"vault {args.action} needs --pn")
@@ -358,6 +386,100 @@ def _vault_command(args) -> int:
         payload["state"] = vault.items[args.pn].state
     emit(payload)
     return 0
+
+
+def _has_setup_options(args) -> bool:
+    return bool(args.program or args.document_types or args.first_parent is not None
+                or args.first_revision or args.properties_file)
+
+
+def _vault_setup(args, name: str):
+    """A vault_setup.VaultSetup from ``vault init`` options; defaults for the rest."""
+    from bruceworx import vault_setup  # noqa: PLC0415
+
+    numbering = vault_setup.NumberingSetup()
+    if args.program:
+        numbering.programs = [vault_setup.ProgramSetup(code.strip())
+                              for code in args.program.split(",") if code.strip()]
+    if args.document_types:
+        types = {}
+        for pair in args.document_types.split(","):
+            code, sep, label = pair.partition("=")
+            if not sep:
+                raise ValueError(f"--document-types entry {pair!r} must be CODE=Name, e.g. 01=Part")
+            types[code.strip()] = label.strip()
+        numbering.document_types = types
+    if args.first_parent is not None:
+        numbering.first_parent = args.first_parent
+    if args.first_revision:
+        numbering.first_revision = args.first_revision
+    properties = []
+    if args.properties_file:
+        with open(args.properties_file, encoding="utf-8") as handle:
+            raw = json.load(handle)
+        properties = raw.get("properties", []) if isinstance(raw, dict) else raw
+        if not isinstance(properties, list):
+            raise ValueError(f"{args.properties_file}: expected a list of properties")
+    return vault_setup.VaultSetup(name=name, folder=args.vault, numbering=numbering, properties=properties)
+
+
+def _vault_import(vault, args, payload) -> int:
+    """Scan a folder, plan numbers, and (unless --dry-run) import into the vault.
+    Under FreeCADCmd the part number is also written into each imported copy."""
+    from bruceworx import vault_setup  # noqa: PLC0415
+    from bruceworx.macro import sole_program  # noqa: PLC0415
+
+    if not args.source_folder:
+        raise ValueError("vault import needs --from <folder>")
+    program = args.program or sole_program(open_number_source(vault_setup.numbering_path(vault.root)))
+    candidates = vault_setup.scan_for_import(args.source_folder)
+    vault_setup.plan_numbers(candidates, vault.root, program)
+    for c in candidates:
+        why = "; ".join(i.text for i in c.issues)
+        print(f"{'+' if c.include else '-'} {c.proposed_part_number or '-':22} {c.kind:9} {c.path}"
+              + (f"  ({why})" if why else ""))
+    payload.update({"program": program.upper(), "dry_run": bool(args.dry_run),
+                    "candidates": [dataclasses.asdict(c) for c in candidates]})
+    if args.dry_run:
+        emit(payload)
+        return 0
+    writer = freecad_io.write_part_number if freecad_io.freecad_available() else None
+    report = vault_setup.run_import(vault, candidates, program, writer=writer)
+    payload.update({"imported": report.imported, "skipped": report.skipped, "failed": report.failed,
+                    "part_numbers_written": writer is not None})
+    payload["ok"] = not report.failed
+    emit(payload)
+    return 1 if report.failed else 0
+
+
+def _vault_settings(args) -> int:
+    """Export the vault's tables to a CSV, or check and apply a CSV (vault_setup.save_settings)."""
+    from bruceworx import vault_setup  # noqa: PLC0415
+    from bruceworx.pdm_folder import find_ref_file  # noqa: PLC0415
+
+    root = os.path.dirname(find_ref_file(os.path.expanduser(args.vault)))
+    payload = {"ok": True, "command": "vault settings", "vault": root}
+    if bool(args.export_csv) == bool(args.import_csv):
+        raise ValueError("vault settings needs --export FILE or --import FILE")
+    if args.export_csv:
+        vault_setup.write_csv_file(args.export_csv, vault_setup.load_settings(root))
+        payload["export"] = os.path.abspath(args.export_csv)
+        emit(payload)
+        return 0
+    settings, issues = vault_setup.read_csv_file(args.import_csv)
+    if not vault_setup._errors(issues):
+        issues += vault_setup.settings_change_issues(root, settings)
+    for issue in issues:
+        print(f"{issue.level}: {issue.text}")
+    errors = vault_setup._errors(issues)
+    payload.update({"import": os.path.abspath(args.import_csv), "dry_run": bool(args.dry_run),
+                    "issues": [dataclasses.asdict(i) for i in issues], "saved": False})
+    if not errors and not args.dry_run:
+        vault_setup.save_settings(root, settings)
+        payload["saved"] = True
+    payload["ok"] = not errors
+    emit(payload)
+    return 1 if errors else 0
 
 
 def _vault_sync(vault, args, payload) -> int:

@@ -1,0 +1,341 @@
+{
+  "_comment": "BruceWorx workspaces (roadmap 13.4, step C2). Each workspace runs one FreeCAD workbench. A tab lists its groups; each group becomes one custom toolbar named '<Tab> · <Caption>' in that workbench, with 'more' commands in the caption menu only. A tab with \"toolbars\": \"workbench\" shows the workbench's own toolbars. 'replaces' are the workbench's stock toolbars that the groups take over. 'load' are the modules imported before a group's command is looked up (commands from other workbenches).",
+  "load": [
+    "PartGui",
+    "BOPTools:importAll",
+    "BOPTools:addCommands",
+    "PartDesignGui",
+    "SketcherGui",
+    "SurfaceGui",
+    "MeshGui",
+    "MeshPartGui",
+    "SpreadsheetGui",
+    "CommandCreateAssembly",
+    "CommandInsertLink",
+    "CommandInsertNewPart",
+    "CommandCreateJoint",
+    "CommandSolveAssembly",
+    "CommandCreateView",
+    "CommandCreateSimulation",
+    "CommandCreateBom"
+  ],
+  "workspaces": [
+    {
+      "name": "Design",
+      "workbench": "PartDesignWorkbench",
+      "shortcut": "Ctrl+1",
+      "replaces": [
+        "Part Design Helper Features",
+        "Part Design Modeling Features",
+        "Part Design Dress-Up Features",
+        "Part Design Transformation Features"
+      ],
+      "tabs": [
+        {
+          "name": "Solid",
+          "groups": [
+            {
+              "caption": "Create",
+              "commands": [
+                "PartDesign_NewSketch",
+                "PartDesign_Pad",
+                "PartDesign_Revolution",
+                "PartDesign_AdditiveLoft",
+                "PartDesign_AdditivePipe",
+                "PartDesign_AdditiveHelix",
+                "PartDesign_Pocket",
+                "PartDesign_Hole",
+                "PartDesign_CompPrimitiveAdditive"
+              ],
+              "more": [
+                "PartDesign_Groove",
+                "PartDesign_SubtractiveLoft",
+                "PartDesign_SubtractivePipe",
+                "PartDesign_SubtractiveHelix",
+                "PartDesign_CompPrimitiveSubtractive",
+                "PartDesign_Body"
+              ]
+            },
+            {
+              "caption": "Pattern",
+              "commands": [
+                "BruceWorx_RectangularPattern",
+                "BruceWorx_CircularPattern",
+                "PartDesign_Mirrored"
+              ],
+              "more": [
+                "PartDesign_LinearPattern",
+                "PartDesign_PolarPattern",
+                "PartDesign_MultiTransform"
+              ]
+            },
+            {
+              "caption": "Modify",
+              "commands": [
+                "PartDesign_Fillet",
+                "PartDesign_Chamfer",
+                "PartDesign_Draft",
+                "PartDesign_Thickness",
+                "PartDesign_Boolean",
+                "Std_TransformManip"
+              ],
+              "more": [
+                "Part_Scale",
+                "Part_RefineShape",
+                "PartDesign_MoveFeature",
+                "PartDesign_MoveFeatureInTree",
+                "PartDesign_MoveTip"
+              ]
+            },
+            {
+              "caption": "Assemble",
+              "commands": [
+                "Assembly_CreateAssembly",
+                "Assembly_InsertLink",
+                "Assembly_CreateJointFixed",
+                "Assembly_CreateJointRevolute",
+                "Assembly_CreateJointSlider"
+              ],
+              "more": [
+                "Assembly_InsertNewPart",
+                "Assembly_ToggleGrounded",
+                "Assembly_CreateJointCylindrical",
+                "Assembly_CreateJointBall",
+                "Assembly_CreateJointDistance",
+                "Assembly_CreateJointParallel",
+                "Assembly_CreateJointPerpendicular",
+                "Assembly_CreateJointAngle",
+                "Assembly_CreateJointRackPinion",
+                "Assembly_CreateJointScrew",
+                "Assembly_CreateJointGearBelt",
+                "Assembly_SolveAssembly",
+                "Assembly_CreateView",
+                "Assembly_CreateSimulation",
+                "Assembly_CreateBom"
+              ]
+            },
+            {
+              "caption": "Construct",
+              "commands": [
+                "PartDesign_Plane",
+                "PartDesign_Line",
+                "PartDesign_Point",
+                "PartDesign_CoordinateSystem",
+                "PartDesign_ShapeBinder"
+              ],
+              "more": [
+                "PartDesign_SubShapeBinder",
+                "PartDesign_Clone"
+              ]
+            },
+            {
+              "caption": "Inspect",
+              "commands": [
+                "Std_Measure",
+                "Part_CheckGeometry",
+                "Std_ToggleClipPlane"
+              ],
+              "more": [
+                "Part_SectionCut"
+              ]
+            },
+            {
+              "caption": "Insert",
+              "commands": [
+                "Std_Import",
+                "Std_Export",
+                "Spreadsheet_CreateSheet"
+              ],
+              "more": [
+                "Std_LinkMake"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Surface",
+          "groups": [
+            {
+              "caption": "Create",
+              "commands": [
+                "Surface_Filling",
+                "Surface_GeomFillSurface",
+                "Surface_Sections",
+                "Part_RuledSurface",
+                "Part_Loft",
+                "Part_Sweep"
+              ],
+              "more": [
+                "Surface_BlendCurve",
+                "Part_Extrude",
+                "Part_Revolve",
+                "Part_MakeFace"
+              ]
+            },
+            {
+              "caption": "Modify",
+              "commands": [
+                "Surface_ExtendFace",
+                "Part_Offset2D",
+                "Part_Offset",
+                "Part_Thickness"
+              ],
+              "more": [
+                "Part_ProjectionOnSurface",
+                "Part_MakeSolid"
+              ]
+            },
+            {
+              "caption": "Combine",
+              "commands": [
+                "Part_Fuse",
+                "Part_Cut",
+                "Part_Common",
+                "Part_BooleanFragments"
+              ],
+              "more": [
+                "Part_Slice",
+                "Part_XOR"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Mesh",
+          "groups": [
+            {
+              "caption": "Create",
+              "commands": [
+                "MeshPart_Mesher",
+                "Mesh_Import",
+                "Mesh_Export",
+                "Part_ShapeFromMesh"
+              ],
+              "more": [
+                "Mesh_BuildRegularSolid"
+              ]
+            },
+            {
+              "caption": "Modify",
+              "commands": [
+                "Mesh_HarmonizeNormals",
+                "Mesh_FlipNormals",
+                "Mesh_FillupHoles",
+                "Mesh_RemoveComponents",
+                "Mesh_Smoothing",
+                "Mesh_Decimating"
+              ],
+              "more": [
+                "Mesh_Scale",
+                "Mesh_RemeshGmsh",
+                "Mesh_Merge",
+                "Mesh_SplitComponents"
+              ]
+            },
+            {
+              "caption": "Boolean",
+              "commands": [
+                "Mesh_Union",
+                "Mesh_Difference",
+                "Mesh_Intersection"
+              ]
+            },
+            {
+              "caption": "Inspect",
+              "commands": [
+                "Mesh_Evaluation",
+                "Mesh_EvaluateSolid",
+                "Mesh_CurvatureInfo",
+                "Mesh_BoundingBox"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Utilities",
+          "groups": [
+            {
+              "caption": "Organize",
+              "commands": [
+                "PartDesign_Body",
+                "Std_Part",
+                "Std_Group",
+                "Std_LinkMake"
+              ]
+            },
+            {
+              "caption": "Properties",
+              "commands": [
+                "BruceWorx_PartNumber",
+                "Std_SetMaterial",
+                "Std_SetAppearance",
+                "Std_Placement"
+              ]
+            },
+            {
+              "caption": "Macro",
+              "commands": [
+                "Std_DlgMacroExecute",
+                "Std_DlgMacroRecord"
+              ]
+            },
+            {
+              "caption": "Settings",
+              "commands": [
+                "Std_DlgCustomize",
+                "Std_DlgParameter"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Simulation",
+      "workbench": "FemWorkbench",
+      "shortcut": "Ctrl+2",
+      "tabs": [
+        {
+          "name": "Simulation",
+          "toolbars": "workbench"
+        }
+      ]
+    },
+    {
+      "name": "Manufacture",
+      "workbench": "CAMWorkbench",
+      "shortcut": "Ctrl+3",
+      "tabs": [
+        {
+          "name": "Manufacture",
+          "toolbars": "workbench"
+        }
+      ]
+    },
+    {
+      "name": "Drawing",
+      "workbench": "TechDrawWorkbench",
+      "shortcut": "Ctrl+4",
+      "tabs": [
+        {
+          "name": "Drawing",
+          "toolbars": "workbench"
+        }
+      ]
+    }
+  ],
+  "sketch": {
+    "name": "Sketch",
+    "workbench": "SketcherWorkbench",
+    "toolbars": [
+      "Edit Mode",
+      "Geometries",
+      "Constraints",
+      "Sketcher Tools",
+      "B-Spline Tools",
+      "Visual Helpers",
+      "Sketcher Edit Tools"
+    ],
+    "finish": "Sketcher_LeaveSketch"
+  }
+}

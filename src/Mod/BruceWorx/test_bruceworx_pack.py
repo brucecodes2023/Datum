@@ -155,6 +155,7 @@ class PackContentsTest(unittest.TestCase):
         self.assertEqual(entries[("BaseApp/Preferences/NaviCube", "CubeSize")], 96)
         self.assertEqual(entries[("BaseApp/Preferences/NaviCube", "FontString")], "")
         self.assertEqual(entries[("BaseApp/Preferences/View", "RotationMode")], 1)
+        self.assertTrue(entries[("BaseApp/Preferences/General", "LockToolBars")])
         self.assertTrue(entries[("BaseApp/MainWindow/Toolbars", "Part Design Modeling Features")])
         self.assertFalse(entries[("BaseApp/MainWindow/Toolbars", "Macro")])
         self.assertFalse(entries[("BaseApp/MainWindow/Toolbars", "B-Spline Tools")])

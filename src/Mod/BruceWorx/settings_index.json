@@ -1,0 +1,6500 @@
+[
+{
+"text": "Connection Test",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Custom",
+"tip": "Use custom proxy settings",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Custom repositories",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Hide addons with non-FSF free/libre license",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Hide addons with non-OSI-approved license",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Hide addons without a license",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Host",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Port",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Proxy addon manager traffic",
+"tip": "Use a proxy server for access to addon data",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Score source URL",
+"tip": "",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "System",
+"tip": "Use the system's proxy settings",
+"page": "Addon Manager Options",
+"area": "AddonManager"
+},
+{
+"text": "Esc leaves edit mode",
+"tip": "Allows leaving edit mode when pressing the Esc key",
+"page": "General",
+"area": "Assembly"
+},
+{
+"text": "Ground first part",
+"tip": "",
+"page": "General",
+"area": "Assembly"
+},
+{
+"text": "Log dragging steps",
+"tip": "Log the dragging steps of the solver. Useful to report a bug. The files are named \"runPreDrag.asmt\" and \"dragging.log\" and are located in the default directory of std::ofstream (on Windows it's the de",
+"page": "General",
+"area": "Assembly"
+},
+{
+"text": "Allow quads",
+"tip": "Allow quadrilateral faces",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Builtin and Mefisto mesher options",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Export Options",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Grading",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Mesher",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Netgen mesher options",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Optimize",
+"tip": "Allows optimization",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Scaling factor",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Second order",
+"tip": "Allow a second order mesh",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Segments per edge",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Segments per radius",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Tessellation",
+"tip": "",
+"page": "DAE",
+"area": "BIM"
+},
+{
+"text": "Helper color (grids, axes, etc.)",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Number of stair steps",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Other",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Panel color",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Pipe diameter",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Rebar color",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Rebar diameter",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Rebar offset",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Space line color",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Space line style",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Space transparency",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Stair height",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Stair length",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Stair width",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Structure color",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Switch backgrounds",
+"tip": "When clicking a view or level in the BIM views manager, this switches the background to plain color when activating a 2D view, and to gradient color when activating a level",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Use sketches for walls",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Visual",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Wall color",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Window glass color",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "Window glass transparency",
+"tip": "",
+"page": "Defaults",
+"area": "BIM"
+},
+{
+"text": "2D Rendering",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Address",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Apply Draft construction style to subcomponents",
+"tip": "If this is checked, when an object becomes subtraction or addition of an Arch object, it will receive the Draft construction color.",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Auto-join walls",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "BIM Server",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Cut areas line thickness ratio",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Cut method",
+"tip": "If this is checked, holes in faces will be performed by subtraction rather than using wires orientation",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Do not compute areas for objects with more than",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Fast conversion",
+"tip": "If this is checked, conversion is faster but the result might still contain triangulated faces",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Force flat faces",
+"tip": "If this is checked, flat groups of faces will be force-flattened, resulting in possible gaps and non-solid results",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Hidden geometry pattern",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "IFC version",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Include unit when sending measurements to clipboard",
+"tip": "If this is checked, the text that gets placed in the clipboard will include the unit. Otherwise, it will be a simple number expressed in internal units (millimeters)",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Interval between file checks for references",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Join base sketches of walls if possible",
+"tip": "When two similar walls are connected, their underlying sketches are merged and the walls are combined into a single object",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Mesh to Shape Conversion",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Object Creation",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Open in external browser",
+"tip": "If this is selected, the \"Open BIM Server in browser\" button will open the BIM Server interface in an external browser instead of the FreeCAD web workbench",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Pattern scale",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Remove external geometry of base sketches if needed",
+"tip": "Two possible strategies to avoid circular dependencies: Create one more object (unchecked) or remove external geometry of base sketch (checked)",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Set \"Move base\" property to True by default",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Set \"Move with host\" property to True by default",
+"tip": "By default, new objects will have their \"Move with host\" property set to False, which means they will not move when their host object is moved",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Show renderer debug messages",
+"tip": "Show debug information during 2D rendering",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Survey",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Symbol line thickness ratio",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Tolerance",
+"tip": "",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Use material color as shape color",
+"tip": "If this is checked, when an Arch object has a material, the object will take the color of the material. This can be overridden for each object.",
+"page": "General Settings",
+"area": "BIM"
+},
+{
+"text": "Add default building if one is not found in the document",
+"tip": "If no building is found in the FreeCAD document, a default one will be added. Warning: The IFC standard asks for at least one building in each file. By turning this option off, a non-standard IFC file",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Add default building storey if one is not found in the document",
+"tip": "If no building storey is found in the FreeCAD document, a default one will be added. A building storey is not mandatory but a common practice to have at least one in the file.",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Add default site if one is not found in the document",
+"tip": "If no site is found in the FreeCAD document, a default one will be added. A site is not mandatory but a common practice is to have at least one in the file.",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Auto-detect and export as standard cases when applicable",
+"tip": "Some IFC types such as IfcWall or IfcBeam have special standard versions like IfcWallStandardCase or IfcBeamStandardCase. If this option is turned on, FreeCAD will automatically export such objects as",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Check also native-IFC-specific preferences under BIM -> Native IFC",
+"tip": "",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Disable IfcRectangleProfileDef",
+"tip": "When possible, IFC objects that are extruded rectangles will be exported as IfcRectangleProfileDef. However, some other applications might have problems importing that entity. If this is the case, it ",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Export 2D objects as IfcAnnotations",
+"tip": "2D objects will be exported as IfcAnnotation",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Export Options",
+"tip": "",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Export full FreeCAD parametric model",
+"tip": "All FreeCAD object properties will be stored inside the exported objects, allowing to recreate a full parametric model on reimport.",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Export nested groups as assemblies",
+"tip": "In FreeCAD, it is possible to nest groups inside buildings or storeys. If this option is disabled, FreeCAD groups will be saved as IfcGroups and aggregated to the building structure. Aggregating non-b",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Export type",
+"tip": "The type of objects to export: - Standard model: solid objects - Structural analysis: wireframe model for structural calculations - Standard + structural: both types of models",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Force export as BREP",
+"tip": "Some IFC viewers do not like objects exported as extrusions. Use this to force all objects to be exported as BREP geometry.",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "IFC file units",
+"tip": "Desired units in the exported IFC file. Note that IFC files are ALWAYS written in metric units; imperial units are only a conversion factor applied on top of them. However, some BIM applications will ",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "IFC standard compliance",
+"tip": "",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Join coplanar facets when triangulating",
+"tip": "Curved shapes that cannot be represented as curves in IFC are decomposed into flat facets. If this is checked, an additional calculation is done to join coplanar facets.",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Reuse similar entities",
+"tip": "When possible, similar entities will be used only once in the file if possible. This can reduce the file size considerably, but will make it less easily readable.",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Store IFC unique ID in FreeCAD objects",
+"tip": "When exporting objects without unique ID (UID), the generated UID will be stored inside the FreeCAD object for reuse next time that object is exported. This leads to smaller differences between file v",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Use DAE triangulation options",
+"tip": "Use triangulation options set in the DAE options page",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Use IfcOpenShell serializer if available",
+"tip": "IFCOpenShell is a library that enables importing IFC files. Its serializer functionality allows giving it an OCC shape and it will produce adequate IFC geometry: NURBS, faceted, or anything else. Note",
+"page": "IFC Export",
+"area": "BIM"
+},
+{
+"text": "Allow invalid shapes",
+"tip": "IFC files can contain unclean or non-solid geometry. If this option is checked, all the geometry is imported, regardless of their validity.",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Check also native-IFC-specific preferences under BIM -> Native IFC",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Create clones when objects have shared geometry",
+"tip": "Clones are used when objects have shared geometry One object is the base object, the others are clones.",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Detect extrusions",
+"tip": "The importer will try to detect extrusions. Note that this might slow things down.",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Exclude list",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Fit view while importing",
+"tip": "Fit view during import on the imported objects. This will slow down the import, but one can watch the import.",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "General Options",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Import IFC properties in spreadsheet",
+"tip": "Each object will have their IFC properties stored in a spreadsheet object",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Import Options",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Import arch IFC objects as",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Import full FreeCAD parametric definitions if available",
+"tip": "Creates a full parametric model on import using stored FreeCAD object properties",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Import structure IFC objects as",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Merge materials with same name and same color",
+"tip": "If several materials with the same name and color are found in the IFC file, they will be treated as one.",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Number of cores to use (experimental)",
+"tip": "EXPERIMENTAL The number of cores to use in multicore mode. Keep 0 to disable multicore mode. The maximum value should be the number of cores in the CPU minus 1, for example, 3 cores for a 4-core CPU. ",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Prefix names with ID number",
+"tip": "Object names will be prefixed with the IFC ID number",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Replace 'Project', 'Site', 'Building', and 'Storey' with 'Group'",
+"tip": "If this option is checked, the default 'Project', 'Site', 'Building', and 'Storeys' objects that are usually found in an IFC file are not imported, and all objects are placed in a 'Group' instead. 'Bu",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Root element",
+"tip": "",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Separate openings",
+"tip": "Openings will be imported as subtractions, otherwise wall shapes will already have their openings subtracted",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Show debug messages",
+"tip": "Shows verbose debug messages during import and export of IFC files in the Report view panel",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Split multilayer walls",
+"tip": "Split walls made of multiple layers",
+"page": "IFC Import",
+"area": "BIM"
+},
+{
+"text": "Always keep original object when converting to type",
+"tip": "When enabled, converting objects to IFC types will always keep the original object",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Always lock new documents",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Ask every time",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Create a default structure",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Export",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Import",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Initial import",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Keep original version of aggregated objects",
+"tip": "When enabling this, the original version of objects dropped onto an IFC project tree will not be deleted",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "New Document",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "New Project",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "New Type",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Preload layers",
+"tip": "Load all layers automatically when opening an IFC file",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Preload materials",
+"tip": "Load all materials automatically when opening an IFC file",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Preload property sets",
+"tip": "Load all property sets automatically when opening an IFC file",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Preload types",
+"tip": "Load all types automatically when opening an IFC file",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Representation type",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Show dialog when converting to type",
+"tip": "When enabled, a dialog will be shown each time when converting objects to IFC types",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Show options dialog when importing",
+"tip": "If this is checked, a dialog will be shown at each import",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Show warning when saving",
+"tip": "",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Switch to BIM workbench after import",
+"tip": "If this is checked, the BIM workbench will be loaded after import",
+"page": "Native IFC",
+"area": "BIM"
+},
+{
+"text": "Cameras (requires Render)",
+"tip": "Whether to import the model's cameras",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Create Arch::Equipment",
+"tip": "Whether to create Arch::Equipment for each furniture defined in the model (NOTE: this can negatively impact the import process speed)",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Create IFC project",
+"tip": "Create a default IFC project with the newly created site",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Create ground level mesh",
+"tip": "Create a mesh to represent the default ground level",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Create render project",
+"tip": "Create a default Render project with the newly created site (requires the Render workbench to be installed)",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Debug geometry",
+"tip": "DEBUG: keep the construction geometries in the active document. Useful when debugging a failed import",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Decorate surfaces",
+"tip": "Create face binders and baseboards for walls, and floors and ceilings for rooms",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Default ceiling color",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Default floor color",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Default furniture color",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Default ground color",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Default sky color",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Doors and Windows",
+"tip": "Whether to import the model's doors and windows",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Fit view while importing",
+"tip": "Fit view while importing",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Furnitures",
+"tip": "Whether to import the model's furnitures",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "General Options",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Import Options",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Join Arch::Wall",
+"tip": "Whether to join the different Arch::Wall together",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Lights (requires Render)",
+"tip": "Whether to import the model's lights. Note that you also need to import the model's furnitures.",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Merge into existing document",
+"tip": "Merge imported element with existing FreeCAD object",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Show this dialog when importing",
+"tip": "",
+"page": "SH3D Import",
+"area": "BIM"
+},
+{
+"text": "Export Options",
+"tip": "",
+"page": "WebGL",
+"area": "BIM"
+},
+{
+"text": "Path to template",
+"tip": "",
+"page": "WebGL",
+"area": "BIM"
+},
+{
+"text": "Use custom export template",
+"tip": "A custom WebGL HTML template is used for export. Otherwise, the default template will be used. The default template is located at: /Resources/Mod/BIM/templates/webgl_export_template.html",
+"page": "WebGL",
+"area": "BIM"
+},
+{
+"text": "Auto-hide",
+"tip": "OverlayLeft AutoHide. The panel hides when the pointer leaves and shows on hover.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Bottom inset",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Browser header in small caps",
+"tip": "On by default. The model tree card is titled BROWSER in small capitals instead of Model.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "BruceWorx features",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "BruceWorx preference pack",
+"tip": "On by default. Applied once on first start (theme, millimetres, Fusion-like navigation, PartDesign startup). Your previous values are saved first. Uncheck to restore them (same as the BruceWorx Off pa",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "BruceWorx top bar (turns the FreeCAD-Ribbon add-on off)",
+"tip": "On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Captioned tool groups",
+"tip": "On by default. Each workbench toolbar gets a small caption under it (CREATE, PATTERN, ...). Click a caption for a menu with every command of the group, named.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Document tabs",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Document tabs and status bar",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Dot on modified document tabs",
+"tip": "On by default. A modified document shows a dot on its tab instead of the close button; the close button appears on hover. Unmodified tabs show it on the current tab only.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Everything BruceWorx adds is on by default. Uncheck a box to turn that feature off.",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Feature summary in the Browser",
+"tip": "On by default. Quiet text after a feature's name with its main dimension: Pad 8 mm, R5, Ø9 × 4.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Float the task panel (command dialog)",
+"tip": "On by default. While the model tree floats, the task panel floats on the right as a card that shows while a command is open. Uncheck to dock it again.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Floating model tree",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Follow the macOS light/dark setting",
+"tip": "On by default. Switches between the BruceWorx and BruceWorx Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences > General.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Hide the history timeline when there is no history",
+"tip": "On by default. The timeline hides while the active document has no history (no body with features, no assembly) and comes back when it has. Uncheck to keep it visible with a short message.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "History timeline (bottom bar: PartDesign history, assembly order)",
+"tip": "On by default. Same switch as BruceWorx > History Timeline. Closing the dock also turns it off.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Hooks add-on (part numbers: BruceWorx > Assign Part Number…)",
+"tip": "On by default. Loads the BruceWorx hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Icon plates in the Browser (dark mode)",
+"tip": "On by default. In dark mode, a faint light plate behind each tree icon keeps dark-outlined icons readable.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Left inset",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Lifecycle state of parts follows the vault",
+"tip": "On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by BruceWorx/Vau",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Navigation pill at the bottom of the 3D view",
+"tip": "A small bar at the bottom of each 3D view: orbit, pan, zoom (click, then drag in the view; Esc stops), fit all, display style, orthographic/perspective, clipping planes, measure.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Navigation pill orbits about",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "On by default. Puts the model tree on the existing left overlay panel (auto-hide, transparency, width, and insets below)",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "On by default. Unified title bar and toolbar, with the native close, minimize, and zoom buttons in that bar. Uncheck to ",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Overlay the model tree",
+"tip": "On by default. Overlay the Model dock (or Tree view, if the panels are split). Uncheck to restore the stock docks.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Part number and state badges in the Browser",
+"tip": "On by default. A part with the BruceWorx part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Quiet property group captions",
+"tip": "On by default. Property groups are small-caps captions instead of grey bars (BruceWorx theme).",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Rectangular and Circular Pattern commands",
+"tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly componen",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Show the grid when a sketch opens",
+"tip": "FreeCAD saves the grid setting in each sketch. On: every sketch shows the grid when it opens for editing, including sketches made before. The sketch panel can still hide it.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Show workbench command lists in the task panel",
+"tip": "The BruceWorx pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Sketch grid strength",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Status bar as text readouts",
+"tip": "On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by BruceWorx/VaultPath.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Top offset",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Trackpad: Shift + swipe pans, Cmd + swipe orbits",
+"tip": "Two-finger swipe on a trackpad: plain swipe zooms, Shift + swipe pans in any direction, Cmd + swipe orbits. A mouse wheel is not affected.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Transparent background",
+"tip": "On by default. OverlayLeft Transparent: the model shows through the Browser; the text keeps a halo so it stays readable. Uncheck for an opaque card.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Two toolbar rows",
+"tip": "On by default. After each workbench switch, File, the workbench tabs and View share the first toolbar row and the workbench's tools follow on the second.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Unified title bar and toolbar on macOS",
+"tip": "On by default. Calls QMainWindow.setUnifiedTitleAndToolBarOnMac. Uncheck to set that property false, which is Qt stock. Known risk: Qt 6.8 documents painting problems when the window contains an OpenG",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Use the macOS accent colour",
+"tip": "On by default. The accent from System Settings > Appearance colours buttons, checkboxes, selection and the view cube highlight. Text on it turns dark when white would be hard to read.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Width",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Workspaces and tabs",
+"tip": "On by default. A workspace menu (Design, Simulation, Manufacture, Drawing; Ctrl+1 to Ctrl+4) and tabs (Solid, Surface, Mesh, Utilities) replace the workbench selector. Opening a sketch adds a SKETCH t",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "macOS window",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Enable OCL dependent features",
+"tip": "",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "If OpenCAMLib is installed with Python bindings, it can be used by some additional 3D operations. NOTE: Enabling OpenCAM",
+"tip": "",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "OpenCAMLib",
+"tip": "",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Suppress all missing speeds warning",
+"tip": "Suppress all warnings about setting speed rates for accurate cycle time calculation",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Suppress feed rate warning",
+"tip": "Suppress warning whenever a path selection mode is activated",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Suppress missing rapid speeds warning",
+"tip": "Suppress warning about setting the rapid speed rates for accurate cycle time calculation. Ignored if all speed warnings are already suppressed.",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Suppress openCAMlib warning",
+"tip": "Suppress warning if openCAMlib cannot be found",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Suppress selection mode warning",
+"tip": "Suppress warning whenever a path selection mode is activated",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Warnings",
+"tip": "",
+"page": "Advanced",
+"area": "CAM"
+},
+{
+"text": "Bounding box normal color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Bounding box selection color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Default Path Colors",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Default normal path color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Default path marker color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Default pathline width",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Path highlight color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Path selection style",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Probe path color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Rapid path color",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Task panel layout",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "UI Settings",
+"tip": "",
+"page": "GUI",
+"area": "CAM"
+},
+{
+"text": "Angle",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Axis",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Default arguments",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Default curve accuracy",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Default geometry tolerance",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Default path",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Default post processor",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Defaults",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Ext. X",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Ext. Y",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Ext. Z",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "File save policy",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Geometry",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Height",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Length",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Output File",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Placement",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Position",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Post Processor",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Post processors selection",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Radius",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Stock",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Template",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Width",
+"tip": "",
+"page": "Job Preferences",
+"area": "CAM"
+},
+{
+"text": "Conversion method",
+"tip": "",
+"page": "DWG",
+"area": "Draft"
+},
+{
+"text": "DWG Conversion",
+"tip": "",
+"page": "DWG",
+"area": "Draft"
+},
+{
+"text": "Note: DXF options apply to DWG files as well.",
+"tip": "",
+"page": "DWG",
+"area": "Draft"
+},
+{
+"text": "Path to file converter",
+"tip": "",
+"page": "DWG",
+"area": "Draft"
+},
+{
+"text": "Advanced processing",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Allow FreeCAD to automatically download and update the DXF libraries",
+"tip": "If checked, FreeCAD is allowed to download and update the Python libraries required by the legacy importer. This can also be done manually by installing the 'dxf_library' addon from the Addon Manager.",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Anonymous blocks (*-blocks)",
+"tip": "If checked, anonymous blocks (whose names begin with *) will also be imported. These are often used for hatches and dimensions",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Appearance",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Automatic Update (Legacy Only)",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Create sketches",
+"tip": "If checked, the legacy importer will attempt to create Sketcher objects instead of Draft or Part objects. This overrides the 'Import As' setting",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Editable Draft objects (highest fidelity, slowest)",
+"tip": "Creates fully parametric Draft objects. Block definitions are imported as reusable objects (Part Compounds) and instances become `App::Link` objects, maintaining the block structure. Best for full int",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Editable Part primitives (high fidelity, slower)",
+"tip": "Creates parametric Part objects (e.g., Part::Line, Part::Circle). Block definitions are imported as reusable objects (Part Compounds) and instances become `App::Link` objects, maintaining the block st",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Export 3D objects as polyface meshes",
+"tip": "All objects containing faces will be exported as 3D polyface meshes",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Export Options",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Export TechDraw Views as blocks",
+"tip": "TechDraw Views will be exported as blocks. This might fail for post DXF R12 templates.",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Fused Part shapes (lowest fidelity, fastest)",
+"tip": "Merges all geometry per layer into a single, non-editable shape. Block structures are not preserved; their geometry becomes part of the layer's shape. Best for importing and viewing very large files w",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "General",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Global scaling factor",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Hatch boundaries",
+"tip": "If checked, the boundaries of hatch objects will be imported as closed wires. (Legacy importer only)",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Import",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Import As",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Import Settings",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Individual Part shapes (balanced, recommended)",
+"tip": "Creates a non-parametric shape for each DXF entity. Block definitions are imported as reusable objects (Part Compounds) and instances become `App::Link` objects, maintaining the block structure. Good ",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Join geometry",
+"tip": "If checked, the legacy importer will attempt to join coincident geometric objects into wires. This can be slow for large files. (Legacy importer only)",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Maximum spline segment",
+"tip": "",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Paper space objects",
+"tip": "If checked, entities from the paper space will also be imported. By default, only model space is imported",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Points",
+"tip": "If checked, point entities will be imported",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Project exported objects along current view direction",
+"tip": "Exported objects will be projected to reflect the current view direction",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Render polylines with width",
+"tip": "If checked, polylines that have a width property will be rendered as faces representing that width. (Legacy importer only)",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Show the importer dialog when importing a file",
+"tip": "If checked, this preferences dialog will be shown each time you import or export a DXF file.",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Texts and dimensions",
+"tip": "If checked, text, mtext, and dimension entities will be imported as Draft objects",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Treat ellipses and splines as polylines",
+"tip": "Ellipse export is poorly supported. Use this to export them as polylines instead.",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Use colors from the DXF file",
+"tip": "If checked, colors will be set as specified in the DXF file whenever possible. Otherwise, default FreeCAD colors are applied",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Use legacy exporter",
+"tip": "Use the legacy Python exporter. This exporter is more feature-complete but slower and requires an external library.",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Use legacy importer",
+"tip": "Use the legacy Python importer. This importer is more feature-complete but slower and requires an external library.",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Use standard font size for texts",
+"tip": "If checked, imported texts will get the standard Draft text size, instead of the size defined in the DXF document. (Legacy importer only)",
+"page": "DXF",
+"area": "Draft"
+},
+{
+"text": "Command Options",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Construction geometry color",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Construction group label",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Create Part primitives if possible",
+"tip": "If checked, Draft commands will create Part primitives instead of Draft objects. Note that this is not fully supported, and many objects will not be editable with Draft modification commands.",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Default working plane",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Edit node pick radius",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "General",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Include groups in layer list",
+"tip": "If checked, the layers drop-down list also includes groups. Objects can then automatically be added to groups as well.",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Internal precision level",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Keep face colors during downgrade/upgrade",
+"tip": "If checked, Draft Downgrade and Draft Upgrade will keep face colors. Only for the splitFaces and makeShell options.",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Keep face names during downgrade/upgrade",
+"tip": "If checked, Draft Downgrade and Draft Upgrade will keep face names. Only for the splitFaces and makeShell options.",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Label prefix for clones",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Maximum number of editable objects",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Mouse delay",
+"tip": "",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Select base objects after copying",
+"tip": "If checked, base objects, instead of created copies, are selected after copying",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Set focus on Length instead of X coordinate",
+"tip": "If checked, Length input, instead of the X coordinate, will have the initial focus. This allows indicating a direction and then type a distance.",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Show prompts in the Report View",
+"tip": "If checked, instructions are displayed in the Report View when using Draft commands",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Show working plane orientation",
+"tip": "If checked, a widget indicating the current working plane orientation appears when picking points",
+"page": "General",
+"area": "Draft"
+},
+{
+"text": "Alt modifier",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Always show the grid",
+"tip": "If checked, the grid will always be visible in new views. Use Draft ToggleGrid to change this for the active view.",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Always snap",
+"tip": "If checked, snapping is activated without the need to press the Snap modifier key",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Constrain modifier",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Grid",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Grid color",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Grid size",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Grid spacing",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Grid transparency",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Major lines every",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Show grid border",
+"tip": "If checked, an additional border is displayed around the grid, showing the main square size in the bottom left corner",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Show human figure",
+"tip": "If checked, the outline of a human figure is displayed at the bottom left corner of the grid. Only effective if \"Show grid border\" is enabled.",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Show the grid during commands",
+"tip": "If checked, the grid will be visible during commands in new views. Use Draft ToggleGrid to change this for the active view.",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Snap modifier",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Snap symbol color",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Snap symbol style",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Snapping and Modifier Keys",
+"tip": "",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Use colored axes",
+"tip": "If checked, the two main axes of the grid are colored red, green or blue if they match the X, Y or Z axis of the global coordinate system",
+"page": "Grid and Snapping",
+"area": "Draft"
+},
+{
+"text": "Add hold",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Close",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Continue",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Copy",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Cycle snap",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Decrease radius",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Exit",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Global",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "In-Command Shortcuts",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Increase radius",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Length",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Make face",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Only show the Draft Snap toolbar during commands",
+"tip": "If checked, the Draft Snap toolbar will only be visible during commands",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Recenter",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Relative",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Restrict X",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Restrict Y",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Restrict Z",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Select edge",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Set working plane",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Show the Draft Scale Widget in the Draft Workbench",
+"tip": "If checked, the Draft Scale Widget is displayed in the Draft Status Bar",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Show the Draft Snap Widget in the Draft Workbench",
+"tip": "If checked, the Draft Snap Widget is displayed in the Draft Status Bar",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Snap",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Subelement mode",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "UI Options",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Undo",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Wipe",
+"tip": "",
+"page": "Interface",
+"area": "Draft"
+},
+{
+"text": "Import OCA areas",
+"tip": "Imports the areas (3D faces) too",
+"page": "OCA",
+"area": "Draft"
+},
+{
+"text": "Import Options",
+"tip": "",
+"page": "OCA",
+"area": "Draft"
+},
+{
+"text": "Add wires for invalid faces",
+"tip": "If face generation results in a degenerated face, a raw wire from the original shape is added",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Apply Cuts",
+"tip": "Check to cut shapes according to the even/odd SVG fill rule",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Convert white line color to black",
+"tip": "All white lines will appear in black in the SVG for better readability against white backgrounds",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Coordinate precision (crucial for detecting closed paths)",
+"tip": "",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Disable unit scaling",
+"tip": "If checked, no unit conversion will occur. One unit in the SVG file will be interpreted as one millimeter.",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Export Options",
+"tip": "",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Export style",
+"tip": "",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Import Options",
+"tip": "",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Import style",
+"tip": "",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Maximum segment length for discretized arcs",
+"tip": "",
+"page": "SVG",
+"area": "Draft"
+},
+{
+"text": "Annotations",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Dimension Details",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Dimension line overshoot",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "End arrow size",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "End arrow type",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Extension line length",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Extension line overshoot",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Feet separator",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Font name",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Font size",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Line and arrow color",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Line spacing factor",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Line width",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Lines and Arrows",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Number of decimals",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Scale multiplier",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Show dimension line",
+"tip": "If checked, the dimension line is displayed by default",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Show unit",
+"tip": "If checked, a unit symbol is added to dimension texts by default",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Start arrow size",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Start arrow type",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Text color",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Text spacing",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Texts",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Unit override",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Units",
+"tip": "",
+"page": "Texts and Dimensions",
+"area": "Draft"
+},
+{
+"text": "Additional SVG pattern location",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "Dashdot line definition",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "Dashed line definition",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "Dotted line definition",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "Drawing View Line Definitions",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "SVG Patterns",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "SVG pattern size",
+"tip": "",
+"page": "Visual",
+"area": "Draft"
+},
+{
+"text": "3D Output, unchecked for 2D",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Analysis Defaults",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Analysis type (transient or steady state)",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Beam, shell element 3D output format",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "CalculiX",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "CalculiX path",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Eigenmode number",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "External editor",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Frequency Defaults",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "High frequency limit",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Initial time increment",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Input file editor",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Input file splitting",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Low frequency limit",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Matrix solver",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Maximum number of increments",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Maximum time increment",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Minimum time increment",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Non-linear geometry",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Number of CPUs to use",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Pipeline only",
+"tip": "Load results as pipeline instead of CCX_Results objects. After unchecking this option, the CalculiX command behaves like SolverCalculiXCcxTools",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Result format",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Result object",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Solver Defaults",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Split writing of *.inp",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Thermo-Mechanical Defaults",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Time incrementation control parameter",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Time period",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Type",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Use binary format",
+"tip": "Save result in binary format. Only takes effect if 'Pipeline only' is enabled",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Use internal editor for *.inp files",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Use non ccx defaults",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Use non-linear geometry",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Use steady state",
+"tip": "",
+"page": "CalculiX",
+"area": "Fem"
+},
+{
+"text": "Elmer Binaries",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "ElmerGrid path",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "ElmerSolver path",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Number of tasks",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Options",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Results",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Save geometry IDs",
+"tip": "Save the index of geometric entities",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Threads per task",
+"tip": "",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Use binary format",
+"tip": "Save result in binary format",
+"page": "Elmer",
+"area": "Fem"
+},
+{
+"text": "Beside .FCStd file",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Create a directory in the same folder in which the FCStd file of the document is located. Use Subfolder for each solver ",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Create mesh groups for analysis reference shapes (experimental)",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Default solver",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Defaults",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Hide analysis features when opening result dialog",
+"tip": "All analysis features are hidden in the model view when the results dialog is opened",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Keep results on calculation re-run",
+"tip": "Existing result objects will be kept otherwise overwritten by new solver run",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Let the application manage (create, delete) the working directories for all solvers. Use temporary directories.",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Mesh",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Overwrite solver working directory with the directory chosen above",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Path",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Restore result dialog settings",
+"tip": "The results dialog will be opened with the last used dialog settings",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Results",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Temporary directories",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Use custom directory",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Use directory set below. Create own subdirectory for every solver. Name directory after the solver label prefixed with t",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Working Directory for Solving Analysis and Gmsh Meshing",
+"tip": "",
+"page": "General",
+"area": "Fem"
+},
+{
+"text": "Gmsh Binary",
+"tip": "",
+"page": "Gmsh",
+"area": "Fem"
+},
+{
+"text": "Gmsh path",
+"tip": "",
+"page": "Gmsh",
+"area": "Fem"
+},
+{
+"text": "Log verbosity",
+"tip": "",
+"page": "Gmsh",
+"area": "Fem"
+},
+{
+"text": "Number of threads",
+"tip": "",
+"page": "Gmsh",
+"area": "Fem"
+},
+{
+"text": "Options",
+"tip": "",
+"page": "Gmsh",
+"area": "Fem"
+},
+{
+"text": "Export",
+"tip": "",
+"page": "INP",
+"area": "Fem"
+},
+{
+"text": "Export group data",
+"tip": "",
+"page": "INP",
+"area": "Fem"
+},
+{
+"text": "Which mesh elements to export",
+"tip": "",
+"page": "INP",
+"area": "Fem"
+},
+{
+"text": "Comments",
+"tip": "",
+"page": "Mystran",
+"area": "Fem"
+},
+{
+"text": "Mystran Binary",
+"tip": "",
+"page": "Mystran",
+"area": "Fem"
+},
+{
+"text": "Mystran path",
+"tip": "",
+"page": "Mystran",
+"area": "Fem"
+},
+{
+"text": "Write comments to input file",
+"tip": "",
+"page": "Mystran",
+"area": "Fem"
+},
+{
+"text": "Legacy Netgen",
+"tip": "Use legacy Netgen object implementation",
+"page": "Netgen",
+"area": "Fem"
+},
+{
+"text": "Log verbosity",
+"tip": "",
+"page": "Netgen",
+"area": "Fem"
+},
+{
+"text": "Netgen",
+"tip": "",
+"page": "Netgen",
+"area": "Fem"
+},
+{
+"text": "Number of threads",
+"tip": "",
+"page": "Netgen",
+"area": "Fem"
+},
+{
+"text": "Options",
+"tip": "",
+"page": "Netgen",
+"area": "Fem"
+},
+{
+"text": "Python path",
+"tip": "",
+"page": "Netgen",
+"area": "Fem"
+},
+{
+"text": "Export",
+"tip": "",
+"page": "VTK",
+"area": "Fem"
+},
+{
+"text": "Import",
+"tip": "",
+"page": "VTK",
+"area": "Fem"
+},
+{
+"text": "Mesh elements to export",
+"tip": "",
+"page": "VTK",
+"area": "Fem"
+},
+{
+"text": "Which object to import into",
+"tip": "",
+"page": "VTK",
+"area": "Fem"
+},
+{
+"text": "Max places in stiffness matrix",
+"tip": "",
+"page": "Z88",
+"area": "Fem"
+},
+{
+"text": "Maximum places in coincidence vector",
+"tip": "",
+"page": "Z88",
+"area": "Fem"
+},
+{
+"text": "Solver Settings",
+"tip": "",
+"page": "Z88",
+"area": "Fem"
+},
+{
+"text": "Solver method",
+"tip": "",
+"page": "Z88",
+"area": "Fem"
+},
+{
+"text": "Z88 Binary",
+"tip": "",
+"page": "Z88",
+"area": "Fem"
+},
+{
+"text": "z88r path",
+"tip": "",
+"page": "Z88",
+"area": "Fem"
+},
+{
+"text": "Anti-aliasing",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Camera Type",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Datum size",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Eye to eye distance for stereo modes",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "General",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Letter color",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Marker size",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Orthographic rendering",
+"tip": "Objects will be in orthographic projection",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Perspective rendering",
+"tip": "Objects will appear in a perspective projection",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Relative size",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Render cache",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Rendering",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Show axis cross by default",
+"tip": "Axis cross will be shown by default at file opening or creation",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Show coordinate system in the corner",
+"tip": "Main coordinate system will always be shown in lower right corner within opened files",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Show counter of frames per second",
+"tip": "Time needed for last operation and resulting frame rate will be shown at the lower left corner in opened files",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Transparent objects",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Use OpenGL VBO (Vertex Buffer Object)",
+"tip": "If selected, Vertex Buffer Objects (VBO) will be used. A VBO is an OpenGL feature that provides methods for uploading vertex data (position, normal vector, color, etc.) to the graphics card. VBOs offe",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Use software OpenGL",
+"tip": "This option is useful for troubleshooting graphics card and driver problems. Changing this option requires a restart of the application.",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "X-axis color",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Y-axis color",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Z-axis color",
+"tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Default workbench",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Remember active workbench by tab",
+"tip": "Remembers which workbench is active for each tab of the viewport",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Selectors",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Startup",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Workbench selector items style",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Workbench selector type",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Workbenches",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "You can reorder workbenches by drag and drop or sort them by right-clicking on any workbench and select Sort alphabetica",
+"tip": "",
+"page": "Available Workbenches",
+"area": "General"
+},
+{
+"text": "Active container object",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Background Color",
+"tip": "Background color for the model view",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Bottom",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Color Bar",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Label text color",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Label text size",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Linear gradient",
+"tip": "Background will have the selected color gradient",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Middle",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Middle color",
+"tip": "Color gradient will get the selected color as middle color",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Object being edited",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Radial gradient",
+"tip": "Background will have the selected color gradient",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Simple color",
+"tip": "Background will have the selected color",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Top",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Tree View",
+"tip": "",
+"page": "Colors",
+"area": "General"
+},
+{
+"text": "Add program icon to the generated thumbnail",
+"tip": "The program icon will be added to the thumbnail",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Add thumbnail to project file when saving",
+"tip": "A thumbnail will be stored when document is saved",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Allow aborting recomputation",
+"tip": "Allow user aborting document recomputation by pressing Esc. This feature may slightly increase recomputation time.",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Allow duplicate object labels in one document",
+"tip": "Allow objects to have same label",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Author name",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Authoring and License",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Company",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Create new document at start up",
+"tip": "The application will create a new document when started",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Date format",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Default license",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Disable partial loading of external linked objects",
+"tip": "Enable partial loading of external linked documents. Then only referenced objects and their dependencies will be loaded when a linked document is auto-opened together with the main document. A partial",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Discard saved transaction after saving document",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Document Objects",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Document save compression level (0 = none, 9 = highest, 7 = default)",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "General",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "License URL",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Maximum number of backup files to keep when resaving document",
+"tip": "How many backup files will be kept when saving document",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Maximum undo/redo steps",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Run AutoRecovery at startup",
+"tip": "If there is a recovery file available, the application will automatically run a file recovery when it is started",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Save auto-recovery information every",
+"tip": "How often a recovery file is written",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Saving transactions (Auto-save)",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Set on save",
+"tip": "The field 'Last modified by' will be set to specified author when saving the file",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Show format documentation",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Size",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Storage",
+"tip": "",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Suppress older version warning on save",
+"tip": "Suppresses the version mismatch warning when saving files created with an older FreeCAD version",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Use date and FCBak extension",
+"tip": "Backup files will get extension '.FCbak' and file names get date suffix according to the specified format",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Using undo/redo in documents",
+"tip": "All changes in documents are stored so that they can be undone/redone",
+"page": "Document",
+"area": "General"
+},
+{
+"text": "Color",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Display Items",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Enable block cursor",
+"tip": "The cursor shape will be a block",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Enable folding",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Enable line numbers",
+"tip": "Code lines will be numbered",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Family",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Indent size",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Indentation",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Insert spaces",
+"tip": "Pressing will insert amount of defined indent size",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Keep tabs",
+"tip": "Pressing will insert a tabulator with defined tab size",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Options",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Preview",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Size",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Tab size",
+"tip": "",
+"page": "Editor",
+"area": "General"
+},
+{
+"text": "Activate overlay panels",
+"tip": "Activate overlay handling of docked panels",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Application",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Console",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Default unit system",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Enable block cursor",
+"tip": "The cursor shape will be a block",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Enable cursor blinking",
+"tip": "The text cursor will be blinking",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Enable splash screen at start-up",
+"tip": "A splash screen is a small loading window that is shown when FreeCAD is launching. If this option is checked, FreeCAD will display the splash screen.",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Enable tiled background",
+"tip": "Background of the main window (when no document is opened) will consist of tiles of an image.",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Enable word wrap",
+"tip": "Words will be wrapped when they exceed available horizontal space in Python console",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Ignore project unit system and use default",
+"tip": "Ignores document unit systems",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Language",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Language and Number Format",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Looking for more themes? You can obtain them using the Addon Manager .",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Minimum fractional inch",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Number format",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Number of decimals",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Other",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Path to external Python executable (optional)",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Preference Packs",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Python profiler interval (ms)",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Save history",
+"tip": "Saves Python history across sessions",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Size of recent file list",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Size of toolbar icons",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Substitute decimal separator",
+"tip": "Substitutes numerical keypad decimal separator with locale separator, except in the Python console and the macro editor where a dot/period will always be printed",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Theme",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Tree View and Property View mode",
+"tip": "",
+"page": "General",
+"area": "General"
+},
+{
+"text": "Ambient light",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Backlight",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Color",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Fill light",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Horizontal angle",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Intensity",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Light Sources",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Main light",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Preview",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "Vertical angle",
+"tip": "",
+"page": "Light Sources",
+"area": "General"
+},
+{
+"text": "General Macro Settings",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Gui Commands",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Keyboard Modifiers",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Keyboard shortcut count",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Log all commands issued by menus to file",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Logging Commands",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Macro Path",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Macro Recording Settings",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Recent Macros Menu",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Record GUI commands",
+"tip": "Recorded macros will also contain user interface commands",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Record as comment",
+"tip": "Recorded macros will also contain user interface commands as comments",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Run macros in local environment",
+"tip": "Variables defined by macros are created as local variables",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Show script commands in Python console",
+"tip": "Commands executed by macro scripts are shown in Python console",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "Size of recent macro list",
+"tip": "",
+"page": "Macro",
+"area": "General"
+},
+{
+"text": "3D navigation",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Animation duration",
+"tip": "Duration of navigation animations that have a fixed duration",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Animations",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Camera zoom",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Clarify Selection",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Color",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Color and transparency",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Corner",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Cube size",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Default camera orientation",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Disable touchscreen tilt gesture",
+"tip": "Prevents view tilting when pinch-zooming. Affects only Gesture navigation style. Mouse tilting is not disabled by this setting.",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Enable long press clarify selection",
+"tip": "Enable Clarify Selection on long press of left mouse button. When enabled, holding left mouse button shows a menu to select overlapping objects. Some navigation styles (OpenInventor, Gesture, OpenSCAD",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Enable spinning animations",
+"tip": "Enable spinning animations that are used in some navigation styles after dragging",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Enable support of legacy SpaceMouse devices",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Font name",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Invert zoom",
+"tip": "Direction of zoom operations will be inverted",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Long press timeout",
+"tip": "Time in seconds to hold left mouse button before showing clarify selection menu",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Navigation",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Navigation Cube",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Opacity when inactive",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Orbit style",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Rotate to nearest",
+"tip": "Rotates to nearest possible state when clicking a face of the cube",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Rotation Center Indicator",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Rotation mode",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Space Mouse",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Sphere size",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Steps by turn",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Zoom at cursor",
+"tip": "Zoom operations will be performed at position of mouse pointer",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Zoom step",
+"tip": "",
+"page": "Navigation",
+"area": "General"
+},
+{
+"text": "Additional Data Sources",
+"tip": "Additional notification sources to show in the notification area.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Auto-remove user notifications",
+"tip": "Removes the user notifications from the notifications list after the maximum duration for pop-up notifications has lapsed.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Debug errors",
+"tip": "Errors intended for developers will appear in the notification area.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Debug warnings",
+"tip": "Warnings intended for developers will appear in the notification area.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Do not show when window is inactive",
+"tip": "Prevent pop-up notifications from appearing when the FreeCAD window is not the active window.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Enable Notification Area",
+"tip": "If checked, show the notification area in the status bar: a button with the current notification count, which can expand the detailed notification list. Optionally, with additional pop-up notification",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Enable Pop-Up Notifications",
+"tip": "Enables non-intrusive pop-up notifications above the status bar notification area. Pop-up notifications can be manually dismissed by clicking on them, and also automatically dismissed by specifying a ",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Hide when other window is activated",
+"tip": "Any open pop-up notifications will disappear when another window is activated.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Maximum concurrent notification count",
+"tip": "",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Maximum duration",
+"tip": "",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Maximum notification count",
+"tip": "",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Minimum duration",
+"tip": "",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Notification bubble width",
+"tip": "",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "Notifications List",
+"tip": "Controls the amount of notifications to show in the list.",
+"page": "Notification Area",
+"area": "General"
+},
+{
+"text": "PDF Export",
+"tip": "",
+"page": "PDF",
+"area": "General"
+},
+{
+"text": "PDF version",
+"tip": "",
+"page": "PDF",
+"area": "General"
+},
+{
+"text": "Colors",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Errors",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Include a timecode for each entry",
+"tip": "Include a timecode for each report",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Log messages",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Normal messages",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Output",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Python Interpreter",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Record error messages",
+"tip": "Error messages will be recorded",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Record log messages",
+"tip": "Log messages will be recorded",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Record normal messages",
+"tip": "Normal messages will be recorded",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Record warnings",
+"tip": "Warnings will be recorded",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Redirect internal Python errors to report view",
+"tip": "Internal Python error messages will be redirected from Python console to Report view panel",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Redirect internal Python output to report view",
+"tip": "Internal Python output will be redirected from Python console to Report view panel",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Show report view on error",
+"tip": "When an error has occurred, the Report View dialog becomes visible on-screen while displaying the error",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Show report view on log message",
+"tip": "When a log message has occurred, the Report View dialog becomes visible on-screen while displaying the log message",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Show report view on normal message",
+"tip": "When a normal message has occurred, the Report View dialog becomes visible on-screen while displaying the message",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Show report view on warning",
+"tip": "When a warning has occurred, the Report View dialog becomes visible on-screen while displaying the warning",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Warnings",
+"tip": "",
+"page": "Report View",
+"area": "General"
+},
+{
+"text": "Add checkboxes for selection in document tree",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Auto expand tree item when the corresponding object is selected in the 3D view",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Auto switch to the 3D view containing the selected item",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Enable preselection",
+"tip": "Enable preselection, highlighted with specified color",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Enable selection",
+"tip": "Enable selection, highlighted with specified color",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Preselect the object in the 3D view when hovering the cursor over the tree item",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Radius",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Record selection in tree view in order to go back/forward using navigation button",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Tree Selection Behavior",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Viewport Selection Behavior",
+"tip": "",
+"page": "Selection",
+"area": "General"
+},
+{
+"text": "Accent color 1",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Accent color 2",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Accent color 3",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Automatically hide in non-3D view",
+"tip": "Automatically hide overlaid dock panels when in non 3D view (e.g. TechDraw or Spreadsheet)",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Automatically pass through of the mouse cursor",
+"tip": "Auto mouse click through transparent part of dock overlay.",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Automatically pass through of the mouse wheel",
+"tip": "Automatically passes mouse wheel events through the transparent areas of an overlay panel",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Customize the current theme. The offered settings are optional for theme developers so they may or may not have an effec",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Font size",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hide description",
+"tip": "Hide column with object description in tree view.",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hide header",
+"tip": "Hide header with column names from the tree view.",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hide internal names",
+"tip": "Hide extra tree view column for internal names",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hide property view scroll bar",
+"tip": "Hide property view scroll bar in dock overlay",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hide scroll bar",
+"tip": "Hide scroll bar from the tree view, scrolling will still be possible using mouse wheel.",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hide tab bar",
+"tip": "Hide tab bar in dock overlay",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Hint show tab bar",
+"tip": "Show tab bar on mouse over when auto hide",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Icon size",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Overlay",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Overlay style sheet",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Resizable columns",
+"tip": "Allow tree view columns to be manually resized.",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Show visibility icon",
+"tip": "Displays an eye icon in front of the tree view items, showing their visibility status. When clicked the visibility is toggled.",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Style sheet (advanced)",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Suggest actions in the task view based on the selection",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Suggested Actions",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Theme Customization",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Tree View",
+"tip": "",
+"page": "UI",
+"area": "General"
+},
+{
+"text": "Custom location",
+"tip": "Set this to a custom URL or the folder where the help files are located. You can easily download the documentation for offline use by using the Addon Manager and installing the \"offline-documentation\"",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Custom stylesheet",
+"tip": "",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Display",
+"tip": "",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "FreeCAD Wiki (online)",
+"tip": "The documentation pages will be fetched from the official FreeCADwiki at https://wiki.freecad.org",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "GitHub (online)",
+"tip": "Fetches the documentation from pages rendered on GitHub. This is currently not available.",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "In a FreeCAD tab",
+"tip": "The documentation will open in a new tab inside the FreeCAD interface. This requires the PySide QtWebengineWidgets component.",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "In a separate, embeddable dialog",
+"tip": "Documentation opens in a dockable dialog within FreeCAD, allowing simultaneous work in the 3D view. Requires the PySide QtWebengineWidgets component.",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "In the default web browser",
+"tip": "The documentation will open in the default web browser",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Markdown version (online)",
+"tip": "The documentation pages will be fetched from an automatic Markdown conversion of the FreeCAD wiki,hosted on FreeCAD's GitHub account. This can be styled with a custom stylesheet below and can look nic",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Note: if PySide Web components are not found on the system, help pages will open in the default web browser regardless o",
+"tip": "",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Options",
+"tip": "",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Source",
+"tip": "",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "Translation suffix",
+"tip": "",
+"page": "Help",
+"area": "Help"
+},
+{
+"text": "AP 203",
+"tip": "Please select the STEP output format your are willing to get",
+"page": "(h)STEP",
+"area": "Import"
+},
+{
+"text": "AP 214",
+"tip": "",
+"page": "(h)STEP",
+"area": "Import"
+},
+{
+"text": "Enable STEP Compound merge",
+"tip": "If this is checked, Compound merge will be done during file reading (slower but higher details).",
+"page": "(h)STEP",
+"area": "Import"
+},
+{
+"text": "Export options",
+"tip": "",
+"page": "(h)STEP",
+"area": "Import"
+},
+{
+"text": "Import options",
+"tip": "",
+"page": "(h)STEP",
+"area": "Import"
+},
+{
+"text": "Cache",
+"tip": "",
+"page": "External Interface",
+"area": "Material"
+},
+{
+"text": "External interface",
+"tip": "",
+"page": "External Interface",
+"area": "Material"
+},
+{
+"text": "Hit rate",
+"tip": "",
+"page": "External Interface",
+"area": "Material"
+},
+{
+"text": "Material cache size",
+"tip": "",
+"page": "External Interface",
+"area": "Material"
+},
+{
+"text": "Model cache size",
+"tip": "",
+"page": "External Interface",
+"area": "Material"
+},
+{
+"text": "Use External Interface",
+"tip": "",
+"page": "External Interface",
+"area": "Material"
+},
+{
+"text": "Card Resources",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Card Sorting and Duplicates",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Delete card duplicates",
+"tip": "Duplicate cards will be deleted from the displayed material card list",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Material Editor",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Material Selector",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Show empty folders",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Show empty libraries",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Show favorites",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Show legacy files",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Show recent",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Sort by resources",
+"tip": "Material cards appear sorted by their resources (locations). If unchecked, they will be sorted by their name.",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Use built-in materials",
+"tip": "The cards built-in to FreeCAD will be listed as available",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Use materials from external workbenches",
+"tip": "Use materials added by external workbenches",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Use materials from the Materials preference directory",
+"tip": "Cards from FreeCAD’s preferences directory are also listed as available",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Use materials from user-defined directory",
+"tip": "Material cards from the specified directory will also be listed as available",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "User directory",
+"tip": "",
+"page": "General",
+"area": "Material"
+},
+{
+"text": "Background color",
+"tip": "",
+"page": "Appearance",
+"area": "Measure"
+},
+{
+"text": "Default Property Values",
+"tip": "",
+"page": "Appearance",
+"area": "Measure"
+},
+{
+"text": "Line color",
+"tip": "",
+"page": "Appearance",
+"area": "Measure"
+},
+{
+"text": "Text color",
+"tip": "",
+"page": "Appearance",
+"area": "Measure"
+},
+{
+"text": "Text size",
+"tip": "",
+"page": "Appearance",
+"area": "Measure"
+},
+{
+"text": "Asymptote",
+"tip": "",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Export",
+"tip": "",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Export 3MF files as model type",
+"tip": "Always export mesh as model type in 3MF format even if not a solid",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Export AMF files using compression",
+"tip": "ZIP compression is used when writing a mesh file in AMF format",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Height",
+"tip": "",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Maximum mesh deviation",
+"tip": "Deviation of tessellation to the actual surface",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Width",
+"tip": "",
+"page": "Mesh Formats",
+"area": "Mesh"
+},
+{
+"text": "Backface color",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Crease angle",
+"tip": "This is the smallest angle between two faces where normals get calculated to do flat shading. If the angle between the normals of two neighbouring faces is less than the crease angle, the faces will b",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Default Appearance for New Meshes",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Default line color",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Default mesh color",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Define normal per vertex",
+"tip": "If this option is set Phong shading is used, otherwise flat shading. Shading defines the appearance of surfaces. With flat shading the surface normals are not defined per vertex that leads to an unrea",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Hint Defining the normals per vertex is also called Phong shading while defining the normals per face is called Flat sha",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Line transparency",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Mesh transparency",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Show bounding-box for highlighted or selected meshes",
+"tip": "A bounding box will be displayed",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Smoothing",
+"tip": "",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Two-side rendering",
+"tip": "The bottom side of the surface will be rendered the same way as the top side. If not checked, it depends on the option \"Enable backlight color\" (preferences section Display -> 3D View). Either the bac",
+"page": "Mesh View",
+"area": "Mesh"
+},
+{
+"text": "Convexity",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "General OpenSCAD Settings",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Maximum fragment size",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Maximum number of faces for polygons (fn)",
+"tip": "The maximum number of faces of a polygon, prism or frustum. If fn is greater than this value the object is considered to be a circular. Set to 0 for no limit",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Mesh fallback",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "OpenSCAD Export",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "OpenSCAD Import",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "OpenSCAD executable",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Print debug information in the Console",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Send to OpenSCAD via",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Transfer directory",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Triangulation settings",
+"tip": "",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Use Multmatrix Feature",
+"tip": "If this is checked, Multmatrix Object will be Parametric",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Use ViewProviders in Tree View",
+"tip": "If this is checked, Features will claim their children in the tree view",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "angle (fa)",
+"tip": "Minimum angle for a fragment",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "deflection",
+"tip": "Deflection",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "size (fs)",
+"tip": "Minimum size of a fragment",
+"page": "General",
+"area": "OpenSCAD"
+},
+{
+"text": "Add name of base object",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Allow multiple solids in Part Design bodies by default",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Automatically check model after boolean operation",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Automatically refine model after applying operations",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Automatically refine model after boolean operation",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Default profile type for holes",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Disable recompute while dragging",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Experimental",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Features Settings",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Highlight the profile used to create features",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Model Settings",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Object Naming",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Preview",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Show final result by default when editing features",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Show interactive draggers when editing features",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Show transparent preview overlay by default when editing features",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Switch to task panel when entering Part Design workbench",
+"tip": "Automatically switch to the task panel when the Part Design workbench is activated",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "These settings are experimental and may result in decreased stability, problems and undefined behaviors",
+"tip": "",
+"page": "General",
+"area": "Part"
+},
+{
+"text": "Export",
+"tip": "",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "Export invisible objects",
+"tip": "Uncheck this to skip invisible objects when exporting, which is useful for CADs that do not support invisibility STEP styling.",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "Export single object placement",
+"tip": "Keeps the placement information when exporting a single object. When importing back the STEP file, the placement will be encoded into the shape geometry, instead of keeping it inside the placement pro",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "Scheme",
+"tip": "",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "Units for export of STEP",
+"tip": "",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "Use legacy export function",
+"tip": "",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "Write out curves in parametric space of surface",
+"tip": "",
+"page": "STEP Export Settings",
+"area": "Part"
+},
+{
+"text": "CodePage",
+"tip": "",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Enable STEP compound merge",
+"tip": "Merges compounds during file reading (slower but higher details)",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Expand compound shape",
+"tip": "Expand compound shape with multiple solids",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Ignore instance names",
+"tip": "Do not use instance names. Useful for some legacy STEP files with non-meaningful auto-generated instance names.",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Import",
+"tip": "",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Import invisible objects",
+"tip": "Select this to import invisible objects",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Mode",
+"tip": "",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Reduce number of objects",
+"tip": "Reduce number of objects using Link array",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Show progress bar when importing",
+"tip": "Show progress bar when importing",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Use LinkGroup",
+"tip": "Select this to use App::LinkGroup as group container, or else use App::Part",
+"page": "STEP Import Settings",
+"area": "Part"
+},
+{
+"text": "Ambient shape color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Bounding box color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Bounding box font size",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Default Annotation Color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Default Shape Appearance Properties",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Emissive shape color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Line color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Line width",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Random",
+"tip": "Use random color instead",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Shape color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Shape shininess",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Shape transparency",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Specular shape color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Text color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Two-side rendering",
+"tip": "The bottom side of the surface will be rendered the same way as the top. If not checked, it depends on the option \"Backlight color\" (preferences section Display -> 3D View); either the backlight color",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Vertex color",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Vertex size",
+"tip": "",
+"page": "Shape Appearance",
+"area": "Part"
+},
+{
+"text": "Maximum angular deflection",
+"tip": "",
+"page": "Shape View",
+"area": "Part"
+},
+{
+"text": "Maximum deviation depending on the model bounding box",
+"tip": "Defines the deviation of tessellation to the actual surface",
+"page": "Shape View",
+"area": "Part"
+},
+{
+"text": "Tessellation",
+"tip": "",
+"page": "Shape View",
+"area": "Part"
+},
+{
+"text": "Colors Outside Sketcher",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Constrained",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Constraint Colors",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Constraint symbols",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Construction geometry",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Coordinate text",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Creating line",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Cursor crosshair",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Deactivated constraints",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Dimensional constraints",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Edge",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Expression dependent constraint",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "External construction geometry",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "External defining geometry",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Face",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Fully constrained sketch",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Geometric Element Colors",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Geometry",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Internal alignment geometry",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Invalid sketch",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Line Type",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Reference constraints",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Unconstrained",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Vertex",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Width",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Working Colors",
+"tip": "",
+"page": "Appearance",
+"area": "Sketcher"
+},
+{
+"text": "Ask for value after creating a dimensional constraint",
+"tip": "Opens a dialog to input a value for new dimensional constraints after creation",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Constraint creation \"Continue Mode\"",
+"tip": "Keeps the current Sketcher constraint tool active after creating geometry",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Constraint symbol size",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Font size",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Force orthographic camera when entering edit",
+"tip": "Forces the camera to an orthographic view when editing a sketch. Works only when \"Restore camera position after editing\" is enabled.",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Geometry creation \"Continue Mode\"",
+"tip": "Keeps the current Sketcher tool active after creating geometry",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Hide all objects that depend on the sketch",
+"tip": "Hides all object features that depend on the opened sketch",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Hide base length units for supported unit systems",
+"tip": "Base length units will not be displayed in constraints or cursor coordinates. Supports all unit systems except 'US customary' and 'Building US/Euro'.",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Note: these settings are defaults applied to new sketches. The behavior is remembered for each sketch individually as pr",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Open sketch in section view mode",
+"tip": "Opens a sketch in section view mode, showing only objects behind the sketch plane",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Restore camera position after editing",
+"tip": "Restores the camera position after closing the sketch",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Segments per geometry",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Show coordinates next to the cursor while editing",
+"tip": "Shows cursor position coordinates next to the cursor while editing a sketch",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Show dimensional constraint name with format",
+"tip": "Shows names of dimensional constraints, if they exist",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Show objects that the sketch is attached to",
+"tip": "Shows objects the opened sketch is attached to",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Show objects used for external geometry",
+"tip": "Shows source objects which are used for external geometry in the opened sketch",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Sketch Editing",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Use system decimals setting for cursor coordinates",
+"tip": "Cursor coordinates will use the system decimals setting instead of the short form",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "View scale ratio",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Visibility Automation",
+"tip": "",
+"page": "Display",
+"area": "Sketcher"
+},
+{
+"text": "Always add external geometry as construction",
+"tip": "Always adds external geometry as construction geometry. Otherwise, it is added according to the current construction mode.",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Auto remove redundant constraints",
+"tip": "Automatically removes newly added redundant constraints",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Dimension Constraint",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Dimension tool diameter/radius mode",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Dimensioning constraints",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Dragging Performance",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Esc key can leave sketch edit mode",
+"tip": "Allows to leave the sketch edit mode by pressing the Esc key",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "General",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Generate internal faces",
+"tip": "Closed loops will automatically generate internal faces which are selectable to be used with other tools",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Group the polyline and line commands",
+"tip": "Shows a command group button that contains both the polyline and line commands. Otherwise, each command has its own separate button.",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Improve solving while dragging",
+"tip": "Special solver algorithm will be used while dragging sketch elements. Requires to re-enter edit mode to take effect.",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Notify about automatic constraint substitutions",
+"tip": "Notifies about automatic constraint substitutions",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "On-view-parameters (OVP)",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Scale upon first constraint",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Show section 'Advanced solver control'",
+"tip": "Displays the additional section 'Advanced Solver Controls' to adjust solver settings in the task view",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Task Panel Widgets",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Tool Parameters",
+"tip": "",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Unified tool for automatic horizontal/vertical constraints",
+"tip": "Unifies the horizontal and vertical constraints to an automatic command",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Unify coincident and point-on-object constraints",
+"tip": "Unifies the coincident and point-on-object constraints in a single tool",
+"page": "General",
+"area": "Sketcher"
+},
+{
+"text": "Grid",
+"tip": "Displays a grid in the active sketch",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Grid Display",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Grid Settings",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Grid auto-spacing",
+"tip": "Automatically adapts grid spacing based on the viewer dimensions",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Grid spacing",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Line color",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Line pattern",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Line width",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Major Grid Lines",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Major grid line interval",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Minor Grid Lines",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Pixel size threshold",
+"tip": "",
+"page": "Grid",
+"area": "Sketcher"
+},
+{
+"text": "Default zoom level",
+"tip": "",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Delimiter character",
+"tip": "",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Display Settings",
+"tip": "",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Escape character",
+"tip": "",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Import/Export Settings",
+"tip": "",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Quote character",
+"tip": "",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Show alias in cell with format",
+"tip": "Uses the custom presentation to display cell string",
+"page": "Spreadsheet",
+"area": "Spreadsheet"
+},
+{
+"text": "Close start page after loading",
+"tip": "",
+"page": "General",
+"area": "Start"
+},
+{
+"text": "Contents",
+"tip": "",
+"page": "General",
+"area": "Start"
+},
+{
+"text": "Options",
+"tip": "",
+"page": "General",
+"area": "Start"
+},
+{
+"text": "Show additional folder contents",
+"tip": "",
+"page": "General",
+"area": "Start"
+},
+{
+"text": "Show examples folder contents",
+"tip": "",
+"page": "General",
+"area": "Start"
+},
+{
+"text": "Show only FreeCAD files in additional folder",
+"tip": "",
+"page": "General",
+"area": "Start"
+},
+{
+"text": "Advanced",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Allow crazy edges",
+"tip": "Include edges with unexpected geometry (zero length etc.) in results",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Alt",
+"tip": "Check this box to include the Alt key in the modifiers.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Auto-correct dimension references",
+"tip": "If checked, the system will attempt to automatically correct dimension references when the model changes.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Balloon drag",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Behaviour Overrides",
+"tip": "Choose non-conflicting key bindings as some combinations of OS and navigation style key bindings may conflict with the default modifier keys for balloon dragging and view snapping override.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Control",
+"tip": "Check this box to include the Control key in the modifiers.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Debug bad shape",
+"tip": "If checked, shapes that fail validation will be saved as BREP files for later analysis.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Debug detail",
+"tip": "Dump intermediate results during detail view processing",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Debug section",
+"tip": "Dump intermediate results during section view processing",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Detect faces",
+"tip": "If checked, TechDraw will attempt to build faces using the line segments returned by the hidden line removal algorithm. Faces must be detected in order to use hatching, but there can be a performance ",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Edge fuzz",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Fuse before section",
+"tip": "Perform a fuse operation on input shapes before section view processing",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Mark fuzz",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Max SVG hatch tiles",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Maximum PAT hatch segments",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Meta",
+"tip": "Check this box to include the Meta/Start/Super key in the modifiers.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Overlap edges scrub passes",
+"tip": "",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Report progress",
+"tip": "Issue progress messages while building view geometry",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Shift",
+"tip": "Check this box to include the Shift key in the modifiers.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Show section edges",
+"tip": "Highlights border of section cut in section views",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Switch workbench on click",
+"tip": "If this box is checked, double-clicking on a page in the tree will automatically switch to TechDraw and the page will be made visible.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Use default",
+"tip": "Check this box to use the default modifier keys. Uncheck this box to set a different key combination.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Use new face finder algorithm",
+"tip": "If checked, FreeCAD will use the new face finder algorithm. If not checked, FreeCAD will use the legacy face finder algorithm.",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Validate shapes",
+"tip": "If checked, input shapes will be checked for errors before use and invalid shapes will be skipped by the shape extractor. Checking for errors is slower, but can prevent crashes from some geometry prob",
+"page": "Advanced",
+"area": "TechDraw"
+},
+{
+"text": "Annotation",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Balloon leader end",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Balloon leader kink length",
+"tip": "Length of horizontal portion of balloon leader",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Balloon orthogonal triangle",
+"tip": "Restrict filled triangle line end to vertical or horizontal directions",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Balloon shape",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Break line style",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Broken view break type",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Center line style",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Complex section line marks",
+"tip": "Shows markers at direction changes on complex section lines",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Detail highlight style",
+"tip": "Line style of detail highlight on base view",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Detail source show highlight",
+"tip": "Highlights the detail area in the source view of the detail",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Detail view outline shape",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Detail view show matting",
+"tip": "Displays the outline around a detail view",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Enforce ISO 8601 date format",
+"tip": "Fills out template date fields using ccyy-mm-dd format automatically, even if that is not the standard format for the current locale.",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Hidden line style",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Include cut line in section annotation",
+"tip": "Draws a cut line on the source view. Otherwise, only the change marks, arrows and symbols will be displayed.",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Leader line auto horizontal",
+"tip": "Forces last leader line segment to be horizontal",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Line end cap shape",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Line standard",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Line width group",
+"tip": "Line group used to set line widths",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Lines",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Print center marks",
+"tip": "Show arc centers in printed output",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Section cut surface",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Section line style",
+"tip": "",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Show center marks",
+"tip": "Show arc center marks in views",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Show section line in source view",
+"tip": "Draws the section annotation on the source view. Otherwise, no section line, arrows or symbol will be shown in the source view.",
+"page": "Annotation",
+"area": "TechDraw"
+},
+{
+"text": "Background",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Break line",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Centerline",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Colors",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Detail highlight",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Dimension",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Geometric hatch",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Grid color",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Hatch",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Hidden line",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Leader line",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Light on dark",
+"tip": "Uses light text and lines on dark backgrounds and sets page color to a dark color. Transparent or light color faces are recommended with this option.",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Monochrome",
+"tip": "Use a single colour for all text and lines",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Normal",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Page color",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Preselected",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Section face",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Section line",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Selected",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Template underline",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Transparent faces",
+"tip": "Object faces will be transparent",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Vertex",
+"tip": "",
+"page": "Colors",
+"area": "TechDraw"
+},
+{
+"text": "Alternate decimals",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Arrow size",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Arrow style",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Diameter symbol",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Dimension format",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Dimension tool diameter/radius mode",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Dimensioning tools",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Dimensions",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Extension gap factor - ASME",
+"tip": "Controls the gap size between the dimension point and the start of the extension line for ASME dimensions",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Extension gap factor - ISO",
+"tip": "Controls the gap size between the dimension point and the start of the extension line for ISO dimensions",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Font size",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Line spacing - ISO",
+"tip": "Controls the gap size between dimension line and dimension text for ISO dimensions.",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Show units",
+"tip": "Append unit to dimension values",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Standard and style",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Tolerance text scale",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Tools",
+"tip": "",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Use global decimals",
+"tip": "Use system setting for number of decimals",
+"page": "Dimensions",
+"area": "TechDraw"
+},
+{
+"text": "Allow page override (global policy)",
+"tip": "Controls whether or not a page's 'Keep Updated' property can override the global 'Update with 3D' parameter",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Auto-distribute secondary views",
+"tip": "Automatically distribute secondary views for ProjectionGroups",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Conventions",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Default template",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Enable multi-selection mode",
+"tip": "If enabled, clicking without Ctrl does not clear existing vertex/edge/face selection",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Files",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Grid",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Grid spacing",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Hatch pattern file",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Highlight snapping factor",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Keep page up to date",
+"tip": "Keep drawing pages in sync with changes of 3D model in real time. This can slow down the response time.",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Label font*",
+"tip": "* This font is also used for dimensions. Changes have no effect on existing dimensions.",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Label size",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Labels",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Line group file",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "PAT file",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Page Update",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Pattern name",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Projection group angle",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Section line convention",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Selection",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Show grid",
+"tip": "Set 'Show grid' property to true on new pages",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Snap detail highlights",
+"tip": "Check this box if you want detail view highlights to snap to the nearest vertex when dragging.",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Snap view alignment",
+"tip": "Snaps views into alignment when being dragged",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Snapping",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Symbol directory",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Template directory",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Update with 3D (global policy)",
+"tip": "Whether or not pages are updated every time the 3D model is changed",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Use 3D camera direction",
+"tip": "Uses the 3D camera direction (or normal of a selected face) as the view direction. Otherwise, views will be created as front views.",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "View Defaults",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "View frames mode",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "View snapping factor",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Welding directory",
+"tip": "",
+"page": "General",
+"area": "TechDraw"
+},
+{
+"text": "Hidden",
+"tip": "",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Hidden Line Removal",
+"tip": "",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "ISO count",
+"tip": "",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Show UV ISO lines",
+"tip": "Makes lines of equal parameterization",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Show hard lines",
+"tip": "Shows hard and outline edges (always shown)",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Show seam lines",
+"tip": "Shows seam lines",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Show smooth lines",
+"tip": "Shows smooth lines",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Use polygon approximation",
+"tip": "Use an approximation to find hidden lines. Fast, but result is a collection of short straight lines.",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Visible",
+"tip": "",
+"page": "HLR",
+"area": "TechDraw"
+},
+{
+"text": "Center mark scale",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Legacy symbol scaling",
+"tip": "Uses the original (incorrect) scaling method for SVG symbols, Spreadsheet views and Draft views as used in v1.0 and earlier. Otherwise, a more accurate method will be used.",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Note: Items in italics are default values for new objects. They have no effect on existing objects.",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Page scale",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Scale",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Size adjustments",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Template edit mark",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Vertex scale",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "View custom scale",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "View scale type",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+},
+{
+"text": "Welding symbol scale",
+"tip": "",
+"page": "Scale",
+"area": "TechDraw"
+}
+]

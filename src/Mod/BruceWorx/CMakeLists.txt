@@ -11,6 +11,12 @@ SET(BruceWorx_SRCS
     TestBruceWorx.py
     TestBruceWorxPattern.py
     TestBruceWorxNavPill.py
+    TestBruceWorxGroups.py
+    TestBruceWorxWorkspaces.py
+    TestBruceWorxSearch.py
+    TestBruceWorxStart.py
+    TestBruceWorxTitleBar.py
+    TestBruceWorxVaultWizard.py
     preferences-bruceworx.ui
     preferences-bruceworx.svg
     BruceWorxModelTree.qss
@@ -21,10 +27,19 @@ SET(BruceWorx_SRCS
     bruceworx_pattern.py
     bruceworx_pattern_gui.py
     bruceworx_toolbars.py
+    bruceworx_groups.py
+    bruceworx_workspaces.py
+    bruceworx_wsload.py
+    workspaces.json
+    bruceworx_search.py
+    settings_index.json
+    bruceworx_titlebar.py
     bruceworx_grid.py
     bruceworx_appearance.py
     bruceworx_taskcard.py
     bruceworx_statusbar.py
+    bruceworx_start.py
+    bruceworx_vaultwizard.py
     bruceworx_browser.py
     TestBruceWorxBrowser.py
     bruceworx_navpill.py

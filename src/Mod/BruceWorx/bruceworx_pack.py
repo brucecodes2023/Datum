@@ -114,6 +114,14 @@ INVENTORY = [
     ),
     _e(
         "BaseApp/Preferences/General",
+        "LockToolBars",
+        "bool",
+        False,
+        True,
+        note="Captioned tool groups (step C1): a dragged group could land on its own row with its caption cut off.",
+    ),
+    _e(
+        "BaseApp/Preferences/General",
         "ToolbarIconSize",
         "int",
         0,

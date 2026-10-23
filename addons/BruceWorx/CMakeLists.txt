@@ -32,6 +32,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/sources.py
     bruceworx/step_export.py
     bruceworx/tree.py
+    bruceworx/vault_setup.py
     config/document_types.json
     config/numbering.example.json
     config/part_properties.json
@@ -72,6 +73,7 @@ INSTALL(
         bruceworx/sources.py
         bruceworx/step_export.py
         bruceworx/tree.py
+        bruceworx/vault_setup.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )
 INSTALL(

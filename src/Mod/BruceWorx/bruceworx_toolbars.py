@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Two toolbar rows: app-wide toolbars on the first, the workbench's tools on the second.
+"""Fixed toolbar rows: app-wide toolbars, the workspace bar, then the workbench's tools.
 
 FreeCAD restores toolbar line breaks from the saved window state, so tools can
 end up spread over three or four rows (add-ons that rebuild the toolbar area
 leave breaks behind). With Preferences/BruceWorx/CompactToolbars on (default),
-BruceWorx re-lays the top toolbars after every workbench switch: File, the
-workbench tabs and View share row 1, and every workbench toolbar follows on
-row 2 with no further breaks (roadmap §13.3, step A).
+BruceWorx re-lays the top toolbars after every workbench switch (roadmap §13.3,
+step A): File, View and search share the first row, the workspace bar (step C2)
+has the next, and every workbench toolbar follows on the last row with no
+further breaks. With the macOS title row (step C4) on top, the workspace bar
+shares its row with File and View (plan_rows).
 """
 
 from __future__ import annotations
@@ -16,23 +18,48 @@ PREF_NAME = "CompactToolbars"
 TOOLBARS_PATH = "User parameter:BaseApp/MainWindow/Toolbars"
 
 # Toolbars that belong to the application, not to a workbench.
-APP_TOOLBARS = ("File", "Workbench", "View", "Edit", "Clipboard", "Macro", "Help", "Individual Views")
+# The search fields (the SearchBar add-on's, BruceWorx's Cmd-K) belong with them on the first row.
+APP_TOOLBARS = (
+    "File",
+    "Workbench",
+    "View",
+    "Edit",
+    "Clipboard",
+    "Macro",
+    "Help",
+    "Individual Views",
+    "SearchBar",
+    "BruceWorxSearchBar",
+)
 # Shown in every workbench (Structure comes with the standard workbench), so not a
 # sign that the workbench's own toolbars show.
-ALWAYS_SHOWN = APP_TOOLBARS + ("Structure", "SearchBar")
+ALWAYS_SHOWN = APP_TOOLBARS + ("Structure",)
+
+
+# The macOS title row (step C4) is the first row; the workspace bar (step C2) gets a
+# row of its own, or shares it with the app toolbars when the title row is there.
+TOP_ROW = ("BruceWorxTitleRow",)
+OWN_ROW = ("BruceWorxWorkspaces",)
+
+
+def plan_rows(names, app_toolbars=APP_TOOLBARS):
+    """Toolbar names grouped in rows, top to bottom.
+
+    Without the title row: app toolbars, the workspace bar, the workbench tools.
+    With it: the title row, the workspace bar followed by the app toolbars, the
+    tools. Empty rows are left out; order inside a group is kept.
+    """
+    top = [n for n in names if n in TOP_ROW]
+    bar = [n for n in names if n in OWN_ROW]
+    app = [n for n in names if n in app_toolbars and n not in TOP_ROW + OWN_ROW]
+    rest = [n for n in names if n not in TOP_ROW + OWN_ROW and n not in app_toolbars]
+    rows = [top, bar + app, rest] if top else [app, bar, rest]
+    return [row for row in rows if row]
 
 
 def plan_breaks(names, app_toolbars=APP_TOOLBARS):
-    """Names, in row order, that should start a new row.
-
-    App toolbars stay together on the first row. The first workbench toolbar
-    starts the second row and the rest follow it. App toolbars that come after a
-    workbench toolbar are not moved; they simply get no break.
-    """
-    for name in names:
-        if name not in app_toolbars:
-            return {name}
-    return set()
+    """Names that should start a new row (the first of every row but the top one)."""
+    return {row[0] for row in plan_rows(names, app_toolbars)[1:]}
 
 
 def _enabled():
@@ -57,14 +84,15 @@ def relayout():
     ]
     # Row order as laid out: breaks are positional, so sort by where they sit.
     bars.sort(key=lambda tb: (tb.geometry().y(), tb.geometry().x()))
-    app = [tb for tb in bars if tb.objectName() in APP_TOOLBARS]
-    rest = [tb for tb in bars if tb.objectName() not in APP_TOOLBARS]
-    wanted = plan_breaks([tb.objectName() for tb in app + rest])
-    for tb in app + rest:
+    by_name = {tb.objectName(): tb for tb in bars}
+    rows = plan_rows([tb.objectName() for tb in bars])
+    ordered = [by_name[name] for row in rows for name in row]
+    wanted = {row[0] for row in rows[1:]}
+    for tb in ordered:
         if mw.toolBarBreak(tb):
             mw.removeToolBarBreak(tb)
     # Re-adding moves each toolbar to the end of the top area, in this order.
-    for tb in app + rest:
+    for tb in ordered:
         if tb.objectName() in wanted:
             mw.addToolBarBreak(top)
         mw.addToolBar(top, tb)

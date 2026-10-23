@@ -24,11 +24,23 @@ def user_config_dir() -> str:
     return os.path.join(FreeCAD.getUserAppDataDir(), "BruceWorx", "numbering")
 
 
+def vault_numbering_path(vault_path: str) -> str:
+    """``<vault>/numbering.json`` when ``vault_path`` (a vault folder or its
+    ref file) has one, else ""."""
+    if not vault_path:
+        return ""
+    from bruceworx.vault_setup import numbering_path  # noqa: PLC0415
+
+    path = numbering_path(vault_path)
+    return path if os.path.isfile(path) else ""
+
+
 def gui_config_path() -> str:
     """Numbering file for the GUI command.
 
-    ``BW_NUMBERING_CONFIG`` wins. Otherwise an existing
-    ``config/numbering.json`` next to the add-on (a source checkout) is used.
+    ``BW_NUMBERING_CONFIG`` wins. Then the open vault's ``numbering.json``
+    (``BruceWorx/VaultPath``, made by the Create Vault wizard). Otherwise an
+    existing ``config/numbering.json`` next to the add-on (a source checkout) is used.
     Otherwise ``<UserAppData>/BruceWorx/numbering/numbering.json``, seeded
     from the shipped example and type table on first use. The installed
     add-on folder can be read-only (an app bundle), so it is not written.
@@ -36,6 +48,11 @@ def gui_config_path() -> str:
     explicit = os.environ.get("BW_NUMBERING_CONFIG")
     if explicit:
         return os.path.abspath(explicit)
+    from bruceworx.partprops import open_vault_path  # noqa: PLC0415
+
+    vault = vault_numbering_path(open_vault_path())
+    if vault:
+        return vault
     local = config_path.local_config_path()
     if os.path.isfile(local):
         return local
@@ -63,6 +80,8 @@ def _qt():
 
 
 def _pick(parent, title, label, codes):
+    if not codes:
+        raise ValueError(f"The numbering file offers no {label.rstrip(':').lower()} (all retired?).")
     if len(codes) == 1:
         return codes[0]
     _QtGui, QtWidgets = _qt()
