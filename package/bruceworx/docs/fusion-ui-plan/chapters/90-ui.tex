@@ -21,12 +21,14 @@ Prefs/QSS version merged (\#6). The free-floating panel (any inset, free height)
 Spike and mock merged (\#7). Remaining: the full bar with marker drag, edit, suppress and reorder (where
 feasible), one-row layout, playback buttons, and a path into core.
 \end{epic}
-\begin{epic}{UIX-05}{Workspaces \& tabs (Fusion naming)}{UI}{\stTodo}{(new, from the UI plan)}
+\begin{epic}{UIX-05}{Workspaces \& tabs (Fusion naming)}{UI}{\stProg}{(new, from the UI plan)}
 Design / Simulation / Manufacture / Drawing workspaces; Design tabs Solid, Surface, Mesh, Sheet Metal and
-Utilities, plus a contextual Sketch tab. Extra workbenches are toggled in Preferences.
+Utilities, plus a contextual Sketch tab. Extra workbenches are toggled in Preferences. Built in step C
+(section~\ref{sec:ui-stepC-built}); Sheet Metal waits for the add-on.
 \end{epic}
-\begin{epic}{UIX-06}{Toolbar \& panels}{UI}{\stTodo}{(new, from the UI plan)}
+\begin{epic}{UIX-06}{Toolbar \& panels}{UI}{\stProg}{(new, from the UI plan)}
 Captioned tool groups at one icon size, a floating command dialog, document tabs on top, and a one-row timeline.
+Captions, tabs in the title bar, search and the Start page are built (step C).
 \end{epic}
 \begin{epic}{UIX-07}{Task panel polish}{UI}{\stTodo}{FCB-P1-06/07/08}
 Sketcher, PartDesign and TechDraw dialogs.
@@ -37,6 +39,34 @@ A matcap draw style behind a preference; with the preference off, rendering is s
 \begin{epic}{UIX-09}{Fresh UI design \& re-render figures}{UI}{\stTodo}{(new)}
 A new visual design for the whole application, then regenerate every figure in this document with the scripts
 in \file{scripts/}.
+\end{epic}
+
+\subsection{From the Nxt add-on review (23 Oct)}\label{sec:uix-nxt}
+
+You asked what the Nxt add-on (\file{github.com/obelisk79/FreeCAD-Nxt}, a QtQuick replacement for the model tree
+and property editor, experimental) does that BruceWorx does not. Already covered: a floating tree (the Browser),
+creation order and rollback (the timeline moves \code{Body.Tip}), badges, and the section view. Taken into the
+roadmap, smallest first: \eref{MOD-13} sketch profile repair, \eref{UIX-10} undo toasts, \eref{UIX-11} pick to
+feature and error chips (with dependency lines in the Browser), \eref{UIX-12} a property inspector, and
+\eref{MOD-14} on-canvas editing. Not taken: Nxt's own fillet and chamfer, which bypass OCCT and leave files that
+stock FreeCAD cannot recompute, against the rule that files stay upstream-compatible. Nxt itself is not bundled:
+its issues report it ignoring light themes and failing after a restart.
+
+\begin{epic}{UIX-10}{Undo toasts}{UI}{\stTodo}{(new, Nxt review)}
+A short notice after each command (``Pad created'') with a one-click \emph{Undo}, bottom centre above the
+navigation pill, gone after a few seconds.
+\emph{Acceptance:} pad, fillet, delete and pattern each show one; Undo restores the model.
+\end{epic}
+\begin{epic}{UIX-11}{Pick to feature \& error chips}{UI}{\stTodo}{(new, Nxt review)}
+Click a face and the Browser and the timeline show the feature that made it (FreeCAD's element map knows).
+A failing feature gets a red chip in the Browser that opens it. Thin dependency lines (Sketch $\rightarrow$ Pad)
+in the Browser on hover.
+\emph{Acceptance:} every face of \code{LE-02001} traces to its feature; a broken sketch shows a chip that opens it.
+\end{epic}
+\begin{epic}{UIX-12}{Property inspector}{UI}{\stTodo}{(new, Nxt review)}
+A simpler inspector for the selection, grouped by meaning (size, position, appearance, part data), next to
+FreeCAD's property editor, which stays for everything else.
+\emph{Acceptance:} Pad, Pocket and Fillet edited from the inspector without the Data tab.
 \end{epic}
 
 \subsection{Starting brief: review of the current window}

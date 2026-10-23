@@ -1411,3 +1411,80 @@ QLabel#bwVaultIssue[level="error"] {
 QLabel#bwVaultIssue[level="warning"] {
   color: @WarnColor;
 }
+
+/* Part-number builder (bruceworx_vaultwizard.py): the number as clickable segments in a card. */
+QFrame#bwPnCard {
+  background-color: @GeneralBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+QFrame#bwPnSegment,
+QFrame#bwPnRev {
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px;
+}
+
+/* At most half the chip's height, or Qt draws square corners. */
+QFrame#bwPnRev {
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 9px;
+  background-color: @CardBackgroundColor;
+}
+
+QFrame#bwPnSegment:hover,
+QFrame#bwPnRev:hover {
+  background-color: @HoverColor;
+}
+
+QFrame#bwPnSegment[selected="true"] {
+  background-color: @AccentSoftColor;
+  border-bottom-color: @AccentColor;
+  border-bottom-left-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
+QFrame#bwPnRev[selected="true"] {
+  background-color: @AccentSoftColor;
+  border-color: @AccentColor;
+}
+
+QFrame#bwPnSegment:focus,
+QFrame#bwPnRev:focus {
+  border-color: @AccentColor;
+}
+
+QLabel#bwPnValue {
+  color: @AccentColor;
+  background: transparent;
+}
+
+QFrame#bwPnSegment[placeholder="true"] QLabel#bwPnValue,
+QFrame#bwPnRev QLabel#bwPnValue,
+QLabel#bwPnDash {
+  color: @TextSecondaryColor;
+  background: transparent;
+}
+
+QLabel#bwPnCaption,
+QLabel#bwPnTitle,
+QLabel#bwPnForm {
+  color: @TextSecondaryColor;
+  background: transparent;
+}
+
+QFrame#bwPnSegment[selected="true"] QLabel#bwPnCaption,
+QFrame#bwPnRev[selected="true"] QLabel#bwPnCaption,
+QFrame#bwPnRev[selected="true"] QLabel#bwPnValue {
+  color: @AccentColor;
+}
+
+QLabel#bwPnPageTitle {
+  font-weight: 600;
+}
+
+QLabel#bwPnSequence {
+  color: @AccentColor;
+}

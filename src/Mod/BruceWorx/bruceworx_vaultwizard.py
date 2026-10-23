@@ -8,7 +8,7 @@ boxes, OK and Cancel are the panel's buttons.
   the vault's name and folder (the folder follows the name, under iCloud
   Drive's "BruceWorx Vaults" when there is one, until the user types or picks
   one); part numbering, fixed form PROG-DT-PPPPP-SSS-REV (programs, document
-  types, first parent number and revision); company part properties. Create
+  types, first parent number); company part properties. Create
   checks everything first; errors show in red in their box. The tables can
   be downloaded as one CSV file and loaded back.
 * Import Files into Vault: finds .FCStd files, proposes numbers, and imports
@@ -27,6 +27,7 @@ TestBruceWorxVaultWizard.py.
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import threading
@@ -270,6 +271,105 @@ def settings_changes(old, new):
     return added, changed
 
 
+# ----- part-number builder (pure) ----------------------------------------------------
+
+# The clickable parts of a part number, in order: (key, caption, placeholder).
+SEGMENTS = (
+    ("program", "PROGRAM", "PROG"),
+    ("type", "TYPE", "DT"),
+    ("parent", "PARENT", "PPPPP"),
+    ("sub", "SUB", "SSS"),
+)
+REV_KEY = "rev"
+FIRST_WORK_REVISION = "01"  # pdm.first_prerelease()
+FIRST_RELEASE = "A"  # pdm.first_release()
+PARENT_TEXT = ("Five digits. Each program and document type counts its own parent numbers; "
+               "every new top-level part, assembly or drawing takes the next one.")
+SUB_TEXT = ("Three digits, set by the vault. A new parent number starts at 001; the sub-assemblies "
+            "and parts made under it take 002, 003, … up to 999.")
+REV_TEXT = ("The revision is kept beside the part number, not in it (ASME Y14.35). While a part is "
+            "in work it is 01, 02, …; the first release makes it A. Later releases take the next "
+            "letter through an ECR → ECO. I, O, Q, S, X and Z are skipped, as they read like digits.")
+REV_SEQUENCE = "01 · 02 · …  →  A  →  B · C · … · Y  →  AA"
+
+
+def number_segments(number):
+    """[(key, caption, text, real)] for "BW-01-01001-001" (a trailing revision is
+    dropped). ``real`` is False where the text is the placeholder: no number,
+    or not four parts."""
+    parts = (number or "").strip().upper().split("-")
+    if len(parts) == 5:
+        parts = parts[:4]
+    ok = len(parts) == 4 and all(parts)
+    return [(key, caption, parts[i] if ok else holder, ok) for i, (key, caption, holder) in enumerate(SEGMENTS)]
+
+
+def rev_chip_text(work=FIRST_WORK_REVISION, release=FIRST_RELEASE):
+    """The revision chip beside the number: "01 → A"."""
+    return f"{work} → {release}"
+
+
+def pick_code(codes, wanted=None, retired=()):
+    """The code the example number shows: ``wanted`` when it is one of
+    ``codes``, else the first code not retired, else the first; None for none."""
+    codes = [str(c).strip().upper() for c in codes if str(c).strip()]
+    wanted = str(wanted or "").strip().upper()
+    if wanted in codes:
+        return wanted
+    for code in codes:
+        if code not in retired:
+            return code
+    return codes[0] if codes else None
+
+
+def number_key(number):
+    """A part number without its revision ("BW-01-01001-001-A" -> "BW-01-01001-001")."""
+    number = (number or "").strip()
+    return number.rsplit("-", 1)[0] if number.count("-") == 4 else number
+
+
+def counter_rows(data, first=1001):
+    """(program, document type, next parent, parents issued) per counter in
+    numbering.json ``data``, sorted; ``first`` where a counter has no next yet."""
+    rows = []
+    for code, entry in ((data or {}).get("programs") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        for dt, bucket in (entry.get("counters") or {}).items():
+            if not isinstance(bucket, dict):
+                continue
+            nxt = bucket.get("next_parent", first)
+            nxt = nxt if isinstance(nxt, int) and not isinstance(nxt, bool) else first
+            rows.append((str(code).upper(), str(dt).zfill(2), f"{nxt:05d}", len(bucket.get("parents") or {})))
+    return sorted(rows)
+
+
+def next_parent(rows, program, document_type, first=1001):
+    """The next parent number for program × document type from counter_rows (an int)."""
+    for code, dt, nxt, _issued in rows:
+        if code == program and dt == document_type:
+            return int(nxt)
+    return first
+
+
+def fit_size(available, values, captions, ref=100.0, pad=0, dash=0.0, gaps=0, lo=12, hi=26):
+    """The largest whole font size in lo..hi at which the number fits ``available`` px.
+
+    ``values`` are the segments' text widths at font size ``ref`` (they scale
+    with the size); ``captions`` their caption widths (fixed); a segment is as
+    wide as the wider of the two plus ``pad``. ``dash`` is one separator's
+    width at ``ref`` (there is one fewer than segments) and ``gaps`` the fixed
+    spacing in all. Returns lo when even lo does not fit.
+    """
+    for size in range(int(hi), int(lo) - 1, -1):
+        scale = size / ref
+        width = sum(max(v * scale, c) + pad for v, c in zip(values, captions))
+        width += dash * scale * max(len(values) - 1, 0) + gaps
+        if width <= available:
+            return size
+    return int(lo)
+
+
 def _engine():
     from bruceworx import vault_setup
 
@@ -462,6 +562,44 @@ def _make_classes():
             row.addWidget(b)
         return row
 
+    def page(*items):
+        """A builder page: widgets and layouts stacked."""
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        for item in items:
+            if isinstance(item, QtWidgets.QLayout):
+                lay.addLayout(item)
+            else:
+                lay.addWidget(item)
+        lay.addStretch(1)
+        return w
+
+    def segment_title(title, form):
+        """ "Parent number  PPPPP": the page's title and the segment's form."""
+        row = QtWidgets.QHBoxLayout()
+        row.setSpacing(8)
+        lab = QtWidgets.QLabel(title)
+        lab.setObjectName("bwPnPageTitle")
+        shape = QtWidgets.QLabel(form)
+        shape.setObjectName("bwPnForm")
+        font = mono_font()
+        font.setPixelSize(12)
+        shape.setFont(font)
+        row.addWidget(lab)
+        row.addWidget(shape)
+        row.addStretch(1)
+        return row
+
+    def revision_page():
+        seq = QtWidgets.QLabel(REV_SEQUENCE)
+        seq.setObjectName("bwPnSequence")
+        font = mono_font()
+        font.setPixelSize(12)
+        seq.setFont(font)
+        seq.setWordWrap(True)
+        return page(segment_title("Revision", "REV"), hint(REV_TEXT), seq)
+
     def message(title, text):
         QtWidgets.QMessageBox.information(Gui.getMainWindow(), title, text)
 
@@ -506,15 +644,284 @@ def _make_classes():
         def textFromValue(self, value):
             return f"{value:05d}"
 
+    # ----- the part-number builder ---------------------------------------------------
+
+    def restyle(widget):
+        """Re-apply the style sheet after a dynamic property changed (and to its labels)."""
+        for w in [widget] + widget.findChildren(QtWidgets.QLabel):
+            w.style().unpolish(w)
+            w.style().polish(w)
+            w.update()
+
+    def mono_font():
+        font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont)
+        font.setStyleHint(QtGui.QFont.Monospace)
+        font.setWeight(QtGui.QFont.Bold)
+        return font
+
+    def caption_font(size=9):
+        font = QtGui.QFont()
+        font.setPixelSize(size)
+        font.setWeight(QtGui.QFont.DemiBold)
+        font.setLetterSpacing(QtGui.QFont.AbsoluteSpacing, 0.8)
+        return font
+
+    class Segment(QtWidgets.QFrame):
+        """One clickable part of the number: its value over a small caption."""
+
+        PAD = 12  # left + right margins (5 + 5) and border (1 + 1, the style sheet's)
+
+        def __init__(self, key, caption, builder, name="bwPnSegment"):
+            super().__init__()
+            self.key = key
+            self.builder = builder
+            self.setObjectName(name)
+            self.setProperty("selected", False)
+            self.setAttribute(QtCore.Qt.WA_Hover, True)
+            self.setCursor(QtCore.Qt.PointingHandCursor)
+            self.setFocusPolicy(QtCore.Qt.TabFocus)
+            self.setAccessibleName(caption.title())
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.setContentsMargins(5, 1, 5, 1)
+            lay.setSpacing(0)
+            self.value = QtWidgets.QLabel("")
+            self.value.setObjectName("bwPnValue")
+            self.value.setAlignment(QtCore.Qt.AlignCenter)
+            self.caption = QtWidgets.QLabel(caption)
+            self.caption.setObjectName("bwPnCaption")
+            self.caption.setAlignment(QtCore.Qt.AlignCenter)
+            self.caption.setFont(caption_font())
+            for lab in (self.value, self.caption):
+                lab.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+                lay.addWidget(lab)
+
+        def mousePressEvent(self, event):
+            if event.button() == QtCore.Qt.LeftButton:
+                self.builder.select(self.key)
+                event.accept()
+                return
+            super().mousePressEvent(event)
+
+        def keyPressEvent(self, event):
+            key = event.key()
+            if key in (QtCore.Qt.Key_Space, QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+                self.builder.select(self.key)
+            elif key in (QtCore.Qt.Key_Left, QtCore.Qt.Key_Up):
+                self.builder.step(self.key, -1)
+            elif key in (QtCore.Qt.Key_Right, QtCore.Qt.Key_Down):
+                self.builder.step(self.key, 1)
+            else:
+                super().keyPressEvent(event)
+
+    class PartNumberBuilder(QtWidgets.QWidget):
+        """The part number as clickable segments in a card, a REV chip under it,
+        and below them the selected segment's options (a stacked widget the
+        panel fills with add_page)."""
+
+        selected = QtCore.Signal(str)
+        LO, HI = 13, 24  # font size range of the number, px
+        DASH = 0.8  # the dashes' size, relative to the number's
+        DASH_MARGIN = 3  # px either side of a dash
+
+        def __init__(self, title="First number"):
+            super().__init__()
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(8)
+            self.card = QtWidgets.QFrame()
+            self.card.setObjectName("bwPnCard")
+            # The card takes the box's width; it never widens the panel.
+            self.card.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            cl = QtWidgets.QVBoxLayout(self.card)
+            cl.setContentsMargins(8, 6, 8, 8)
+            cl.setSpacing(4)
+            self.title = QtWidgets.QLabel(title.upper())
+            self.title.setObjectName("bwPnTitle")
+            self.title.setFont(caption_font())
+            self.title.setAlignment(QtCore.Qt.AlignCenter)
+            cl.addWidget(self.title)
+            row = QtWidgets.QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(2)
+            row.addStretch(1)
+            self.segments, self.dashes = {}, []
+            for i, (key, caption, _holder) in enumerate(SEGMENTS):
+                if i:
+                    dash = QtWidgets.QFrame()
+                    dl = QtWidgets.QVBoxLayout(dash)
+                    dl.setContentsMargins(0, 0, 0, 0)
+                    dl.setSpacing(0)
+                    text = QtWidgets.QLabel("–")
+                    text.setObjectName("bwPnDash")
+                    # Baseline near the digits' (the dash's font is smaller).
+                    text.setAlignment(QtCore.Qt.AlignHCenter | QtCore.Qt.AlignBottom)
+                    text.setContentsMargins(self.DASH_MARGIN, 0, self.DASH_MARGIN, 0)
+                    under = QtWidgets.QLabel("")
+                    under.setFont(caption_font())
+                    dl.addWidget(text)
+                    dl.addWidget(under)
+                    self.dashes.append(text)
+                    row.addWidget(dash)
+                seg = Segment(key, caption, self)
+                self.segments[key] = seg
+                row.addWidget(seg)
+            row.addStretch(1)
+            cl.addLayout(row)
+            self.row = row
+            chip_row = QtWidgets.QHBoxLayout()
+            chip_row.setContentsMargins(0, 2, 0, 0)
+            chip_row.addStretch(1)
+            self.rev = Segment(REV_KEY, "Revision", self, "bwPnRev")
+            self.rev.setToolTip("The revision is kept beside the part number, not in it.")
+            rl = self.rev.layout()
+            rl.setDirection(QtWidgets.QBoxLayout.LeftToRight)
+            rl.setContentsMargins(10, 3, 10, 3)
+            rl.setSpacing(6)
+            rl.removeWidget(self.rev.caption)  # caption first: "REV  01 → A"
+            rl.insertWidget(0, self.rev.caption)
+            self.rev.caption.setText("REV")
+            self.rev.value.setText(rev_chip_text())
+            small = mono_font()
+            small.setPixelSize(11)
+            self.rev.value.setFont(small)
+            chip_row.addWidget(self.rev)
+            chip_row.addStretch(1)
+            cl.addLayout(chip_row)
+            lay.addWidget(self.card)
+            self.stack = QtWidgets.QStackedWidget()
+            lay.addWidget(self.stack)
+            self.pages = {}
+            self.order = [key for key, _c, _h in SEGMENTS] + [REV_KEY]
+            self.current = None
+            self.set_number("")
+
+        def add_page(self, key, widget):
+            self.pages[key] = widget
+            self.stack.addWidget(widget)
+            if self.current is None:
+                self.select(key)
+
+        def _all(self):
+            return list(self.segments.values()) + [self.rev]
+
+        def select(self, key):
+            """Show ``key``'s options and mark its segment."""
+            if key not in self.pages:
+                return
+            self.current = key
+            for seg in self._all():
+                if seg.property("selected") != (seg.key == key):
+                    seg.setProperty("selected", seg.key == key)
+                    restyle(seg)
+            # Only the shown page counts for the stack's height.
+            for k, page in self.pages.items():
+                vertical = QtWidgets.QSizePolicy.Preferred if k == key else QtWidgets.QSizePolicy.Ignored
+                page.setSizePolicy(QtWidgets.QSizePolicy.Preferred, vertical)
+            self.stack.setCurrentWidget(self.pages[key])
+            self.fit_stack()
+            self.selected.emit(key)
+
+        def fit_stack(self):
+            """The stack as tall as the shown page (its layout keeps the tallest
+            page's height otherwise). Called again when a page's rows change."""
+            page = self.stack.currentWidget()
+            if page is not None:
+                page.layout().activate()
+                self.stack.setFixedHeight(page.sizeHint().height())
+
+        def step(self, key, delta):
+            """Arrow keys: the next or previous segment."""
+            keys = [k for k in self.order if k in self.pages]
+            if key not in keys:
+                return
+            nxt = keys[(keys.index(key) + delta) % len(keys)]
+            self.select(nxt)
+            (self.rev if nxt == REV_KEY else self.segments[nxt]).setFocus(QtCore.Qt.TabFocusReason)
+
+        def set_number(self, number):
+            """Show ``number`` (no revision); placeholders when it is empty or invalid."""
+            for key, _caption, text, real in number_segments(number):
+                seg = self.segments[key]
+                seg.value.setText(text)
+                if seg.property("placeholder") != (not real):
+                    seg.setProperty("placeholder", not real)
+                    restyle(seg)
+            self.number = number_key(number) if number else ""
+            self.card.setToolTip(self.number)
+            self.fit()
+
+        def fit(self):
+            """The number's font size: as large as fits the card (LO..HI px)."""
+            ref = mono_font()
+            ref.setPixelSize(100)
+            fm = QtGui.QFontMetricsF(ref)
+            values = [fm.horizontalAdvance(s.value.text()) for s in self.segments.values()]
+            captions = [QtGui.QFontMetricsF(s.caption.font()).horizontalAdvance(s.caption.text()) + 6
+                        for s in self.segments.values()]
+            # Inside the card's border and layout margins.
+            margins = self.card.layout().contentsMargins()
+            available = self.card.contentsRect().width() - margins.left() - margins.right()
+            if available <= 40:  # not laid out yet
+                available = 280
+            dash = mono_font()
+            dash.setWeight(QtGui.QFont.Normal)
+            dash.setPixelSize(100)
+            dash_width = QtGui.QFontMetricsF(dash).horizontalAdvance("–") * self.DASH
+            # Layout spacing between the 7 items, plus the dashes' margins.
+            gaps = 2 * (2 * len(values) - 2) + 2 * self.DASH_MARGIN * (len(values) - 1)
+            guess = fit_size(available, values, captions, 100.0, Segment.PAD, dash_width,
+                             gaps, self.LO, self.HI)
+            # The guess, checked against the row's real width (label metrics round up).
+            for size in range(min(guess + 2, self.HI), self.LO - 1, -1):
+                self._apply(size)
+                if self._row_width() <= available:
+                    break
+
+        def _row_width(self):
+            """The number row's width from its items' current hints (the row's
+            own hint is cached until the next layout pass)."""
+            width = count = 0
+            for i in range(self.row.count()):
+                widget = self.row.itemAt(i).widget()
+                if widget is None:  # the stretches
+                    continue
+                if widget.layout() is not None:
+                    widget.layout().invalidate()
+                width += widget.sizeHint().width()
+                count += 1
+            return width + self.row.spacing() * max(count - 1, 0)
+
+        def _apply(self, size):
+            font = mono_font()
+            font.setPixelSize(size)
+            for seg in self.segments.values():
+                seg.value.setFont(font)
+            dash = mono_font()
+            dash.setWeight(QtGui.QFont.Normal)
+            dash.setPixelSize(max(int(round(size * self.DASH)), 8))
+            # As tall as the digits, so the dash sits at their middle.
+            tall = QtGui.QFontMetrics(font).height()
+            for lab in self.dashes:
+                lab.setFont(dash)
+                lab.setFixedHeight(tall)
+            self.row.invalidate()
+            self.font_px = size
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            if event.oldSize().width() != event.size().width():
+                self.fit()
+
     # ----- shared: code tables and property tables -----------------------------
 
     class CodeTable:
         """Code + text rows, optionally with a Retired column. Existing rows
         (Vault Settings) keep their code and cannot be removed."""
 
-        def __init__(self, headers, retired=False, changed=None):
+        def __init__(self, headers, retired=False, changed=None, picked=None):
             self.retired = retired
             self.changed = changed or (lambda: None)
+            self.picked = picked or (lambda: None)
             self.widget = table(headers + (["Retired"] if retired else []))
             self.widget.setColumnWidth(0, 64)
             if retired:
@@ -522,6 +929,22 @@ def _make_classes():
                 self.widget.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
                 self.widget.setColumnWidth(2, 54)
             self.widget.itemChanged.connect(self._edited)
+            self.widget.currentCellChanged.connect(lambda *_a: self.picked())
+
+        def selected_code(self):
+            """The code of the current row ("" for none)."""
+            item = self.widget.item(self.widget.currentRow(), 0)
+            return item.text().strip().upper() if item is not None else ""
+
+        def select_first(self):
+            """Make the first row not retired the current one (the example shows it)."""
+            rows = self.rows()
+            for r, (_code, _text, retired) in enumerate(rows):
+                if not retired:
+                    self.widget.setCurrentCell(r, 0)
+                    return
+            if rows:
+                self.widget.setCurrentCell(0, 0)
 
         def add(self, code="", text="", retired=False, existing=False):
             t = self.widget
@@ -940,46 +1363,71 @@ def _make_classes():
             defaults = self.vs.NumberingSetup()
             w = box("Part numbering")
             lay = QtWidgets.QVBoxLayout(w)
-            lay.addWidget(hint("Every part gets PROG-DT-PPPPP-SSS-REV: program, document type, parent "
-                               "number, sub number and revision."))
-            self.programs = CodeTable(["Code", "Description"], changed=self._edited)
+            lay.addWidget(hint("Click a part of the number to set it up."))
+            self.builder = PartNumberBuilder("First number")
+            self.programs = CodeTable(["Code", "Description"], changed=self._edited, picked=self._picked)
             for p in defaults.programs:
                 self.programs.add(p.code, p.description)
-            lay.addLayout(plus_minus("Programs", self.programs.add_new, self.programs.remove))
-            lay.addWidget(self.programs.widget)
-            self.types = CodeTable(["Code", "Name"], changed=self._edited)
+            self.builder.add_page("program", page(
+                plus_minus("Programs", self.programs.add_new, self.programs.remove),
+                self.programs.widget,
+                hint("A code of 1–8 letters or digits per product line or customer, e.g. BW. "
+                     "Select a row to see it in the number."),
+            ))
+            self.types = CodeTable(["Code", "Name"], changed=self._edited, picked=self._picked)
             for code, name in defaults.document_types.items():
                 self.types.add(code, name)
-            lay.addLayout(plus_minus("Document types", self.types.add_new, self.types.remove))
-            lay.addWidget(self.types.widget)
+            self.builder.add_page("type", page(
+                plus_minus("Document types", self.types.add_new, self.types.remove),
+                self.types.widget,
+                hint("Two digits for the kind of document: part, assembly, drawing… "
+                     "Select a row to see it in the number."),
+            ))
             form = QtWidgets.QFormLayout()
             self.parent_spin = NumberSpin()
             self.parent_spin.setRange(1, 99999)
             self.parent_spin.setValue(int(defaults.first_parent))
             self.parent_spin.valueChanged.connect(lambda _v: self.changed())
             form.addRow("First parent number", self.parent_spin)
-            self.revision_edit = QtWidgets.QLineEdit(str(defaults.first_revision))
-            self.revision_edit.setMaxLength(3)
-            self.revision_edit.textEdited.connect(self._revision_edited)
-            form.addRow("First revision", self.revision_edit)
-            self.example_label = QtWidgets.QLabel("")
-            self.example_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-            form.addRow("First number", self.example_label)
-            lay.addLayout(form)
+            self.builder.add_page("parent", page(
+                segment_title("Parent number", "PPPPP"),
+                hint(PARENT_TEXT),
+                form,
+            ))
+            self.builder.add_page("sub", page(segment_title("Sub number", "SSS"), hint(SUB_TEXT)))
+            self.builder.add_page(REV_KEY, revision_page())
+            self.builder.select("program")
+            self.programs.select_first()
+            self.types.select_first()
+            lay.addWidget(self.builder)
             self._csv_buttons(lay)
             self.numbering_issues = IssueList()
             lay.addWidget(self.numbering_issues)
             return w
 
+        def _picked(self):
+            """A program or document type row was selected: show it in the number."""
+            if hasattr(self, "builder"):
+                self._show_example(self.numbering()[0])
+
+        def _show_example(self, setup, issues=()):
+            """The example number for the selected program and document type
+            (shown without revision); issues found computing it are returned."""
+            out = []
+            example = ""
+            if not has_errors(issues):
+                program = pick_code([_code(p) for p in setup.programs], self.programs.selected_code())
+                dt = pick_code(list(setup.document_types), self.types.selected_code())
+                try:
+                    example = self.vs.example_number(setup, program=program, document_type=dt)
+                except Exception as exc:
+                    out.append(("error", str(exc)))
+            self.builder.set_number(self.vs.existing_key(example) or number_key(example) if example else "")
+            self.builder.fit_stack()
+            return out
+
         def _edited(self):
             self.csv_issues = []
-            self.changed()
-
-        def _revision_edited(self, text):
-            if text != text.upper():
-                pos = self.revision_edit.cursorPosition()
-                self.revision_edit.setText(text.upper())
-                self.revision_edit.setCursorPosition(pos)
             self.changed()
 
         def numbering(self):
@@ -990,7 +1438,6 @@ def _make_classes():
                 programs=[self.vs.ProgramSetup(c, d) for c, d in programs],
                 document_types=dict(types),
                 first_parent=int(self.parent_spin.value()),
-                first_revision=self.revision_edit.text().strip(),
             )
             return setup, issues + more
 
@@ -1001,14 +1448,8 @@ def _make_classes():
                     issues += list(self.vs.validate_numbering(setup))
                 except Exception as exc:
                     issues.append(("error", str(exc)))
-            example = ""
-            if not has_errors(issues):
-                try:
-                    example = self.vs.example_number(setup)
-                except Exception as exc:
-                    issues.append(("error", str(exc)))
-            self.example_label.setText(example or "—")
-            return issues
+            # The number without its revision: the vault keeps revisions beside the part number.
+            return issues + self._show_example(setup, issues)
 
         # --- company part properties
         def _build_properties(self):
@@ -1081,6 +1522,8 @@ def _make_classes():
             custom_keys = {k for k, _t in CUSTOM_TYPES}
             for entry in wanted.values():
                 self.props.add(entry, checked=True, fixed=entry.get("type") not in custom_keys)
+            self.programs.select_first()
+            self.types.select_first()
             return []
 
         # --- validation and Create
@@ -1360,7 +1803,9 @@ def _make_classes():
                 if item is None:
                     continue
                 item.setCheckState(0, QtCore.Qt.Checked if c.include else QtCore.Qt.Unchecked)
-                item.setText(1, c.proposed_part_number if c.include else "")
+                # Shown without a revision: the vault keeps revisions beside the part number.
+                proposed = self.vs.existing_key(c.proposed_part_number) or c.proposed_part_number
+                item.setText(1, proposed if c.include else "")
                 notes = "; ".join(_text(n) for n in c.issues)
                 item.setText(5, notes)
                 item.setToolTip(5, notes)
@@ -1487,6 +1932,14 @@ def _make_classes():
                 self.used = self.vs.used_codes(root)
             except Exception:
                 self.used = None
+            data = None
+            try:
+                with open(self.vs.numbering_path(root), encoding="utf-8") as handle:
+                    data = json.load(handle)
+            except (OSError, ValueError):
+                pass
+            self.first_parent = self.vs.first_parent_of(data)
+            self.counters = counter_rows(data, self.first_parent)
             self.form = [self._build_vault(), self._build_numbering(), self._build_properties()]
             self.show_settings(self.saved)
             self.validate()
@@ -1523,18 +1976,73 @@ def _make_classes():
         def _build_numbering(self):
             w = box("Part numbering")
             lay = QtWidgets.QVBoxLayout(w)
-            lay.addWidget(hint("Add programs and document types, or rename them. A code the vault has "
-                               "cannot change or be deleted: tick Retired to stop offering it."))
-            self.programs = CodeTable(["Code", "Description"], retired=True, changed=self._edited)
-            lay.addLayout(plus_minus("Programs", self.programs.add_new, self.programs.remove))
-            lay.addWidget(self.programs.widget)
-            self.types = CodeTable(["Code", "Name"], retired=True, changed=self._edited)
-            lay.addLayout(plus_minus("Document types", self.types.add_new, self.types.remove))
-            lay.addWidget(self.types.widget)
+            lay.addWidget(hint("Click a part of the number to see or change it."))
+            self.builder = PartNumberBuilder("Next number")
+            retire = ("A code the vault has cannot change or be deleted: tick Retired to stop offering it. "
+                      "Select a row to see it in the number.")
+            self.programs = CodeTable(["Code", "Description"], retired=True, changed=self._edited,
+                                      picked=self._picked)
+            self.builder.add_page("program", page(
+                plus_minus("Programs", self.programs.add_new, self.programs.remove),
+                self.programs.widget, hint(retire)))
+            self.types = CodeTable(["Code", "Name"], retired=True, changed=self._edited, picked=self._picked)
+            self.builder.add_page("type", page(
+                plus_minus("Document types", self.types.add_new, self.types.remove),
+                self.types.widget, hint(retire)))
+            self.counter_table = table(["Program", "Type", "Next parent"])
+            self.counter_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            self.counter_table.setColumnWidth(0, 80)
+            self.counter_table.setColumnWidth(1, 60)
+            for r, (code, dt, nxt, issued) in enumerate(self.counters):
+                self.counter_table.insertRow(r)
+                for c, text in enumerate((code, dt, nxt)):
+                    item = QtWidgets.QTableWidgetItem(text)
+                    item.setToolTip(f"{code}-{dt}: {plural(issued, 'parent number')} given, next {nxt}.")
+                    self.counter_table.setItem(r, c, item)
+            counters = [self.counter_table] if self.counters else [hint("No counters yet: the first "
+                                                                       "number will be "
+                                                                       f"{self.first_parent:05d}.")]
+            self.builder.add_page("parent", page(
+                segment_title("Parent number", "PPPPP"), hint(PARENT_TEXT + " The vault's counters:"),
+                *counters))
+            self.builder.add_page("sub", page(segment_title("Sub number", "SSS"), hint(SUB_TEXT)))
+            self.builder.add_page(REV_KEY, revision_page())
+            self.builder.select("program")
+            lay.addWidget(self.builder)
             self._csv_buttons(lay)
             self.numbering_issues = IssueList()
             lay.addWidget(self.numbering_issues)
             return w
+
+        def _picked(self):
+            if hasattr(self, "builder"):
+                self._show_example()
+
+        def _show_example(self):
+            """The next number for the selected program and document type, from the vault's counters."""
+            programs, p_retired, issues = self.programs.pairs("program code")
+            types, t_retired, more = self.types.pairs("document type code")
+            number = ""
+            program = pick_code([c for c, _d in programs], self.programs.selected_code(), p_retired)
+            dt = pick_code([c for c, _n in types], self.types.selected_code(), t_retired)
+            if program and dt and not has_errors(issues + more):
+                setup = self.vs.NumberingSetup(
+                    programs=[self.vs.ProgramSetup(c, d) for c, d in programs],
+                    document_types=dict(types),
+                    first_parent=next_parent(self.counters, program, dt, self.first_parent),
+                )
+                try:
+                    number = number_key(self.vs.example_number(setup, program=program, document_type=dt))
+                except Exception:
+                    number = ""  # the box lists why
+            self.builder.set_number(number)
+            self.builder.fit_stack()
+            for r in range(self.counter_table.rowCount()):
+                if (self.counter_table.item(r, 0).text(), self.counter_table.item(r, 1).text()) == (program, dt):
+                    self.counter_table.setCurrentCell(r, 0)
+                    break
+            else:
+                self.counter_table.clearSelection()
 
         def _build_properties(self):
             w = box("Company part properties")
@@ -1580,6 +2088,8 @@ def _make_classes():
                 existing = name in saved_props
                 self.props.add(entry, fixed=existing or entry.get("type") not in custom_keys,
                                retired=name in retired.get("property", ()))
+            self.programs.select_first()
+            self.types.select_first()
 
         def current_settings(self):
             programs, p_retired, _i = self.programs.pairs("program code")
@@ -1626,6 +2136,7 @@ def _make_classes():
                 numbering, props = [("error", f"The settings cannot be checked: {exc}")], []
             self.numbering_issues.set(self.csv_issues + numbering)
             self.property_issues.set(props)
+            self._show_example()
             return numbering + props
 
         def save(self):
@@ -1681,8 +2192,6 @@ def _vault_programs(vs, root):
     except Exception:
         pass
     try:
-        import json
-
         with open(vs.numbering_path(root), encoding="utf-8") as handle:
             data = json.load(handle)
         return [(str(code), (entry or {}).get("description", "")) for code, entry in data.get("programs", {}).items()]

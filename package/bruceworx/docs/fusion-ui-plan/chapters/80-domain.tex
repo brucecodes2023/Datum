@@ -88,3 +88,18 @@ Push connector and mounting-hole positions from MCAD to ECAD and back. Check boa
 interference command (\eref{ASM-06}).
 \emph{Acceptance:} the fit check flags a connector moved into a wall.
 \end{epic}
+
+\begin{epic}{ECD-05}{Boards in the vault}{M3}{\stTodo}{(new, 23 Oct)}
+A PCB item type: the KiCad project is checked in as one item with its own P/N; the board STEP and a thumbnail are
+made at check-in; \emph{Insert board}, a newer-version badge and \emph{Update board} in assemblies. Plan in
+section~\ref{sec:ecd-plan}.
+\emph{Acceptance:} a board revised in KiCad and checked in updates in its enclosure with one click; joints survive.
+\end{epic}
+
+\begin{epic}{ECD-06}{Board materials \& mass}{M3}{\stTodo}{(new, 23 Oct)}
+KiCad's bodies mapped to materials on import, FR-4 and solder-mask materials added. Plan in
+section~\ref{sec:ecd-plan}.
+\emph{Acceptance:} board mass within 5\,\% of a weighed sample; the BOM lists FR-4 and copper.
+\end{epic}
+
+\input{chapters/82-ecd-plan}

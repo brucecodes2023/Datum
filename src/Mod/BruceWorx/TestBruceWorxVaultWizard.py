@@ -145,5 +145,84 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(wiz.settings_changes(old, old), (0, 0))
 
 
+class TestPartNumberBuilder(unittest.TestCase):
+    def test_segments_of_a_number(self):
+        segs = wiz.number_segments("BW-01-02001-001")
+        self.assertEqual([(k, c, t) for k, c, t, _r in segs],
+                         [("program", "PROGRAM", "BW"), ("type", "TYPE", "01"),
+                          ("parent", "PARENT", "02001"), ("sub", "SUB", "001")])
+        self.assertTrue(all(r for *_x, r in segs))
+        # A revision on the end is dropped: it is not part of the number.
+        self.assertEqual([t for _k, _c, t, _r in wiz.number_segments("bw-01-02001-001-A")],
+                         ["BW", "01", "02001", "001"])
+
+    def test_placeholders(self):
+        for bad in ("", None, "BW-01", "BW--01001-001"):
+            segs = wiz.number_segments(bad)
+            self.assertEqual([t for _k, _c, t, _r in segs], ["PROG", "DT", "PPPPP", "SSS"])
+            self.assertFalse(any(r for *_x, r in segs))
+
+    def test_number_key_drops_the_revision(self):
+        self.assertEqual(wiz.number_key("BW-01-01001-001-A"), "BW-01-01001-001")
+        self.assertEqual(wiz.number_key("BW-01-01001-001"), "BW-01-01001-001")
+        self.assertEqual(wiz.number_key(""), "")
+
+    def test_rev_chip(self):
+        self.assertEqual(wiz.rev_chip_text(), "01 → A")
+
+    def test_pick_code(self):
+        self.assertEqual(wiz.pick_code(["BW", "AC"], "ac"), "AC")  # the selected row
+        self.assertEqual(wiz.pick_code(["BW", "AC"], "ZZ"), "BW")  # not in the table: the first
+        self.assertEqual(wiz.pick_code(["BW", "AC"], "", retired={"BW"}), "AC")
+        self.assertEqual(wiz.pick_code(["BW"], "", retired={"BW"}), "BW")
+        self.assertIsNone(wiz.pick_code([], "BW"))
+        self.assertEqual(wiz.pick_code(["01", "02", " "], "02"), "02")
+
+    def test_selection_flows_into_the_example(self):
+        try:
+            from bruceworx import vault_setup as vs
+        except ImportError:
+            self.skipTest("BruceWorx hooks add-on not installed")
+        setup = vs.NumberingSetup(programs=[vs.ProgramSetup("BW"), vs.ProgramSetup("AC")],
+                                  document_types={"01": "Part", "02": "Assembly"}, first_parent=2001)
+        program = wiz.pick_code([p.code for p in setup.programs], "AC")
+        dt = wiz.pick_code(list(setup.document_types), "02")
+        number = wiz.number_key(vs.example_number(setup, program=program, document_type=dt))
+        self.assertEqual(number, "AC-02-02001-001")
+        self.assertEqual([t for _k, _c, t, _r in wiz.number_segments(number)], ["AC", "02", "02001", "001"])
+
+    def test_counter_rows(self):
+        data = {"programs": {
+            "BW": {"counters": {"02": {"next_parent": 1005, "parents": {"01001": {}, "01002": {}}},
+                                "01": {"next_parent": 1001, "parents": {}}}},
+            "ac": {"counters": {"01": {"parents": {}}}},
+            "XX": "broken",
+        }}
+        rows = wiz.counter_rows(data, first=1001)
+        self.assertEqual(rows, [("AC", "01", "01001", 0), ("BW", "01", "01001", 0), ("BW", "02", "01005", 2)])
+        self.assertEqual(wiz.next_parent(rows, "BW", "02"), 1005)
+        self.assertEqual(wiz.next_parent(rows, "NX", "01", first=3001), 3001)
+        self.assertEqual(wiz.counter_rows(None), [])
+
+    def test_fit_size(self):
+        # Four segments of 2, 2, 5 and 3 monospace characters, 60 px each at size 100.
+        values = [120.0, 120.0, 300.0, 180.0]
+        captions = [50.0, 30.0, 44.0, 24.0]
+        size = wiz.fit_size(300, values, captions, 100.0, pad=12, dash=60.0, gaps=12, lo=13, hi=26)
+        self.assertTrue(13 <= size <= 26)
+
+        def width(n):
+            s = n / 100.0
+            return sum(max(v * s, c) + 12 for v, c in zip(values, captions)) + 60.0 * s * 3 + 12
+
+        self.assertLessEqual(width(size), 300)
+        self.assertGreater(width(size + 1), 300)
+        self.assertEqual(wiz.fit_size(5000, values, captions, 100.0, 12, 60.0, 12, 13, 26), 26)  # capped
+        self.assertEqual(wiz.fit_size(50, values, captions, 100.0, 12, 60.0, 12, 13, 26), 13)  # floor
+        # A narrower panel never gives a larger number.
+        sizes = [wiz.fit_size(w, values, captions, 100.0, 12, 60.0, 12, 13, 26) for w in (420, 380, 330, 300)]
+        self.assertEqual(sizes, sorted(sizes, reverse=True))
+
+
 if __name__ == "__main__":
     unittest.main()

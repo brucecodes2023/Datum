@@ -25,9 +25,10 @@ Gui--OverlayTabWidget::pane {
   border-radius: 10px;
 }
 
+/* Transparent Browser: no card at all, as in the Nxt add-on (23 Oct); the rows sit on the model. */
 Gui--OverlayTabWidget#OverlayLeft[transparent="true"]::pane {
-  background-color: @BrowserCardColor;
-  border-color: @GeneralBorderColor;
+  background-color: transparent;
+  border-color: transparent;
 }
 
 Gui--OverlayTabWidget QTreeView,
@@ -105,10 +106,16 @@ Gui--OverlayToolButton:hover {
   background: @HoverColor;
 }
 
-/* Transparent Browser (Preferences > BruceWorx > Transparent background): a tinted glass card,
-   72 % opaque (@BrowserCardColor; the token engine passes an rgba() with a percentage through
-   unparsed, so it keeps its alpha). The model shows through, and the text keeps a halo in the card
-   colour (the effect above). */
+/* Transparent Browser (Preferences > BruceWorx > Transparent background): no card, the model shows
+   through everywhere. The text keeps a soft halo in the card colour so it reads over any part. Hover
+   and selection keep their solid row plates. */
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] {
+  border-color: transparent;
+  qproperty-effectBlurRadius: 3;
+  qproperty-effectWidth: 1;
+  qproperty-effectHeight: 1;
+}
+
 Gui--OverlayTabWidget#OverlayLeft[transparent="true"],
 Gui--OverlayTabWidget#OverlayLeft[transparent="true"] QTreeView,
 Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--TreePanel,

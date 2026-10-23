@@ -348,7 +348,9 @@ Structural members swept along 3D-sketch edges from a \textbf{profile library}: 
 extrusion, square and round tube, angle, flat bar. Each joint gets an \textbf{end treatment} (mitre, butt
 one or the other, cope), and \textbf{trim/extend} works against other members. The \textbf{cut list} groups
 identical members and gives stock length, angles and quantity. Each member is a body with a cut-list item, not
-a separate part file.
+a separate part file. Wood framing belongs here too: dimensional lumber profiles ($2\times4$, $2\times6$, \ldots)
+with a cut list by board foot. Reference (23 Oct): LumberCAD, a beta tool for dimensional-lumber builds with a
+catalogue of over 100 components, aimed at people who do not use CAD.
 \emph{Acceptance:} the frame in Figure~\ref{fig:frame} produces the cut list below.
 \end{epic}
 
@@ -482,4 +484,17 @@ Sketcher is mature, but full parity needs a checked list. Compare it against Fus
 slots, conics, text, offset and project/include, sketch patterns, dimension-driven parameters, constraint
 inference while drawing, and sketch-level mirror and fillet behaviours. Close the five most-used gaps.
 \emph{Acceptance:} gap list approved; top five gaps closed.
+\end{epic}
+
+\begin{epic}{MOD-13}{Sketch profile repair}{M1}{\stTodo}{(new, from the Nxt add-on review, 23 Oct)}
+When Pad, Pocket or Revolve is about to fail on an open wire, find the open ends, the small gaps and the
+missing coincidences, show them in the sketch, and offer to close them (one constraint or one short line each).
+Nothing changes without a click. Seen in the Nxt add-on (\S\ref{sec:uix-nxt}).
+\emph{Acceptance:} a sketch with a 0.05\,mm gap pads after one click.
+\end{epic}
+
+\begin{epic}{MOD-14}{On-canvas editing}{M5}{\stTodo}{(new, from the Nxt add-on review, 23 Oct)}
+Double-click a face or a feature to edit it in the 3D view: value fields and drag arrows, as Fusion's press-pull.
+Builds on FreeCAD~1.1's interactive draggers (Fillet, Chamfer). A plan comes first.
+\emph{Acceptance:} pad length, fillet radius and hole depth edited in the view without the task panel.
 \end{epic}
