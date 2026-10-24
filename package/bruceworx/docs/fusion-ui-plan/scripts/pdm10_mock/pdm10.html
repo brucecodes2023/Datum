@@ -1,0 +1,344 @@
+<!doctype html>
+<!-- PDM-10 mock (24 Oct): the vault dashboard, the vault side of the BruceWorx Start page.
+     Tokens from src/Gui/Stylesheets/parameters/BruceWorx(.yaml| Dark.yaml) and the "BruceWorx Start page"
+     blocks of BruceWorx.qss. ?theme=light|dark&fig=full|empty; rendered by render.sh. Invented sample data. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#F3F3F5; --card:#FFFFFF; --border:#D9D9DE; --grid:#EBEBEF; --text:#1D1D1F; --sec:#6E6E73; --dim:#86868B;
+          --accent:#007AFF; --soft:#DCEBFF; --hover:#E6E6EA; --ok:#1F9D55; --warn:#C27C00; --err:#D93A3F; --obs:#B4B4BA;
+          --rev:#007AFF; }
+  body.dark { --bg:#2A2A2D; --card:#2C2C2F; --border:#3A3A3D; --grid:#333336; --text:#ECECEF; --sec:#A1A1A6; --dim:#808085;
+          --accent:#0A84FF; --soft:#1F3A5C; --hover:#38383B; --ok:#32D74B; --warn:#FFB340; --err:#FF6961; --obs:#5A5A5F;
+          --rev:#0A84FF; }
+  html, body { margin:0; }
+  body { background:var(--bg); color:var(--text); font:13px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+         display:flex; height:100vh; overflow:hidden; }
+  /* left column: as bruceworx_start.py (248 px, captions, 32 px rows) */
+  .side { width:248px; box-sizing:border-box; padding:18px 14px 14px; border-right:1px solid var(--border); display:flex;
+          flex-direction:column; gap:2px; flex:none; }
+  .cap { color:var(--dim); font-size:10px; font-weight:700; letter-spacing:.7px; padding:0 4px 4px; }
+  .it { height:32px; display:flex; align-items:center; gap:9px; padding:0 8px; border-radius:7px; }
+  .it .k { margin-left:auto; color:var(--dim); font-size:11px; }
+  .it.on { background:var(--soft); font-weight:600; }
+  .gap { height:10px; }
+  .vs { display:flex; align-items:center; gap:7px; padding:5px 6px; font-weight:600; border-radius:6px; }
+  .vs .sub { font-weight:400; color:var(--sec); font-size:11.5px; display:block; }
+  .sp { flex:1; }
+  /* icons */
+  .i { width:18px; height:18px; flex:none; display:inline-block; vertical-align:-4px; }
+  .main { flex:1; padding:18px 24px; display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .hdr { display:flex; align-items:center; gap:12px; }
+  .hdr .t { font-size:20px; font-weight:700; }
+  .hdr .s { color:var(--sec); font-size:12px; margin-top:2px; }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin:0 4px 1px 0; vertical-align:middle; }
+  .btn { border:1px solid var(--border); background:var(--card); border-radius:6px; padding:4px 11px; font-size:12.5px; }
+  .btn.p { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .title { font-size:15px; font-weight:700; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .ch { display:flex; align-items:center; gap:8px; padding:9px 12px 7px; }
+  .ch .title { font-size:13.5px; }
+  .ch .more { margin-left:auto; color:var(--accent); font-size:12px; }
+  .ch .n { color:var(--sec); font-size:12px; }
+  /* tiles */
+  .tiles { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
+  .tile { padding:11px 13px 11px; position:relative; }
+  .tile .lab { color:var(--sec); font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .tile .num { font-size:26px; font-weight:700; margin:3px 0 7px; font-variant-numeric:tabular-nums; letter-spacing:-.3px; }
+  .tile .chev { position:absolute; right:12px; top:11px; color:var(--dim); }
+  .bar { display:flex; height:6px; border-radius:3px; overflow:hidden; background:var(--grid); gap:1px; }
+  .bar span { display:block; height:100%; }
+  .w { background:var(--warn); } .r { background:var(--rev); } .g { background:var(--ok); } .o { background:var(--obs); }
+  .leg { display:flex; gap:10px; margin-top:7px; font-size:11px; color:var(--sec); font-variant-numeric:tabular-nums; flex-wrap:wrap; }
+  .leg i { display:inline-block; width:7px; height:7px; border-radius:2px; margin-right:4px; vertical-align:0; }
+  .leg b { color:var(--text); font-weight:600; }
+  .grid2 { display:grid; grid-template-columns:1.45fr 1fr; gap:14px; min-height:0; }
+  .colm { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  /* tables like bwStartTable */
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th { text-align:left; background:var(--hover); color:var(--dim); font-size:10px; font-weight:700; letter-spacing:.4px;
+       padding:5px 8px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  td { padding:0 8px; height:30px; border-bottom:1px solid var(--grid); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  tr:last-child td { border-bottom:none; }
+  td.sec { color:var(--sec); }
+  tr.grp td { color:var(--sec); font-size:11px; letter-spacing:.3px; height:26px; }
+  tr.grp td b { color:var(--text); font-weight:600; }
+  .pn { font-variant-numeric:tabular-nums; }
+  .badge { font-size:9px; font-weight:700; padding:0 4px; border:1px solid var(--border); border-radius:4px; color:var(--sec);
+           line-height:14px; display:inline-block; letter-spacing:.2px; }
+  .badge.wip { color:var(--warn); border-color:var(--warn); }
+  .badge.rel { color:var(--ok); border-color:var(--ok); }
+  .badge.rev { color:var(--accent); border-color:var(--accent); background:var(--soft); }
+  .badge.u { color:var(--sec); }
+  .warnt { color:var(--warn); font-weight:600; }
+  .acc { color:var(--accent); }
+  /* projects */
+  .proj { display:grid; grid-template-columns:22px 1fr 170px 160px; align-items:center; gap:10px; padding:8px 12px;
+          border-top:1px solid var(--grid); }
+  .proj .nm { font-weight:600; }
+  .proj .pn2 { color:var(--sec); font-size:11.5px; }
+  .proj .bar { height:8px; border-radius:4px; }
+  .proj .st { font-size:11.5px; color:var(--sec); text-align:right; line-height:15px; }
+  .proj .st b { color:var(--text); }
+  /* activity */
+  .day { color:var(--dim); font-size:10px; font-weight:700; letter-spacing:.6px; padding:6px 12px 2px; }
+  .ev { display:grid; grid-template-columns:18px 1fr auto; gap:8px; padding:4px 12px; align-items:start; font-size:12.3px; line-height:17px; }
+  .ev .tm { color:var(--dim); font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .ev .who { font-weight:600; }
+  .ev .wh { color:var(--sec); }
+  .spark { display:flex; align-items:flex-end; gap:2px; height:22px; padding:0 12px 4px; }
+  .spark span { flex:1; background:var(--accent); opacity:.55; border-radius:1px 1px 0 0; min-height:1px; }
+  .spark span.t { opacity:1; }
+  .seg { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; font-size:11.5px; background:var(--card); }
+  .seg div { padding:1px 8px; color:var(--sec); border-left:1px solid var(--border); }
+  .seg div:first-child { border-left:none; }
+  .seg div.on { background:var(--soft); color:var(--text); font-weight:600; }
+  /* health */
+  .hl { display:grid; grid-template-columns:14px 1fr auto; gap:6px; padding:5px 12px; font-size:12.3px; align-items:center;
+        border-top:1px solid var(--grid); }
+  .hl .r2 { color:var(--sec); font-size:11.5px; }
+  /* change rows */
+  .chip { font-size:9px; font-weight:700; padding:0 5px; border-radius:4px; line-height:15px; display:inline-block; letter-spacing:.3px; }
+  .chip.open { color:var(--warn); background:color-mix(in srgb, var(--warn) 16%, transparent); }
+  .chip.appr { color:var(--accent); background:var(--soft); }
+  /* recent */
+  .rh { display:flex; align-items:center; gap:10px; }
+  .filter { margin-left:auto; width:240px; border:1px solid var(--border); background:var(--card); border-radius:6px; height:22px;
+            color:var(--dim); font-size:12px; display:flex; align-items:center; padding:0 8px; box-sizing:border-box; }
+  .cards { display:grid; grid-template-columns:repeat(5, 1fr); gap:14px; }
+  .rc { background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .rc .th { height:66px; display:flex; align-items:center; justify-content:center; border-bottom:1px solid var(--grid); }
+  .rc .inf { padding:6px 10px 8px; font-size:12px; line-height:17px; }
+  .rc .inf b { font-weight:600; display:block; }
+  .rc .inf span { color:var(--sec); }
+  .foot { color:var(--sec); font-size:12px; display:flex; gap:6px; }
+  .foot .acc { color:var(--accent); }
+  .muted { color:var(--sec); }
+  /* empty vault */
+  .steps { padding:4px 0 6px; }
+  .step { display:grid; grid-template-columns:26px 1fr auto; gap:10px; align-items:center; padding:9px 14px; border-top:1px solid var(--grid); }
+  .step .n { width:20px; height:20px; border-radius:50%; border:1.5px solid var(--border); display:flex; align-items:center;
+             justify-content:center; font-size:11px; font-weight:700; color:var(--sec); }
+  .step .n.done { background:var(--ok); border-color:var(--ok); color:#fff; }
+  .step .d { color:var(--sec); font-size:12px; margin-top:1px; }
+  .step .t { font-weight:600; }
+  .note { position:absolute; right:10px; bottom:6px; font-size:10px; color:var(--dim); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="part" viewBox="0 0 18 18"><path d="M9 1.5l6.5 3.6v7.8L9 16.5l-6.5-3.6V5.1z" fill="#3D7BE0"/><path d="M9 1.5l6.5 3.6L9 8.7 2.5 5.1z" fill="#7FB0F5"/><path d="M9 8.7v7.8l6.5-3.6V5.1z" fill="#2A5DB8"/></symbol>
+    <symbol id="asm" viewBox="0 0 18 18"><path d="M5 2l4 2.2v4.4L5 10.8 1 8.6V4.2z" fill="#E8B21E"/><path d="M13 2l4 2.2v4.4l-4 2.2-4-2.2V4.2z" fill="#3D7BE0"/><path d="M9 8.6l4 2.2v4.4L9 17.4l-4-2.2v-4.4z" fill="#E8B21E"/></symbol>
+    <symbol id="dwg" viewBox="0 0 18 18"><rect x="1.5" y="2.5" width="15" height="13" rx="1.2" fill="none" stroke="#8A8A90" stroke-width="1.4"/><rect x="3.5" y="4.5" width="6" height="5" fill="none" stroke="#8A8A90" stroke-width="1.1"/><path d="M11 12h4M11 13.8h4M3.5 12h5" stroke="#8A8A90" stroke-width="1.1"/></symbol>
+    <symbol id="cots" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.5" fill="#9A9AA2"/><circle cx="9" cy="9" r="2.4" fill="#D8D8DE"/></symbol>
+    <symbol id="sketch" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="2" fill="#fff" stroke="#D93A3F" stroke-width="1.4"/><circle cx="8" cy="10" r="3.5" fill="none" stroke="#D93A3F" stroke-width="1.4"/></symbol>
+    <symbol id="sim" viewBox="0 0 18 18"><rect x="1.5" y="5" width="15" height="9" fill="#E8B21E"/><path d="M1.5 5h15M4 5v9M7 5v9M10 5v9M13 5v9" stroke="#C33" stroke-width="1"/><rect x="1.5" y="3" width="15" height="2" fill="#3DA34A"/></symbol>
+    <symbol id="open" viewBox="0 0 18 18"><path d="M1.5 4h5l1.5 1.5h8.5v9h-15z" fill="#3D7BE0"/><path d="M1.5 7h15l-1.5 7.5h-13z" fill="#7FB0F5"/></symbol>
+    <symbol id="imp" viewBox="0 0 18 18"><path d="M4 1.5h7l3.5 3.5v11.5H4z" fill="#fff" stroke="#8A8A90"/><path d="M2 10h7m-2.5-2.5L9 10l-2.5 2.5" stroke="#1F9D55" stroke-width="1.8" fill="none"/></symbol>
+    <symbol id="vault" viewBox="0 0 18 18"><path d="M1.5 3.5h5.5l1.5 1.5h8v10h-15z" fill="#3A78D8"/></symbol>
+    <symbol id="proj" viewBox="0 0 18 18"><rect x="1.5" y="3" width="15" height="12" rx="2" fill="none" stroke="var(--accent)" stroke-width="1.5"/><path d="M5 7h8M5 10h5" stroke="var(--accent)" stroke-width="1.5"/></symbol>
+    <symbol id="help" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" fill="#3D7BE0"/><text x="9" y="13" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">?</text></symbol>
+    <symbol id="gear" viewBox="0 0 18 18"><path d="M3 15l6-6M9 9l5-5 1 3-3 1z" stroke="#8A8A90" stroke-width="1.8" fill="none"/><path d="M15 15L5 5 3 3" stroke="#8A8A90" stroke-width="1.8"/></symbol>
+    <symbol id="eco" viewBox="0 0 24 24"><rect x="3.5" y="5" width="13" height="15" rx="2" fill="none" stroke="var(--accent)" stroke-width="1.8"/><path d="M7.5 3h11a2 2 0 0 1 2 2v13" fill="none" stroke="var(--accent)" stroke-width="1.8"/><path d="M7 11.3l2.3 2.3 4-4.2" fill="none" stroke="var(--accent)" stroke-width="1.9"/></symbol>
+    <symbol id="ecr" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z" fill="none" stroke="var(--warn)" stroke-width="1.8"/><path d="M12 9v5" stroke="var(--warn)" stroke-width="2.1"/><circle cx="12" cy="17.3" r="1.25" fill="var(--warn)"/></symbol>
+    <symbol id="ci" viewBox="0 0 18 18"><path d="M9 14V4M5 8l4-4 4 4" stroke="var(--accent)" stroke-width="1.8" fill="none"/></symbol>
+    <symbol id="rl" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="var(--ok)" stroke-width="1.6"/><path d="M5.5 9.2l2.4 2.4 4.6-4.8" stroke="var(--ok)" stroke-width="1.7" fill="none"/></symbol>
+    <symbol id="sb" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="var(--accent)" stroke-width="1.6"/><path d="M9 5v4.5l3 2" stroke="var(--accent)" stroke-width="1.6" fill="none"/></symbol>
+    <symbol id="nw" viewBox="0 0 18 18"><path d="M9 3v12M3 9h12" stroke="var(--sec)" stroke-width="1.8"/></symbol>
+  </defs>
+</svg>
+
+<template id="full">
+<div class="side">
+  <div class="cap">NEW</div>
+  <div class="it"><svg class="i"><use href="#part"/></svg>Part</div>
+  <div class="it"><svg class="i"><use href="#asm"/></svg>Assembly</div>
+  <div class="it"><svg class="i"><use href="#dwg"/></svg>Drawing</div>
+  <div class="it"><svg class="i"><use href="#proj"/></svg>Project…</div>
+  <div class="it"><svg class="i"><use href="#sketch"/></svg>Sketch</div>
+  <div class="it"><svg class="i"><use href="#sim"/></svg>Simulation study</div>
+  <div class="gap"></div>
+  <div class="cap">OPEN</div>
+  <div class="it"><svg class="i"><use href="#open"/></svg>Open file…<span class="k">⌘O</span></div>
+  <div class="it"><svg class="i"><use href="#imp"/></svg>Import STEP / STL…</div>
+  <div class="gap"></div>
+  <div class="cap">VAULT</div>
+  <div class="vs"><svg class="i"><use href="#vault"/></svg><span>Workshop ▾<span class="sub">iCloud Drive</span></span></div>
+  <div class="sp"></div>
+  <div class="it"><svg class="i"><use href="#help"/></svg>Getting started</div>
+  <div class="it"><svg class="i"><use href="#gear"/></svg>Settings</div>
+</div>
+
+<div class="main">
+  <div class="hdr">
+    <div>
+      <div class="t">Workshop</div>
+      <div class="s"><span class="dot" style="background:var(--ok)"></span>Up to date · read 1 min ago · iCloud Drive · you are bruce@mac · units mm</div>
+    </div>
+    <div class="sp"></div>
+    <div class="btn">Import Files…</div>
+    <div class="btn">Vault panel</div>
+    <div class="btn p">New Project…</div>
+  </div>
+
+  <div class="tiles">
+    <div class="card tile"><div class="lab"><svg class="i"><use href="#part"/></svg>Parts</div><span class="chev">›</span>
+      <div class="num">214</div>
+      <div class="bar"><span class="w" style="width:52%"></span><span class="r" style="width:3%"></span><span class="g" style="width:43%"></span><span class="o" style="width:2%"></span></div>
+      <div class="leg"><span><i class="w"></i>WIP <b>111</b></span><span><i class="r"></i>Review <b>6</b></span><span><i class="g"></i>Released <b>93</b></span><span><i class="o"></i>Obsolete <b>4</b></span></div></div>
+    <div class="card tile"><div class="lab"><svg class="i"><use href="#asm"/></svg>Assemblies</div><span class="chev">›</span>
+      <div class="num">23</div>
+      <div class="bar"><span class="w" style="width:61%"></span><span class="r" style="width:9%"></span><span class="g" style="width:30%"></span></div>
+      <div class="leg"><span><i class="w"></i>WIP <b>14</b></span><span><i class="r"></i>Review <b>2</b></span><span><i class="g"></i>Released <b>7</b></span></div></div>
+    <div class="card tile"><div class="lab"><svg class="i"><use href="#dwg"/></svg>Drawings</div><span class="chev">›</span>
+      <div class="num">61</div>
+      <div class="bar"><span class="w" style="width:48%"></span><span class="r" style="width:5%"></span><span class="g" style="width:47%"></span></div>
+      <div class="leg"><span><i class="w"></i>WIP <b>29</b></span><span><i class="r"></i>Review <b>3</b></span><span><i class="g"></i>Released <b>29</b></span><span class="warnt">4 out of date</span></div></div>
+    <div class="card tile"><div class="lab"><svg class="i"><use href="#cots"/></svg>Bought (COTS)</div><span class="chev">›</span>
+      <div class="num">38</div>
+      <div class="bar"><span class="w" style="width:21%"></span><span class="g" style="width:79%"></span></div>
+      <div class="leg"><span><i class="w"></i>WIP <b>8</b></span><span><i class="g"></i>Released <b>30</b></span></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="colm">
+      <div class="card">
+        <div class="ch"><span class="title">Projects</span><span class="n">3</span><span class="more">All projects ›</span></div>
+        <div class="proj"><svg class="i"><use href="#asm"/></svg>
+          <div><div class="nm">Workbench cart <span class="badge u">IN</span></div><div class="pn2">DM-02-01001-001 · 18 items · 13 drawings</div></div>
+          <div><div class="bar"><span class="g" style="width:44%"></span><span class="r" style="width:11%"></span><span class="w" style="width:45%"></span></div></div>
+          <div class="st"><b>8 of 18</b> released<br><span class="warnt">2 drawings out of date</span></div></div>
+        <div class="proj"><svg class="i"><use href="#asm"/></svg>
+          <div><div class="nm">Pedestal</div><div class="pn2">LE-02-02001-001 · 41 items · 30 drawings</div></div>
+          <div><div class="bar"><span class="g" style="width:12%"></span><span class="r" style="width:5%"></span><span class="w" style="width:83%"></span></div></div>
+          <div class="st"><b>5 of 41</b> released<br>2 in review</div></div>
+        <div class="proj"><svg class="i"><use href="#asm"/></svg>
+          <div><div class="nm">Bench vise</div><div class="pn2">DM-02-00410-001 · rev B · 12 items</div></div>
+          <div><div class="bar"><span class="g" style="width:100%"></span></div></div>
+          <div class="st"><b>12 of 12</b> released<br>ECO-0003 open</div></div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><span class="title">My work</span><span class="n">10</span><span class="more">Open in the Vault panel ›</span></div>
+        <table>
+          <tr><th style="width:36%">PART NUMBER</th><th>DESCRIPTION</th><th style="width:28%">STATUS</th></tr>
+          <tr class="grp"><td colspan="3">CHECKED OUT TO ME · <b>3</b></td></tr>
+          <tr><td class="pn"><svg class="i"><use href="#part"/></svg> DM-01-01002-001-02</td><td>Cross member</td><td>Modified locally</td></tr>
+          <tr><td class="pn"><svg class="i"><use href="#asm"/></svg> DM-02-01002-001-01</td><td>Frame</td><td>Checked out to me</td></tr>
+          <tr class="grp"><td colspan="3">WAITING FOR REVIEW · <b>2</b></td></tr>
+          <tr><td class="pn"><svg class="i"><use href="#part"/></svg> DM-01-01004-001-01</td><td>Caster plate</td><td><span class="badge rev">IN REVIEW</span> since Tue</td></tr>
+          <tr class="grp"><td colspan="3">DRAWINGS OUT OF DATE · <b>4</b> &nbsp;<span class="acc">Update drawings…</span></td></tr>
+          <tr><td class="pn"><svg class="i"><use href="#dwg"/></svg> DM-01-01001-001-02</td><td>Side rail (drawing)</td><td class="warnt">model changed in 03</td></tr>
+          <tr><td class="pn"><svg class="i"><use href="#dwg"/></svg> DM-02-01001-001-01</td><td>Workbench cart (drawing)</td><td class="warnt">a part below changed</td></tr>
+          <tr class="grp"><td colspan="3">NEWER IN THE VAULT · <b>1</b> &nbsp;·&nbsp; ECOS OPEN · <b>1</b> &nbsp;<span class="acc">+ 3 more rows</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="colm">
+      <div class="card">
+        <div class="ch"><span class="title">Changes</span><span class="n">3 open</span><span class="more">All changes ›</span></div>
+        <table>
+          <tr><td style="width:24px"><svg class="i"><use href="#eco"/></svg></td><td class="pn"><b>ECO-0003</b></td><td class="sec">Jaw insert wears fast</td><td style="text-align:right"><span class="chip open">OPEN</span> 1 of 3 in review</td></tr>
+          <tr><td><svg class="i"><use href="#ecr"/></svg></td><td class="pn"><b>ECR-0007</b></td><td class="sec">Caster bracket cracks</td><td style="text-align:right"><span class="chip open">OPEN</span> to decide</td></tr>
+          <tr><td><svg class="i"><use href="#ecr"/></svg></td><td class="pn"><b>ECR-0006</b></td><td class="sec">Handle too low</td><td style="text-align:right"><span class="chip appr">APPROVED</span> no ECO yet</td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="ch"><span class="title">Activity</span><div class="seg" style="margin-left:auto"><div>7 d</div><div class="on">14 d</div><div>30 d</div></div></div>
+        <div class="spark">
+          <span style="height:20%"></span><span style="height:5%"></span><span style="height:0"></span><span style="height:45%"></span><span style="height:30%"></span><span style="height:60%"></span><span style="height:10%"></span>
+          <span style="height:0"></span><span style="height:25%"></span><span style="height:80%"></span><span style="height:35%"></span><span style="height:15%"></span><span style="height:55%"></span><span class="t" style="height:100%"></span>
+        </div>
+        <div class="day">TODAY</div>
+        <div class="ev"><svg class="i"><use href="#rl"/></svg><div><span class="who">You</span> released <span class="pn">DM-01-01003-001</span> rev A <span class="wh">· Deck</span></div><span class="tm">14:32</span></div>
+        <div class="ev"><svg class="i"><use href="#ci"/></svg><div><span class="who">You</span> checked in 6 files <span class="wh">· “Side rail: slot 2 mm wider”</span></div><span class="tm">11:05</span></div>
+        <div class="ev"><svg class="i"><use href="#sb"/></svg><div><span class="who">You</span> submitted <span class="pn">DM-01-01004-001</span> for review</div><span class="tm">09:40</span></div>
+        <div class="day">YESTERDAY</div>
+        <div class="ev"><svg class="i"><use href="#ecr"/></svg><div><span class="who">You</span> raised ECR-0007 <span class="wh">· Caster bracket cracks</span></div><span class="tm">17:12</span></div>
+        <div class="ev"><svg class="i"><use href="#nw"/></svg><div><span class="who">You</span> created project Workbench cart <span class="wh">· 13 items, 6 drawings</span></div><span class="tm">10:02</span></div>
+        <div style="padding:2px 12px 8px" class="acc">Show older ›</div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><span class="title">Vault health</span><span class="more">Check vault…</span></div>
+        <div class="hl"><span class="dot" style="background:var(--ok)"></span><span>iCloud: all 1 412 files listed, 1 386 on this Mac</span><span class="r2">26 in the cloud only</span></div>
+        <div class="hl"><span class="dot" style="background:var(--warn)"></span><span>2 versions still syncing from another Mac</span><span class="r2">since 3 min</span></div>
+        <div class="hl"><span class="dot" style="background:var(--ok)"></span><span>Locks: 3 held by you, none by others</span><span class="r2">oldest 2 d</span></div>
+        <div class="hl"><span class="dot" style="background:var(--ok)"></span><span>Journal: 2 312 events from 1 Mac, no problems</span><span class="r2">0.02 s to read</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rh"><span class="title">Recent in this vault</span>
+    <div class="seg"><div class="on">All</div><div>Parts</div><div>Assemblies</div><div>Drawings</div></div>
+    <div class="filter">Filter by name or P/N</div></div>
+  <div class="cards">
+    <div class="rc"><div class="th"><svg width="46" height="46"><use href="#asm"/></svg></div><div class="inf"><b>Workbench cart</b><span>DM-02-01001-001</span> <span class="badge wip">WIP 01</span></div></div>
+    <div class="rc"><div class="th"><svg width="46" height="46"><use href="#part"/></svg></div><div class="inf"><b>Side rail</b><span>DM-01-01001-001</span> <span class="badge wip">WIP 03</span></div></div>
+    <div class="rc"><div class="th"><svg width="46" height="46"><use href="#part"/></svg></div><div class="inf"><b>Deck</b><span>DM-01-01003-001</span> <span class="badge rel">Rev A</span></div></div>
+    <div class="rc"><div class="th"><svg width="46" height="46"><use href="#dwg"/></svg></div><div class="inf"><b>Side rail (drawing)</b><span>DM-01-01001-001</span> <span class="badge wip">WIP 02</span></div></div>
+    <div class="rc"><div class="th"><svg width="46" height="46"><use href="#part"/></svg></div><div class="inf"><b>Caster plate</b><span>DM-01-01004-001</span> <span class="badge rev">In review 01</span></div></div>
+  </div>
+  <div class="foot">Showing 5 of 27 vault files · only files in this vault are listed while it is open</div>
+</div>
+</template>
+
+<template id="empty">
+<div class="side">
+  <div class="cap">NEW</div>
+  <div class="it"><svg class="i"><use href="#part"/></svg>Part</div>
+  <div class="it"><svg class="i"><use href="#asm"/></svg>Assembly</div>
+  <div class="it"><svg class="i"><use href="#dwg"/></svg>Drawing</div>
+  <div class="it"><svg class="i"><use href="#proj"/></svg>Project…</div>
+  <div class="gap"></div>
+  <div class="cap">VAULT</div>
+  <div class="vs"><svg class="i"><use href="#vault"/></svg><span>Workshop ▾<span class="sub">iCloud Drive</span></span></div>
+  <div class="sp"></div>
+</div>
+<div class="main">
+  <div class="hdr">
+    <div><div class="t">Workshop</div>
+      <div class="s"><span class="dot" style="background:var(--ok)"></span>New vault, created today · iCloud Drive · you are bruce@mac · units mm</div></div>
+    <div class="sp"></div>
+    <div class="btn">Import Files…</div>
+    <div class="btn p">New Project…</div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="ch"><span class="title">Get started</span><span class="n">1 of 4 done</span></div>
+      <div class="steps">
+        <div class="step"><span class="n done">✓</span><div><div class="t">Vault settings</div><div class="d">Programs DM, LE · numbering DM-01-01001-001 · units mm · ANSI B drawings</div></div><span class="acc">Change…</span></div>
+        <div class="step"><span class="n">2</span><div><div class="t">Start a project</div><div class="d">Type its structure; every part, assembly and drawing is numbered and checked in as WIP 01</div></div><div class="btn p">New Project…</div></div>
+        <div class="step"><span class="n">3</span><div><div class="t">Or bring files in</div><div class="d">FreeCAD, STEP or Fusion exports: they get numbers and their links are kept</div></div><div class="btn">Import Files…</div></div>
+        <div class="step"><span class="n">4</span><div><div class="t">Or make one part</div><div class="d">New Part numbers it when you first save it into the vault</div></div><div class="btn">New Part</div></div>
+      </div>
+    </div>
+    <div class="colm">
+      <div class="card">
+        <div class="ch"><span class="title">Activity</span></div>
+        <div class="day">TODAY</div>
+        <div class="ev"><svg class="i"><use href="#nw"/></svg><div><span class="who">You</span> created the vault <span class="wh">· ~/Library/Mobile Documents/…/Workshop</span></div><span class="tm">09:12</span></div>
+        <div style="height:6px"></div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="title">Vault health</span></div>
+        <div class="hl"><span class="dot" style="background:var(--ok)"></span><span>iCloud Drive folder, syncing on</span><span class="r2"></span></div>
+        <div class="hl"><span class="dot" style="background:var(--ok)"></span><span>Journal: empty, ready</span><span class="r2"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">No vault files opened yet. Files you open from this vault are listed here; files outside it are not.</div>
+</div>
+</template>
+
+<script>
+const q = new URLSearchParams(location.search);
+if ((q.get("theme") || "light") === "dark") document.body.classList.add("dark");
+document.body.appendChild(document.getElementById(q.get("fig") || "full").content.cloneNode(true));
+</script>
+</body>
+</html>

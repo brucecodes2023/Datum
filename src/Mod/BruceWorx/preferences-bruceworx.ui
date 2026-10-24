@@ -840,6 +840,25 @@
        </layout>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="CreateVaultInTab">
+        <property name="toolTip">
+         <string>On by default. Create Vault opens as a full-window tab of its own, with numbered sections and Cancel / Create at the bottom. Off runs it in the task panel on the right.</string>
+        </property>
+        <property name="text">
+         <string>Create Vault in a full-window tab</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>CreateVaultInTab</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="PinStartTab">
         <property name="toolTip">
          <string>On by default. The Start page, where the vault is, stays the first document tab and has no close button, so one click goes back to it.</string>

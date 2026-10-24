@@ -1002,6 +1002,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "Create Vault in a full-window tab",
+"tip": "On by default. Create Vault opens as a full-window tab of its own, with numbered sections and Cancel / Create at the bottom. Off runs it in the task panel on the right.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Dependency lines on hover",
 "tip": "Hovering a Browser row draws thin lines to the rows it uses (Sketch to Pad) and the rows that use it.",
 "page": "BruceWorx",

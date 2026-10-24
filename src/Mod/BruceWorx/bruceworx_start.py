@@ -323,6 +323,22 @@ def find_vault_ref(path: str) -> str:
     return os.path.join(path, refs[0]) if refs else ""
 
 
+def vault_folder(vault_path: str, root: str = "") -> str:
+    """The vault's folder: its root once read, else the VaultPath setting (a folder or its .bwvault file)."""
+    folder = root or os.path.expanduser(vault_path or "")
+    if folder.lower().endswith(".bwvault"):
+        folder = os.path.dirname(folder)
+    return os.path.normpath(folder) if folder else ""
+
+
+def in_folder(path: str, folder: str) -> bool:
+    """True when ``path`` lies inside ``folder`` (the vault's own files and work copies)."""
+    if not folder:
+        return False
+    path, folder = os.path.normpath(os.path.expanduser(path)), os.path.normpath(folder)
+    return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
+
+
 def read_vault(path: str, actor: str = "") -> dict:
     """A snapshot of the vault for the page (replays the journal; worker thread).
 
@@ -1238,9 +1254,12 @@ def _make_classes():
             self._render_vault()
             parts = self.vault.get("parts") if self.vault and "parts" in self.vault else None
             vault_root = self.vault.get("root", "") if self.vault else ""
+            # With a vault open the page is the vault's: files from elsewhere are not listed (24 Oct).
+            folder = vault_folder(self.vault.get("path", ""), vault_root) if self.vault else ""
+            entries = [e for e in self.entries if in_folder(e[0], folder)] if folder else self.entries
             rows = []
             text = self.filter_edit.text()
-            for path, exists, mtime in self.entries:
+            for path, exists, mtime in entries:
                 info = self.infos.get(path, {})
                 shown = merge_vault(info, parts)
                 name = os.path.basename(path)
@@ -1290,10 +1309,15 @@ def _make_classes():
             self.table.fit()
             self.table.setVisible(bool(rows))
             self.empty.setVisible(not rows)
-            self.empty.setText("No recent files yet. Files you open or save are listed here."
-                               if not self.entries else "No recent file matches the filter.")
-            total = len(self.entries)
-            self.count_label.setText(f"Showing {len(rows)} of {total} recent file{'s' if total != 1 else ''}")
+            if folder:
+                self.empty.setText("No vault files opened yet. Open one from the Vault panel, or start a new part."
+                                   if not entries else "No vault file matches the filter.")
+            else:
+                self.empty.setText("No recent files yet. Files you open or save are listed here."
+                                   if not self.entries else "No recent file matches the filter.")
+            total = len(entries)
+            word = "vault file" if folder else "recent file"
+            self.count_label.setText(f"Showing {len(rows)} of {total} {word}{'s' if total != 1 else ''}")
 
         def _pixmap(self, path, mtime, info):
             data = info.get("thumbnail")

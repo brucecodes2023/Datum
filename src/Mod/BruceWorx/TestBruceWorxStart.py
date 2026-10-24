@@ -315,5 +315,19 @@ class TestStockStartView(unittest.TestCase):
         self.assertIn('"ShowOnStartup"', text)
 
 
+class VaultFolderTests(unittest.TestCase):
+    def test_folder_from_ref_file_or_root(self):
+        self.assertEqual(start.vault_folder("/v/Vector/Vector.bwvault"), "/v/Vector")
+        self.assertEqual(start.vault_folder("/v/Vector"), "/v/Vector")
+        self.assertEqual(start.vault_folder("/elsewhere/x.bwvault", "/v/Vector"), "/v/Vector")
+        self.assertEqual(start.vault_folder(""), "")
+
+    def test_in_folder(self):
+        self.assertTrue(start.in_folder("/v/Vector/work/me/VC-01-01001-001.FCStd", "/v/Vector"))
+        self.assertFalse(start.in_folder("/v/VectorOld/a.FCStd", "/v/Vector"))
+        self.assertFalse(start.in_folder("/home/a.FCStd", "/v/Vector"))
+        self.assertFalse(start.in_folder("/v/Vector/a.FCStd", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

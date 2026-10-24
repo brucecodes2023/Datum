@@ -2187,3 +2187,35 @@ QWidget#BruceWorxParameters QTreeWidget#bwParamTree::branch:closed:has-children,
 QWidget#BruceWorxParameters QTreeWidget#bwParamTree::branch:open:has-children {
   padding: 3px;
 }
+
+/* Create Vault as a full-window tab (bruceworx_vaultwizard.py): a centred column of section cards on the
+   window background, and a bar with Cancel / Create at the bottom. */
+QWidget#BruceWorxCreateVaultPage,
+QWidget#BruceWorxCreateVaultPage QScrollArea#bwVaultPageScroll,
+QWidget#BruceWorxCreateVaultPage QWidget#bwVaultPageBody {
+  background-color: @GeneralBackgroundColor;
+}
+
+QWidget#BruceWorxCreateVaultPage QLabel#bwVaultPageTitle {
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxCreateVaultPage QLabel#bwVaultPageIntro {
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxCreateVaultPage QFrame#bwVaultPageCard {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+QWidget#BruceWorxCreateVaultPage QLabel#bwVaultPageStep {
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxCreateVaultPage QFrame#bwVaultPageBar {
+  background-color: @CardBackgroundColor;
+  border: none;
+  border-top: 1px solid @GeneralBorderColor;
+}

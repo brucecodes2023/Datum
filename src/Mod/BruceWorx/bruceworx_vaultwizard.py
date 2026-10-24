@@ -4,7 +4,11 @@
 Each runs in FreeCAD's task panel, like Pad or a joint: the boxes are task
 boxes, OK and Cancel are the panel's buttons.
 
-* Create Vault (BruceWorx → Create Vault…, the Start page, Cmd-K). Boxes:
+* Create Vault (BruceWorx → Create Vault…, the Start page, Cmd-K) opens as a
+  full-window tab of its own (24 Oct 2026, the user's choice): a centred page
+  with numbered sections and Cancel / Create at the bottom; the Start tab is
+  one click away. Preferences/BruceWorx/CreateVaultInTab (default on); off
+  runs it in the task panel as before. Sections:
   the vault's name and folder (the folder follows the name, under iCloud
   Drive's "BruceWorx Vaults" when there is one, until the user types or picks
   one); part numbering, fixed form PROG-DT-PPPPP-SSS-REV (programs, document
@@ -2294,9 +2298,169 @@ def _repaint_title():
         QtCore.QTimer.singleShot(delay, update)
 
 
+TAB_PREF = "CreateVaultInTab"
+PAGE_NAME = "BruceWorxCreateVaultPage"
+PAGE_TITLE = "Create Vault"
+PAGE_STEPS = ("Name and folder", "Part numbering", "Company part properties")
+PAGE_INTRO = ("A vault keeps your parts, assemblies and drawings with their part numbers, revisions and "
+              "history, in one folder you choose (iCloud Drive works).")
+
+
 def show_create(folder="", name=""):
-    """The Create Vault task dialog; ``folder`` pre-fills it (Open vault… on a plain folder)."""
+    """Create Vault: a full-window tab (default) or the task dialog; ``folder`` pre-fills it."""
+    import FreeCAD
+
+    if FreeCAD.ParamGet(PREFS_PATH).GetBool(TAB_PREF, True):
+        return show_create_page(folder, name)
     return _show("Create Vault", lambda c: c["CreateVaultPanel"](folder, name))
+
+
+def _page_subwindow():
+    import FreeCADGui
+    from PySide import QtWidgets
+
+    mdi = FreeCADGui.getMainWindow().findChild(QtWidgets.QMdiArea)
+    if mdi is None:
+        return None, None
+    for sub in mdi.subWindowList():
+        if sub.widget() is not None and sub.widget().objectName() == PAGE_NAME:
+            return mdi, sub
+    return mdi, None
+
+
+def _show_start():
+    """Bring the Start tab forward (Std_Start opens it when it is closed)."""
+    import FreeCADGui
+    from PySide import QtWidgets
+
+    mdi = FreeCADGui.getMainWindow().findChild(QtWidgets.QMdiArea)
+    for sub in mdi.subWindowList() if mdi is not None else []:
+        if sub.widget() is not None and sub.widget().metaObject().className() == "StartGui::StartView":
+            mdi.setActiveSubWindow(sub)
+            return
+    try:
+        FreeCADGui.runCommand("Std_Start")
+    except Exception:
+        pass
+
+
+def show_create_page(folder="", name=""):
+    """Create Vault as a tab of its own in the window; the one already open is brought forward."""
+    import FreeCADGui
+    from PySide import QtCore, QtGui, QtWidgets
+
+    mdi, sub = _page_subwindow()
+    if mdi is None:
+        return _show("Create Vault", lambda c: c["CreateVaultPanel"](folder, name))
+    if sub is not None:
+        mdi.setActiveSubWindow(sub)
+        return True
+    try:
+        panel = _make_classes()["CreateVaultPanel"](folder, name)
+    except ImportError as exc:
+        _message("Create Vault", f"Vaults need the BruceWorx hooks add-on: {exc}")
+        return False
+    except Exception as exc:
+        _message("Create Vault", f"Create Vault could not open: {exc}")
+        return False
+
+    page = QtWidgets.QWidget()
+    page.setObjectName(PAGE_NAME)
+    page.setWindowTitle(PAGE_TITLE)
+    page.setWindowIcon(QtGui.QIcon(":/icons/folder.svg"))
+    outer = QtWidgets.QVBoxLayout(page)
+    outer.setContentsMargins(0, 0, 0, 0)
+    outer.setSpacing(0)
+    scroll = QtWidgets.QScrollArea(page)
+    scroll.setObjectName("bwVaultPageScroll")
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+    outer.addWidget(scroll, 1)
+    body = QtWidgets.QWidget()
+    body.setObjectName("bwVaultPageBody")
+    row = QtWidgets.QHBoxLayout(body)
+    row.setContentsMargins(24, 28, 24, 28)
+    row.addStretch(1)
+    column = QtWidgets.QWidget(body)
+    column.setMaximumWidth(860)
+    column.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+    col = QtWidgets.QVBoxLayout(column)
+    col.setContentsMargins(0, 0, 0, 0)
+    col.setSpacing(14)
+    row.addWidget(column, 100)
+    row.addStretch(1)
+    scroll.setWidget(body)
+
+    title = QtWidgets.QLabel(PAGE_TITLE, column)
+    title.setObjectName("bwVaultPageTitle")
+    font = title.font()
+    font.setPointSizeF(font.pointSizeF() * 1.7)
+    font.setBold(True)
+    title.setFont(font)
+    col.addWidget(title)
+    intro = QtWidgets.QLabel(PAGE_INTRO, column)
+    intro.setObjectName("bwVaultPageIntro")
+    intro.setWordWrap(True)
+    col.addWidget(intro)
+
+    for number, (section, box) in enumerate(zip(PAGE_STEPS, panel.form), start=1):
+        card = QtWidgets.QFrame(column)
+        card.setObjectName("bwVaultPageCard")
+        lay = QtWidgets.QVBoxLayout(card)
+        lay.setContentsMargins(18, 14, 18, 16)
+        lay.setSpacing(8)
+        head = QtWidgets.QLabel(f"{number}  {section}", card)
+        head.setObjectName("bwVaultPageStep")
+        hfont = head.font()
+        hfont.setBold(True)
+        hfont.setPointSizeF(hfont.pointSizeF() * 1.15)
+        head.setFont(hfont)
+        lay.addWidget(head)
+        lay.addWidget(box)
+        col.addWidget(card)
+    col.addStretch(1)
+
+    bar = QtWidgets.QFrame(page)
+    bar.setObjectName("bwVaultPageBar")
+    bar_lay = QtWidgets.QHBoxLayout(bar)
+    bar_lay.setContentsMargins(24, 10, 24, 10)
+    note = QtWidgets.QLabel("Nothing is written until you press Create.", bar)
+    note.setObjectName("bwVaultHint")
+    bar_lay.addWidget(note)
+    bar_lay.addStretch(1)
+    buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, bar)
+    bar_lay.addWidget(buttons)
+    outer.addWidget(bar)
+    panel.modifyStandardButtons(buttons)  # the panel's own OK handling: "Create"
+    buttons.button(QtWidgets.QDialogButtonBox.Ok).setDefault(True)
+
+    def close_page():
+        _m, sub_now = _page_subwindow()
+        if sub_now is not None:
+            sub_now.close()
+        _show_start()
+
+    def create():
+        if panel.accept():  # creates, releases, offers the import
+            close_page()
+
+    def cancel():
+        panel.reject()
+        close_page()
+
+    buttons.accepted.connect(create)
+    buttons.rejected.connect(cancel)
+    _state["page_panel"] = panel  # kept alive with the page
+
+    for widget in [page] + page.findChildren(QtWidgets.QWidget):
+        widget.setAttribute(QtCore.Qt.WA_ContentsMarginsRespectsSafeArea, False)
+    sub = mdi.addSubWindow(page)
+    sub.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+    sub.setWindowTitle(PAGE_TITLE)
+    sub.showMaximized()
+    mdi.setActiveSubWindow(sub)
+    panel.name_edit.setFocus()
+    return True
 
 
 def show_import(root=""):
