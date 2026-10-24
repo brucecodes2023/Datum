@@ -1,0 +1,285 @@
+%======================================================================
+\subsection{BW-PDM-08 --- Plan: migrating from Fusion (24 Oct 2026, approved 24 Oct)}\label{sec:pdm08-plan}
+%======================================================================
+
+\eref{PDM-08} moves the Fusion designs into the vault, numbered and at the right revision, and turns the FC-T01 switch
+criteria into the checklist that closes M6. It comes last in the track (it depends on the pilot, \eref{PDM-07}), but the
+facts below decide what the export from Fusion must contain, and that is worth knowing before the pilot exports
+anything. The acceptance stays as written: \emph{all LE parts imported, numbered and released; FC-T01 criteria met.}
+
+%----------------------------------------------------------------------
+\subsubsection*{1. What Fusion can give, and what survives}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.3cm}>{\hsize=1.35\hsize}X>{\raggedright\arraybackslash}p{2.7cm}>{\hsize=0.65\hsize}X@{}}
+\toprule
+Export & Holds & FreeCAD reads & Use in the migration\\
+\midrule
+\file{.f3d} & One design: history, sketches, parameters, joints, appearances, materials & no (Autodesk's format) &
+  archive only, attached to the item\\
+\file{.f3z} & A design with the designs it references & no & archive only, attached to the assembly\\
+STEP (AP214, \verify{} AP242) & B-rep solids; one \code{PRODUCT} per component and one occurrence (NAUO)
+  per instance, with placements, names, colours. \textbf{No history,
+  parameters, sketches or joints.} & yes (\code{Import}) & the geometry\\
+STL, 3MF, OBJ & meshes & yes, as meshes & print files only; not migrated as models\\
+Drawing PDF & the sheet as vector graphics & no & attached as the released drawing of a migrated revision\\
+Drawing DWG, DXF & 2D geometry and text, not associative & yes (DXF; DWG with a converter) & not needed if the PDF is kept\\
+Fusion API (Python) & per component: name, part number, description, material, physical properties (mass, volume,
+  area, centre of mass), occurrences with transforms; STEP per component & --- & the manifest that makes the import
+  exact (section~3)\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}XXX@{}}
+\toprule
+Survives the move & Rebuilt in FreeCAD & Lost (kept only in the archive)\\
+\midrule
+Solid geometry, exact B-rep & joints (\eref{ASM-03}) & feature history, sketches\\
+Assembly structure, quantities, placements & materials, from the manifest & user parameters\\
+Names, part numbers (manifest) & drawings, when a part next changes & drawing associativity\\
+Colours (AP214) & sheet-metal flat patterns (\eref{MOD-06}) & CAM set-ups\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{2. What the spike showed (24 Oct)}
+
+A STEP file of a two-level assembly was written by this build (\file{pdm-plans/spike\_step.py}) with Fusion-style names
+(\code{LE-02001-A.1 Pedestal Assy v7} holding \code{LE-01001-A.1 Base plate v12} and two instances of
+\code{LE-01010-A.1 Lower vertical supports v3}), then read back three ways.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\hsize=1.15\hsize}X>{\hsize=0.85\hsize}X@{}}
+\toprule
+Check & Result\\
+\midrule
+Product tree read from the STEP text (50 lines of Python, no CAD kernel, \file{pdm-plans/step\_tree.py}) & 3
+  products, support $\times2$: the structure and quantities are in the file\\
+\code{Import.insert} in \code{FreeCADCmd}, default options & works; the two support instances come back as
+  \emph{two separate copies}, not links\\
+\quad labels of the copies & \code{\ldots supports v3} and \code{\ldots supports v001}: FreeCAD's unique-label rule
+  rewrote the trailing ``3'' of Fusion's version suffix\\
+\quad with \code{useLinkGroup=True} (instances as links) & \textbf{crash} (segmentation fault), twice\\
+\quad with one-document-per-part modes (\code{mode=1}, \code{3}, \code{merge=False}) & ignored headless: one document,
+  copies (\verify{} in the GUI)\\
+Vault import (\file{vault\_setup.py}) & reads \file{.FCStd} only; \code{LE-01001-A.1} is not a vault number, so a file
+  carrying it gets a new one\\
+Vault revision letters & \code{S}, \code{X}, \code{Z} refused; LE-STD-0001 allows them\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{What follows.} Matching FreeCAD objects to Fusion components by label is unsafe (labels are rewritten), and
+FreeCAD's own assembly import either copies instances or, headless, crashes when asked to keep them as links. So the
+migration does not rely on importing a whole assembly: \textbf{each component is exported as its own STEP file and the
+structure comes from a manifest}, from which the vault builds the parts and then the assemblies with links, exactly
+as \eref{ASM-01} wants them. The STEP text reader stays as a cross-check of the manifest's quantities. The crash is
+to be reported upstream with the spike file.
+
+%----------------------------------------------------------------------
+\subsubsection*{3. The pipeline}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,node distance=5mm and 5mm,
+  b/.style={draw=bwblue!70,fill=bwblue!5,rounded corners=2pt,font=\scriptsize,align=center,minimum height=1.05cm,text width=2.2cm},
+  f/.style={b,draw=bworange!80,fill=bworange!8},
+  u/.style={b,draw=bwgreen!80,fill=bwgreen!8},
+  t/.style={font=\tiny\color{bwgrey},align=center,text width=2.6cm}]
+\node[f] (fu) {Fusion project\\\emph{Leonardo / v0\_proto}};
+\node[f,right=of fu] (ex) {Export script\\(Fusion API)};
+\node[b,right=of ex] (st) {Staging folder\\STEP per component, manifest, PDFs, \texttt{.f3d}};
+\node[b,right=of st] (ck) {Check: register, numbers, revisions, duplicates};
+\node[u,below=9mm of ck] (cs) {\texttt{migration.csv}\\you review it};
+\node[b,left=of cs] (cv) {Convert: one \texttt{.FCStd} per part, assemblies with links};
+\node[b,left=of cv] (vf) {Verify: mass properties, flattened BOM};
+\node[b,left=of vf] (im) {Vault import: numbers, revisions, provenance, attachments};
+\node[u,below=9mm of im] (fc) {FC-T01 checklist};
+\draw[->] (fu) -- (ex); \draw[->] (ex) -- (st); \draw[->] (st) -- (ck); \draw[->] (ck) -- (cs);
+\draw[->] (cs) -- (cv); \draw[->] (cv) -- (vf); \draw[->] (vf) -- (im); \draw[->] (im) -- (fc);
+\node[t,above=1mm of ex] {runs in Fusion, by you};
+\node[t,above=1mm of ck] {dry run: writes nothing};
+\node[t,below=1mm of vf,text width=2.6cm] {fails the item if\\$|\Delta V|/V > 10^{-4}$};
+\node[t,right=4mm of fc,text width=6.2cm,align=left] {Lost on the way, kept in the attached \texttt{.f3d}: history,
+  sketches, parameters, joints. Rebuilt: joints, materials, drawings when a part next changes.};
+\end{tikzpicture}
+\caption{Migration from Fusion. Orange runs in Fusion, blue in BruceWorx, green are the two points where you decide.
+Nothing is written to the vault before the reviewed \file{migration.csv} says so.}
+\label{fig:pdm08-pipeline}
+\end{figure}
+
+\begin{itemize}[nosep]
+  \item \textbf{Export script} (Python, Fusion API, run by you in Fusion). For every component in the chosen designs:
+        its STEP file, and a line in \file{manifest.json} with the component's name, part number and description fields,
+        material, physical properties, the design's Fusion version, and every occurrence with its parent and transform.
+        Each drawing as PDF, each design as \file{.f3d} (\file{.f3z} for assemblies). The Fusion API works in
+        centimetres, so lengths are converted once, in the script.
+  \item \textbf{Check} (BruceWorx, FreeCAD-free, like \code{scan\_for\_import}). Reads the manifest and the register,
+        proposes a vault number and revision for each component (section~4), finds repeats (the same component in two
+        designs), and writes \file{migration.csv}. Nothing is reserved yet.
+  \item \textbf{Review.} You open \file{migration.csv} in a spreadsheet, fix a number or a revision, untick a row; the
+        tool reads it back, as Vault Settings does with its CSV.
+  \item \textbf{Convert} (\code{FreeCADCmd}). Each part's STEP becomes \file{<P/N>.FCStd} with an \code{App::Part},
+        its solid and the part properties; each assembly becomes an Assembly with one \code{App::Link} per occurrence
+        (placement from the manifest), linking the part files by P/N, children first, as \code{run\_import} already
+        orders them.
+  \item \textbf{Verify} (section~4), then \textbf{import}: the existing import (\code{run\_import}) learns to take the
+        converted files with numbers fixed by the CSV, records provenance in the check-in, and attaches the PDF and
+        \file{.f3d} as write-once objects.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{4. Theory: mapping numbers and revisions, and checking geometry}
+
+\paragraph{Numbers.} A Fusion component $f$ is mapped to a vault number by the first rule that applies:
+\[
+  \varphi(f) =
+  \begin{cases}
+    \text{the LE ID in its part-number field or name}, & \text{matching } \texttt{LE-}(\mathit{BB})(\mathit{SSS}) \\
+    \text{the register row with the same title}, & \text{if exactly one}\\
+    \text{the next free number in its band}, & \text{never a blocked one}\\
+  \end{cases}
+\]
+with the band from the register class (part, assembly, tooling, harness, electronic, reference, COTS). Two components
+that map to the same number are a conflict for you to resolve in the CSV, never merged silently. Scratch (\code{ZZ})
+components are skipped. The number form itself follows question~2 of \S\ref{sec:pdm07-plan}.
+
+\paragraph{Revisions.} Fusion's own version numbers (v7, v12) are saves, not revisions; they go into the provenance
+only. The LE revision $\ell$ on the register row maps to a vault state and revision:
+\[
+  \psi(\ell) =
+  \begin{cases}
+    (\text{WIP},\ 0n) & \ell = \text{A.}n \quad\text{(never released)}\\
+    (\text{Released},\ X) & \ell = X\\
+    (\text{Released } X^{-},\ \text{then WIP } X \text{ under a migration ECO}) & \ell = X.n,\ X \ne \text{A}
+  \end{cases}
+\]
+where $X^{-}$ is the letter before $X$. The vault's lifecycle cannot create a released revision without a review, so the
+import writes a new journal event, \code{import\_release}, which records the revision as released \emph{by migration}
+with its provenance (Fusion design, version, export date, SHA-256 of the STEP and the \file{.f3d}) instead of a
+checklist. Earlier letters are recorded as superseded, without a file unless an archive of them exists (question~4).
+With the display rule of \S\ref{sec:pdm07-plan} (question~3), \code{0}$n$ prints as \code{A.}$n$, so nobody sees the
+mapping.
+
+\paragraph{Geometry: a checksum that survives conversion.} A STEP file's bytes change with every export (it carries a
+timestamp), so its SHA-256 cannot show that a part arrived intact. Mass properties can. For each part the manifest gives
+Fusion's volume $V$, area $A$ and centre of mass $\mathbf{c}$; FreeCAD computes the same from the converted solid. The part
+passes when
+\[
+  \frac{|V' - V|}{V} < 10^{-4},\qquad \frac{|A' - A|}{A} < 10^{-4},\qquad \lVert\mathbf{c}' - \mathbf{c}\rVert < 0.01\,\text{mm}.
+\]
+The B-rep is exact in both kernels, so honest differences come only from their integration tolerances, far below these
+bounds; anything above them is a lost face or a body that did not convert. For each assembly the flattened BOM must match: for every leaf
+$x$, $Q'_t(x) = Q_t(x)$, with $Q'$ from the vault (\S\ref{sec:pdm06-plan}) and $Q$ from the manifest's occurrences, and
+the STEP text reader as a third count.
+
+%----------------------------------------------------------------------
+\subsubsection*{5. FC-T01: a proposed switch checklist}
+
+The Ops data marks ``Bruce sets FC-T01 switch criteria'' as done, but the criteria are not recorded (open question
+\ref{q:fct01}). Proposed, so there is something to correct:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\# & Criterion\\
+\midrule
+1 & The parity matrix (Appendix~\ref{app:parity}) is met for every row the LE parts use.\\
+2 & \code{LE-02001} rev A was released from FreeCAD (\eref{PDM-07}), and one ECR $\rightarrow$ ECO $\rightarrow$ rev B
+  round trip was done on a real part (\eref{PDM-05}).\\
+3 & Every issued LE register row is a vault item with the same number and revision; none is unmapped; no blocked number
+  was used.\\
+4 & Every migrated part passed the geometry check; every assembly's flattened BOM matches Fusion's.\\
+5 & Every released drawing exists in the vault (FreeCAD, or the Fusion PDF attached); every part that will change has a
+  FreeCAD drawing.\\
+6 & Print, CNC and laser files for at least one LE part each were made from FreeCAD (M3).\\
+7 & The vault is backed up off this Mac, and a restore was tested (\emph{Move vault} verifies by SHA-256).\\
+8 & Two weeks of LE work in FreeCAD only, with no fallback to Fusion.\\
+9 & The Fusion project is archived into the vault (\file{.f3z} per assembly) and set read-only.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{6. Build order and effort}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+\# & Step & Effort\\
+\midrule
+1 & Fusion export script: STEP per component, manifest, PDFs, archives (tested on one design with you) & 1.5\,d\\
+2 & STEP text reader, manifest check, mapping $\varphi$ and $\psi$, \file{migration.csv} out and back in & 1.5\,d\\
+3 & Converter: part files, assemblies with links and placements, children first (\code{FreeCADCmd}) & 2\,d\\
+4 & Geometry and BOM verification, report per item & 1\,d\\
+5 & Vault: \code{import\_release} event and contract tests, provenance, attachments, fixed numbers in \code{run\_import} & 1.5\,d\\
+6 & Migrate panel in FreeCAD (the import panel's pages: staging folder, CSV review, progress, report) & 1.5\,d\\
+7 & Dry run on \code{LE-02001}, then all LE; FC-T01 checklist page; write-up & 1\,d\\
+\midrule
+ & Total & 10\,d\\
+\bottomrule
+\end{tabularx}
+\end{center}
+Steps 1--4 are useful before M6: the pilot (\eref{PDM-07}) can use them to bring the pedestal in if no FreeCAD model
+exists.
+
+\paragraph{Risks.} \emph{The Fusion API} changes between Fusion releases and runs only inside Fusion on your Mac; the
+script is kept small and tested on one design first. \emph{Mesh and surface bodies} in a design have no solid to check;
+they are listed and imported as they are. \emph{Large designs} make large STEP files that iCloud uploads slowly; the
+staging folder sits outside iCloud. \emph{Name drift}: components renamed in Fusion between export runs map to new rows;
+the CSV shows them side by side. \emph{The headless link-group crash} is avoided, not fixed.
+
+%----------------------------------------------------------------------
+\paragraph{Your answers to the questions below (24 Oct).} All eleven as recommended. 1: the nine FC-T01 criteria are
+M6's checklist (criterion~8's two weeks can be shorter). 2: \textbf{LE first}, the other programs one by one with the
+same tools. 3: \textbf{the Fusion API script}, which you run; the Fusion bridge only with your go-ahead. 4: the current
+released revision and the current work; earlier letters as superseded records. 5: each design's \file{.f3d}
+(\file{.f3z}) attached write-once. 6: the register's state is kept; working \code{A.}$n$ items arrive as WIP. 7:
+\textbf{remodel on change}. 8: the Fusion PDFs attached; a drawing is redrawn when its part next changes. 9: scripted
+parts skip Fusion. 10: a material table in the vault, checked through mass. 11: Fusion goes read-only when FC-T01 is
+met, the subscription kept one more period. \textbf{The pilot starts fresh} (\S\ref{sec:pdm07-plan}, Q1): \code{LE-02001}
+is modelled in FreeCAD and nothing is imported, so steps 1--4 are not used by the pilot; migration stays M6 work, for
+the other LE items, the other programs and their history.
+
+\subsubsection*{Questions before PDM-08 starts}
+
+\begin{enumerate}
+  \item \textbf{FC-T01.} Are the nine criteria of section~5 right? What is missing?\\
+        \emph{Recommendation:} adopt them as M6's checklist; criterion~8's two weeks can be shorter if nothing
+        sent you back to Fusion.
+  \item \textbf{Scope.} Leonardo only, or every program in Fusion (OW, SI, FO, AS)?\\
+        \emph{Recommendation:} LE first; the others program by program with the same tools once LE passes.
+  \item \textbf{How to export.} A Fusion API script (exact part numbers, mass properties, transforms), or STEP and PDF
+        exported by hand?\\
+        \emph{Recommendation:} the script. You run it in Fusion; the Fusion bridge configured on this Mac could also run
+        it, but only with your go-ahead, since Fusion is your live tool.
+  \item \textbf{How much history.} Only the current revision of each item, or every released letter?\\
+        \emph{Recommendation:} the current released revision and the current work; earlier letters as superseded records,
+        with an \file{.f3d} attached only where Fusion still has that version.
+  \item \textbf{Fusion archives.} Attach each design's \file{.f3d} (\file{.f3z} for assemblies) to its item?\\
+        \emph{Recommendation:} yes, as write-once attachments; they are the only copy of the history.
+  \item \textbf{Released on arrival.} Import released LE items as released (recorded as \emph{released by migration}),
+        or as WIP needing a new review?\\
+        \emph{Recommendation:} keep the register's state; working \code{A.}$n$ items arrive as WIP.
+  \item \textbf{Remodelling.} Keep migrated parts as STEP solids, or remodel them natively?\\
+        \emph{Recommendation:} remodel on change: a migrated part stays a solid until its first ECO, then is remodelled
+        or direct-edited (\eref{MOD-04}).
+  \item \textbf{Drawings.} Attach the Fusion PDF as the released drawing of a migrated revision, or redraw every
+        drawing in TechDraw?\\
+        \emph{Recommendation:} attach the PDFs; redraw a part's drawing when the part next changes.
+  \item \textbf{Scripted parts} (build123d, CadQuery; ADR-0002). They never were Fusion parts. Same pipeline?\\
+        \emph{Recommendation:} no Fusion step: the item holds the generated STEP converted to \file{.FCStd}, with the
+        script and its commit attached; a change regenerates it.
+  \item \textbf{Materials.} STEP carries colours, not materials. Map Fusion's material names to FreeCAD's library with
+        a table in the vault?\\
+        \emph{Recommendation:} yes; the geometry check then also compares mass, which catches a wrong mapping.
+  \item \textbf{When Fusion goes read-only.} The day FC-T01 is met, or later?\\
+        \emph{Recommendation:} when FC-T01 is met; keep the subscription one more renewal period as a fallback for
+        reading the archives.
+\end{enumerate}

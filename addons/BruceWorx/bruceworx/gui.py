@@ -97,7 +97,8 @@ class PartNumberCommand:
             "MenuText": "Assign Part Number…",
             "ToolTip": (
                 "Label the selected objects (or the solid roots) and the document with the "
-                "next BruceWorx part number, {PROG}-{DT}-{PPPPP}-{SSS}-{REV}. "
+                "next BruceWorx part number, {PROG}-{DT}-{PPPPP}-{SSS} (a numbering file "
+                "not yet migrated adds -{REV}). "
                 "Turn the hooks add-on off on Preferences → BruceWorx."
             ),
         }

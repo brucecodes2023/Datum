@@ -265,6 +265,12 @@ def refMissing(ref):
         if re.search(r"(Face|Edge|Vertex)\d+$", sub):
             # A face, edge or vertex past the shape's count comes back as a null shape
             found = found if isinstance(found, Part.Shape) and not found.isNull() else None
+        elif found is None:
+            # [BW] A coordinate system or datum has no shape: look for the object itself
+            try:
+                found = obj.getSubObject(sub, retType=1)
+            except Exception:
+                found = None
         if found is None:
             return f"{obj.Name}.{sub}"
     return ""

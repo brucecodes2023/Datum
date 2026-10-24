@@ -1,5 +1,5 @@
 %======================================================================
-\subsection{BW-PDM-04 --- Plan: the vault client in FreeCAD (23 Oct 2026, for approval)}\label{sec:pdm04-plan}
+\subsection{BW-PDM-04 --- Plan: the vault client in FreeCAD (23 Oct 2026, approved the same day, built 24 Oct)}\label{sec:pdm04-plan}
 %======================================================================
 
 \eref{PDM-04} brings the folder vault (\S\ref{sec:pdm-decision}) into FreeCAD. Today the vault can be made, filled
@@ -142,6 +142,12 @@ change leaves a file unmodified.
         and the document stays open and unchanged (\verify).
   \item \textbf{Opening a vault file} that is not checked out opens the read-only copy; its tab and the task card
         show a lock, and the first edit offers a check-out.
+  \item \textbf{Move vault\ldots} (your request, 23 Oct), in Vault Settings: moves the whole vault, say to an SSD.
+        The vault is \emph{copied} into \file{<name>.moving}, every file is compared by SHA-256, the copy is opened and
+        must replay to the same items, versions and locks, and only then is it renamed into place
+        (\file{bruceworx/vault\_move.py}). FreeCAD then switches to the new place and reopens your documents from
+        there; the old copy goes to the Trash only if you say so. A move is refused when there is not enough space,
+        the destination is inside the vault or not empty, or files have not finished downloading from iCloud.
 \end{itemize}
 
 \begin{figure}[!htbp]
@@ -223,6 +229,93 @@ $O(\text{items} + \text{links})$, and a cycle (which FreeCAD allows between file
 fallback is to cancel the save through the Std\_Save command instead). Very large assemblies make the first status
 pass slow until the hash cache is warm. The PySide clean-up found in the vault task panels applies to the new panels
 too. No upstream conflict: everything is Python except, possibly, a \code{[BW]} hook if step~4 needs one.
+
+%----------------------------------------------------------------------
+\subsubsection*{Your answers (23 Oct, evening)}
+Recommendations 1, 5 and 6 accepted (fetch linked parts at once; Submit and Approve now; the panel is called
+\emph{Vault}). Changed: \textbf{a check-in comment is required} (OK stays disabled until there is one), and
+\textbf{no backup files} for vault files: every check-in is a version, and FreeCAD's own crash recovery, which
+lives outside iCloud, covers the time between check-ins. Stale locks: no expiry; \emph{Break lock\ldots} in Vault
+Settings. Because the actor name is \code{user@mac} and macOS sometimes renames the Mac (``-2'' after a name
+clash), the client \textbf{pins the actor} the first time it opens a vault, so a rename never orphans your own
+locks. One Mac is assumed until much later.
+
+%----------------------------------------------------------------------
+\subsubsection*{Built (24 Oct 2026)}
+The vault client (\file{bruceworx\_vaultclient.py}: commands, Check In panel, Vault panel, Browser badges, status
+bar, save prompt, Move vault) was built on 23 Oct. On 24 Oct the rest of the plan was added:
+\begin{itemize}[nosep]
+  \item \textbf{Links on check-in} (\S4). Before a check-in, \code{Workspace.fix\_links} reads every link in the
+        files going in. A link that is already \file{<P/N>.FCStd} is left alone. A link to a vault file by some other
+        path (another work folder, an imported original, a copy with the same content) is pointed at its part number.
+        A file that is not in the vault yet is shown in the panel's \emph{Links} box with ``Import it into the vault
+        with a new part number and link to it'' (ticked): it is imported with what it links in turn
+        (\code{vault\_setup.import\_linked\_files}, numbers from the program of the item being checked in), and the
+        links are rewritten in the zip before the file goes to \file{objects/}. Unticked, or for a file that cannot be
+        found, the link goes in as written and the box says so. An open document whose links changed is read again,
+        so a later save cannot write the old paths back.
+  \item \textbf{Import fixes.} The Create Vault import now numbers parts before the assemblies that link them (it went
+        in file-name order, so \file{a-frame.FCStd} kept its old links), and it drops the ``Link not restored'' error
+        FreeCAD saved in the copy it numbered, which showed as \textsc{error} on every link in the Browser.
+  \item \textbf{iCloud: download before open} (\S1). \code{needs\_download} spots a file iCloud keeps only in the
+        cloud: \emph{dataless} on macOS~14 and later (\code{st\_flags} has \code{SF\_DATALESS}), or replaced by a
+        \file{.<name>.icloud} stand-in on older macOS. Before the workspace reads a vault object or a work file
+        (check out, get latest, get revision, check in, open with everything it links), it asks for the download
+        through \code{NSFileManager startDownloadingUbiquitousItemAtURL:error:} (ctypes, as for the Trash) and waits
+        with a progress dialog (``Downloading 2 files (14 MB) from iCloud\ldots'', Cancel). If no file arrives for
+        2~minutes it stops with ``\ldots{} did not download from iCloud \ldots{} Check that this Mac is online and
+        signed in to iCloud''. Status passes never read an evicted file: its hash is kept in \file{state.json}.
+  \item \textbf{Tests.} Add-on: \file{test\_pdm\_workspace.py} (stand-ins, dataless files, waits, time-outs, status
+        without reading) and \file{test\_vault\_links.py} (check-in links: import, by path, same content, missing
+        file, sub-assemblies); FreeCAD: \code{TestBruceWorxVaultClient}, \code{TestBruceWorxVaultWizard},
+        \code{TestBruceWorxStart} pass.
+\end{itemize}
+
+\begin{figure}[!htbp]
+\centering
+\IfFileExists{fig/pdm04_built_checkin.png}{\includegraphics[height=8.5cm]{fig/pdm04_built_checkin.png}}{\fbox{pdm04\_built\_checkin.png}}\hspace{6mm}
+\IfFileExists{fig/pdm04_built_states.png}{\includegraphics[height=8.5cm]{fig/pdm04_built_states.png}}{\fbox{pdm04\_built\_states.png}}
+\caption{As built. \emph{Left:} Check In with a washer linked from outside the vault (light). \emph{Right:} the Vault
+panel showing newer, released, checked out by someone else and checked out to you, modified (dark).}
+\label{fig:pdm04-built}
+\end{figure}
+
+\paragraph{Your answers to the two questions left by the build (24 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm}X@{}}
+\toprule
+Question & Answer\\
+\midrule
+\emph{File $\rightarrow$ Open} and \emph{Open Recent} on a vault file go straight to FreeCAD, past the client, so an
+  evicted iCloud file blocks with no progress dialog. Should they go through the client? & \textbf{Yes}: both go
+  through the vault client, which downloads first (with its progress dialog) and opens the file as the Vault panel
+  does.\\
+After an import at check-in, the outside original (e.g.\ \file{washer.FCStd}) stays where it was. Offer to move it to
+  the Trash? & \textbf{No}: originals of imported outside files stay where they are; no Trash offer.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Acceptance, to repeat on LE-02001.} Run in a scratch vault (not in iCloud Drive) on a door hinge assembly
+linking a bracket and a pin, light and dark, through the client: 27 checks, all passed. The iCloud download was
+simulated with \file{.icloud} stand-ins; a real iCloud Drive vault is the step still to do. The same steps on
+\code{LE-02001}:
+\begin{enumerate}[nosep]
+  \item Create a vault in iCloud Drive (Start page $\rightarrow$ Create vault) and import the folder that holds
+        \code{LE-02001} and its parts. Open the Vault panel (click ``Vault \ldots'' in the status bar): every row
+        reads \emph{Checked in, up to date}.
+  \item Right-click the assembly $\rightarrow$ \emph{Check Out}, then double-click it. It opens with all its parts;
+        the parts' tabs show a lock and the Browser shows ``WIP 01'' and a lock on the assembly.
+  \item Change a part you checked out too, and add a part from outside the vault to the assembly. Save. Both rows read
+        \emph{Checked out to me, modified}.
+  \item \emph{Check In\ldots} (Shift-Cmd-I): write a comment; the \emph{Links} box offers to import the outside
+        part. Check in. The new part has a P/N, every row is up to date and read-only, and the assembly reopens with
+        no broken links.
+  \item On a second Mac (or from the command line as another user) check in a change to a part: its row turns
+        \emph{Newer} with \emph{Get latest}; click it. Then, in Finder, \emph{Remove Download} on the assembly and
+        open it from the Vault panel: the download dialog appears and the file opens.
+\end{enumerate}
 
 %----------------------------------------------------------------------
 \subsubsection*{Questions before PDM-04 starts}

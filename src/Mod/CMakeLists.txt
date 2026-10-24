@@ -154,6 +154,8 @@ add_subdirectory(BruceWorx)
 # installed to Mod/ by the normal build.
 option(BUILD_BW_HISTORY_TIMELINE "BruceWorx: install the History Timeline add-on (Mod/HistoryTimeline)" ON)
 option(BUILD_BW_HOOKS "BruceWorx: install the hooks / part-number add-on (Mod/BruceWorxHooks)" ON)
+# MOD-06 was paused half-way on 24 Oct 2026 (its networkx dependency is not set up yet): off until it resumes.
+option(BUILD_BW_SHEETMETAL "BruceWorx: install the vendored SheetMetal add-on (Mod/SheetMetal, MOD-06)" OFF)
 if(BUILD_BW_HISTORY_TIMELINE)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/package/bruceworx/mods/HistoryTimeline
@@ -164,5 +166,27 @@ if(BUILD_BW_HOOKS)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/addons/BruceWorx
         ${CMAKE_BINARY_DIR}/bruceworx/BruceWorxHooks
+    )
+endif()
+if(BUILD_BW_SHEETMETAL)
+    add_subdirectory(
+        ${CMAKE_SOURCE_DIR}/package/bruceworx/vendor
+        ${CMAKE_BINARY_DIR}/bruceworx/vendor
+    )
+endif()
+
+# [BW] KEYSTONE splash screen (24 Oct 2026): App::Application reads <home>/bin/branding.xml at
+# start; the images go to <home>/icons, which BitmapFactory searches (the _2x one on Retina).
+option(BUILD_BW_BRANDING "BruceWorx: KEYSTONE splash screen (bin/branding.xml, icons/keystonesplash*.png)" ON)
+if(BUILD_BW_BRANDING)
+    set(BW_BRANDING_DIR ${CMAKE_SOURCE_DIR}/package/bruceworx/branding)
+    configure_file(${BW_BRANDING_DIR}/branding.xml ${CMAKE_BINARY_DIR}/bin/branding.xml COPYONLY)
+    foreach(BW_SPLASH keystonesplash.png keystonesplash_2x.png)
+        configure_file(${BW_BRANDING_DIR}/${BW_SPLASH} ${CMAKE_BINARY_DIR}/icons/${BW_SPLASH} COPYONLY)
+    endforeach()
+    install(FILES ${BW_BRANDING_DIR}/branding.xml DESTINATION bin)
+    install(
+        FILES ${BW_BRANDING_DIR}/keystonesplash.png ${BW_BRANDING_DIR}/keystonesplash_2x.png
+        DESTINATION icons
     )
 endif()

@@ -1,0 +1,53 @@
+%======================================================================
+\subsection{DRW-01 plan: templates, title block and the vault's drawing standards (23 Oct 2026, building)}\label{sec:drw01-plan}
+%======================================================================
+
+\paragraph{Your answers (23 Oct).} Settled on 19 Oct: ASME Y14.5, third-angle projection, ANSI sheets, and the title
+block fields (P/N, revision, title, material, finish, mass, scale, sheet, approvals). New: the \textbf{company name comes
+from the vault}; \textbf{mm}, on \textbf{ANSI A--D and ISO A4--A1} sheets; \textbf{GD\&T and tolerance standards are set
+per vault in Vault Settings}; and (for \eref{PDM-05}) you approve your own releases with a checklist.
+
+\paragraph{Your answers (24 Oct).} \textbf{New Page uses the vault's default sheet} while a vault is open, as
+\emph{New Drawing} already does: opening a vault sets TechDraw's template preference to the vault's sheet and closing it
+restores yours. \textbf{Metric and imperial are both required}: units become a \textbf{per-vault default with a
+per-document override}, so the ``Units: mm'' row below is the default of a choice, not a fixed value. Their plan, with
+the product tree, its drawings and a new-project wizard, is written in its own chapter.
+
+\paragraph{The vault's drawing standards.} Vault Settings gets a \emph{Drawing standards} box, stored in
+\file{<vault>/drawing\_standards.json} and included in the vault's CSV:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Setting & Default\\
+\midrule
+Company name, logo & the vault's name; a logo file (SVG or PNG) copied into the vault\\
+Standard & ASME Y14.5-2018 (choice: ASME Y14.5-2009, ISO GPS)\\
+Projection & third angle (choice: first angle, for ISO)\\
+Units & mm\\
+Default sheet & ANSI B landscape (choice: ANSI A--D, ISO A4--A1, portrait or landscape)\\
+General tolerances & decimal places: X.X $\pm0.5$, X.XX $\pm0.25$, X.XXX $\pm0.1$\,mm, angles $\pm1^\circ$, each
+  editable; or ISO 2768 with its class (f, m, c, v); or ``per drawing''\\
+Surface finish, edges & default $Ra$ and ``break sharp edges 0.2--0.5'' notes, optional\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Templates.} Eight new SVG templates (ANSI A--D, ISO A4--A1, landscape; portrait for A and A4), drawn to one
+BruceWorx title-block design: company and logo, title, P/N, revision, material, finish, mass, scale, sheet $n$ of $m$,
+units, the projection symbol, the general-tolerance block, and \emph{Drawn / Checked / Approved} with dates. They live in
+a BruceWorx template folder (no change to TechDraw's own templates), and the vault's default sheet becomes TechDraw's
+default template while that vault is open.
+
+\paragraph{Filling the title block.} TechDraw fills a field when the template marks it \code{freecad:autofill}, but it
+knows only author, date, company, scale, sheet, title and page numbers (\file{TechDraw/App/DrawTemplate.h}). Rather
+than extend that C++ list, a Python observer (\file{bruceworx\_drawing.py}) fills the template's \code{EditableTexts}
+whenever the page or its part changes: the part is the source of the page's first view (its root \code{App::Part} or
+body), and the values come from its part properties (P/N, revision, material, finish, mass, from
+\file{partprops.py}), the vault (company, logo, standards, the tolerance block) and the lifecycle (drawn, checked and
+approved names and dates from the journal; ``WIP 02'' or ``A'' as the revision). A field the user typed by hand is left
+alone and marked, so automation never overwrites a decision. No upstream change.
+
+\paragraph{Build order.} 1 drawing standards in the vault (engine, CSV, Vault Settings box); 2 the eight templates;
+3 the fill observer and \emph{New Drawing} from the selected part using the vault's default sheet; 4 the \code{LE-01001}
+sample drawing (acceptance: every field fills by itself); 5 tests and the write-up. About 4 days.

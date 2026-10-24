@@ -311,10 +311,11 @@ where the printed geometry is the thread.
 \subsection{BW-MOD-06 --- Sheet metal}
 %----------------------------------------------------------------------
 
-\begin{epic}{MOD-06}{Sheet metal}{M3}{\stTodo}{(new, from the UI plan)}
+\begin{epic}{MOD-06}{Sheet metal}{M3}{\stProg}{(new, from the UI plan)}
 Bundle the SheetMetal add-on (decided; LGPL-2.1-or-later since v0.4.00) and add per-material, per-thickness
 \textbf{rules} (bend radius, K-factor, relief) as a library, like Fusion's sheet-metal rules. Flats and
 DXF are covered in \eref{MFG-03}, and the drawing in \eref{DRW-07}.
+\textbf{Plan approved 24 Oct, building} (\S\ref{sec:mod06-plan}).
 \emph{Acceptance:} the bracket in Figure~\ref{fig:sheet} unfolds to the length given by the bend-allowance
 formula within 0.01\,mm.
 \end{epic}
@@ -339,11 +340,13 @@ $\ell_1=40-(2+1.5)=36.5$, $\ell_2=30-3.5=26.5$, and $BA=\tfrac{\pi}{2}(2+0.44\cd
 $L_{\text{flat}}=67.178$\,mm. $K$ comes from the rules library per material, thickness and tooling. That is
 why the rules table matters more than the unfold algorithm.
 
+\input{chapters/24-mod06-plan}
+
 %----------------------------------------------------------------------
 \subsection{BW-MOD-07 --- Frames and weldments}
 %----------------------------------------------------------------------
 
-\begin{epic}{MOD-07}{Frames \& weldments}{M3}{\stTodo}{(new)}
+\begin{epic}{MOD-07}{Frames \& weldments}{M3}{\stProg}{(new)}
 Structural members swept along 3D-sketch edges from a \textbf{profile library}: 2020/2040 aluminium
 extrusion, square and round tube, angle, flat bar. Each joint gets an \textbf{end treatment} (mitre, butt
 one or the other, cope), and \textbf{trim/extend} works against other members. The \textbf{cut list} groups
@@ -351,6 +354,7 @@ identical members and gives stock length, angles and quantity. Each member is a 
 a separate part file. Wood framing belongs here too: dimensional lumber profiles ($2\times4$, $2\times6$, \ldots)
 with a cut list by board foot. Reference (23 Oct): LumberCAD, a beta tool for dimensional-lumber builds with a
 catalogue of over 100 components, aimed at people who do not use CAD.
+\textbf{Plan approved 24 Oct, building} (FrameForge plus a BruceWorx layer, \S\ref{sec:mod07-plan}).
 \emph{Acceptance:} the frame in Figure~\ref{fig:frame} produces the cut list below.
 \end{epic}
 
@@ -387,6 +391,8 @@ $\alpha=\arccos(\hat{\mathbf d}_1\!\cdot\hat{\mathbf d}_2)$, the cut is $\alpha/
 90$^\circ$ corner gives 45$^\circ$. For profile width $w$, the outer edge is longer than the centre line by
 $\tfrac{w}{2}\tan\tfrac{\alpha}{2}$ at each mitred end, and the inner edge shorter by the same amount. With
 $w=20$ the centre lines are 280 and 180\,mm, which gives the 300/260 and 200/160 pairs above.
+
+\input{chapters/26-mod07-plan}
 
 %----------------------------------------------------------------------
 \subsection{BW-MOD-08 --- Surfacing parity}
@@ -493,8 +499,11 @@ Nothing changes without a click. Seen in the Nxt add-on (\S\ref{sec:uix-nxt}).
 \emph{Acceptance:} a sketch with a 0.05\,mm gap pads after one click.
 \end{epic}
 
-\begin{epic}{MOD-14}{On-canvas editing}{M5}{\stTodo}{(new, from the Nxt add-on review, 23 Oct)}
+\begin{epic}{MOD-14}{On-canvas editing}{M5}{\stProg}{(new, from the Nxt add-on review, 23 Oct)}
 Double-click a face or a feature to edit it in the 3D view: value fields and drag arrows, as Fusion's press-pull.
-Builds on FreeCAD~1.1's interactive draggers (Fillet, Chamfer). A plan comes first.
+Builds on FreeCAD~1.1's interactive draggers (Fillet, Chamfer). \textbf{Plan approved 24 Oct, building}
+(\S\ref{sec:mod14-plan}).
 \emph{Acceptance:} pad length, fillet radius and hole depth edited in the view without the task panel.
 \end{epic}
+
+\input{chapters/28-mod14-plan}

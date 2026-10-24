@@ -73,3 +73,6 @@ files_to_translate.txt
 
 # Local BruceWorx part-number counter (copied from numbering.example.json)
 /addons/BruceWorx/config/numbering.json
+
+# [BW] Private tool environments (kicad-python for the MCP harness)
+/.tools/

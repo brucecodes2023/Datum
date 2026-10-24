@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<!-- BruceWorx Insert Board: a populated circuit board with mounting holes. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect x="5" y="11" width="54" height="42" rx="3" fill="#2e7d4f" stroke="#1b4d30" stroke-width="2"/>
+  <circle cx="11" cy="17" r="2.6" fill="#d9e6dd" stroke="#c9a227" stroke-width="1.4"/>
+  <circle cx="53" cy="17" r="2.6" fill="#d9e6dd" stroke="#c9a227" stroke-width="1.4"/>
+  <circle cx="11" cy="47" r="2.6" fill="#d9e6dd" stroke="#c9a227" stroke-width="1.4"/>
+  <circle cx="53" cy="47" r="2.6" fill="#d9e6dd" stroke="#c9a227" stroke-width="1.4"/>
+  <path d="M18 32 H26 M38 32 H46 M32 22 V18 H44 M32 42 V46 H20" fill="none" stroke="#c9a227" stroke-width="1.8"/>
+  <rect x="25" y="24" width="14" height="16" rx="1.5" fill="#26292b" stroke="#111" stroke-width="1"/>
+  <path d="M27 24 V21 M31 24 V21 M35 24 V21 M27 40 V43 M31 40 V43 M35 40 V43" stroke="#c0c4c8" stroke-width="1.6"/>
+  <rect x="15" y="28" width="4" height="8" rx="0.8" fill="#26292b"/>
+  <rect x="45" y="28" width="4" height="8" rx="0.8" fill="#26292b"/>
+</svg>

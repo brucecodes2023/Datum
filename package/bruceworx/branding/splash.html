@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- KEYSTONE splash screen. Rendered by render_splash.sh at 568x368 (1x) and 1136x736 (2x).
+     The query string carries the version: splash.html?v=1.1.4-bw.1 -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 568px; height: 368px; overflow: hidden;
+    font-family: "SF Pro Display", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(120% 140% at 78% 40%, #1d2633 0%, #121821 45%, #0b0f15 100%);
+    color: #e9eef5; position: relative;
+  }
+  /* Faint drafting grid that fades towards the left, under the wordmark. */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+    background-size: 64px 64px, 64px 64px, 16px 16px, 16px 16px;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.35) 35%, #000 70%);
+  }
+  svg { position: absolute; right: 14px; top: 62px; }
+  .mark { position: absolute; left: 40px; top: 116px; }
+  .word {
+    font-size: 42px; font-weight: 800; letter-spacing: 5px; line-height: 1;
+    color: #f4f7fb;
+  }
+  .bar { width: 46px; height: 4px; border-radius: 2px; background: #2f7bff; margin: 16px 0 14px 2px;
+         box-shadow: 0 0 14px rgba(47,123,255,0.65); }
+  .tag { font-size: 15px; font-weight: 500; letter-spacing: 0.4px; color: #aab6c6; margin-left: 2px; }
+  .tag b { color: #e9eef5; font-weight: 600; }
+  .verbs { margin: 10px 0 0 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 2.6px; color: #6f7d90; }
+  .version { position: absolute; right: 22px; bottom: 16px; font: 500 10.5px "SF Mono", Menlo, monospace;
+             color: #6f7d90; letter-spacing: 0.5px; }
+  .line { position: absolute; left: 40px; right: 22px; bottom: 40px; height: 1px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)); }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<svg id="arch" width="232" height="232" viewBox="0 0 300 300"></svg>
+<div class="mark">
+  <div class="word">KEYSTONE</div>
+  <div class="bar"></div>
+  <div class="tag">Engineering CAD &mdash; <b>built on FreeCAD</b></div>
+  <div class="verbs">DESIGN &middot; ASSEMBLE &middot; RELEASE</div>
+</div>
+<div class="line"></div>
+<div class="version" id="version"></div>
+<script>
+  // Version from the query string (?v=...).
+  const v = new URLSearchParams(location.search).get("v") || "";
+  document.getElementById("version").textContent = v;
+
+  // A semicircular arch of 9 voussoirs; the middle one, the keystone, is filled with the accent.
+  const svg = document.getElementById("arch");
+  const NS = "http://www.w3.org/2000/svg";
+  const cx = 150, cy = 236, r1 = 78, r2 = 128, n = 9, gap = 0.016;
+  function pt(r, a) { return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; }
+  function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; }
+  // Glow behind the keystone.
+  const defs = el("defs", {});
+  defs.innerHTML = '<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2f7bff" stop-opacity="0.55"/><stop offset="1" stop-color="#2f7bff" stop-opacity="0"/></radialGradient>' +
+                   '<linearGradient id="k" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b9bff"/><stop offset="1" stop-color="#1f5fd6"/></linearGradient>';
+  el("circle", { cx: cx, cy: cy - (r1 + r2) / 2, r: 62, fill: "url(#g)" });
+  for (let i = 0; i < n; i++) {
+    const a0 = Math.PI * i / n + gap, a1 = Math.PI * (i + 1) / n - gap;
+    // The keystone flares outward a little, as real keystones do.
+    const key = i === (n - 1) / 2;
+    const ro = key ? r2 + 10 : r2;
+    const p = [pt(r1, a0), pt(ro, a0), pt(ro, a1), pt(r1, a1)];
+    const d = `M${p[0]} L${p[1]} A${ro},${ro} 0 0 0 ${p[2]} L${p[3]} A${r1},${r1} 0 0 1 ${p[0]} Z`;
+    el("path", key
+      ? { d, fill: "url(#k)", stroke: "#8fbaff", "stroke-width": 1.2 }
+      : { d, fill: "rgba(255,255,255,0.035)", stroke: "rgba(214,226,240,0.55)", "stroke-width": 1.1 });
+  }
+  // Piers and a dimension line: the drawing-office touch.
+  el("rect", { x: cx - r2, y: cy, width: r2 - r1, height: 46, fill: "rgba(255,255,255,0.03)", stroke: "rgba(214,226,240,0.45)", "stroke-width": 1.1 });
+  el("rect", { x: cx + r1, y: cy, width: r2 - r1, height: 46, fill: "rgba(255,255,255,0.03)", stroke: "rgba(214,226,240,0.45)", "stroke-width": 1.1 });
+  el("line", { x1: cx - r1, y1: cy + 30, x2: cx + r1, y2: cy + 30, stroke: "rgba(143,186,255,0.7)", "stroke-width": 0.9 });
+  el("path", { d: `M${cx - r1},${cy + 30} l6,-3 v6 Z M${cx + r1},${cy + 30} l-6,-3 v6 Z`, fill: "rgba(143,186,255,0.8)" });
+  const t = el("text", { x: cx, y: cy + 26, "text-anchor": "middle", fill: "rgba(143,186,255,0.85)",
+                         "font-family": "SF Mono, Menlo, monospace", "font-size": 8.5 });
+  t.textContent = "156";
+</script>
+</body>
+</html>

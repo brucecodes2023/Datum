@@ -458,7 +458,7 @@ class DocumentTabsAndStatusTest(unittest.TestCase):
     def test_pack_puts_tabs_on_top_with_dots_and_readouts(self):
         entries = {(e["path"], e["name"]): e for e in pack.INVENTORY}
         tab = entries[("BaseApp/Preferences/MainWindow", "DocumentTabPos")]
-        self.assertEqual((tab["stock"], tab["light"], tab["dark"]), (1, 0, 0))  # stock South, pack North
+        self.assertEqual((tab["stock"], tab["light"], tab["dark"]), (1, 1, 1))  # tabs at the bottom (24 Oct)
         for name in ("DocumentTabDot", "StatusReadouts"):
             entry = entries[(pack.APPLIED_GROUP, name)]
             self.assertEqual((entry["stock"], entry["light"], entry["dark"]), (False, True, True), name)
@@ -478,7 +478,7 @@ class DocumentTabsAndStatusTest(unittest.TestCase):
         cls, props = found["DocumentTabPos"]
         self.assertEqual(cls, "Gui::PrefComboBox")
         self.assertEqual(props["prefPath"].findtext("cstring"), "MainWindow")
-        self.assertEqual(props["currentIndex"].findtext("number"), "0")
+        self.assertEqual(props["currentIndex"].findtext("number"), "1")
 
     def test_stylesheet_styles_the_new_widgets(self):
         qss = _read(os.path.join(ROOT, "src", "Gui", "Stylesheets", "BruceWorx.qss"))

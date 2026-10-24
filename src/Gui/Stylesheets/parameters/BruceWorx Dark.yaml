@@ -49,3 +49,9 @@ BrowserCardColor: "rgba(44, 44, 47, 72%)"
 # Themes/UserParameters (blue accent: white text).
 AccentTextColor: "#FFFFFF"
 AccentGlyphColor: "white"
+# FreeCAD 1.1's task-panel drag arrows (Gizmo style parameters): accent idle, orange dragged,
+# as BruceWorx's on-canvas arrow (MOD-14).
+LinearGizmoBaseColor: "@AccentColor"
+LinearGizmoActiveColor: "#FF9F0A"
+RotationGizmoBaseColor: "@AccentColor"
+RotationGizmoActiveColor: "#FF9F0A"

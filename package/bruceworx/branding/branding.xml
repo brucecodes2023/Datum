@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [BW] KEYSTONE branding, read by App::Application from <home>/bin/branding.xml at start.
+     Only the splash screen is branded (the user's choice, 24 Oct 2026); the application and executable
+     names stay FreeCAD's so preferences, add-ons and paths are unchanged. The splash images live in
+     <home>/icons (keystonesplash.png, keystonesplash_2x.png for Retina); the version is drawn into the
+     image by render_splash.sh, so FreeCAD's own name/version overlay is drawn fully transparent. -->
+<Branding>
+  <SplashScreen>keystonesplash</SplashScreen>
+  <SplashInfoColor>#00000000</SplashInfoColor>
+  <SplashAlignment>Bottom|Left</SplashAlignment>
+  <SplashTextColor>#8a97a8</SplashTextColor>
+</Branding>

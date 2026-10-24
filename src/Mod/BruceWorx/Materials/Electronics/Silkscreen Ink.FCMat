@@ -1,0 +1,17 @@
+---
+# BruceWorx electronics materials (ECD-06). Values are typical; check a datasheet for precise work.
+General:
+  UUID: "6b5ac905-9a22-4232-bb9a-0091cbb514f4"
+  Author: "BruceWorx"
+  License: "LGPL-2.1-or-later"
+  Name: "Silkscreen Ink"
+  Description: "White legend ink (appearance only)."
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3800, 0.3800, 0.3800, 1.0)"
+    DiffuseColor: "(0.9500, 0.9500, 0.9500, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.1000"
+    SpecularColor: "(0.2000, 0.2000, 0.2000, 1.0)"
+    Transparency: "0.0"

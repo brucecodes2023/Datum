@@ -1,0 +1,33 @@
+---
+# BruceWorx electronics materials (ECD-06). Values are typical; check a datasheet for precise work.
+General:
+  UUID: "c72f4c00-ea65-4e2c-94bb-f9c16294c0b6"
+  Author: "BruceWorx"
+  License: "LGPL-2.1-or-later"
+  Name: "PCB Copper"
+  Description: "Electrodeposited copper of PCB pads, tracks, vias and zones."
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "8960 kg/m^3"
+    YoungsModulus: "117 GPa"
+    PoissonRatio: "0.34"
+    UltimateTensileStrength: "280 MPa"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    SpecificHeat: "385 J/kg/K"
+    ThermalConductivity: "390 W/m/K"
+    ThermalExpansionCoefficient: "17 µm/m/K"
+  Electromagnetic:
+    UUID: 'b2eb5f48-74b3-4193-9fbb-948674f427f3'
+    ElectricalConductivity: "58 MS/m"
+    RelativePermeability: "0.999994"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2880, 0.1800, 0.0800, 1.0)"
+    DiffuseColor: "(0.7200, 0.4500, 0.2000, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.9000, 0.7000, 0.5000, 1.0)"
+    Transparency: "0.0"

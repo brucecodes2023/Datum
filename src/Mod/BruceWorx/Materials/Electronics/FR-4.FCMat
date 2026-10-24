@@ -1,0 +1,32 @@
+---
+# BruceWorx electronics materials (ECD-06). Values are typical; check a datasheet for precise work.
+General:
+  UUID: "e4fd295b-7da2-4a82-af69-89659c5139ac"
+  Author: "BruceWorx"
+  License: "LGPL-2.1-or-later"
+  Name: "FR-4"
+  Description: "Glass-epoxy laminate of printed circuit boards (FR-4, Tg 130-140 C). In-plane values."
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1850 kg/m^3"
+    YoungsModulus: "24 GPa"
+    PoissonRatio: "0.12"
+    UltimateTensileStrength: "310 MPa"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    SpecificHeat: "1100 J/kg/K"
+    ThermalConductivity: "0.29 W/m/K"
+    ThermalExpansionCoefficient: "14 µm/m/K"
+  Electromagnetic:
+    UUID: 'b2eb5f48-74b3-4193-9fbb-948674f427f3'
+    RelativePermittivity: "4.5"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2720, 0.2800, 0.2280, 1.0)"
+    DiffuseColor: "(0.6800, 0.7000, 0.5700, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.1500"
+    SpecularColor: "(0.2000, 0.2000, 0.2000, 1.0)"
+    Transparency: "0.0"

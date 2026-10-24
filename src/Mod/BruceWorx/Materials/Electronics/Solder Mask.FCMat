@@ -1,0 +1,21 @@
+---
+# BruceWorx electronics materials (ECD-06). Values are typical; check a datasheet for precise work.
+General:
+  UUID: "ea8badac-1ca4-480f-9902-af6eef7271f6"
+  Author: "BruceWorx"
+  License: "LGPL-2.1-or-later"
+  Name: "Solder Mask"
+  Description: "Liquid photoimageable solder mask, green. KiCad exports it as faces without volume, so it adds no mass."
+Models:
+  Density:
+    UUID: '454661e5-265b-4320-8e6f-fcf6223ac3af'
+    Density: "1500 kg/m^3"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.0640, 0.1680, 0.1000, 1.0)"
+    DiffuseColor: "(0.1600, 0.4200, 0.2500, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.5000"
+    SpecularColor: "(0.4000, 0.5000, 0.4000, 1.0)"
+    Transparency: "0.1"

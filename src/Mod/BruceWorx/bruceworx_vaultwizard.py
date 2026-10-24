@@ -452,7 +452,9 @@ class ImportJob:
             for key in kept:
                 vs._claim(data, key)
             self.source._save(data)
-        self.ordered = [c for c in included if c.kind != "drawing"] + [c for c in included if c.kind == "drawing"]
+        # Parts before the assemblies that link them, so the links can be rewritten to their numbers.
+        self.ordered = vs._children_first([c for c in included if c.kind != "drawing"]) + [
+            c for c in included if c.kind == "drawing"]
         self.staging = os.path.join(vault.root, vs.STAGING_DIR)
         self.numbered = {}
         self.done = 0
@@ -1496,9 +1498,14 @@ def _make_classes():
         def current_settings(self):
             numbering, _issues = self.numbering()
             chosen, custom = self.properties()
-            return self.vs.settings_from_setup(numbering, chosen + custom)
+            settings = self.vs.settings_from_setup(numbering, chosen + custom)
+            if getattr(self, "csv_standards", None):
+                settings.standards = dict(self.csv_standards)
+            return settings
 
         def apply_settings(self, settings):
+            # Drawing standards from a CSV have no box here: kept and passed to the new vault.
+            self.csv_standards = dict(getattr(settings, "standards", None) or {})
             numbering, _issues = self.numbering()
             numbering, properties = self.vs.apply_to_setup(settings, numbering)
             self.programs.clear()
@@ -1545,6 +1552,7 @@ def _make_classes():
                 numbering=numbering,
                 properties=chosen + custom,
                 make_default=self.make_default.isChecked(),
+                standards=dict(getattr(self, "csv_standards", None) or {}),
             )
 
         def create(self):
@@ -1940,7 +1948,8 @@ def _make_classes():
                 pass
             self.first_parent = self.vs.first_parent_of(data)
             self.counters = counter_rows(data, self.first_parent)
-            self.form = [self._build_vault(), self._build_numbering(), self._build_properties()]
+            self.form = [self._build_vault(), self._build_numbering(), self._build_properties(),
+                         self._build_drawing()]
             self.show_settings(self.saved)
             self.validate()
 
@@ -1969,9 +1978,24 @@ def _make_classes():
             finder = QtWidgets.QPushButton("Open in Finder")
             finder.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(self.root)))
             row.addWidget(finder)
+            # Break Lock and Move Vault live in bruceworx_vaultclient (BW-PDM-04).
+            unlock = QtWidgets.QPushButton("Break Lock…")
+            unlock.setToolTip("Release a lock nobody can release normally (a crash, a lost Mac).")
+            unlock.clicked.connect(lambda: __import__("bruceworx_vaultclient").break_lock(parent=w))
+            move = QtWidgets.QPushButton("Move Vault…")
+            move.setToolTip("Copy the vault to another place (an external SSD), check the copy, and switch to it.")
+            move.clicked.connect(self._move_vault)
+            row.addWidget(unlock)
+            row.addWidget(move)
             row.addStretch(1)
             lay.addLayout(row)
             return w
+
+        def _move_vault(self):
+            """Close this dialog first: the move closes and reopens the vault's documents."""
+            root = self.root
+            Gui.Control.closeDialog()
+            QtCore.QTimer.singleShot(200, lambda: __import__("bruceworx_vaultclient").move_vault_dialog(root))
 
         def _build_numbering(self):
             w = box("Part numbering")
@@ -2063,6 +2087,16 @@ def _make_classes():
             lay.addWidget(self.property_issues)
             return w
 
+        def _build_drawing(self):
+            """Drawing standards (DRW-01): the editor lives in bruceworx_drawing."""
+            w = box("Drawing standards")
+            lay = QtWidgets.QVBoxLayout(w)
+            self.drawing = __import__("bruceworx_drawing").StandardsEditor(self.root, changed=self.changed)
+            lay.addWidget(self.drawing.widget)
+            for index, combo in enumerate(self.drawing.combos):  # release() detaches held combo boxes
+                setattr(self, f"_drawing_combo{index}", combo)
+            return w
+
         def _edited(self):
             self.csv_issues = []
             self.changed()
@@ -2100,6 +2134,7 @@ def _make_classes():
                 document_types=dict(types),
                 properties=fixed + custom,
                 retired={"program": p_retired, "document_type": t_retired, "property": props_retired},
+                standards=self.drawing.texts() if hasattr(self, "drawing") else {},
             )
 
         def apply_settings(self, loaded):
@@ -2111,6 +2146,8 @@ def _make_classes():
                 return [i for i in issues if _level(i) == "error"]
             added, changed = settings_changes(current, merged)
             self.show_settings(merged)
+            if getattr(loaded, "standards", None):
+                self.drawing.show(loaded.standards)
             # The boxes list what the change does once it is shown.
             return [("info", f"{plural(added, 'row')} added, {changed} changed. Save to keep them.")]
 
@@ -2126,6 +2163,8 @@ def _make_classes():
             # Also checks the new settings on their own (codes, names, the property schema).
             for issue in self.vs.check_settings_change(self.saved, self.current_settings(), self.used):
                 text = _text(issue).lower()
+                if text.startswith("drawing standard"):
+                    continue  # the Drawing standards box lists its own
                 (props if "propert" in text else numbering).append(issue)
             return numbering, props
 
@@ -2144,11 +2183,16 @@ def _make_classes():
             if has_errors(self.validate()):
                 return False
             try:
+                self.drawing.commit()  # a newly chosen logo goes into the vault first
                 self.vs.save_settings(self.root, self.current_settings())
             except Exception as exc:
                 self.numbering_issues.set([("error", f"The settings were not saved: {exc}")])
                 return False
             refresh_start()
+            try:
+                __import__("bruceworx_drawing").refresh_all()  # open drawings take the new standards
+            except Exception:
+                pass
             return True
 
         def accept(self):

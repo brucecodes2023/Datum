@@ -118,6 +118,63 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="DrawingAutoFill">
+        <property name="toolTip">
+         <string>On by default. Drawings on the BruceWorx sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard, projection, who drew, checked and approved). Fields you type yourself are kept. Needs the hooks add-on.</string>
+        </property>
+        <property name="text">
+         <string>Fill drawing title blocks from the part and the vault</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>DrawingAutoFill</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="VaultClient">
+        <property name="toolTip">
+         <string>On by default. Check out and check in from FreeCAD: the Vault panel, vault status in the Browser and the status bar, a check-out offer when you save or edit a vault file that is not checked out to you, and no backup files for vault files. Needs the hooks add-on.</string>
+        </property>
+        <property name="text">
+         <string>Vault client: check out, check in, Vault panel</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>VaultClient</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="ClaudeBridge">
+        <property name="toolTip">
+         <string>On by default. Lets Claude Code (the BruceWorx MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call in a session asks you; a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
+        </property>
+        <property name="text">
+         <string>Claude Code bridge (asks once per session)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>ClaudeBridge</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="PatternCommands">
         <property name="toolTip">
          <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
@@ -130,6 +187,63 @@
         </property>
         <property name="prefEntry" stdset="0">
          <cstring>PatternCommands</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="KiCadBoards">
+        <property name="toolTip">
+         <string>On by default. Adds Insert Board… (Assemble group and BruceWorx menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems at the board origin and mounting holes.</string>
+        </property>
+        <property name="text">
+         <string>KiCad boards (Insert Board command)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>KiCadBoards</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="SheetMetalAddon">
+        <property name="toolTip">
+         <string>On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design &gt; Sheet Metal tab: base wall, flanges, relief, unfold, and BruceWorx's sheet-metal rules and Export Flat (shop DXF). Off skips any SheetMetal add-on, a copy from the Addon Manager too. Takes effect on the next start.</string>
+        </property>
+        <property name="text">
+         <string>Sheet metal add-on (Design &gt; Sheet Metal tab)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>SheetMetalAddon</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="SheetMetalAutoRule">
+        <property name="toolTip">
+         <string>On by default. The first sheet-metal wall of a document without a rule gets the vault's default sheet-metal rule (thickness, bend radius, K-factor, relief); change it with Sheet Metal &gt; Rules.</string>
+        </property>
+        <property name="text">
+         <string>New sheet-metal parts take the vault's default rule</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>SheetMetalAutoRule</cstring>
         </property>
         <property name="prefPath" stdset="0">
          <cstring>BruceWorx</cstring>
@@ -370,6 +484,112 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="SketchRepair">
+        <property name="toolTip">
+         <string>When a Pad, Pocket, Revolution or Groove fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing changes without a click.</string>
+        </property>
+        <property name="text">
+         <string>Offer to close the gaps of an open sketch profile</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>SketchRepair</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layoutSketchRepair">
+        <item>
+         <widget class="QLabel" name="labelSketchRepairSnap">
+          <property name="text">
+           <string>Constraint up to</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Gui::PrefDoubleSpinBox" name="SketchRepairSnap">
+          <property name="toolTip">
+           <string>Ends closer than this get a coincident constraint.</string>
+          </property>
+          <property name="suffix">
+           <string> mm</string>
+          </property>
+          <property name="decimals">
+           <number>3</number>
+          </property>
+          <property name="minimum">
+           <double>0.001</double>
+          </property>
+          <property name="maximum">
+           <double>10</double>
+          </property>
+          <property name="singleStep">
+           <double>0.05</double>
+          </property>
+          <property name="value">
+           <double>0.1</double>
+          </property>
+          <property name="prefEntry" stdset="0">
+           <cstring>SketchRepairSnap</cstring>
+          </property>
+          <property name="prefPath" stdset="0">
+           <cstring>BruceWorx</cstring>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelSketchRepairMaxGap">
+          <property name="text">
+           <string>short line up to</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Gui::PrefDoubleSpinBox" name="SketchRepairMaxGap">
+          <property name="toolTip">
+           <string>Ends further apart, up to this, get a short line. Wider gaps are only shown.</string>
+          </property>
+          <property name="suffix">
+           <string> mm</string>
+          </property>
+          <property name="decimals">
+           <number>3</number>
+          </property>
+          <property name="minimum">
+           <double>0.001</double>
+          </property>
+          <property name="maximum">
+           <double>100</double>
+          </property>
+          <property name="singleStep">
+           <double>0.05</double>
+          </property>
+          <property name="value">
+           <double>1</double>
+          </property>
+          <property name="prefEntry" stdset="0">
+           <cstring>SketchRepairMaxGap</cstring>
+          </property>
+          <property name="prefPath" stdset="0">
+           <cstring>BruceWorx</cstring>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacerSketchRepair">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="TrackpadGestures">
         <property name="toolTip">
          <string>Two-finger swipe on a trackpad: plain swipe zooms, Shift + swipe pans in any direction, Cmd + swipe orbits. A mouse wheel is not affected.</string>
@@ -451,6 +671,90 @@
         </item>
        </layout>
       </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="UndoToasts">
+        <property name="toolTip">
+         <string>A small card above the navigation pill after each command (Pad created, Deleted) with an Undo button; it fades after four seconds. Not shown for property edits or while a sketch is open.</string>
+        </property>
+        <property name="text">
+         <string>Undo toast after each command</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>UndoToasts</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="OnCanvasEditing">
+        <property name="toolTip">
+         <string>Double-click a face of a Pad, Pocket, Fillet or Hole in the 3D view (or Alt-double-click its Browser row): a drag arrow, a value field and a command bar appear. Drag or type; one drag is one undo step. Esc undoes the edit, Done or a click on empty space leaves.</string>
+        </property>
+        <property name="text">
+         <string>On-canvas editing (double-click a face: drag arrow and value field)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>OnCanvasEditing</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layoutOnCanvasPreview">
+        <item>
+         <widget class="QLabel" name="labelOnCanvasPreviewMs">
+          <property name="text">
+           <string>Preview while dragging when a recompute takes over</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Gui::PrefSpinBox" name="OnCanvasPreviewMs">
+          <property name="toolTip">
+           <string>When recomputes during a drag average more than this, only the edited feature is recomputed and shown see-through; the features after it update when you let go. 0: never.</string>
+          </property>
+          <property name="suffix">
+           <string> ms</string>
+          </property>
+          <property name="minimum">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <number>2000</number>
+          </property>
+          <property name="singleStep">
+           <number>10</number>
+          </property>
+          <property name="value">
+           <number>80</number>
+          </property>
+          <property name="prefEntry" stdset="0">
+           <cstring>OnCanvasPreviewMs</cstring>
+          </property>
+          <property name="prefPath" stdset="0">
+           <cstring>BruceWorx</cstring>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacerOnCanvasPreview">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
@@ -510,10 +814,10 @@
         <item>
          <widget class="Gui::PrefComboBox" name="DocumentTabPos">
           <property name="toolTip">
-           <string>MainWindow/DocumentTabPos. The BruceWorx pack puts the tabs on top, under the toolbars; stock FreeCAD has them at the bottom.</string>
+           <string>Where the open files' tabs are: at the bottom of the window (the default), or on top in the title row (macOS). Switches at once.</string>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <property name="prefEntry" stdset="0">
            <cstring>DocumentTabPos</cstring>
@@ -534,6 +838,25 @@
          </widget>
         </item>
        </layout>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="PinStartTab">
+        <property name="toolTip">
+         <string>On by default. The Start page, where the vault is, stays the first document tab and has no close button, so one click goes back to it.</string>
+        </property>
+        <property name="text">
+         <string>Keep the Start page as the first tab</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>PinStartTab</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
       </item>
       <item>
        <widget class="Gui::PrefCheckBox" name="DocumentTabDot">
@@ -719,6 +1042,82 @@
         </property>
         <property name="prefEntry" stdset="0">
          <cstring>BrowserGroupCaptions</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="PickTrace">
+        <property name="toolTip">
+         <string>Picking a face, edge or vertex in the 3D view highlights the feature that made it in the Browser and on the history timeline. The selection is not changed.</string>
+        </property>
+        <property name="text">
+         <string>Pick a face: show the feature that made it</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>PickTrace</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserErrorChips">
+        <property name="toolTip">
+         <string>A feature whose recompute failed gets a red ERROR chip in the Browser; click it to open the feature.</string>
+        </property>
+        <property name="text">
+         <string>Error chip on failed features</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserErrorChips</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="BrowserDependencyLines">
+        <property name="toolTip">
+         <string>Hovering a Browser row draws thin lines to the rows it uses (Sketch to Pad) and the rows that use it.</string>
+        </property>
+        <property name="text">
+         <string>Dependency lines on hover</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>BrowserDependencyLines</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="RightPanelTabs">
+        <property name="toolTip">
+         <string>Properties, Vault, Parameters and Physical as tabs of the right panel; a command opens as a tab of its own. Cmd-I hides and shows the panel. Takes effect after a restart.</string>
+        </property>
+        <property name="text">
+         <string>Right panel tabs: Properties, Vault, Parameters, Physical</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>RightPanelTabs</cstring>
         </property>
         <property name="prefPath" stdset="0">
          <cstring>BruceWorx</cstring>
@@ -946,6 +1345,11 @@
   <customwidget>
    <class>Gui::PrefSpinBox</class>
    <extends>QSpinBox</extends>
+   <header>Gui/PrefWidgets.h</header>
+  </customwidget>
+  <customwidget>
+   <class>Gui::PrefDoubleSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
    <header>Gui/PrefWidgets.h</header>
   </customwidget>
  </customwidgets>

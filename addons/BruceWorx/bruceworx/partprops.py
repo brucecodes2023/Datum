@@ -402,14 +402,29 @@ def _chosen(material) -> bool:
     return getattr(material, "Name", "Default") != "Default"
 
 
+def _mass_override(body) -> float | None:
+    """A body's ``MassOverride`` in kg when set above zero (a weighed or
+    table mass, e.g. a board component's), else None."""
+    if "MassOverride" not in getattr(body, "PropertiesList", ()):
+        return None
+    value = body.MassOverride
+    kg = value.getValueAs("kg").Value if hasattr(value, "getValueAs") else float(value)
+    return kg if kg > 0 else None
+
+
 def computed_mass(obj):
     """Mass of the bodies that have a material; 0 kg when none has one (the
-    "Default" placeholder's density is not the part's). None: no bodies."""
+    "Default" placeholder's density is not the part's). A body's
+    ``MassOverride`` replaces its volume times density. None: no bodies."""
     bodies = _bodies(obj)
     if not bodies:
         return None
     total = 0.0
     for body in bodies:
+        override = _mass_override(body)
+        if override is not None:
+            total += override
+            continue
         shape = getattr(body, "Shape", None)
         if shape is None or shape.isNull() or not shape.Solids or not _chosen(body.ShapeMaterial):
             continue
@@ -474,7 +489,7 @@ class _Observer:
     part's contents, change. Owners are the changed object and the objects
     whose Group holds it (an App::Part and its bodies)."""
 
-    WATCH = ("ShapeMaterial", "Shape", "Group")
+    WATCH = ("ShapeMaterial", "Shape", "Group", "MassOverride")
 
     def __init__(self):
         self.busy = False

@@ -119,6 +119,11 @@ def InitApplications():
         DisabledAddons += [Name for Name in Replaced.split(";") if Name and Name not in DisabledAddons]
         FreeCAD.ConfigSet("DisabledAddons", ";".join(Name for Name in DisabledAddons if Name))
         FreeCAD.ConfigSet("BruceWorxReplacedAddons", Replaced)
+    # [BW] The bundled SheetMetal add-on (MOD-06) has an off switch:
+    # Preferences/BruceWorx/SheetMetalAddon. Off skips any SheetMetal, a user copy too.
+    if not BruceWorxPrefs.GetBool("SheetMetalAddon", True) and "SheetMetal" not in DisabledAddons:
+        DisabledAddons.append("SheetMetal")
+        FreeCAD.ConfigSet("DisabledAddons", ";".join(Name for Name in DisabledAddons if Name))
 
     #print FreeCAD.getHomePath()
     if os.path.isdir(FreeCAD.getHomePath()+'src\\Tools'):
@@ -270,6 +275,8 @@ def InitApplications():
             if Name in FreeCAD.ConfigGet("BruceWorxReplacedAddons").split(";"):
                 Msg(f'NOTICE: Addon "{Name}" not loaded: replaced by the BruceWorx top bar '
                     '(Preferences > BruceWorx)\n')
+            elif Name == "SheetMetal" and not BruceWorxPrefs.GetBool("SheetMetalAddon", True):
+                Msg('NOTICE: Addon "SheetMetal" not loaded: switched off in Preferences > BruceWorx\n')
             else:
                 Msg(f'NOTICE: Addon "{Name}" disabled by presence of "--disable-addon {Name}" argument\n')
             return True

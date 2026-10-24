@@ -164,25 +164,32 @@ class JsonSourceTests(unittest.TestCase):
 
 
 class OpsSourceTests(unittest.TestCase):
-    def test_allocate_is_not_implemented(self):
+    """Construction only; the HTTP reader is tested against a local stub in test_ops_source.py."""
+
+    def test_spec_dict_builds_the_reader_without_a_request(self):
         source = open_number_source(
             {"source": "ops", "base_url": "https://ops.example/api", "token_env": "BW_OPS_TOKEN"}
         )
         self.assertIsInstance(source, OpsApiNumberSource)
         self.assertEqual(source.base_url, "https://ops.example/api")
+        self.assertEqual(source.endpoint, "https://ops.example/api/part-numbers")
         self.assertEqual(source.programs(), [])
         self.assertEqual(source.document_types(), [])
-        for method in (source.allocate, source.preview):
-            with self.assertRaises(NotImplementedError) as caught:
-                method("LE", "01", parent="01001")
-            self.assertIn("FCB-P2-03", str(caught.exception))
-            self.assertIn("BW_OPS_TOKEN", str(caught.exception))
-            self.assertIn("01", str(caught.exception))
-            self.assertIn("01001", str(caught.exception))
+        with self.assertRaises(NotImplementedError) as caught:
+            source.preview("LE", "01", parent="01001")
+        self.assertIn("01001", str(caught.exception))
 
     def test_ops_requires_base_url(self):
         with self.assertRaises(ValueError):
             open_number_source({"source": "ops", "base_url": "  "})
+
+    def test_token_never_goes_over_plain_http_to_another_machine(self):
+        with self.assertRaises(ValueError):
+            open_number_source({"source": "ops", "base_url": "http://ops.example/api"})
+        with self.assertRaises(ValueError):
+            open_number_source({"source": "ops", "base_url": "ftp://ops.example/api"})
+        local = open_number_source({"source": "ops", "base_url": "http://127.0.0.1:9/api"})
+        self.assertEqual(local.base_url, "http://127.0.0.1:9/api")
 
     def test_unknown_kind(self):
         with self.assertRaises(ValueError):

@@ -65,7 +65,7 @@ the acceptance check.
 \section{Track ECD --- ECAD bridge (KiCad)}\label{sec:ecd}
 %======================================================================
 
-\begin{epic}{ECD-01}{ECAD intake \& adopt-vs-build}{M1}{\stTodo}{FCB-P2E-01..04}
+\begin{epic}{ECD-01}{ECAD intake \& adopt-vs-build}{M1}{\stProg}{FCB-P2E-01..04}
 Requirements intake from the ECAD owner (KiCad version, outline and keep-outs, direction of placement sync,
 STEP needs, sample board). Evaluate the KiCad StepUp add-on on current FreeCAD with a KiCad 9 board,
 including its AGPL licence and maintenance. Then a decision memo: adopt StepUp unmodified, or build a bridge on
@@ -73,7 +73,7 @@ including its AGPL licence and maintenance. Then a decision memo: adopt StepUp u
 recorded (open question).
 \end{epic}
 
-\begin{epic}{ECD-02}{Board STEP into assembly}{M3}{\stTodo}{FCB-P2E-05}
+\begin{epic}{ECD-02}{Board STEP into assembly}{M3}{\stProg}{FCB-P2E-05}
 Export with \code{kicad-cli pcb export step}, and insert into the assembly with an LCS at the board origin, so
 the board joints like any component.
 \end{epic}
@@ -96,7 +96,7 @@ section~\ref{sec:ecd-plan}.
 \emph{Acceptance:} a board revised in KiCad and checked in updates in its enclosure with one click; joints survive.
 \end{epic}
 
-\begin{epic}{ECD-06}{Board materials \& mass}{M3}{\stTodo}{(new, 23 Oct)}
+\begin{epic}{ECD-06}{Board materials \& mass}{M3}{\stProg}{(new, 23 Oct)}
 KiCad's bodies mapped to materials on import, FR-4 and solder-mask materials added. Plan in
 section~\ref{sec:ecd-plan}.
 \emph{Acceptance:} board mass within 5\,\% of a weighed sample; the BOM lists FR-4 and copper.

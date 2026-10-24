@@ -676,6 +676,7 @@ Gui--TreeWidget {
   qproperty-badgeTextColor: @TextSecondaryColor;
   qproperty-badgeWarnColor: @WarnColor;
   qproperty-badgeAccentColor: @AccentColor;
+  qproperty-badgeErrorColor: @ErrorColor;
 }
 
 Gui--PropertyEditor--PropertyEditor {
@@ -824,6 +825,27 @@ QRadioButton::indicator:checked {
   background-color: @AccentColor;
   border-color: @AccentColor;
   image: url(qss:images_classic/radio-mark-@AccentGlyphColor.svg);
+}
+
+/* Check boxes inside lists, trees and tables: the same box (the default is faint in dark). */
+QAbstractItemView::indicator {
+  width: 14px;
+  height: 14px;
+  border: 1px solid @CheckBoxBorderColor;
+  border-radius: 4px;
+  background-color: @CheckBoxBackgroundColor;
+}
+
+QAbstractItemView::indicator:checked {
+  background-color: @AccentColor;
+  border-color: @AccentColor;
+  image: url(qss:images_classic/check-mark-@AccentGlyphColor.svg);
+}
+
+QAbstractItemView::indicator:indeterminate {
+  background-color: @AccentColor;
+  border-color: @AccentColor;
+  image: url(qss:images_classic/indeterminate-mark-@AccentGlyphColor.svg);
 }
 
 QCheckBox::indicator:disabled,
@@ -1019,6 +1041,19 @@ QStatusBar QLabel#vaultReadout {
   color: @OkColor;
 }
 
+/* Claude Code bridge (bruceworx_bridge.py): shown while Claude Code may control FreeCAD; a click disconnects. */
+QStatusBar QPushButton#claudeChip {
+  background-color: @AccentSoftColor;
+  color: @AccentColor;
+  border-radius: 8px;
+  padding: 1px 8px;
+}
+
+QStatusBar QPushButton#claudeChip:hover {
+  background-color: @AccentColor;
+  color: @AccentTextColor;
+}
+
 /* Toolbars placed in the status bar: no plate of their own. */
 QStatusBar QToolBar,
 QStatusBar QToolBar QToolButton {
@@ -1196,6 +1231,27 @@ QWidget#thumbnailWidget[state="pressed"] {
 #BruceWorxStart QPushButton#bwStartLink:pressed {
   background-color: transparent;
   color: @AccentColor;
+}
+
+/* The Start page's one-line vault switcher (PDM-04): the vault's name with a menu. */
+#BruceWorxStart QToolButton#bwStartVaultSwitch {
+  background: transparent;
+  color: @TextForegroundColor;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+#BruceWorxStart QToolButton#bwStartVaultSwitch:hover {
+  background-color: @HoverColor;
+}
+
+#BruceWorxStart QToolButton#bwStartVaultSwitch::menu-indicator {
+  image: none;
+  width: 0px;
 }
 
 #BruceWorxStart QFrame#bwStartVault {
@@ -1398,6 +1454,133 @@ QWidget#thumbnailWidget[state="pressed"] {
   border: none;
 }
 
+/* Undo toast (bruceworx_toasts.py): a small card above the navigation pill. */
+#BruceWorxToast {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 9px;
+}
+
+QLabel#BruceWorxToastText {
+  color: @TextForegroundColor;
+  background: transparent;
+}
+
+QToolButton#BruceWorxToastUndo {
+  color: @AccentColor;
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-weight: 600;
+}
+
+QToolButton#BruceWorxToastUndo:hover {
+  background-color: @AccentSoftColor;
+}
+
+QToolButton#BruceWorxToastUndo:disabled {
+  color: @TextDisabledColor;
+}
+
+/* On-canvas editing (bruceworx_oncanvas.py): value card at the arrow tip, command bar above the pill. */
+#BruceWorxCanvasField,
+#BruceWorxCanvasBar {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 9px;
+}
+
+#BruceWorxCanvasField QLineEdit {
+  color: @TextForegroundColor;
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @AccentColor;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+
+#BruceWorxCanvasField QLineEdit:read-only {
+  color: @TextSecondaryColor;
+  border-color: @GeneralBorderColor;
+}
+
+#BruceWorxCanvasField QLabel,
+QLabel#BruceWorxCanvasKeys {
+  color: @TextSecondaryColor;
+  background: transparent;
+  font-size: 11px;
+}
+
+QLabel#BruceWorxCanvasTitle {
+  color: @TextForegroundColor;
+  background: transparent;
+}
+
+#BruceWorxCanvasBar QToolButton {
+  color: @TextForegroundColor;
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+#BruceWorxCanvasBar QToolButton:hover {
+  background-color: @HoverColor;
+}
+
+QToolButton#BruceWorxCanvasSnap {
+  color: @AccentColor;
+}
+
+QToolButton#BruceWorxCanvasDone {
+  color: @AccentTextColor;
+  background-color: @AccentColor;
+  font-weight: 600;
+}
+
+QToolButton#BruceWorxCanvasDone:hover {
+  color: @AccentTextColor;
+  background-color: @AccentColor;
+}
+
+/* Sketch profile repair card (bruceworx_sketchrepair.py): top centre of the 3D view. */
+#BruceWorxRepairCard {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-left: 3px solid @ErrorColor;
+  border-radius: 9px;
+}
+
+#BruceWorxRepairCard QLabel {
+  background: transparent;
+}
+
+QLabel#BruceWorxRepairCardTitle {
+  color: @TextForegroundColor;
+  font-weight: 600;
+}
+
+QLabel#BruceWorxRepairCardBody {
+  color: @TextForegroundColor;
+}
+
+QLabel#BruceWorxRepairCardNote {
+  color: @TextSecondaryColor;
+}
+
+QToolButton#BruceWorxRepairCardClose {
+  color: @TextSecondaryColor;
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 0px 4px;
+}
+
+QToolButton#BruceWorxRepairCardClose:hover {
+  background-color: @HoverColor;
+}
+
 /* Vault task dialogs (bruceworx_vaultwizard.py): problems at the foot of each task box. Errors block OK. */
 QLabel#bwVaultHint,
 QLabel#bwVaultIssue {
@@ -1410,6 +1593,30 @@ QLabel#bwVaultIssue[level="error"] {
 
 QLabel#bwVaultIssue[level="warning"] {
   color: @WarnColor;
+}
+
+/* Release checklist (bruceworx_changes.py): a mark per line; your ticks are plain checkboxes. */
+QLabel#bwCheckMark {
+  color: @TextSecondaryColor;
+  font-weight: 700;
+}
+
+QLabel#bwCheckMark[state="ok"] {
+  color: @OkColor;
+}
+
+QLabel#bwCheckMark[state="fail"] {
+  color: @ErrorColor;
+}
+
+QLabel#bwCheckText[state="skip"] {
+  color: @TextSecondaryColor;
+}
+
+QListWidget#bwChangeItems {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 8px;
 }
 
 /* Part-number builder (bruceworx_vaultwizard.py): the number as clickable segments in a card. */
@@ -1487,4 +1694,496 @@ QLabel#bwPnPageTitle {
 
 QLabel#bwPnSequence {
   color: @AccentColor;
+}
+
+/* Vault panel and Check In (bruceworx_vaultclient.py, BW-PDM-04). The list paints its rows
+   itself; its colours come from these tokens (qproperty-*). */
+QFrame#Vault {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+QWidget#bwVaultPanel,
+QWidget#bwVaultTop {
+  background: transparent;
+}
+
+QLabel#bwVaultCaption {
+  color: @TextSecondaryColor;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+QLabel#bwVaultName {
+  color: @TextForegroundColor;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+QLabel#bwVaultSync,
+QLabel#bwVaultCount,
+QToolButton#bwVaultSort,
+QLabel#bwVaultFooter,
+QLabel#bwVaultEmpty,
+QLabel#bwVaultIntro {
+  color: @TextSecondaryColor;
+}
+
+QLineEdit#bwVaultSearch {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+QLineEdit#bwVaultSearch:focus {
+  border-color: @AccentColor;
+}
+
+QPushButton#bwVaultChip {
+  background-color: @CardBackgroundColor;
+  color: @TextForegroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 11px;
+  padding: 1px 6px;
+  min-height: 18px;
+}
+
+QPushButton#bwVaultChip:hover {
+  background-color: @HoverColor;
+}
+
+QPushButton#bwVaultChip:checked {
+  background-color: @AccentColor;
+  border-color: @AccentColor;
+  color: @AccentTextColor;
+  font-weight: 600;
+}
+
+QToolButton#bwVaultSort,
+QToolButton#bwVaultTool {
+  background: transparent;
+  color: @TextSecondaryColor;
+  border: none;
+  padding: 2px;
+}
+
+QToolButton#bwVaultTool:hover,
+QToolButton#bwVaultSort:hover {
+  background-color: @HoverColor;
+  border-radius: 5px;
+}
+
+QToolButton#bwVaultTool::menu-indicator {
+  image: none;
+  width: 0px;
+}
+
+QListView#bwVaultList {
+  background: transparent;
+  border: none;
+  border-top: 1px solid @GeneralBorderColor;
+  qproperty-textColor: @TextForegroundColor;
+  qproperty-secondaryColor: @TextSecondaryColor;
+  qproperty-accentColor: @AccentColor;
+  qproperty-okColor: @OkColor;
+  qproperty-warnColor: @WarnColor;
+  qproperty-errorColor: @ErrorColor;
+  qproperty-borderColor: @GeneralBorderColor;
+  qproperty-hoverColor: @HoverColor;
+  qproperty-selectedColor: @AccentSoftColor;
+  qproperty-cardColor: @CardBackgroundColor;
+}
+
+QLabel#bwVaultFooter {
+  border-top: 1px solid @GeneralBorderColor;
+}
+
+QPlainTextEdit#bwVaultComment {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+QPlainTextEdit#bwVaultComment:focus {
+  border: 2px solid @AccentColor;
+  padding: 2px;
+}
+
+QTreeWidget#bwVaultFiles {
+  background: transparent;
+  border: none;
+}
+
+/* Properties tab of the right panel (bruceworx_inspector.py, UIX-12): folding sections with compact fields,
+   as in a Fusion command dialog. */
+QWidget#BruceWorxInspector QWidget#bwInspectorFoot {
+  border-top: 1px solid @GeneralBorderColor;
+}
+
+QWidget#BruceWorxInspector QFrame#bwInspectorRule {
+  color: @GeneralBorderColor;
+  border: none;
+  border-top: 1px solid @GeneralBorderColor;
+  margin: 4px -12px 4px -12px;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorFold {
+  background: transparent;
+  border: none;
+  padding: 0px;
+  min-width: 12px;
+  max-width: 12px;
+  color: @TextDisabledColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorField {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 5px;
+  padding: 1px 7px;
+  min-height: 18px;
+  text-align: left;
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorField:hover {
+  border-color: @AccentColor;
+}
+
+QWidget#BruceWorxInspector QScrollArea#bwInspectorScroll,
+QWidget#BruceWorxInspector QWidget#bwInspectorBody {
+  background: transparent;
+  border: none;
+}
+
+QWidget#BruceWorxInspector QLabel#bwInspectorCaption {
+  color: @TextDisabledColor;
+}
+
+QWidget#BruceWorxInspector QLabel#bwInspectorSub,
+QWidget#BruceWorxInspector QLabel#bwInspectorLabel,
+QWidget#BruceWorxInspector QLabel#bwInspectorHint {
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxInspector QLabel#bwInspectorValue {
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxInspector QLineEdit,
+QWidget#BruceWorxInspector QAbstractSpinBox,
+QWidget#BruceWorxInspector QComboBox {
+  min-height: 18px;
+  max-height: 22px;
+  padding-top: 0px;
+  padding-bottom: 0px;
+}
+
+QWidget#BruceWorxInspector QFrame#bwInspectorSegments {
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 6px;
+  background-color: @TextEditFieldBackgroundColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorSegment {
+  background-color: transparent;
+  border: none;
+  border-left: 1px solid @GeneralBorderColor;
+  border-radius: 0px;
+  padding: 0px 6px;
+  min-height: 20px;
+  max-height: 20px;
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorSegment[position="first"] {
+  border-left: none;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorSegment[position="last"] {
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorSegment:hover {
+  background-color: @HoverColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorSegment:checked {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+  font-weight: 600;
+}
+
+/* Links as chips: a click selects the linked object. At most half the height as radius. */
+QWidget#BruceWorxInspector QToolButton#bwInspectorChip {
+  background-color: @HoverColor;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 1px 8px 1px 4px;
+  min-height: 16px;
+  max-height: 18px;
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorChip:hover {
+  border-color: @AccentColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorAction,
+QWidget#BruceWorxInspector QPushButton#bwInspectorAction {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 6px;
+  padding: 2px 10px;
+  min-height: 18px;
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorAction:hover,
+QWidget#BruceWorxInspector QPushButton#bwInspectorAction:hover {
+  background-color: @HoverColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorMenu,
+QWidget#BruceWorxInspector QToolButton#bwInspectorSwatch {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 1px 4px;
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorMenu::menu-indicator {
+  image: none;
+  width: 0px;
+}
+
+QWidget#BruceWorxInspector QToolButton#bwInspectorMenu:hover,
+QWidget#BruceWorxInspector QToolButton#bwInspectorSwatch:hover {
+  background-color: @HoverColor;
+}
+
+QToolButton#bwInspectorMore,
+QToolButton#bwInspectorBack {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  color: @AccentColor;
+  font-weight: 600;
+}
+
+QToolButton#bwInspectorMore:hover,
+QToolButton#bwInspectorBack:hover {
+  color: @AccentHoverColor;
+}
+
+/* Right panel tabs (bruceworx_rightpanel.py, UIX-12): a thin strip of text tabs over the panel's title bar,
+   the current one in the text colour with an accent underline; the command's tab on the right. */
+QWidget#bwRightTabs {
+  background-color: @CardBackgroundColor;
+  border: none;
+  border-bottom: 1px solid @GeneralBorderColor;
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+}
+
+QWidget#bwRightTabs QToolButton#bwRightTab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0px;
+  padding: 0px 6px;
+  margin: 0px;
+  font-size: 11px;
+  font-weight: 600;
+  color: @TextSecondaryColor;
+}
+
+QWidget#bwRightTabs QToolButton#bwRightTab:hover {
+  color: @TextForegroundColor;
+}
+
+QWidget#bwRightTabs QToolButton#bwRightTab[current="true"] {
+  color: @TextForegroundColor;
+  border-bottom-color: @AccentColor;
+}
+
+QWidget#bwRightTabs QToolButton#bwRightTab[kind="command"] {
+  color: @AccentColor;
+}
+
+QWidget#bwRightTabs QToolButton#bwRightTab[kind="command"][current="true"] {
+  color: @TextForegroundColor;
+}
+
+/* Physical tab of the right panel (bruceworx_physical.py, UIX-12): the Properties tab's sections, read-only. */
+QWidget#BruceWorxPhysical QWidget#bwInspectorFoot {
+  border-top: 1px solid @GeneralBorderColor;
+}
+
+QWidget#BruceWorxPhysical QFrame#bwInspectorRule {
+  color: @GeneralBorderColor;
+  border: none;
+  border-top: 1px solid @GeneralBorderColor;
+  margin: 4px -12px 4px -12px;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorFold {
+  background: transparent;
+  border: none;
+  padding: 0px;
+  min-width: 12px;
+  max-width: 12px;
+  color: @TextDisabledColor;
+}
+
+QWidget#BruceWorxPhysical QScrollArea#bwInspectorScroll,
+QWidget#BruceWorxPhysical QWidget#bwInspectorBody {
+  background: transparent;
+  border: none;
+}
+
+QWidget#BruceWorxPhysical QLabel#bwInspectorSub,
+QWidget#BruceWorxPhysical QLabel#bwInspectorLabel,
+QWidget#BruceWorxPhysical QLabel#bwInspectorHint {
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxPhysical QLabel#bwInspectorValue {
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxPhysical QFrame#bwInspectorSegments {
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 6px;
+  background-color: @TextEditFieldBackgroundColor;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorSegment {
+  background-color: transparent;
+  border: none;
+  border-left: 1px solid @GeneralBorderColor;
+  border-radius: 0px;
+  padding: 0px 6px;
+  min-height: 20px;
+  max-height: 20px;
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorSegment[position="first"] {
+  border-left: none;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorSegment[position="last"] {
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorSegment:hover {
+  background-color: @HoverColor;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorSegment:checked {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+  font-weight: 600;
+}
+
+QWidget#BruceWorxPhysical QToolButton#bwInspectorMore:disabled {
+  color: @TextDisabledColor;
+}
+
+/* Parameters tab of the right panel (bruceworx_parameters.py, UIX-12): a filter over a Name / Expression / Value
+   table; group rows banded, expressions in a fixed-width font. */
+QWidget#BruceWorxParameters QWidget#bwParamFoot {
+  border-top: 1px solid @GeneralBorderColor;
+}
+
+QWidget#BruceWorxParameters QLineEdit#bwParamFilter {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 6px;
+  padding: 0px 6px;
+}
+
+QWidget#BruceWorxParameters QLineEdit#bwParamFilter:focus {
+  border-color: @AccentColor;
+}
+
+QWidget#BruceWorxParameters QLabel#bwParamError,
+QDialog#bwParamDialog QLabel#bwParamError {
+  color: @ErrorColor;
+}
+
+QWidget#BruceWorxParameters QLabel#bwParamHint {
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree {
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree::item {
+  min-height: 22px;
+  padding: 0px 2px;
+  border-bottom: 1px solid @HoverColor;
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree::item:hover {
+  background-color: @HoverColor;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree::item:selected {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree QHeaderView::section {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid @GeneralBorderColor;
+  padding: 3px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: @TextSecondaryColor;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree QLineEdit#bwParamEditor {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @AccentColor;
+  border-radius: 4px;
+  padding: 0px 3px;
+}
+
+QWidget#BruceWorxParameters QWidget#bwParamGroupHead {
+  background: transparent;
+}
+
+QWidget#BruceWorxParameters QToolButton#bwParamPlus {
+  background: transparent;
+  border: none;
+  padding: 0px 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: @AccentColor;
+}
+
+QWidget#BruceWorxParameters QToolButton#bwParamPlus:hover {
+  color: @AccentHoverColor;
+}
+
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree::branch:closed:has-children,
+QWidget#BruceWorxParameters QTreeWidget#bwParamTree::branch:open:has-children {
+  padding: 3px;
 }

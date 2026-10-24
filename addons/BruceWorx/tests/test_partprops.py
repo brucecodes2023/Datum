@@ -279,7 +279,7 @@ class VaultWritesStateTests(unittest.TestCase):
         self.assertEqual(self.part.LifecycleState, pdm.WIP)
         self.vault.submit("P1")
         self.assertEqual(self.part.LifecycleState, pdm.IN_REVIEW)
-        self.vault.approve("P1")
+        self.vault.approve("P1", note="released")
         self.assertEqual(self.part.LifecycleState, pdm.RELEASED)
         self.assertEqual(self.vault.problems, [])
 
@@ -347,6 +347,17 @@ class ComputedTests(unittest.TestCase):
         obj.Group[0].ShapeMaterial = FakeMaterial("Aluminum-6061-T6")
         partprops.refresh(obj, self.computed)
         self.assertEqual(obj.MaterialName, "Aluminum-6061-T6")
+
+    def test_mass_override_replaces_volume_times_density(self):
+        obj = self.part("Default")
+        weighed = FakeBody("Default")
+        weighed.PropertiesList = ["ShapeMaterial", "Shape", "MassOverride"]
+        weighed.MassOverride = 0.0021  # kg, e.g. from component_masses.csv
+        unset = FakeBody("Default")
+        unset.PropertiesList = weighed.PropertiesList
+        unset.MassOverride = 0.0
+        obj.Group += [weighed, unset]
+        self.assertEqual(partprops.computed_mass(obj), "0.0021 kg")
 
     def test_refresh_leaves_other_types_alone(self):
         obj = self.part("Steel", Mass=("App::PropertyFloat", 1.5))

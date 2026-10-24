@@ -1,5 +1,5 @@
 {
-  "_comment": "BruceWorx workspaces (roadmap 13.4, step C2). Each workspace runs one FreeCAD workbench. A tab lists its groups; each group becomes one custom toolbar named '<Tab> · <Caption>' in that workbench, with 'more' commands in the caption menu only. A tab with \"toolbars\": \"workbench\" shows the workbench's own toolbars. 'replaces' are the workbench's stock toolbars that the groups take over. 'load' are the modules imported before a group's command is looked up (commands from other workbenches).",
+  "_comment": "BruceWorx workspaces (roadmap 13.4, step C2). Each workspace runs one FreeCAD workbench. A tab lists its groups; each group becomes one custom toolbar named '<Tab> · <Caption>' in that workbench, with 'more' commands in the caption menu only. A tab with \"toolbars\": \"workbench\" shows the workbench's own toolbars. 'replaces' are the workbench's stock toolbars that the groups take over. 'load' are the modules imported before a group's command is looked up (commands from other workbenches). A tab with \"requires\": \"<add-on folder>\" shows only while that add-on is loaded (SheetMetal, MOD-06).",
   "load": [
     "PartGui",
     "BOPTools:importAll",
@@ -17,7 +17,23 @@
     "CommandSolveAssembly",
     "CommandCreateView",
     "CommandCreateSimulation",
-    "CommandCreateBom"
+    "CommandCreateBom",
+    "ExtrudedCutout",
+    "SheetMetalBaseCmd",
+    "SheetMetalBaseShapeCmd",
+    "SheetMetalBend",
+    "SheetMetalCmd",
+    "SheetMetalHem",
+    "SheetMetalCornerReliefCmd",
+    "SheetMetalExtendCmd",
+    "SheetMetalFoldCmd",
+    "SheetMetalFormingCmd",
+    "SheetMetalJunction",
+    "SheetMetalRelief",
+    "SheetMetalUnfoldCmd",
+    "SketchOnSheetMetalCmd",
+    "SheetMetalSketch",
+    "SheetMetalFromSolid"
   ],
   "workspaces": [
     {
@@ -98,6 +114,7 @@
               ],
               "more": [
                 "Assembly_InsertNewPart",
+                "BruceWorx_InsertBoard",
                 "Assembly_ToggleGrounded",
                 "Assembly_CreateJointCylindrical",
                 "Assembly_CreateJointBall",
@@ -247,6 +264,62 @@
                 "Mesh_EvaluateSolid",
                 "Mesh_CurvatureInfo",
                 "Mesh_BoundingBox"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Sheet Metal",
+          "requires": "SheetMetal",
+          "groups": [
+            {
+              "caption": "Create",
+              "commands": [
+                "SheetMetal_AddBase",
+                "SheetMetal_AddWall",
+                "SheetMetal_AddFoldWall",
+                "SheetMetal_Extrude",
+                "SheetMetal_AddHem"
+              ],
+              "more": [
+                "SheetMetal_BaseShape",
+                "SheetMetal_FromSolid",
+                "SheetMetal_ExtendBySketch",
+                "SheetMetal_AddBend",
+                "SheetMetal_NewSketch"
+              ]
+            },
+            {
+              "caption": "Modify",
+              "commands": [
+                "SheetMetal_AddRelief",
+                "SheetMetal_AddCornerRelief",
+                "SheetMetal_AddJunction",
+                "SheetMetal_AddCutout"
+              ],
+              "more": [
+                "SheetMetal_SketchOnSheet",
+                "SheetMetal_Forming"
+              ]
+            },
+            {
+              "caption": "Flat",
+              "commands": [
+                "SheetMetal_Unfold",
+                "BruceWorx_ExportFlat"
+              ],
+              "more": [
+                "SheetMetal_UnfoldUpdate",
+                "SheetMetal_UnattendedUnfold"
+              ]
+            },
+            {
+              "caption": "Rules",
+              "commands": [
+                "BruceWorx_SheetMetalRule"
+              ],
+              "more": [
+                "BruceWorx_SheetMetalRules"
               ]
             }
           ]

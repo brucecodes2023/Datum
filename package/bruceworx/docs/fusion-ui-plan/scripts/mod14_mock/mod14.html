@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>MOD-14 on-canvas editing mock</title>
+<script src="points.js"></script>
+<style>
+/* Tokens: src/Gui/Stylesheets/parameters/BruceWorx.yaml and "BruceWorx Dark.yaml" (as in pdm04_mock) */
+:root {
+  --accent: #007aff; --accent-soft: rgba(0,122,255,.14); --accent-line: rgba(0,122,255,.55);
+  --chrome: #e9e9ec; --chrome-2: #f3f3f5; --chrome-line: #d9d9de;
+  --card: rgba(255,255,255,.86); --card-solid: #ffffff; --card-line: rgba(0,0,0,.10);
+  --field: #ffffff; --field-line: #d9d9de;
+  --text: #1d1d1f; --text-2: #6e6e73; --text-3: #86868b;
+  --shadow: 0 6px 24px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.10);
+  --vp: #e0e2e8; --vp-2: #eef0f4; --active: #ff9f0a; --ghost: rgba(29,29,31,.45);
+  --halo: rgba(238,240,244,.9); --badge-bg: rgba(29,29,31,.086);
+}
+body.dark {
+  --accent: #0a84ff; --accent-soft: rgba(10,132,255,.22); --accent-line: rgba(10,132,255,.65);
+  --chrome: #232326; --chrome-2: #2a2a2d; --chrome-line: #3a3a3d;
+  --card: rgba(44,44,47,.86); --card-solid: #2c2c2f; --card-line: rgba(255,255,255,.12);
+  --field: #1c1c1e; --field-line: #3a3a3d;
+  --text: #ececef; --text-2: #a1a1a6; --text-3: #808085;
+  --shadow: 0 8px 28px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.4);
+  --vp: #33353a; --vp-2: #45484f; --active: #ffb340; --ghost: rgba(236,236,239,.55);
+  --halo: rgba(51,53,58,.9); --badge-bg: rgba(236,236,239,.086);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; overflow: hidden; }
+body { font: 13px/1.3 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color: var(--text); background: var(--chrome);
+  -webkit-font-smoothing: antialiased; }
+img.i16 { width: 16px; height: 16px; display: block; flex: none; }
+img.i20 { width: 20px; height: 20px; display: block; flex: none; }
+svg.g { width: 16px; height: 16px; stroke: var(--text-2); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.vp { position: relative; background: radial-gradient(ellipse at 60% 35%, var(--vp-2), var(--vp) 70%); overflow: hidden; }
+.layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+/* The value field: a small card at the arrow tip (QLineEdit on the 3D view, like the navigation pill) */
+.val { position: absolute; display: flex; flex-direction: column; gap: 3px; z-index: 5; }
+.val .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; color: var(--text-2); text-shadow: 0 0 3px var(--halo), 0 0 2px var(--halo); white-space: nowrap; }
+.val .box { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; border-radius: 7px; background: var(--card-solid);
+  border: 1.5px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.val .box .u { color: var(--text-3); font-weight: 500; }
+.val .box .fx { font: italic 600 11px Georgia, serif; color: var(--text-3); padding: 0 4px; border-left: 1px solid var(--field-line); margin-left: 4px; }
+.val .box .caret { width: 1px; height: 16px; background: var(--text); margin-left: -4px; }
+.val .delta { font-size: 11px; color: var(--text-2); text-shadow: 0 0 3px var(--halo), 0 0 2px var(--halo); white-space: nowrap; }
+.val.small .box { height: 24px; font-size: 12.5px; border-width: 1px; box-shadow: var(--shadow); border-color: var(--field-line); }
+
+.hud { position: absolute; display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 10px; border-radius: 9px; background: var(--card);
+  border: 1px solid var(--card-line); box-shadow: var(--shadow); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 12px; white-space: nowrap; z-index: 6; }
+.hud b { font-size: 12.5px; }
+.hud .k { color: var(--text-2); }
+.hud kbd { font: 600 10.5px -apple-system; color: var(--text-2); border: 1px solid var(--field-line); border-radius: 4px; padding: 0 4px; background: var(--card-solid); }
+.hud .btn { height: 22px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--field-line); background: var(--card-solid); display: inline-flex; align-items: center; font-size: 11.5px; }
+.hud .btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.hud .vs { width: 1px; height: 18px; background: var(--card-line); }
+.snap { display: inline-flex; gap: 2px; background: var(--badge-bg); border-radius: 6px; padding: 2px; }
+.snap span { padding: 1px 6px; border-radius: 4px; font-size: 11px; color: var(--text-2); }
+.snap span.on { background: var(--card-solid); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+
+.tree { position: absolute; left: 14px; top: 12px; }
+.row { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 4px; white-space: nowrap; border-radius: 6px;
+  text-shadow: 0 0 4px var(--halo), 0 0 2px var(--halo); }
+.row .meta { color: var(--text-3); font-size: 12px; }
+.row.sel { background: var(--accent-soft); }
+.row.live .meta { color: var(--accent); font-weight: 600; }
+.bhead { height: 26px; display: flex; align-items: center; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--text-2); padding-left: 6px; }
+.nav { position: absolute; bottom: 12px; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 9px; background: var(--card-solid);
+  border: 1px solid var(--card-line); box-shadow: var(--shadow); }
+.nav span { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
+.nav .vs { width: 1px; height: 18px; background: var(--card-line); margin: 0 3px; }
+.co { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #d2463c; color: #fff; font: 700 12px -apple-system;
+  display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); z-index: 9; }
+.panels { display: flex; gap: 14px; padding: 14px; }
+.panel { position: relative; width: 422px; height: 400px; border-radius: 10px; overflow: hidden; border: 1px solid var(--chrome-line); }
+.ptitle { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 700; color: var(--text-2); letter-spacing: .03em; z-index: 7;
+  text-shadow: 0 0 3px var(--halo), 0 0 2px var(--halo); }
+.ptitle span { font-weight: 400; letter-spacing: 0; color: var(--text-3); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const FIG = Q.get("fig") || "pad";
+if (Q.get("theme") === "dark") document.body.classList.add("dark");
+const ic = (n, c = "i16") => `<img class="${c}" src="icons/${n}.svg">`;
+const G = {
+  orbit: '<svg class="g" viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6" ry="2.6"/><path d="M8 2v12"/><circle cx="8" cy="8" r="1.2"/></svg>',
+  pan: '<svg class="g" viewBox="0 0 16 16"><path d="M8 1.8v12.4M1.8 8h12.4"/></svg>',
+  zoom: '<svg class="g" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14M5 7h4M7 5v4"/></svg>',
+  fit: '<svg class="g" viewBox="0 0 16 16"><path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/><rect x="5.5" y="5.5" width="5" height="5" rx="1"/></svg>',
+};
+const EYE = '<svg width="15" height="15" viewBox="0 0 16 16" style="flex:none"><path d="M1.2 8s2.6-4.4 6.8-4.4S14.8 8 14.8 8s-2.6 4.4-6.8 4.4S1.2 8 1.2 8z" fill="none" stroke="var(--text)" stroke-width="1.3"/><circle cx="8" cy="8" r="2.4" fill="var(--text)"/></svg>';
+
+/* geometry in render pixels (views_mod14.py) */
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]], mul = (a, k) => [a[0] * k, a[1] * k];
+const unit = a => { const n = Math.hypot(a[0], a[1]) || 1; return [a[0] / n, a[1] / n]; };
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+function hull(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of p.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+const path = (pts, close = true) => "M" + pts.map(p => p.map(v => v.toFixed(1)).join(" ")).join("L") + (close ? "Z" : "");
+const SEL = 'fill="var(--accent)" fill-opacity=".26" stroke="var(--accent)" stroke-width="5" stroke-linejoin="round"';
+
+/* An arrow (the dragger) in render pixels: shaft, head, a base dot. */
+function arrow(a, b, color, w = 9) {
+  const d = unit(sub(b, a)), n = [-d[1], d[0]], hl = w * 5, hw = w * 2.4;
+  const s = sub(b, mul(d, hl));
+  return `<line x1="${a[0]}" y1="${a[1]}" x2="${s[0]}" y2="${s[1]}" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>
+    <path d="${path([b, add(s, mul(n, hw)), add(s, mul(n, -hw))])}" fill="${color}"/>
+    <circle cx="${a[0]}" cy="${a[1]}" r="${w * 1.3}" fill="${color}" stroke="#fff" stroke-width="3"/>`;
+}
+function ticks(a, b, n, color) {
+  const d = unit(sub(b, a)), nn = [-d[1], d[0]];
+  let out = "";
+  for (let i = 0; i <= n; i++) {
+    const p = lerp(a, b, i / n), l = i % 5 === 0 ? 20 : 11;
+    out += `<line x1="${p[0] - nn[0] * l}" y1="${p[1] - nn[1] * l}" x2="${p[0] + nn[0] * l}" y2="${p[1] + nn[1] * l}" stroke="${color}" stroke-width="3"/>`;
+  }
+  return out;
+}
+/* A model render placed so that image point c lands at screen (x, y), with an SVG overlay and screen-space HTML. */
+function stage(job, c, x, y, s, svg, html) {
+  const J = PTS[job], left = x - c[0] * s, top = y - c[1] * s;
+  const scr = p => [left + p[0] * s, top + p[1] * s];
+  return `<div class="layer" style="left:${left}px;top:${top}px;transform:scale(${s})">
+      <img src="${job}.png" style="display:block;width:${J.w}px;height:${J.h}px">
+      <svg style="position:absolute;left:0;top:0;overflow:visible" width="${J.w}" height="${J.h}" viewBox="0 0 ${J.w} ${J.h}">${svg(J)}</svg></div>${html(J, scr)}`;
+}
+const valbox = (pos, cap, v, u, delta, cls = "") => `<div class="val ${cls}" style="left:${pos[0]}px;top:${pos[1]}px"><span class="cap">${cap}</span>
+  <span class="box">${v}<span class="caret"></span> <span class="u">${u}</span><span class="fx">fx</span></span>${delta ? `<span class="delta">${delta}</span>` : ""}</div>`;
+
+/* The pad being dragged from 14 to 20 mm (render: boss at 20). */
+function padStage(x, y, s, opts = {}) {
+  return stage("pad", [2300, 1050], x, y, s, J => {
+    const P = J.points, base = P.base, d = unit(sub(P.tipdir, P.base));
+    const tip = add(base, mul(d, 330)), base0 = P.base0;
+    const top = path(hull(J.polys.top)) + " " + path(J.polys.in);
+    return `<path d="${path(J.polys.was)}" fill="none" stroke="var(--ghost)" stroke-width="4" stroke-dasharray="18 12"/>
+      <path d="${top}" fill-rule="evenodd" ${SEL}/>
+      ${arrow(base, tip, opts.idle ? "var(--accent)" : "var(--active)")}
+      ${ticks(base, add(base, mul(d, Math.hypot(...sub(base, base0)) / 6 * 10)), 10, "var(--active)")}`;
+  }, (J, scr) => {
+    const P = J.points, d = unit(sub(P.tipdir, P.base)), tip = scr(add(P.base, mul(d, 330)));
+    return valbox([tip[0] + 18, tip[1] - 30], "DISTANCE", "20", "mm", opts.small ? "" : "was 14 mm · snap 1 mm", opts.small ? "small" : "");
+  });
+}
+
+function padFig() {
+  const W = 1180, H = 760;
+  document.body.style.cssText += `width:${W}px;height:${H}px`;
+  const notes = Q.get("notes") ? [[1, 668, 285], [2, 742, 200], [3, 762, 452], [4, 266, 668], [5, 196, 62]] : [];
+  return `<div class="vp" style="width:${W}px;height:${H}px">
+    ${padStage(640, 440, 0.42)}
+    <div class="tree"><div class="bhead">BROWSER</div>
+      ${[["PartDesign_Pad", "Base plate", "Pad 8 mm", ""], ["PartDesign_Pad", "Boss", "Pad 20 mm", "sel live"], ["PartDesign_Hole", "Hole", "Ø9 × 2", ""], ["PartDesign_Fillet", "Fillet", "R5", ""]]
+        .map(([i, l, m, c]) => `<div class="row ${c}">${EYE}${ic(i)}<span>${l}</span><span class="meta">${m}</span></div>`).join("")}</div>
+    <div class="hud" style="left:50%;transform:translateX(-50%);bottom:60px">${ic("PartDesign_Pad")}<b>Boss</b><span class="k">Pad · Distance</span><i class="vs"></i>
+      <span class="snap"><span>Free</span><span class="on">1 mm</span><span>Grid</span></span><i class="vs"></i>
+      <span class="k"><kbd>Tab</kbd> next value</span><span class="k"><kbd>Esc</kbd> cancel</span><span class="btn">Edit…</span><span class="btn pri">Done</span></div>
+    <div class="nav" style="left:50%;transform:translateX(-50%)"><span>${G.orbit}</span><span>${G.pan}</span><span>${G.zoom}</span><span>${G.fit}</span><i class="vs"></i>
+      <span>${ic("DrawStyleShaded", "i20")}</span><span>${ic("view-isometric", "i20")}</span><span>${ic("view-measurement", "i20")}</span></div>
+    ${notes.map(([n, x, y]) => `<span class="co" style="left:${x}px;top:${y}px">${n}</span>`).join("")}
+  </div>`;
+}
+
+function statesFig() {
+  document.body.style.cssText += "width:1320px;height:430px;background:var(--chrome-2)";
+  const panel = (title, inner) => `<div class="panel vp"><div class="ptitle">${title}</div>${inner}</div>`;
+  const pad = padStage(205, 245, 0.36, { small: true });
+  const fillet = stage("fillet", [2985, 1330], 240, 230, 0.6, J => {
+    const P = J.points;
+    const face = path(J.polys.arcT.concat(J.polys.arcB.slice().reverse()));
+    return `<line x1="${P.etop[0]}" y1="${P.etop[1]}" x2="${P.ebot[0]}" y2="${P.ebot[1]}" stroke="var(--ghost)" stroke-width="3" stroke-dasharray="12 9"/>
+      <path d="${face}" ${SEL} stroke-width="3"/>
+      <line x1="${P.edge[0]}" y1="${P.edge[1]}" x2="${P.t2[0]}" y2="${P.t2[1]}" stroke="var(--ghost)" stroke-width="2.5" stroke-dasharray="8 6"/>
+      ${arrow(P.edge, P.t1, "var(--accent)", 6)}`;
+  }, (J, scr) => { const t = scr(J.points.t1); return valbox([t[0] - 120, t[1] - 80], "RADIUS", "5", "mm", "", "small"); });
+  const hole = stage("hole", [2290, 1150], 200, 225, 0.42, J => {
+    const P = J.points, cyl = path(hull(J.polys.rtop.concat(J.polys.rbot)));
+    const rim = J.polys.rtop[0], c = P.top;
+    return `<path d="${cyl}" ${SEL} stroke-width="4"/>${arrow(P.top, P.bottom, "var(--accent)", 8)}
+      ${arrow(c, add(rim, mul(unit(sub(rim, c)), 50)), "var(--accent)", 7)}`;
+  }, (J, scr) => {
+    const b = scr(J.points.bottom), r = scr(J.polys.rtop[0]);
+    return valbox([b[0] + 22, b[1] - 40], "DEPTH", "24", "mm", "", "small") + valbox([r[0] + 26, r[1] - 46], "DIAMETER", "9", "mm", "", "small");
+  });
+  return `<div class="panels">${panel("PAD / POCKET <span>· distance along the face normal</span>", pad)}
+    ${panel("FILLET <span>· radius, along a face from the edge</span>", fillet)}
+    ${panel("HOLE <span>· depth and diameter</span>", hole)}</div>`;
+}
+document.getElementById("app").innerHTML = { pad: padFig, states: statesFig }[FIG]();
+</script>
+</body>
+</html>

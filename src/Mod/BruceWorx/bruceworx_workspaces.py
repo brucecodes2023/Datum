@@ -91,6 +91,29 @@ def validate(defn):
     return errors
 
 
+def without_missing(defn, available):
+    """The definition without the tabs whose "requires" add-on is not loaded.
+    available(name) says whether an add-on folder is loaded."""
+    out = dict(defn)
+    out["workspaces"] = []
+    for ws in defn.get("workspaces", []):
+        ws = dict(ws)
+        ws["tabs"] = [t for t in ws.get("tabs", []) if not t.get("requires") or available(t["requires"])]
+        out["workspaces"].append(ws)
+    return out
+
+
+def addon_loaded(name):
+    """True when FreeCAD found the add-on folder (any case) and it is not disabled."""
+    import FreeCAD
+
+    disabled = {n.lower() for n in FreeCAD.ConfigGet("DisabledAddons").split(";") if n}
+    if name.lower() in disabled:
+        return False
+    return any(os.path.basename(os.path.normpath(d)).lower() == name.lower()
+               for d in getattr(FreeCAD, "__ModDirs__", []))
+
+
 def toolbar_name(tab, caption):
     return f"{tab} {DOT} {caption}"
 
@@ -225,7 +248,7 @@ _groups = []
 def definition():
     global _defn
     if _defn is None:
-        _defn = load()
+        _defn = without_missing(load(), addon_loaded)
     return _defn
 
 

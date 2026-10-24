@@ -1,20 +1,35 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# BW-PDM-02 draft API contract (19 Oct 2026).
+# BW-PDM-02 API contract. Draft 19 Oct 2026; brought up to date with the code 24 Oct 2026.
+# 0.3.0-draft (24 Oct 2026, approved list A3/A5/A9/A10 and BW-PDM-06): required texts and
+# the refusals that need no files are rules of pdm.py; BOMs are kept per revision with
+# resolved child revisions; where-used returns revisions; retire also counts file links.
 #
-# Storage-independent: whichever option BW-PDM-01 chooses implements these
-# operations. Behaviour is defined by bruceworx/pdm.py and its tests
-# (tests/test_pdm.py); every rule there maps to one operation here.
+# Storage-independent: the folder vault (BW-PDM-01, bruceworx/pdm_folder.py) implements
+# these operations today as journal events; a later server (Ops) implements the same.
+# Behaviour is defined by bruceworx/pdm.py (lifecycle, change control, BOM),
+# bruceworx/pdm_folder.py (files, locks, journal) and their tests (tests/test_pdm.py,
+# tests/test_pdm_folder.py, tests/test_pdm_contract.py). Every state-changing operation's
+# operationId is the journal operation of the folder vault (pdm_folder.LIFECYCLE_OPS and
+# FILE_OPS); tests/test_pdm_contract.py checks that the two lists match.
 # Auth: bearer token (env BW_OPS_TOKEN on the client), as in sources.py.
 openapi: 3.1.0
 info:
   title: BruceWorx PDM
-  version: 0.1.0-draft
+  version: 0.3.0-draft
   description: >
     Items, revisions, lifecycle (WIP -> In Review -> Released -> Obsolete),
-    change control (ECR -> ECO), BOM and where-used, and file vaulting with
-    check-out locks. The part number never contains the revision; clients print
-    P/N-REV. Pre-release revisions are 01, 02, ...; the first approval
-    releases A; letters skip I, O, Q, S, X, Z.
+    change control (ECR -> ECO), BOM and where-used, file vaulting with
+    check-out locks, and part-number allocation. The part number never contains
+    the revision; clients print P/N-REV. Pre-release revisions are 01, 02, ...;
+    a rejection supersedes the number and work goes on at the next one; the
+    first approval releases A; later letters come only through an ECO and
+    release with it. Letters skip I, O, Q, S, X, Z. "Superseded" is a flag on a
+    revision, not a state. Released revisions, their files and their BOMs never
+    change. Every decision is recorded with who and when (Decision) and needs
+    its text (release note, reason, problem); a server refuses it without one.
+    One writer at a time; locks never expire and are broken by hand (force).
+    Rules added after a journal was written are not applied when it is
+    replayed: history is accepted as recorded.
 servers:
   - url: https://ops.example/api/pdm
 security:
@@ -22,7 +37,13 @@ security:
 
 paths:
   /items:
+    get:
+      operationId: status
+      summary: Every item with its latest revision, state, lock and latest file (the vault status)
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/ItemStatus"}}}}}
     post:
+      operationId: create_item
       summary: Create an item (starts at revision 01, WIP)
       requestBody:
         required: true
@@ -34,43 +55,94 @@ paths:
         "409": {$ref: "#/components/responses/Lifecycle"}
   /items/{pn}:
     get:
-      summary: Item with all revisions
+      summary: Item with all revisions and their decision records
       parameters: [{$ref: "#/components/parameters/pn"}]
       responses:
         "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}
   /items/{pn}/submit:
     post:
-      summary: WIP -> In Review (latest revision)
+      operationId: submit
+      summary: WIP -> In Review (latest revision). Refused while the item is checked out.
       parameters: [{$ref: "#/components/parameters/pn"}]
       responses: {"200": {$ref: "#/components/responses/Revision"}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /items/{pn}/reject:
     post:
+      operationId: reject
       summary: >
         In Review -> WIP. Pre-release: the number is superseded and work moves to
-        the next number. ECO revision: keeps its letter.
+        the next number (01 -> 02). ECO revision: back to WIP, keeping its letter.
+        Refused without a reason.
       parameters: [{$ref: "#/components/parameters/pn"}]
       requestBody:
-        content: {application/json: {schema: {type: object, properties: {reason: {type: string}}}}}
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: string, minLength: 1, description: "Why; required"}
+                checklist: {$ref: "#/components/schemas/Checklist"}
+                attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
       responses: {"200": {$ref: "#/components/responses/Revision"}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /items/{pn}/approve:
     post:
-      summary: First release only (pre-release In Review -> Released as A). Later letters release with their ECO.
+      operationId: approve
+      summary: >
+        First release only: a pre-release revision in review is released as A and
+        its latest file and its BOM are frozen (each BOM line pinned to its child
+        revision). Refused for an ECO revision (it releases with its ECO), for an item
+        that is already released, without a release note, and while the revision's BOM
+        has lines that are not vault items (BomRecord.missing). A released BOM is
+        appended to the vault's outbox for Ops (ReleasedBom).
       parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: {type: string, minLength: 1, description: "Release note; required"}
+                checklist: {$ref: "#/components/schemas/Checklist"}
+                attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
       responses: {"200": {$ref: "#/components/responses/Revision"}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /items/{pn}/retire:
     post:
-      summary: Released -> Obsolete; refused while a released assembly still uses the item
+      operationId: retire
+      summary: >
+        Released -> Obsolete for the released revision; the item shows Obsolete and
+        never changes again (no ECR, no ECO). Refused when the item has no released
+        revision, is already obsolete, has its next letter in work under an ECO, without
+        a reason, or while it is used by the current released revision of another item:
+        through that revision's resolved BOM lines, directly or through sub-assemblies,
+        or, for a released revision with no BOM recorded, through a link in its released
+        file (PDM-02 A10). Superseded and obsolete revisions do not block.
       parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string, minLength: 1}}}}}
       responses: {"204": {description: Retired}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
   /items/{pn}/files:
     get:
-      summary: File versions of the latest revision (content-addressed by SHA-256)
+      summary: Every file version of the item, oldest first, each with the revision it belongs to
       parameters: [{$ref: "#/components/parameters/pn"}]
       responses:
         "200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/FileVersion"}}}}}
+  /items/{pn}/files/{sha256}:
+    get:
+      summary: >
+        The content of one version (content-addressed). The reader verifies the
+        SHA-256; a version whose object has not arrived yet (a sync service) is 404.
+      parameters:
+        - {$ref: "#/components/parameters/pn"}
+        - {name: sha256, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: The file, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+        "404": {description: Not stored here (yet)}
   /items/{pn}/checkout:
     post:
+      operationId: checkout
       summary: Take the exclusive lock (pessimistic; .FCStd cannot be merged). Only WIP revisions.
       parameters: [{$ref: "#/components/parameters/pn"}]
       responses:
@@ -79,7 +151,13 @@ paths:
         "409": {$ref: "#/components/responses/Lifecycle"}
   /items/{pn}/checkin:
     post:
-      summary: Upload a new file version and release the lock. Same SHA-256 as the current version is a no-op.
+      operationId: checkin
+      summary: >
+        Store a new file version of the latest (WIP) revision and release the lock,
+        unless keep_lock. Needs the caller's lock and a comment. Same SHA-256 as the
+        latest version: no new version, only the lock is released. For an assembly the
+        client then records the revision's BOM, read from the open assembly (set_bom
+        with this version's sha256).
       parameters: [{$ref: "#/components/parameters/pn"}]
       requestBody:
         required: true
@@ -87,78 +165,194 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [file, comment]
               properties:
                 file: {type: string, format: binary}
-                comment: {type: string}
+                comment: {type: string, minLength: 1, description: "Required (decided 23 Oct; a rule of the store since 24 Oct)"}
                 keep_lock: {type: boolean, default: false}
-      responses: {"201": {description: Stored, content: {application/json: {schema: {$ref: "#/components/schemas/FileVersion"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+      responses:
+        "201": {description: Stored, content: {application/json: {schema: {$ref: "#/components/schemas/FileVersion"}}}}
+        "409": {$ref: "#/components/responses/Lifecycle"}
   /items/{pn}/undo-checkout:
     post:
-      summary: Release the lock without a new version (holder, or admin to break a stale lease)
-      parameters: [{$ref: "#/components/parameters/pn"}]
-      responses: {"204": {description: Unlocked}}
-
-  /items/{pn}/bom:
-    put:
-      summary: Replace the BOM lines of the item's latest revision (pushed on check-in of an assembly)
+      operationId: undo_checkout
+      summary: >
+        Release the lock without a new version. The holder may always; force=true
+        breaks a lock held by someone else (Vault Settings -> Break lock), and is
+        recorded like any other event. Locks never expire on their own.
       parameters: [{$ref: "#/components/parameters/pn"}]
       requestBody:
+        content: {application/json: {schema: {type: object, properties: {force: {type: boolean, default: false}}}}}
+      responses: {"204": {description: Unlocked}, "423": {description: Locked by someone else and force not set}}
+
+  /items/{pn}/revisions/{rev}/bom:
+    get:
+      operationId: bom_of
+      summary: A revision's BOM lines, each with the child revision it resolves to
+      parameters: [{$ref: "#/components/parameters/pn"}, {$ref: "#/components/parameters/rev"}]
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/BomRecord"}}}}
+    put:
+      operationId: set_bom
+      summary: >
+        Record the BOM of a WIP revision, read from the file version sha256 (the client
+        walks the open assembly at check-in: parts only, quantity per parent). A line
+        without a child revision resolves to the child's latest revision now. Refused
+        for an unknown item or child, a quantity below 1, a revision that is not WIP
+        (a released BOM is frozen), or a BOM that would contain itself (the error names
+        the path); the previous BOM is kept. Lines that are not vault items go in
+        "missing": they are listed at check-in and refuse the release. Older journal
+        lines [child, quantity] without a revision still replay (latest revision).
+      parameters: [{$ref: "#/components/parameters/pn"}, {$ref: "#/components/parameters/rev"}]
+      requestBody:
         required: true
-        content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/BomLine"}}}}
-      responses: {"204": {description: Stored}, "409": {description: Unknown child, or the BOM would contain itself}}
+        content: {application/json: {schema: {$ref: "#/components/schemas/BomRecord"}}}
+      responses: {"204": {description: Stored}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /items/{pn}/explode:
     get:
-      summary: Total quantity of everything under the item (sum over paths of products)
+      summary: >
+        Total quantity of everything under a revision (sum over paths of the products of
+        quantities, over the resolved child revisions)
       parameters:
         - {$ref: "#/components/parameters/pn"}
+        - {name: revision, in: query, schema: {type: string}, description: Default the latest revision with a BOM}
         - {name: flattened, in: query, schema: {type: boolean, default: false}, description: Leaves only}
+        - {name: indented, in: query, schema: {type: boolean, default: false}, description: "Rows depth first (IndentedRow)"}
       responses:
         "200": {description: OK, content: {application/json: {schema: {type: object, additionalProperties: {type: integer}}}}}
   /items/{pn}/where-used:
     get:
-      summary: Every assembly that contains the item, directly or indirectly
+      operationId: where_used
+      summary: >
+        Every assembly revision that uses the item (at revision, or any), by reverse
+        reachability over the resolved BOM lines: exact rows first, then "may pick up"
+        rows (a current released or in-work revision that reaches it only when its
+        lines float to the latest released child). Each row has the total quantity and
+        one path. Counts only (no units yet).
       parameters:
         - {$ref: "#/components/parameters/pn"}
-        - {name: released_only, in: query, schema: {type: boolean, default: false}}
+        - {name: revision, in: query, schema: {type: string}}
+        - {name: released_only, in: query, schema: {type: boolean, default: false}, description: Only current released revisions}
       responses:
-        "200": {description: OK, content: {application/json: {schema: {type: array, items: {type: string}}}}}
+        "200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/Use"}}}}}
+  /released-boms:
+    post:
+      operationId: receive_released_bom
+      servers:
+        - url: https://ops.example/api
+      summary: >
+        BW-PDM-06, Ops side (draft; Ops has no API yet). Ops receives each released BOM
+        (first release and every ECO release; WIP BOMs stay in the vault). Stored by
+        key (P/N, revision, SHA-256), so sending one twice changes nothing. Until Ops
+        serves it, the vault keeps the same rows in outbox/<actor>.jsonl and the client
+        exports a CSV.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/ReleasedBom"}}}
+      responses: {"201": {description: Stored}, "200": {description: Already stored (same key)}}
 
+  /changes:
+    get:
+      summary: ECRs and ECOs with their state, newest first (the Changes filter)
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/ChangeRow"}}}}}
   /ecrs:
     post:
-      summary: Raise a change request against released items
+      operationId: raise_ecr
+      summary: >
+        Raise a change request against released items. Without a number the next
+        ECR-0001, ECR-0002, ... of the vault is taken. Refused for an empty problem,
+        no items, an item that is not released or is obsolete, or a number already used
+        (all rules of the reference model).
       requestBody:
         required: true
         content: {application/json: {schema: {$ref: "#/components/schemas/NewEcr"}}}
       responses: {"201": {description: Raised, content: {application/json: {schema: {$ref: "#/components/schemas/Ecr"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /ecrs/{number}/decision:
     post:
-      summary: Approve or reject an open ECR
+      operationId: decide_ecr
+      summary: Approve or reject an open ECR, with a reason (required). A decided ECR cannot be decided again.
       parameters: [{name: number, in: path, required: true, schema: {type: string}}]
       requestBody:
         required: true
-        content: {application/json: {schema: {type: object, required: [approved], properties: {approved: {type: boolean}}}}}
-      responses: {"200": {description: Decided, content: {application/json: {schema: {$ref: "#/components/schemas/Ecr"}}}}}
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved, reason]
+              properties:
+                approved: {type: boolean}
+                reason: {type: string, minLength: 1}
+                attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
+      responses: {"200": {description: Decided, content: {application/json: {schema: {$ref: "#/components/schemas/Ecr"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /ecos:
     post:
+      operationId: open_eco
       summary: >
-        Open an ECO from approved ECRs. Opens the next letter in WIP for every
-        affected item and for the drawings of those items.
+        Open an ECO from approved ECRs (number: next ECO-0001, ... when omitted).
+        Opens the next letter in WIP for every affected item and for the drawings of
+        those items (retired drawings stay retired). Refused, with nothing changed, when
+        an ECR is not Approved, no ECR is given, the number is taken, or an affected item
+        is obsolete or already has a revision in WIP or In Review.
       requestBody:
         required: true
-        content: {application/json: {schema: {type: object, required: [number, ecrs], properties: {number: {type: string}, ecrs: {type: array, items: {type: string}}}}}}
+        content: {application/json: {schema: {type: object, required: [ecrs], properties: {number: {type: string}, ecrs: {type: array, minItems: 1, items: {type: string}}}}}}
       responses: {"201": {description: Opened, content: {application/json: {schema: {$ref: "#/components/schemas/Eco"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
   /ecos/{number}/release:
     post:
-      summary: Release every revision of the ECO together (all must be In Review); older letters become superseded
+      operationId: release_eco
+      summary: >
+        Release every revision of the ECO together (all must be In Review); the older
+        letters become superseded and the new files and BOMs are frozen (items of the ECO
+        pin each other's new letter). Each revision records its own checklist with the
+        shared note. Refused without a release note and while an item's BOM has lines
+        that are not vault items. Each released BOM goes to the outbox (ReleasedBom).
       parameters: [{name: number, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: {type: string, minLength: 1, description: "Release note; required"}
+                checklists: {type: object, additionalProperties: {$ref: "#/components/schemas/Checklist"}, description: "P/N -> its checklist"}
+                attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
       responses: {"200": {description: Released, content: {application/json: {schema: {$ref: "#/components/schemas/Eco"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
+  /part-numbers:
+    servers:
+      - url: https://ops.example/api
+    post:
+      operationId: allocate_part_number
+      summary: >
+        BW-PDM-03 (client: sources.OpsApiNumberSource). Reserve the next part number,
+        without a revision. parent null takes the next parent drawing PPPPP for the
+        program and document type, with sub-assembly 001; a five-digit parent takes the
+        next sub-assembly under that drawing. Draft: the Ops app does not serve it yet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [program, document_type]
+              properties:
+                program: {type: string, example: LE}
+                document_type: {type: string, pattern: "^[0-9]{2}$", example: "01"}
+                parent: {type: [string, "null"], pattern: "^[0-9]{5}$", example: null}
+      responses:
+        "201":
+          description: Reserved
+          content: {application/json: {schema: {type: object, required: [part_number], properties: {part_number: {type: string, example: LE-01-01001-001}}}}}
+        "409": {description: Unknown program, document type or parent, content: {application/json: {schema: {type: object, properties: {error: {type: string}}}}}}
 
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer}
   parameters:
     pn: {name: pn, in: path, required: true, schema: {type: string}, description: "Part number without revision, e.g. LE-01-01001-001"}
+    rev: {name: rev, in: path, required: true, schema: {type: string}, description: "Revision code, 01, 02, ... or A, B, ...; a first release also answers to the number it came from"}
   responses:
     Revision: {description: The affected revision, content: {application/json: {schema: {$ref: "#/components/schemas/Revision"}}}}
     Lifecycle:
@@ -172,7 +366,7 @@ components:
         part_number: {type: string}
         item_type: {enum: [part, assembly, drawing, cots]}
         description: {type: string}
-        drawing_of: {type: string, description: Required for drawings; the documented part's P/N}
+        drawing_of: {type: string, description: Required for drawings; the documented part's P/N, which must exist}
     Item:
       type: object
       properties:
@@ -181,56 +375,162 @@ components:
         description: {type: string}
         drawing_of: {type: [string, "null"]}
         obsolete: {type: boolean}
+        state: {enum: [WIP, In Review, Released, Obsolete], description: "The latest revision's state; Obsolete once retired"}
+        released: {type: [string, "null"], description: "Code of the current released revision (not superseded)"}
         revisions: {type: array, items: {$ref: "#/components/schemas/Revision"}}
+    ItemStatus:
+      type: object
+      properties:
+        part_number: {type: string}
+        type: {enum: [part, assembly, drawing, cots]}
+        description: {type: string}
+        revision: {type: string}
+        state: {enum: [WIP, In Review, Released, Obsolete]}
+        released: {type: [string, "null"]}
+        display: {type: string, description: "P/N-REV"}
+        checked_out_by: {type: [string, "null"]}
+        file: {type: [string, "null"]}
+        sha256: {type: [string, "null"]}
+        versions: {type: integer}
     Revision:
       type: object
       properties:
         code: {type: string, description: "01, 02, ... before release; A, B, ... after"}
         state: {enum: [WIP, In Review, Released, Obsolete]}
-        eco: {type: [string, "null"]}
-        superseded: {type: boolean}
+        eco: {type: [string, "null"], description: "The ECO that opened it; null on the pre-release line"}
+        superseded: {type: boolean, description: "A rejected pre-release number, or an older released letter"}
         display: {type: string, description: "P/N-REV as printed on drawings"}
         history: {type: array, items: {type: string}}
+        records: {type: array, items: {$ref: "#/components/schemas/Decision"}}
+    Decision:
+      type: object
+      description: One review or change decision, as recorded (unset fields are left out)
+      required: [op]
+      properties:
+        op: {enum: [approve, reject, retire, release_eco, raise_ecr, decide_ecr, open_eco]}
+        by: {type: string, description: "Actor, user@mac"}
+        at: {type: string, format: date-time}
+        note: {type: string}
+        reason: {type: string}
+        approved: {type: boolean}
+        eco: {type: string}
+        checklist: {$ref: "#/components/schemas/Checklist"}
+        attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
+    Checklist:
+      type: object
+      description: >
+        The release checklist as ticked (bruceworx/release_check.py record()): one entry per
+        line key (checked_in, drawing, components, drawing_reviewed), plus no_drawing and the
+        version (SHA-256) it was checked against.
+      properties:
+        no_drawing: {type: boolean}
+        version: {type: string}
+      additionalProperties:
+        type: object
+        properties:
+          ok: {type: boolean}
+          skipped: {type: boolean}
+          by_hand: {type: boolean}
+          detail: {type: string}
+          list: {type: array, items: {type: array, items: {type: string}}, description: "[P/N or file, reason]"}
+          reason: {type: string, description: Why releasing with unreleased components is fine}
+    Attachment:
+      type: object
+      required: [sha256, size, filename]
+      properties:
+        sha256: {type: string}
+        size: {type: integer}
+        filename: {type: string}
     FileVersion:
       type: object
       properties:
         sha256: {type: string}
         size: {type: integer}
         filename: {type: string}
+        revision: {type: string, description: The revision code the version was checked in under}
         checked_in_by: {type: string}
         checked_in_at: {type: string, format: date-time}
         comment: {type: string}
     Lock:
       type: object
       properties:
-        holder: {type: string}
-        since: {type: string, format: date-time}
-        lease_expires: {type: string, format: date-time}
+        holder: {type: string, description: "Actor, user@mac (pinned per vault on first open)"}
     BomLine:
       type: object
-      required: [child, quantity]
+      required: [child, qty]
       properties:
-        child: {type: string, description: Child item P/N (resolved to its latest released revision unless pinned)}
-        quantity: {type: integer, minimum: 1}
-        find_number: {type: integer}
-        configuration: {type: string}
-        pinned_revision: {type: string}
+        child: {type: string, description: Child item P/N}
+        qty: {type: integer, minimum: 1, description: "Per parent; counts only (units later)"}
+        find: {type: integer, description: "Find number (balloon), in the assembly's order"}
+        rev: {type: string, description: "The child revision seen at check-in; pinned at release"}
+    BomRecord:
+      type: object
+      required: [lines]
+      properties:
+        sha256: {type: string, description: The file version the BOM was read from}
+        lines: {type: array, items: {$ref: "#/components/schemas/BomLine"}}
+        missing:
+          type: array
+          description: What the assembly holds that is not a vault item; refuses the release
+          items: {type: object, properties: {name: {type: string}, qty: {type: integer}}}
+    Use:
+      type: object
+      properties:
+        part_number: {type: string}
+        revision: {type: string}
+        state: {enum: [WIP, In Review, Released, Obsolete]}
+        current: {type: boolean, description: "The item's current released revision (or its latest, when none is released)"}
+        quantity: {type: integer, description: Total through every path}
+        path: {type: array, items: {type: array, items: {type: string}}, description: "[[P/N, rev], ...] down to the item"}
+        exact: {type: boolean, description: "false: may pick up (floats to a newer released child)"}
+    ReleasedBom:
+      type: object
+      description: One line of outbox/<actor>.jsonl
+      required: [key, part_number, revision, sha256, lines]
+      properties:
+        key: {type: string, description: "<P/N>@<rev>:<sha256>"}
+        part_number: {type: string}
+        revision: {type: string}
+        description: {type: string}
+        sha256: {type: string, description: The released file version}
+        eco: {type: [string, "null"]}
+        at: {type: string, format: date-time}
+        by: {type: string}
+        event: {type: string, description: The journal event id}
+        lines: {type: array, items: {$ref: "#/components/schemas/BomLine"}}
     NewEcr:
       type: object
-      required: [number, problem, items]
+      required: [problem, items]
       properties:
-        number: {type: string}
-        problem: {type: string}
-        items: {type: array, items: {type: string}}
+        number: {type: string, description: "Omit to take the next ECR-0001, ..."}
+        problem: {type: string, minLength: 1}
+        items: {type: array, minItems: 1, items: {type: string}}
+        attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
     Ecr:
       allOf:
         - $ref: "#/components/schemas/NewEcr"
         - type: object
-          properties: {status: {enum: [Open, Approved, Rejected]}}
+          properties:
+            status: {enum: [Open, Approved, Rejected]}
+            reason: {type: string}
+            records: {type: array, items: {$ref: "#/components/schemas/Decision"}}
     Eco:
       type: object
       properties:
         number: {type: string}
         ecrs: {type: array, items: {type: string}}
+        items: {type: array, items: {type: string}, description: Affected items and their drawings}
+        status: {enum: [Open, Released]}
+        note: {type: string}
+        records: {type: array, items: {$ref: "#/components/schemas/Decision"}}
+    ChangeRow:
+      type: object
+      properties:
+        kind: {enum: [ECR, ECO]}
+        number: {type: string}
+        state: {type: string}
+        title: {type: string}
         items: {type: array, items: {type: string}}
-        status: {enum: [Open, Released, Cancelled]}
+        by: {type: string}
+        at: {type: string}
+        pending: {type: array, items: {type: string}, description: "ECO: items not in review yet"}

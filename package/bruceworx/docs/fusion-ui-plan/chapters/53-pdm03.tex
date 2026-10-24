@@ -1,0 +1,78 @@
+%======================================================================
+\subsection{BW-PDM-03 --- Numbering service: what is built (24 Oct 2026)}\label{sec:pdm03}
+%======================================================================
+
+\paragraph{Already there.} The local JSON source and the macro (\#5): \code{JsonNumberSource}, \code{bw-hooks next},
+\code{preview} and \code{rename}, and \emph{Assign Part Number\ldots}. Each vault has its own \file{numbering.json},
+made by the Create Vault panel, whose part-number builder shows the PROGRAM, TYPE, PARENT and SUB segments and a REV
+chip that explains the ASME revisions (no ``first revision'' field any more). The vault keys items by the number
+without its revision. The Ops reader was a stub that refused to allocate.
+
+\paragraph{Built today.}
+\begin{enumerate}[nosep]
+  \item \textbf{The P/N has no revision.} The numbers are \code{\{PROG\}-\{DT\}-\{PPPPP\}-\{SSS\}}, for
+        example \code{LE-01-01001-001} (\file{numbering.py}); the revision is item metadata (\file{pdm.py}) and is printed beside it.
+        \code{parse\_part\_number} reads both forms; \code{split\_revision} and \code{migrate\_part\_number} take
+        \code{-REV} off a number and refuse anything that is not one, so a free-form label is never cut.
+  \item \textbf{Migration.} \code{migrate\_numbering\_file} rewrites a numbering file in the new form: the format
+        changes, each program's revision moves to a \code{migrated} record, and every counter stays as it was. The old
+        file is kept once as \file{numbering.json.pre-pdm03}; a second run changes nothing; a migrated file refuses
+        \code{--revision}. \code{migrate\_labels(doc)} does the same for a document's labels and \code{PartNumber}
+        properties and returns the revisions it dropped. A file that is not migrated issues exactly what it did before.
+  \item \textbf{Ops reader.} \code{OpsApiNumberSource.allocate} posts to \code{\{base\_url\}/part-numbers} as written
+        in \file{docs/pdm-openapi.yaml} (\code{program}, \code{document\_type}, \code{parent} or null; reply
+        \code{\{"part\_number"\}}), with a bearer token from \code{BW\_OPS\_TOKEN}. Without a token nothing is sent; the
+        token only travels over https (plain http to this Mac only). The reply is checked against the request
+        (program, type, parent) and an old \code{P/N-REV} reply loses its revision. No preview or listing endpoint is
+        documented, so \code{preview} says so instead of guessing, and the program and type pickers read the vault's
+        own tables.
+  \item \textbf{Choosing the source} follows the existing setting: the numbering file's \code{source} key, \code{json}
+        by default. A vault switches to Ops by setting \code{"source": "ops"} and \code{base\_url} in its
+        \file{numbering.json}, keeping its tables for Vault Settings and the pickers.
+\end{enumerate}
+Tests (plain Python, no FreeCAD): \file{test\_numbering\_migration.py} (13: a set of LE-style numbers, labels,
+numbering files, the shipped example, a vault made by the wizard and then changed in Vault Settings) and
+\file{test\_ops\_source.py} (9, against a stub server on \code{127.0.0.1}; no network, no Railway).
+
+\paragraph{Theory: why the next number is the old one without its revision.} A source issues
+$n = f(\mathit{prog}, \mathit{dt}, p, s)$ where $(p, s)$ comes from the counters alone
+(\code{next\_parent}, \code{next\_sub}) and the old form appends the program's letter: $n_{\mathrm{old}} =
+f(\ldots) \,\Vert\, \text{``-''} \,\Vert\, r$. Migration leaves the counters unchanged, so for the same counter state
+$n_{\mathrm{new}} = \mathrm{strip}(n_{\mathrm{old}})$. Every allocation advances a counter, so no two issued numbers
+share $(\mathit{prog}, \mathit{dt}, p, s)$, and stripping never makes two issued numbers equal. Two labels that differ
+only in the letter (\code{\ldots-001-A}, \code{\ldots-001-B}) were the same part at two revisions; they become one
+item, which is the point of the decision.
+
+\paragraph{Still to do.}
+\begin{itemize}[nosep]
+  \item Switch \emph{new} numbering files to the P/N form: the Create Vault panel, Vault Settings and the shipped example
+        still write the old form (the vault strips the letter on import). A one-line change each, plus the tests that
+        expect \code{-A}; left to the owners of those files.
+  \item A way to run the migration without Python: a \emph{Migrate numbering} button in Vault Settings, or
+        \code{bw-hooks} subcommand.
+  \item The Ops side: the Ops app does not serve \code{/part-numbers} yet. \eref{PDM-03}'s acceptance (\emph{P/N
+        allocated from Ops}) waits for it.
+\end{itemize}
+
+\paragraph{Your answers (24 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm}X@{}}
+\toprule
+Question & Answer\\
+\midrule
+Q1 The Ops endpoint: is \code{POST /part-numbers} $\rightarrow$ 201 \code{\{"part\_number"\}} what Ops should serve,
+  and at which base URL? & \textbf{Accepted as built}: \code{POST \{base\_url\}/part-numbers} with \code{program},
+  \code{document\_type}, \code{parent}, returning \code{\{"part\_number"\}}. \textbf{The base URL is still to be given
+  by you}; until then no vault is switched to \code{"source": "ops"}. Preview and listing endpoints are not part of
+  this answer.\\
+Q2 Which ``existing LE numbers'' does the acceptance mean: the macro's \code{LE-01-01001-001-A} labels, or the
+  register's \code{LE-01001}? & As recommended: the acceptance means the macro and hooks labels, which this
+  migration handles; register numbers (\code{LE-01001}) come in through the per-program format of \eref{PDM-07} and the
+  mapping of \eref{PDM-08}.\\
+Q3 Should a legacy letter seed the vault revision (a \code{-B} label importing as released B)? & \textbf{No}, as
+  recommended: the old letter was a program default, not a release record. It is dropped and reported; imported
+  items start at 01.\\
+\bottomrule
+\end{tabularx}
+\end{center}

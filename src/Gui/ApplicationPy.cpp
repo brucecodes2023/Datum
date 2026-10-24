@@ -22,6 +22,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QDockWidget>  // [BW] addDockWindow
 #include <QPrinter>
 #include <QFileInfo>
 #include <Inventor/SoInput.h>
@@ -47,6 +48,9 @@
 #include "BitmapFactory.h"
 #include "Command.h"
 #include "Dialogs/DlgPreferencesImp.h"
+#include "DockWindowManager.h"
+#include "OverlayManager.h"
+#include "OverlayWidgets.h"
 #include "Document.h"
 #include "DocumentObserverPython.h"
 #include "DownloadManager.h"
@@ -178,6 +182,29 @@ PyMethodDef ApplicationPy::Methods[] = {
      "getMainWindow() -> QMainWindow\n"
      "\n"
      "Return the main window instance."},
+    // [BW] UIX-12: a dock FreeCAD's overlay panels can take, as the stock docks are
+    {"addDockWindow",
+     (PyCFunction)ApplicationPy::sAddDockWindow,
+     METH_VARARGS,
+     "addDockWindow(name, widget, area=2, overlay='') -> QDockWidget\n"
+     "\n"
+     "Put widget in a dock window registered with FreeCAD's dock window manager, so\n"
+     "the overlay panels restore and take it like the stock docks.\n"
+     "\n"
+     "name : str\n    Object name of the dock (as listed in the overlay preferences).\n"
+     "widget : QWidget\n    The dock's content.\n"
+     "area : int\n    Qt.DockWidgetArea (default Qt.RightDockWidgetArea).\n"
+     "overlay : str\n    An overlay panel (\"OverlayRight\"...) to put the dock in now, when\n"
+     "    the panel did not take it at start (the overlay restores before modules load)."},
+    // [BW] UIX-12: Cmd-I hides and shows the right panel
+    {"setOverlayAutoHide",
+     (PyCFunction)ApplicationPy::sSetOverlayAutoHide,
+     METH_VARARGS,
+     "setOverlayAutoHide(panel, on) -> bool\n"
+     "\n"
+     "Switch an overlay panel (\"OverlayRight\"...) to auto hide (it slides away and shows\n"
+     "when the pointer reaches its edge, or while a command is open) or back to showing with\n"
+     "commands. Returns whether the previous mode was auto hide."},
     {"updateGui",
      (PyCFunction)ApplicationPy::sUpdateGui,
      METH_VARARGS,
@@ -979,6 +1006,70 @@ PyObject* ApplicationPy::sGetMainWindow(PyObject* /*self*/, PyObject* args)
     catch (const Py::Exception&) {
         return nullptr;
     }
+}
+
+// [BW] UIX-12
+PyObject* ApplicationPy::sAddDockWindow(PyObject* /*self*/, PyObject* args)
+{
+    char* name = nullptr;
+    PyObject* pyWidget = nullptr;
+    int area = Qt::RightDockWidgetArea;
+    char* overlay = nullptr;
+    if (!PyArg_ParseTuple(args, "sO|is", &name, &pyWidget, &area, &overlay)) {
+        return nullptr;
+    }
+
+    try {
+        PythonWrapper wrap;
+        wrap.loadWidgetsModule();
+        auto widget = qobject_cast<QWidget*>(wrap.toQObject(Py::Object(pyWidget)));
+        if (!widget) {
+            PyErr_SetString(PyExc_TypeError, "widget must be a QWidget");
+            return nullptr;
+        }
+        auto pDockMgr = DockWindowManager::instance();
+        if (QDockWidget* existing = pDockMgr->getDockContainer(name)) {
+            return Py::new_reference_to(wrap.fromQWidget(existing, "QDockWidget"));
+        }
+        QDockWidget* dock
+            = pDockMgr->addDockWindow(name, widget, static_cast<Qt::DockWidgetArea>(area));
+        if (overlay && *overlay && dock) {
+            for (auto tabs : getMainWindow()->findChildren<OverlayTabWidget*>()) {
+                if (tabs->objectName() == QString::fromUtf8(overlay)
+                    && tabs->dockWidgetIndex(dock) < 0) {
+                    tabs->addWidget(dock, dock->windowTitle());
+                    break;
+                }
+            }
+        }
+        return Py::new_reference_to(wrap.fromQWidget(dock, "QDockWidget"));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+// [BW] UIX-12
+PyObject* ApplicationPy::sSetOverlayAutoHide(PyObject* /*self*/, PyObject* args)
+{
+    char* panel = nullptr;
+    PyObject* on = nullptr;
+    if (!PyArg_ParseTuple(args, "sO!", &panel, &PyBool_Type, &on)) {
+        return nullptr;
+    }
+    for (auto tabs : getMainWindow()->findChildren<OverlayTabWidget*>()) {
+        if (tabs->objectName() == QString::fromUtf8(panel)) {
+            bool was = tabs->getAutoMode() == OverlayTabWidget::AutoMode::AutoHide;
+            tabs->setAutoMode(
+                Base::asBoolean(on) ? OverlayTabWidget::AutoMode::AutoHide
+                                    : OverlayTabWidget::AutoMode::TaskShow
+            );
+            OverlayManager::instance()->refresh();
+            return Py::new_reference_to(Py::Boolean(was));
+        }
+    }
+    PyErr_SetString(PyExc_ValueError, "no such overlay panel");
+    return nullptr;
 }
 
 PyObject* ApplicationPy::sUpdateGui(PyObject* /*self*/, PyObject* args)

@@ -16,15 +16,15 @@
 \code{MOD-03} & Configurations & M1 & \scriptsize MOD-02 & \stTodo\\
 \code{MOD-04} & Direct edit on imported geometry & M1 & --- & \stTodo\\
 \code{MOD-05} & Threads, holes \& hardware library & M1 & --- & \stTodo\\
-\code{MOD-06} & Sheet metal & M3 & --- & \stTodo\\
-\code{MOD-07} & Frames \& weldments & M3 & --- & \stTodo\\
+\code{MOD-06} & Sheet metal & M3 & --- & \stProg\\
+\code{MOD-07} & Frames \& weldments & M3 & --- & \stProg\\
 \code{MOD-08} & Surfacing parity & M5 & --- & \stTodo\\
 \code{MOD-09} & Freeform (subdivision / T-spline-like) & M5 & \scriptsize MOD-08 & \stTodo\\
 \code{MOD-10} & Mesh to solid & M5 & --- & \stTodo\\
 \code{MOD-11} & Inspect tools & M1 & --- & \stTodo\\
 \code{MOD-12} & Sketcher parity audit & M1 & --- & \stTodo\\
 \code{MOD-13} & Sketch profile repair & M1 & \scriptsize MOD-12 & \stTodo\\
-\code{MOD-14} & On-canvas editing & M5 & \scriptsize UIX-12 & \stTodo\\
+\code{MOD-14} & On-canvas editing & M5 & \scriptsize UIX-12 & \stProg\\
 \midrule\multicolumn{5}{@{}l}{\textbf{Assembly}}\\
 \code{ASM-01} & File model: one part per file & M1 & --- & \stTodo\\
 \code{ASM-02} & Assembly gap audit & M1 & --- & \stDone\\
@@ -37,7 +37,7 @@
 \code{ASM-09} & Smart fastener mating & M5 & \scriptsize MOD-05 ASM-03 & \stTodo\\
 \code{ASM-10} & Dynamic motion study & M5 & \scriptsize ASM-03 & \stTodo\\
 \midrule\multicolumn{5}{@{}l}{\textbf{Drawings (ASME)}}\\
-\code{DRW-01} & ASME templates \& title block & M2 & --- & \stTodo\\
+\code{DRW-01} & ASME templates \& title block & M2 & --- & \stProg\\
 \code{DRW-02} & Associative BOM table \& balloons & M2 & \scriptsize ASM-04 & \stTodo\\
 \code{DRW-03} & GD\&T \& datums (ASME Y14.5) & M2 & --- & \stTodo\\
 \code{DRW-04} & Hole \& thread callouts from the model & M2 & \scriptsize MOD-05 & \stTodo\\
@@ -49,10 +49,11 @@
 \code{PDM-01} & PDM evaluation \& decision & M2 & --- & \stDone\\
 \code{PDM-02} & Data model \& lifecycle spec & M2 & --- & \stProg\\
 \code{PDM-03} & Numbering service & M2 & \scriptsize PDM-02 & \stProg\\
-\code{PDM-04} & FreeCAD vault client & M2 & \scriptsize PDM-01 PDM-02 & \stTodo\\
-\code{PDM-05} & Lifecycle \& change control & M2 & \scriptsize PDM-04 & \stTodo\\
-\code{PDM-06} & BOM sync \& where-used & M2 & \scriptsize ASM-04 PDM-04 & \stTodo\\
+\code{PDM-04} & FreeCAD vault client & M2 & \scriptsize PDM-01 PDM-02 & \stProg\\
+\code{PDM-05} & Lifecycle \& change control & M2 & \scriptsize PDM-04 & \stProg\\
+\code{PDM-06} & BOM sync \& where-used & M2 & \scriptsize ASM-04 PDM-04 & \stProg\\
 \code{PDM-07} & Pilot: LE-02001 \& CAD register & M2 & \scriptsize PDM-05 DRW-05 & \stTodo\\
+\code{PDM-09} & Units, product tree \& New Project & M2 & \scriptsize PDM-04 PDM-06 DRW-01 UIX-12 & \stProg\\
 \code{PDM-08} & Migration from Fusion & M6 & \scriptsize PDM-07 & \stTodo\\
 \midrule\multicolumn{5}{@{}l}{\textbf{Simulation}}\\
 \code{SIM-01} & Study setup (Fusion-style) & M4 & --- & \stTodo\\
@@ -73,16 +74,16 @@
 \code{ROB-04} & Drone balance \& thrust-to-weight & M3 & \scriptsize ROB-03 & \stTodo\\
 \code{ROB-05} & Kinematic chains \& joint drive & M5 & \scriptsize ASM-03 & \stTodo\\
 \midrule\multicolumn{5}{@{}l}{\textbf{ECAD bridge (KiCad)}}\\
-\code{ECD-01} & ECAD intake \& adopt-vs-build & M1 & --- & \stTodo\\
+\code{ECD-01} & ECAD intake \& adopt-vs-build & M1 & --- & \stProg\\
 \code{ECD-02} & Board STEP into assembly & M3 & \scriptsize ECD-01 & \stTodo\\
 \code{ECD-03} & Board outline round-trip & M3 & \scriptsize ECD-01 & \stTodo\\
 \code{ECD-04} & Placement sync \& enclosure fit & M3 & \scriptsize ECD-02 ASM-06 & \stTodo\\
 \code{ECD-05} & Boards in the vault & M3 & \scriptsize ECD-01 PDM-04 & \stTodo\\
-\code{ECD-06} & Board materials \& mass & M3 & \scriptsize ECD-02 & \stTodo\\
+\code{ECD-06} & Board materials \& mass & M3 & \scriptsize ECD-02 & \stProg\\
 \midrule\multicolumn{5}{@{}l}{\textbf{AI \& automation}}\\
 \code{AUT-01} & Headless hooks \& CLI & M0 & --- & \stDone\\
 \code{AUT-02} & bruceworx.api & M1 & \scriptsize AUT-01 & \stTodo\\
-\code{AUT-03} & MCP server & M1 & \scriptsize AUT-02 & \stTodo\\
+\code{AUT-03} & MCP server & M1 & \scriptsize AUT-02 & \stProg\\
 \code{AUT-04} & Assistant panel & M5 & \scriptsize AUT-03 & \stTodo\\
 \code{AUT-05} & Command line & M5 & --- & \stTodo\\
 \midrule\multicolumn{5}{@{}l}{\textbf{UI \& styling}}\\
@@ -97,7 +98,7 @@
 \code{UIX-09} & Fresh UI design \& re-render figures & UI & \scriptsize UIX-05 & \stProg\\
 \code{UIX-10} & Undo toasts & UI & --- & \stTodo\\
 \code{UIX-11} & Pick to feature \& error chips & UI & \scriptsize UIX-03 & \stTodo\\
-\code{UIX-12} & Property inspector & UI & \scriptsize UIX-07 & \stTodo\\
+\code{UIX-12} & Property inspector & UI & \scriptsize UIX-07 & \stProg\\
 \midrule\multicolumn{5}{@{}l}{\textbf{Kernel study}}\\
 \code{KRN-01} & OCCT coupling survey & BG & --- & \stTodo\\
 \code{KRN-02} & STEP exchange harness & BG & \scriptsize FND-05 & \stTodo\\

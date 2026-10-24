@@ -55,7 +55,7 @@ class TestDefinition(unittest.TestCase):
 
     def test_design_tabs(self):
         design = ws.workspace(self.defn, "Design")
-        self.assertEqual([t["name"] for t in design["tabs"]], ["Solid", "Surface", "Mesh", "Utilities"])
+        self.assertEqual([t["name"] for t in design["tabs"]], ["Solid", "Surface", "Mesh", "Sheet Metal", "Utilities"])
         self.assertIn("Solid · Create", ws.tab_toolbars(design, "Solid"))
         self.assertNotIn("Surface · Create", ws.tab_toolbars(design, "Solid"))
 
@@ -95,10 +95,27 @@ class TestDefinition(unittest.TestCase):
 
     def test_tab_names(self):
         design = ws.workspace(self.defn, "Design")
-        self.assertEqual(ws.tab_names(design, "Mesh"), (["Solid", "Surface", "Mesh", "Utilities"], "Mesh"))
+        self.assertEqual(ws.tab_names(design, "Mesh"), (["Solid", "Surface", "Mesh", "Sheet Metal", "Utilities"], "Mesh"))
         self.assertEqual(ws.tab_names(design, "Gone")[1], "Solid")
         names, current = ws.tab_names(design, "Mesh", sketch=True)
         self.assertEqual((names[-1], current), ("Sketch", "Sketch"))
+
+
+    def test_sheet_metal_tab_needs_the_addon(self):
+        # MOD-06: the tab shows only while the SheetMetal add-on is loaded.
+        design = ws.workspace(self.defn, "Design")
+        sheet = ws.tab(design, "Sheet Metal")
+        self.assertEqual(sheet["requires"], "SheetMetal")
+        self.assertIn("Sheet Metal · Flat", ws.tab_toolbars(design, "Sheet Metal"))
+        self.assertIn("BruceWorx_ExportFlat", sheet["groups"][2]["commands"])
+        self.assertEqual(ws.place_of(self.defn, "BruceWorx_SheetMetalRules"), ("Design", "Sheet Metal", "Rules"))
+        self.assertIn("SheetMetalUnfoldCmd", self.defn["load"])
+        without = ws.without_missing(self.defn, lambda name: False)
+        names = [t["name"] for t in ws.workspace(without, "Design")["tabs"]]
+        self.assertEqual(names, ["Solid", "Surface", "Mesh", "Utilities"])
+        self.assertNotIn("Sheet Metal · Create", [n for _g, n, _c in ws.custom_toolbars(without)["PartDesignWorkbench"]])
+        self.assertEqual(ws.without_missing(self.defn, lambda name: name == "SheetMetal"), self.defn)
+        self.assertEqual(len(ws.workspace(self.defn, "Design")["tabs"]), 5)  # the original is not changed
 
 
 class TestCustomToolbarParams(unittest.TestCase):

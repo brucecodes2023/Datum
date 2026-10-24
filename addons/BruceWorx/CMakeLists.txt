@@ -29,10 +29,19 @@ SET(BruceWorxHooks_SRCS
     bruceworx/partprops.py
     bruceworx/pdm.py
     bruceworx/pdm_folder.py
+    bruceworx/release_check.py
     bruceworx/sources.py
     bruceworx/step_export.py
     bruceworx/tree.py
     bruceworx/vault_setup.py
+    bruceworx/drawing_standards.py
+    bruceworx/pdm_workspace.py
+    bruceworx/vault_move.py
+    bruceworx/kicad_bridge.py
+    bruceworx/sheetmetal_rules.py
+    bruceworx/flat_dxf.py
+    bruceworx/flat_export.py
+    bruceworx/bom.py
     config/document_types.json
     config/numbering.example.json
     config/part_properties.json
@@ -70,10 +79,19 @@ INSTALL(
         bruceworx/partprops.py
         bruceworx/pdm.py
         bruceworx/pdm_folder.py
+        bruceworx/release_check.py
         bruceworx/sources.py
         bruceworx/step_export.py
         bruceworx/tree.py
         bruceworx/vault_setup.py
+        bruceworx/drawing_standards.py
+    bruceworx/pdm_workspace.py
+    bruceworx/vault_move.py
+        bruceworx/kicad_bridge.py
+        bruceworx/sheetmetal_rules.py
+        bruceworx/flat_dxf.py
+        bruceworx/flat_export.py
+        bruceworx/bom.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )
 INSTALL(

@@ -224,5 +224,41 @@ class TestPartNumberBuilder(unittest.TestCase):
         self.assertEqual(sizes, sorted(sizes, reverse=True))
 
 
+class TestImportJob(unittest.TestCase):
+    def test_parts_go_before_the_assemblies_that_link_them(self):
+        import shutil
+        import zipfile
+
+        from bruceworx import pdm_workspace as ws
+        from bruceworx import vault_setup as vs
+
+        tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-wiz-job-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+
+        def fcstd(name, kind, links=()):
+            path = os.path.join(tmp, "src", name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            xlinks = "".join(f'<XLink file="{f}" name="Body"/>' for f in links)
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("Document.xml", (
+                    f'<Document><Objects Count="1"><Object type="{kind}" name="Main" id="0"/></Objects>'
+                    f'<ObjectData Count="1"><Object name="Main"><Properties Count="0">{xlinks}</Properties>'
+                    '</Object></ObjectData></Document>'))
+                archive.writestr("GuiDocument.xml", f"<GuiDocument salt='{name}'/>")
+            return path
+
+        fcstd("a-frame.FCStd", "Assembly::AssemblyObject", ("z-plate.FCStd",))  # sorts before its part
+        fcstd("z-plate.FCStd", "PartDesign::Body")
+        vault = vs.create_vault(vs.VaultSetup(name="Job", folder=os.path.join(tmp, "vault")), actor="bruce@mac")
+        candidates = vs.plan_numbers(vs.scan_for_import(os.path.join(tmp, "src")), vault.root, "BW")
+        job = wiz.ImportJob(vs, vault, candidates, "BW")
+        while job.step() is not None:
+            pass
+        numbers = {os.path.basename(p): key for p, key in job.report.imported}
+        vault.refresh()
+        frame = ws.Workspace(vault).get_latest(numbers["a-frame.FCStd"])
+        self.assertEqual(ws.linked_files(frame), [numbers["z-plate.FCStd"] + ".FCStd"])
+
+
 if __name__ == "__main__":
     unittest.main()

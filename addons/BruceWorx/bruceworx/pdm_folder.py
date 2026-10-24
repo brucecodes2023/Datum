@@ -9,6 +9,7 @@ and it is laid out so a sync service has nothing to conflict over::
       <name>.bwvault            ref file: identifies the vault; written once
       objects/<ab>/<sha256>.<ext>   file versions; written once, never changed
       journal/<actor>.jsonl     append-only event log, one writer per file
+      outbox/<actor>.jsonl      released BOMs for Ops (PDM-06), one line per BOM, append-only
 
 The ref file is what a reader opens (FreeCAD, the CLI, later Ops) to view
 and drive the vault. All state is rebuilt by replaying the journal through
@@ -58,20 +59,23 @@ FORMAT_VERSION = 1
 REF_SUFFIX = ".bwvault"
 OBJECTS = "objects"
 JOURNAL = "journal"
+OUTBOX = "outbox"
 _ACTOR_SAFE = re.compile(r"[^A-Za-z0-9._@-]+")
 
 # Lifecycle operations replayed through pdm.Vault, with their argument names.
+# Names after the first optional one (PDM-05: checklist, note, reason, attachments)
+# are written only when used, so journals from before them read exactly as they did.
 LIFECYCLE_OPS = {
     "create_item": ("part_number", "item_type", "description", "drawing_of"),
     "submit": ("part_number",),
-    "reject": ("part_number", "reason"),
-    "approve": ("part_number",),
-    "retire": ("part_number",),
-    "raise_ecr": ("number", "problem", "items"),
-    "decide_ecr": ("number", "approved"),
+    "reject": ("part_number", "reason", "checklist", "attachments"),
+    "approve": ("part_number", "note", "checklist", "attachments"),
+    "retire": ("part_number", "reason"),
+    "raise_ecr": ("number", "problem", "items", "attachments"),
+    "decide_ecr": ("number", "approved", "reason", "attachments"),
     "open_eco": ("number", "ecr_numbers"),
-    "release_eco": ("number",),
-    "set_bom": ("parent", "lines"),
+    "release_eco": ("number", "note", "checklists", "attachments"),
+    "set_bom": ("parent", "lines", "revision", "sha256", "missing"),
 }
 FILE_OPS = ("checkout", "undo_checkout", "checkin")
 
@@ -204,6 +208,9 @@ class FolderVault:
         """Rebuild all state from the journal (after a sync, or on open)."""
         before = self.states() if self.model is not None else None
         self.model = pdm.Vault()
+        # Rules newer than a journal line do not refuse it on replay; _record checks them.
+        self.model.strict = False
+        self.model.file_link_users = self._file_link_users
         self.versions: dict[str, list[FileVersion]] = {}
         self.locks: dict[str, str] = {}
         self.released_files: dict[tuple[str, str], str] = {}
@@ -216,7 +223,7 @@ class FolderVault:
                 self._seq = max(self._seq, event.seq)
             try:
                 self._apply(event)
-            except (LifecycleError, ValueError, KeyError) as exc:
+            except (LifecycleError, ValueError, KeyError, TypeError) as exc:
                 self.problems.append(f"{event.at} {event.actor} {event.op}: {exc}")
         if before is not None:
             self._notify(before)
@@ -249,9 +256,11 @@ class FolderVault:
     def _apply(self, event: Event):
         args = event.args
         if event.op in LIFECYCLE_OPS:
-            if event.op == "set_bom":
-                args = dict(args, lines=[(child, int(qty)) for child, qty in args["lines"]])
-            result = getattr(self.model, event.op)(**args)
+            self.model.context = {"by": event.actor, "at": event.at}
+            try:
+                result = getattr(self.model, event.op)(**args)
+            finally:
+                self.model.context = {}
             if event.op == "approve":
                 self._freeze(args["part_number"])
             elif event.op == "release_eco":
@@ -304,17 +313,22 @@ class FolderVault:
         self._seq += 1
         event = Event(str(uuid.uuid4()), self.actor, self._seq, _now(), op, _jsonable(args))
         before = self.states()
+        self.model.strict = True
         try:
             result = self._apply(event)
         except Exception:
             self._seq -= 1
             raise
+        finally:
+            self.model.strict = False
         os.makedirs(os.path.dirname(self.journal_path), exist_ok=True)
         with open(self.journal_path, "a", encoding="utf-8") as handle:
             handle.write(event.to_json() + "\n")
             handle.flush()
             os.fsync(handle.fileno())
         self._seen.add(event.id)
+        if op in ("approve", "release_eco"):
+            self._send_released_boms(event)
         self._notify(before)
         return result
 
@@ -370,43 +384,165 @@ class FolderVault:
                                                 description=description, drawing_of=drawing_of))
 
     def submit(self, part_number):
+        holder = self.locks.get(part_number)
+        if holder:  # the file in review must be the one in the vault (PDM-05)
+            raise LifecycleError(f"{part_number} is checked out by {holder}; check it in first")
         return self._record("submit", dict(part_number=part_number))
 
-    def reject(self, part_number, reason=""):
-        return self._record("reject", dict(part_number=part_number, reason=reason))
+    def reject(self, part_number, reason="", checklist=None, attachments=None):
+        return self._record("reject", _optional(dict(part_number=part_number, reason=reason),
+                                                checklist=checklist, attachments=self.attach(attachments)))
 
-    def approve(self, part_number):
-        return self._record("approve", dict(part_number=part_number))
+    def approve(self, part_number, note="", checklist=None, attachments=None):
+        return self._record("approve", _optional(dict(part_number=part_number), note=note,
+                                                 checklist=checklist, attachments=self.attach(attachments)))
 
-    def retire(self, part_number):
-        return self._record("retire", dict(part_number=part_number))
+    def retire(self, part_number, reason=""):
+        """Retire a released item (Obsolete); the reason is required and recorded (PDM-05). The
+        released files' links count as uses for items without a BOM (pdm.Vault.retire)."""
+        return self._record("retire", dict(part_number=part_number, reason=reason))
 
-    def raise_ecr(self, number, problem, items):
-        return self._record("raise_ecr", dict(number=number, problem=problem, items=list(items)))
+    def raise_ecr(self, number, problem, items, attachments=None):
+        """``number`` None takes the next ``ECR-0001`` number. ``attachments`` are file
+        paths (copied into the vault as write-once objects) or already stored records."""
+        number = number or self.next_ecr_number()  # the journal records the number taken
+        return self._record("raise_ecr", _optional(dict(number=number, problem=problem, items=list(items)),
+                                                   attachments=self.attach(attachments)))
 
-    def decide_ecr(self, number, approved):
-        return self._record("decide_ecr", dict(number=number, approved=bool(approved)))
+    def decide_ecr(self, number, approved, reason="", attachments=None):
+        return self._record("decide_ecr", _optional(dict(number=number, approved=bool(approved)), reason=reason,
+                                                    attachments=self.attach(attachments)))
 
     def open_eco(self, number, ecr_numbers):
+        """``number`` None takes the next ``ECO-0001`` number."""
+        number = number or self.next_eco_number()
         return self._record("open_eco", dict(number=number, ecr_numbers=list(ecr_numbers)))
 
-    def release_eco(self, number):
-        return self._record("release_eco", dict(number=number))
+    def release_eco(self, number, note="", checklists=None, attachments=None):
+        return self._record("release_eco", _optional(dict(number=number), note=note, checklists=checklists,
+                                                     attachments=self.attach(attachments)))
 
-    def set_bom(self, parent, lines):
-        return self._record("set_bom", dict(parent=parent, lines=[[c, int(q)] for c, q in lines]))
+    def next_ecr_number(self):
+        return self.model.next_ecr_number()
+
+    def next_eco_number(self):
+        return self.model.next_eco_number()
+
+    def set_bom(self, parent, lines, revision=None, sha256="", missing=None):
+        """Record a revision's BOM (PDM-06). The journal line names the revision and, per line,
+        the child revision it resolved to, so a replay needs no guessing."""
+        item = self.model.items.get(parent)
+        if item is None:
+            raise LifecycleError(f"unknown item {parent}")
+        revision = revision or item.latest.code
+        resolved = []
+        for raw in lines:
+            line = pdm.bom_line(raw)
+            child = self.model.items.get(line.child)
+            if line.rev is None and child is not None:
+                line.rev = child.latest.code
+            resolved.append(line.as_dict())
+        gaps = [{"name": str(m["name"]), "qty": int(m.get("qty", 1))} if isinstance(m, dict)
+                else {"name": str(m), "qty": 1} for m in (missing or ())]
+        return self._record("set_bom", _optional(dict(parent=parent, lines=resolved, revision=revision),
+                                                 sha256=sha256, missing=gaps))
 
     def drawings_of(self, part_number):
         return self.model.drawings_of(part_number)
 
-    def explode(self, top):
-        return self.model.explode(top)
+    def bom_of(self, part_number, revision=None):
+        return self.model.bom_of(part_number, revision)
 
-    def flattened(self, top):
-        return self.model.flattened(top)
+    def cycle_path(self, parent, children):
+        return self.model.cycle_path(parent, children)
+
+    def explode(self, top, revision=None):
+        return self.model.explode(top, revision)
+
+    def flattened(self, top, revision=None):
+        return self.model.flattened(top, revision)
+
+    def indented(self, top, revision=None):
+        return self.model.indented(top, revision)
 
     def where_used(self, part_number, released_only=False):
         return self.model.where_used(part_number, released_only=released_only)
+
+    def where_used_revisions(self, part_number, revision=None):
+        return self.model.where_used_revisions(part_number, revision)
+
+    def newer_children(self, parent, revision=None):
+        return self.model.newer_children(parent, revision)
+
+    def _file_link_users(self, part_number):
+        """Released items whose released revision has no BOM and whose released file links to
+        ``part_number`` (PDM-02 A10: file links are a use until a BOM is recorded)."""
+        from bruceworx.pdm_workspace import linked_files  # pdm_workspace imports this module
+
+        users = set()
+        for pn, item in self.model.items.items():
+            rev = item.released
+            if pn == part_number or rev is None or rev.bom is not None:
+                continue
+            version = self.released_version(pn)
+            path = os.path.join(self.root, version.object_name) if version else ""
+            if not path or not os.path.exists(path):
+                continue
+            if any(os.path.splitext(os.path.basename(n))[0] == part_number for n in linked_files(path)):
+                users.add(pn)
+        return users
+
+    # ----- the outbox for Ops (PDM-06) ----------------------------------------
+
+    @property
+    def outbox_path(self) -> str:
+        return os.path.join(self.root, OUTBOX, f"{self.actor}.jsonl")
+
+    def _send_released_boms(self, event: Event):
+        """One outbox line per released BOM of this approval or ECO release. Ops (once it has an
+        API) stores them by (P/N, revision, SHA-256), so sending a line twice changes nothing."""
+        if event.op == "approve":
+            pns, eco = [event.args["part_number"]], None
+        else:
+            pns, eco = list(self.model.ecos[event.args["number"]].items), event.args["number"]
+        lines = []
+        for pn in pns:
+            item = self.model.items[pn]
+            rev = item.released
+            if rev is None or rev.bom is None:
+                continue
+            sha = self.released_files.get((pn, rev.code)) or rev.bom_version
+            lines.append(json.dumps({
+                "key": f"{pn}@{rev.code}:{sha}", "event": event.id, "at": event.at, "by": event.actor,
+                "part_number": pn, "revision": rev.code, "description": item.description, "sha256": sha,
+                "eco": eco, "lines": [dict(line.as_dict(), description=self.model.items[line.child].description)
+                                      if line.child in self.model.items else line.as_dict() for line in rev.bom],
+            }, sort_keys=True, separators=(",", ":")))
+        if not lines:
+            return
+        os.makedirs(os.path.dirname(self.outbox_path), exist_ok=True)
+        with open(self.outbox_path, "a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def outbox(self) -> list:
+        """Every released BOM sent to the outbox (all devices), oldest first, one per key."""
+        folder = os.path.join(self.root, OUTBOX)
+        found = {}
+        for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else ():
+            if not name.endswith(".jsonl"):
+                continue
+            with open(os.path.join(folder, name), encoding="utf-8") as handle:
+                text = handle.read()
+            for line in text.split("\n")[: None if text.endswith("\n") else -1]:
+                try:
+                    row = json.loads(line) if line.strip() else None
+                except json.JSONDecodeError:
+                    row = None
+                if row and row.get("key"):
+                    found.setdefault(row["key"], row)
+        return sorted(found.values(), key=lambda r: (r.get("at", ""), r["key"]))
 
     # ----- files ------------------------------------------------------------
 
@@ -422,7 +558,10 @@ class FolderVault:
         return self._record("undo_checkout", dict(part_number=part_number, force=bool(force)))
 
     def checkin(self, part_number, path: str, comment: str = "", keep_lock: bool = False):
-        """Store ``path`` as a new version. Unchanged content only releases the lock."""
+        """Store ``path`` as a new version. Unchanged content only releases the lock. A comment
+        is required (PDM-02 A3)."""
+        if not (comment or "").strip():
+            raise LifecycleError("a check-in comment is required")
         if self.locks.get(part_number) != self.actor:
             raise LifecycleError(f"{part_number} is not checked out by {self.actor}")
         digest = sha256_of(path)
@@ -431,15 +570,47 @@ class FolderVault:
             if not keep_lock:
                 self.undo_checkout(part_number)
             return current
+        stored = self.store_object(path, digest)
+        return self._record("checkin", dict(part_number=part_number, comment=comment,
+                                            keep_lock=bool(keep_lock), **stored))
+
+    def store_object(self, path: str, digest: str | None = None) -> dict:
+        """Copy a file into ``objects/`` (write-once, by SHA-256); returns its record."""
+        digest = digest or sha256_of(path)
         filename = os.path.basename(path)
         target = os.path.join(self.root, object_name(digest, filename))
         if not os.path.exists(target):
             os.makedirs(os.path.dirname(target), exist_ok=True)
             with open(path, "rb") as handle:
                 _write_once(target, handle.read())
-        return self._record("checkin", dict(part_number=part_number, sha256=digest,
-                                            size=os.path.getsize(path), filename=filename,
-                                            comment=comment, keep_lock=bool(keep_lock)))
+        return {"sha256": digest, "size": os.path.getsize(path), "filename": filename}
+
+    def attach(self, attachments) -> list:
+        """Attachments as journal records: paths are stored first, records pass through."""
+        records = []
+        for entry in attachments or ():
+            if isinstance(entry, dict):
+                records.append({"sha256": entry["sha256"], "size": int(entry["size"]),
+                                "filename": entry["filename"]})
+            else:
+                records.append(self.store_object(os.fspath(entry)))
+        return records
+
+    def attachment_path(self, record: dict) -> str:
+        """Where an attachment's object lives in the vault (read it, never write it)."""
+        return os.path.join(self.root, object_name(record["sha256"], record["filename"]))
+
+    def fetch_attachment(self, record: dict, dest_dir: str) -> str:
+        """Copy an attachment out of the vault under its original name, verifying it."""
+        source = self.attachment_path(record)
+        if not os.path.exists(source):
+            raise FileNotFoundError(f"{record['filename']} has not synced to this device yet ({source})")
+        if sha256_of(source) != record["sha256"]:
+            raise LifecycleError(f"{source} does not match its SHA-256; the copy is damaged or incomplete")
+        os.makedirs(dest_dir, exist_ok=True)
+        dest = os.path.join(dest_dir, record["filename"])
+        shutil.copyfile(source, dest)
+        return dest
 
     def latest_version(self, part_number) -> FileVersion | None:
         versions = self.versions.get(part_number)
@@ -475,7 +646,39 @@ class FolderVault:
             for version in versions:
                 if not os.path.exists(os.path.join(self.root, version.object_name)):
                     missing.append(version.object_name)
+        for ecr in self.model.ecrs.values():
+            for record in ecr.attachments:
+                name = object_name(record["sha256"], record["filename"])
+                if not os.path.exists(os.path.join(self.root, name)):
+                    missing.append(name)
         return missing
+
+    def changes(self) -> list[dict]:
+        """ECRs and ECOs with their state, newest first, as JSON-ready rows."""
+        rows = []
+        for ecr in self.model.ecrs.values():
+            raised = ecr.records[0] if ecr.records else {}
+            decided = next((r for r in reversed(ecr.records) if r.get("op") == "decide_ecr"), {})
+            ecos = [eco.number for eco in self.model.ecos.values() if ecr.number in eco.ecrs]
+            rows.append({
+                "kind": "ECR", "number": ecr.number, "state": ecr.status, "title": ecr.problem,
+                "items": list(ecr.items), "attachments": list(ecr.attachments), "reason": ecr.reason,
+                "by": raised.get("by", ""), "at": raised.get("at", ""), "decided_at": decided.get("at", ""),
+                "ecos": ecos,
+            })
+        for eco in self.model.ecos.values():
+            opened = eco.records[0] if eco.records else {}
+            released = next((r for r in reversed(eco.records) if r.get("op") == "release_eco"), {})
+            pending = [pn for pn in eco.items if self.model.items[pn].latest.state != pdm.IN_REVIEW]
+            rows.append({
+                "kind": "ECO", "number": eco.number, "state": eco.status,
+                "title": "; ".join(self.model.ecrs[n].problem for n in eco.ecrs if n in self.model.ecrs),
+                "items": list(eco.items), "ecrs": list(eco.ecrs), "note": eco.note,
+                "by": opened.get("by", ""), "at": opened.get("at", ""), "released_at": released.get("at", ""),
+                "pending": pending if eco.status == "Open" else [],
+            })
+        rows.sort(key=lambda row: (row["at"], row["number"]), reverse=True)
+        return rows
 
     # ----- reading ------------------------------------------------------------
 
@@ -517,6 +720,13 @@ def _write_once(path: str, data: bytes) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, path)
+
+
+def _optional(args: dict, **extra) -> dict:
+    """``args`` plus the optional fields that are set; unset ones stay out of the journal."""
+    args = dict(args)
+    args.update({k: v for k, v in extra.items() if v not in (None, "", [], {})})
+    return args
 
 
 def _jsonable(args: dict) -> dict:

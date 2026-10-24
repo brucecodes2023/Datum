@@ -1,0 +1,244 @@
+<!doctype html>
+<!-- PDM-09 mock (24 Oct): the Vault tab's Structure view (product tree with drawings) and the New Project
+     task panel. Same tokens as ui_mock/right_tabs.html. ?fig=tree or ?fig=wizard; rendered by render.sh. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#e9ecf1; --card:#ffffff; --border:#d8dce3; --text:#1d1f23; --sec:#6b717c; --dim:#9aa0aa;
+          --accent:#007aff; --soft:#e3eefc; --hover:#f3f5f8; --field:#ffffff; --warn:#b26a00; --warnbg:#fdf1de;
+          --ok:#1e8a3c; --okbg:#e2f4e6; --err:#c62828; --errbg:#fbe4e4; --rev:#1e5fbf; --revbg:#e3eefc; }
+  html, body { margin:0; }
+  body { background:var(--bg); font:12.5px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color:var(--text);
+         display:flex; gap:22px; padding:22px; box-sizing:border-box; }
+  .col { display:flex; flex-direction:column; gap:8px; }
+  .label { font-weight:600; color:var(--sec); font-size:11.5px; letter-spacing:.3px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; flex:1; display:flex; flex-direction:column;
+          box-shadow:0 2px 14px rgba(0,0,0,.08); overflow:hidden; }
+  .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 6px; }
+  .tab { padding:9px 7px 7px; color:var(--sec); font-size:11.5px; font-weight:600; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .tab.cmd { margin-left:auto; color:var(--accent); }
+  .tab.cmd.on { color:var(--text); }
+  .body { padding:8px 12px; flex:1; overflow:hidden; }
+  .head { display:flex; align-items:center; gap:8px; margin:2px 0 8px; }
+  .head .t { font-weight:700; font-size:13.5px; }
+  .head .s { color:var(--sec); }
+  .seg { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; font-size:11.5px; }
+  .seg div { padding:2px 10px; color:var(--sec); border-left:1px solid var(--border); }
+  .seg div:first-child { border-left:none; }
+  .seg div.on { background:var(--soft); color:var(--text); font-weight:600; }
+  .f { background:var(--field); border:1px solid var(--border); border-radius:5px; height:22px; display:flex; align-items:center;
+       padding:0 7px; box-sizing:border-box; font-variant-numeric:tabular-nums; }
+  .f.dd::after { content:"▾"; margin-left:auto; color:var(--dim); font-size:10px; }
+  .f .u { margin-left:auto; color:var(--dim); }
+  .pill { display:inline-block; font-size:10px; font-weight:700; padding:0 5px; border-radius:4px; line-height:16px; letter-spacing:.2px; }
+  .wip { color:var(--warn); background:var(--warnbg); }
+  .rel { color:var(--ok); background:var(--okbg); }
+  .rvw { color:var(--rev); background:var(--revbg); }
+  .units { color:var(--sec); border:1px solid var(--border); background:var(--card); font-weight:600; }
+  .filters { display:flex; gap:6px; margin:0 0 8px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--border); border-radius:11px; padding:1px 9px; color:var(--sec); font-size:11.5px; }
+  .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .chip b { color:var(--warn); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th { text-align:left; color:var(--sec); font-weight:600; font-size:10.5px; padding:4px 3px; border-bottom:1px solid var(--border);
+       text-transform:uppercase; letter-spacing:.3px; }
+  td { padding:0 3px; height:40px; border-bottom:1px solid var(--hover); vertical-align:middle; }
+  tr.sel td { background:var(--soft); }
+  .tw { color:var(--dim); width:10px; display:inline-block; font-size:10px; }
+  .ic { display:inline-block; width:15px; height:15px; border-radius:3px; vertical-align:-3px; margin-right:5px; }
+  .ic.asm { background:linear-gradient(135deg,#5b8def 0 50%,#2f6ad8 50%); }
+  .ic.prt { background:linear-gradient(135deg,#f0b04a 0 50%,#d8901e 50%); }
+  .ic.cots { background:#c3c8d0; border-radius:50%; }
+  .pn { font-family:"SF Mono", Menlo, monospace; font-size:11.3px; }
+  .pn .r { color:var(--sec); }
+  .nm { color:var(--sec); font-size:11.5px; display:block; margin-top:1px; }
+  .q { color:var(--sec); text-align:right; }
+  .dw { white-space:nowrap; font-size:11.5px; }
+  .dw .d { display:inline-block; width:12px; height:14px; border:1.4px solid currentColor; border-radius:2px; vertical-align:-3px;
+           margin-right:4px; box-sizing:border-box; position:relative; }
+  .dw .d::after { content:""; position:absolute; left:2px; right:2px; bottom:2px; height:2px; border-top:1px solid currentColor; }
+  .dw.ok { color:var(--ok); } .dw.old { color:var(--warn); font-weight:600; } .dw.none { color:var(--dim); }
+  .dw.none .d { border-style:dashed; }
+  .dw.na { color:var(--dim); }
+  .st { text-align:right; color:var(--dim); width:18px; }
+  .lock { color:var(--accent); }
+  .foot { padding:7px 12px; border-top:1px solid var(--border); display:flex; color:var(--accent); font-weight:600; font-size:11.5px; gap:14px; }
+  .foot span:last-child { margin-left:auto; }
+  .summary { color:var(--sec); font-size:11.5px; padding:6px 0 0; }
+  .summary b { color:var(--warn); }
+  .menu { background:var(--card); border:1px solid var(--border); border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,.16);
+          padding:5px 0; width:250px; }
+  .menu div { padding:4px 14px; }
+  .menu div.hl { background:var(--accent); color:#fff; border-radius:4px; margin:0 5px; padding:4px 9px; }
+  .menu .sep { border-top:1px solid var(--border); margin:4px 0; padding:0; }
+  .menu .k { float:right; color:var(--dim); }
+  .menu .dim { color:var(--dim); }
+  .legend { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:8px 12px; line-height:1.4; font-size:11.5px; }
+  .legend .row { margin:3px 0; }
+  .legend .row { display:flex; gap:8px; align-items:baseline; }
+  .legend .row .dw { width:96px; flex:none; }
+  .why { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; line-height:1.5; }
+  .why .t { font-weight:700; margin-bottom:4px; }
+  .why .pn { font-size:11px; }
+  /* wizard */
+  .box { border:1px solid var(--border); border-radius:8px; margin:0 0 10px; overflow:hidden; }
+  .box .bt { background:var(--hover); padding:6px 10px; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .box .bt .n { background:var(--accent); color:#fff; border-radius:50%; width:16px; height:16px; font-size:10.5px; display:inline-flex;
+                align-items:center; justify-content:center; }
+  .box .bt .n.done { background:var(--ok); }
+  .box .bc { padding:8px 10px; }
+  .fr { display:flex; align-items:center; gap:8px; height:28px; }
+  .fr .k { width:84px; color:var(--sec); flex:none; }
+  .fr .v { flex:1; }
+  .hint { color:var(--sec); font-size:11px; line-height:1.4; margin:4px 0 2px; }
+  .ta { font-family:"SF Mono", Menlo, monospace; font-size:11px; line-height:1.55; border:1px solid var(--accent); border-radius:5px;
+        padding:6px 8px; white-space:pre; background:var(--field); box-shadow:0 0 0 3px rgba(0,122,255,.15); }
+  .ta .c { color:var(--dim); }
+  .ta .cur { border-left:1.5px solid var(--text); margin-left:1px; }
+  .ok { color:var(--ok); }
+  .warnt { color:var(--warn); }
+  .pv td { height:27px; }
+  .pv .pn { font-size:10.8px; }
+  .pv .new { color:var(--accent); }
+  .chk { display:inline-block; width:12px; height:12px; border:1px solid var(--accent); border-radius:3px; vertical-align:-2px;
+         background:var(--accent); position:relative; }
+  .chk::after { content:"✓"; color:#fff; font-size:9.5px; position:absolute; left:2px; top:-1px; font-weight:700; }
+  .chk.off { background:var(--field); border-color:var(--border); }
+  .chk.off::after { content:""; }
+  .btns { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); }
+  .btn { flex:1; text-align:center; border:1px solid var(--border); border-radius:6px; padding:5px; }
+  .btn.p { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .note { color:var(--sec); font-size:11px; }
+</style>
+</head>
+<body>
+<script>
+const q = new URLSearchParams(location.search);
+const fig = q.get("fig") || "tree";
+</script>
+
+<!-- ======================= FIGURE 1: the Structure view ======================= -->
+<template id="tree">
+<div class="col" style="width:470px"><div class="label">1 · VAULT TAB — STRUCTURE of the Workbench cart</div>
+<div class="card" style="flex:none">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab on">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div></div>
+  <div class="body">
+    <div class="head"><div class="seg"><div>List</div><div class="on">Structure</div></div>
+      <span style="margin-left:auto" class="pill units">in</span><span class="s">⟳</span></div>
+    <div class="f dd" style="margin-bottom:8px"><span class="ic asm" style="width:13px;height:13px"></span>
+      <b>Workbench cart</b>&nbsp;<span class="pn" style="color:var(--sec)">&nbsp;DM-02-01001-001</span></div>
+    <div class="filters"><span class="chip on">All</span><span class="chip">Needs a drawing <b>1</b></span><span class="chip">Out of date <b>2</b></span><span class="chip">Checked out 1</span></div>
+    <table>
+      <tr><th style="width:52%">Item</th><th style="text-align:right">Qty</th><th>State</th><th>Drawing</th><th></th></tr>
+      <tr><td><span class="tw">▾</span><span class="ic asm"></span><span class="pn">DM-02-01001-001<span class="r">-02</span></span><span class="nm" style="margin-left:30px">Workbench cart</span></td>
+          <td class="q">1</td><td><span class="pill wip">WIP</span></td><td class="dw ok"><span class="d"></span>02</td><td class="st">✓</td></tr>
+      <tr><td style="padding-left:16px"><span class="tw">▾</span><span class="ic asm"></span><span class="pn">DM-02-01002-001<span class="r">-01</span></span><span class="nm" style="margin-left:30px">Frame</span></td>
+          <td class="q">1</td><td><span class="pill wip">WIP</span></td><td class="dw ok"><span class="d"></span>01</td><td class="st">✓</td></tr>
+      <tr class="sel"><td style="padding-left:32px"><span class="tw"></span><span class="ic prt"></span><span class="pn">DM-01-01001-001<span class="r">-03</span></span><span class="nm" style="margin-left:30px">Side rail</span></td>
+          <td class="q">2</td><td><span class="pill wip">WIP</span></td><td class="dw old"><span class="d"></span>Out of date</td><td class="st lock">🔒︎</td></tr>
+      <tr><td style="padding-left:32px"><span class="tw"></span><span class="ic prt"></span><span class="pn">DM-01-01002-001<span class="r">-A</span></span><span class="nm" style="margin-left:30px">Cross member</span></td>
+          <td class="q">3</td><td><span class="pill rel">RELEASED</span></td><td class="dw ok"><span class="d"></span>A</td><td class="st" style="color:var(--ok)">⛉</td></tr>
+      <tr><td style="padding-left:16px"><span class="tw"></span><span class="ic prt"></span><span class="pn">DM-01-01003-001<span class="r">-02</span></span><span class="nm" style="margin-left:30px">Deck</span></td>
+          <td class="q">1</td><td><span class="pill rvw">IN REVIEW</span></td><td class="dw old"><span class="d"></span>Out of date</td><td class="st">✓</td></tr>
+      <tr><td style="padding-left:16px"><span class="tw"></span><span class="ic prt"></span><span class="pn">DM-01-01004-001<span class="r">-01</span></span><span class="nm" style="margin-left:30px">Caster plate</span></td>
+          <td class="q">4</td><td><span class="pill wip">WIP</span></td><td class="dw none"><span class="d"></span>None ＋</td><td class="st">✓</td></tr>
+      <tr><td style="padding-left:16px"><span class="tw"></span><span class="ic cots"></span><span class="pn">DM-09-01001-001<span class="r">-A</span></span><span class="nm" style="margin-left:30px">Caster, 3 in swivel · COTS</span></td>
+          <td class="q">4</td><td><span class="pill rel">RELEASED</span></td><td class="dw na">—</td><td class="st" style="color:var(--ok)">⛉</td></tr>
+    </table>
+    <div class="summary">7 items · 15 parts in all · <b>2 drawings out of date</b> · <b>1 missing</b></div>
+  </div>
+  <div class="foot"><span>Open top</span><span>Bill of materials</span><span>Update drawings…</span></div>
+</div></div>
+
+<div class="col" style="width:330px"><div class="label">2 · RIGHT-CLICK THE SIDE RAIL</div>
+  <div class="menu">
+    <div>Open part</div>
+    <div class="hl">Open drawing <span class="k" style="color:#dfe9ff">DWG 01</span></div>
+    <div>Update drawing (check out, refresh)</div>
+    <div class="dim">Create drawing</div>
+    <div class="sep"></div>
+    <div>Check out</div><div>Check in…</div>
+    <div class="sep"></div>
+    <div>Where used…</div><div>Bill of materials…</div><div>Show in list</div>
+  </div>
+  <div class="why" style="margin-top:10px">
+    <div class="t">Why “out of date”</div>
+    The drawing (<span class="pn">DM-01-01001-001 DWG</span>, rev 01) was checked in against Side rail version
+    <span class="pn">7f3a2c1</span> (rev 02). The part is now at <span class="pn">c90e44b</span> (rev 03, “36 in tube”).
+    <div class="note" style="margin-top:4px">Geometry changed: volume +18 %. A change of description alone would show “metadata only”.</div>
+  </div>
+  <div class="label" style="margin-top:12px">DRAWING COLUMN</div>
+  <div class="legend">
+    <div class="row"><span class="dw ok"><span class="d"></span>02</span><span>current: made from the part's latest version (its own rev shown)</span></div>
+    <div class="row"><span class="dw old"><span class="d"></span>Out of date</span><span>the part changed since the drawing was made</span></div>
+    <div class="row"><span class="dw none"><span class="d"></span>None ＋</span><span>no drawing yet; ＋ makes one from the vault template</span></div>
+    <div class="row"><span class="dw na">—</span><span>none needed (COTS, or marked “no drawing”)</span></div>
+  </div>
+</div>
+</template>
+
+<!-- ======================= FIGURE 2: the New Project task panel ======================= -->
+<template id="wizard">
+<div class="col" style="width:400px"><div class="label">1 · NAME, UNITS AND STRUCTURE</div>
+<div class="card">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div><div class="tab cmd on">New Project</div></div>
+  <div class="body">
+    <div class="box"><div class="bt"><span class="n">1</span>Project</div><div class="bc">
+      <div class="fr"><span class="k">Name</span><span class="v"><div class="f">Workbench cart</div></span></div>
+      <div class="fr"><span class="k">Program</span><span class="v"><div class="f dd">DM · Demo products</div></span></div>
+      <div class="fr"><span class="k">Units</span><span class="v" style="display:flex;gap:8px;align-items:center"><div class="seg"><div>mm</div><div class="on">inch</div></div><span class="note">vault default</span></span></div>
+      <div class="fr"><span class="k">Drawings</span><span class="v"><div class="f dd">ANSI B landscape · ASME</div></span></div>
+    </div></div>
+    <div class="box"><div class="bt"><span class="n">2</span>Structure <span class="note" style="font-weight:400;margin-left:auto">type, or paste from a spreadsheet</span></div><div class="bc">
+<div class="ta">Workbench cart
+  Frame
+    Side rail                 x2
+    Cross member              x3
+  Deck
+  Caster plate                x4
+  Caster, 3 in swivel         x4  cots
+  <span class="c">DM-01-00877-001  Handle grip  x2</span><span class="cur"></span></div>
+      <div class="hint">Indent with two spaces or a tab for each level. <b>x2</b> is the quantity per parent;
+        a line with children is an assembly; <b>cots</b> marks a bought part; a line that starts with a
+        P/N reuses that vault item.</div>
+    </div></div>
+  </div>
+  <div class="btns"><div class="btn">Cancel</div><div class="btn">Load CSV…</div><div class="btn p">Next</div></div>
+</div></div>
+
+<div class="col" style="width:520px"><div class="label">2 · CHECK, THEN CREATE (NOTHING IS WRITTEN BEFORE OK)</div>
+<div class="card">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div><div class="tab cmd on">New Project</div></div>
+  <div class="body">
+    <div class="box"><div class="bt"><span class="n done">✓</span>Project <span class="note" style="font-weight:400">Workbench cart · DM · inch · ANSI B</span></div></div>
+    <div class="box"><div class="bt"><span class="n">3</span>Items <span class="note" style="font-weight:400;margin-left:auto">numbers are a preview until OK</span></div><div class="bc" style="padding:2px 6px 6px">
+    <table class="pv">
+      <tr><th>Item</th><th style="text-align:right">Qty</th><th>P/N</th><th>Drawing</th></tr>
+      <tr><td><span class="tw">▾</span><span class="ic asm"></span>Workbench cart</td><td class="q">1</td><td class="pn new">DM-02-01001-001</td><td><span class="chk"></span> <span class="note">DWG, same P/N</span></td></tr>
+      <tr><td style="padding-left:14px"><span class="tw">▾</span><span class="ic asm"></span>Frame</td><td class="q">1</td><td class="pn new">DM-02-01002-001</td><td><span class="chk"></span> <span class="note">DWG, same P/N</span></td></tr>
+      <tr><td style="padding-left:28px"><span class="tw"></span><span class="ic prt"></span>Side rail</td><td class="q">2</td><td class="pn new">DM-01-01001-001</td><td><span class="chk"></span> <span class="note">DWG, same P/N</span></td></tr>
+      <tr><td style="padding-left:28px"><span class="tw"></span><span class="ic prt"></span>Cross member</td><td class="q">3</td><td class="pn new">DM-01-01002-001</td><td><span class="chk"></span> <span class="note">DWG, same P/N</span></td></tr>
+      <tr><td style="padding-left:14px"><span class="tw"></span><span class="ic prt"></span>Deck</td><td class="q">1</td><td class="pn new">DM-01-01003-001</td><td><span class="chk"></span> <span class="note">DWG, same P/N</span></td></tr>
+      <tr><td style="padding-left:14px"><span class="tw"></span><span class="ic prt"></span>Caster plate</td><td class="q">4</td><td class="pn new">DM-01-01004-001</td><td><span class="chk"></span> <span class="note">DWG, same P/N</span></td></tr>
+      <tr><td style="padding-left:14px"><span class="tw"></span><span class="ic cots"></span>Caster, 3 in swivel</td><td class="q">4</td><td class="pn new">DM-09-01001-001</td><td><span class="chk off"></span> <span class="note">COTS</span></td></tr>
+      <tr><td style="padding-left:14px"><span class="tw"></span><span class="ic prt"></span>Handle grip</td><td class="q">2</td><td class="pn">DM-01-00877-001</td><td class="note">existing item, rev A</td></tr>
+    </table></div></div>
+    <div class="box"><div class="bt"><span class="n">4</span>Create</div><div class="bc">
+      <div class="fr"><span class="chk"></span><span>Assemblies link their children, placed in a row</span></div>
+      <div class="fr"><span class="chk"></span><span>Empty drawing for each part and assembly, from the vault template</span></div>
+      <div class="fr"><span class="chk"></span><span>Check everything in as <span class="pill wip">WIP 01</span></span></div>
+      <div class="fr"><span class="k" style="width:60px">Comment</span><span class="v"><div class="f">New project: Workbench cart</div></span></div>
+      <div class="hint ok" style="margin-top:6px">✓ 7 new items, 6 drawings, 13 files · 1 existing item reused · no errors</div>
+    </div></div>
+  </div>
+  <div class="btns"><div class="btn">Cancel</div><div class="btn">Back</div><div class="btn p">Create project</div></div>
+</div></div>
+</template>
+
+<script>
+document.body.appendChild(document.getElementById(fig).content.cloneNode(true));
+</script>
+</body>
+</html>

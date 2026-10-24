@@ -58,6 +58,9 @@ public:
     static PyObject* sSendFocusView            (PyObject *self,PyObject *args);
 
     static PyObject* sGetMainWindow            (PyObject *self,PyObject *args);
+    // [BW] Register a Python widget as a dock window (UIX-12: tabs on the right panel)
+    static PyObject* sAddDockWindow            (PyObject *self,PyObject *args);
+    static PyObject* sSetOverlayAutoHide       (PyObject *self,PyObject *args);  // [BW] UIX-12
     static PyObject* sUpdateGui                (PyObject *self,PyObject *args);
     static PyObject* sUpdateLocale             (PyObject *self,PyObject *args);
     static PyObject* sGetLocale                (PyObject *self,PyObject *args);

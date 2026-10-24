@@ -69,6 +69,7 @@ _observer = None
 _groups = []  # the observers live on these wrappers; keep them
 _filter = None
 _vault = None
+VAULT_SUFFIX = []  # callables returning text appended to the vault readout
 
 
 def _prefs():
@@ -128,7 +129,13 @@ def update(*_args) -> None:
     if label is None:
         _vault.hide()
     else:
-        _vault.setText(label[0])
+        suffix = ""
+        for extra in VAULT_SUFFIX:  # " · 2 checked out · 1 newer" (bruceworx_vaultclient)
+            try:
+                suffix += extra()
+            except Exception:
+                pass
+        _vault.setText(label[0] + suffix)
         _vault.setToolTip(label[1])
         _vault.show()
 

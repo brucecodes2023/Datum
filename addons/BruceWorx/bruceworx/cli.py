@@ -32,7 +32,7 @@ from bruceworx.tree import document_tree
 COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault")
 VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
-    "submit", "approve", "reject", "fetch", "sync", "import", "settings",
+    "submit", "approve", "reject", "retire", "fetch", "sync", "import", "settings",
 )
 _ENTRY_NAMES = {"hooks.py", "hooks"}
 
@@ -115,7 +115,17 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--drawing-of", default="", help="create: the part a drawing documents")
     vault.add_argument("--file", default="", help="checkin: the saved .FCStd; sync: the .FCStd to update")
     vault.add_argument("--workspace", default="", help="checkout/fetch: copy the file here")
-    vault.add_argument("--comment", default="", help="checkin comment or reject reason")
+    vault.add_argument("--comment", default="", help="checkin comment (reject: same as --note)")
+    # approve, reject, retire (PDM-05): the same journal fields as FreeCAD's panels.
+    vault.add_argument("--note", default="",
+                       help="approve: the release note; reject, retire: the reason (required)")
+    vault.add_argument("--reviewed", action="store_true",
+                       help="approve: you reviewed the drawing against the model (the checklist's tick)")
+    vault.add_argument("--no-drawing", action="store_true", help="approve: this assembly has no drawing")
+    vault.add_argument("--waiver", default="",
+                       help="approve: why release an assembly whose components are not all released")
+    vault.add_argument("--attach", action="append", default=[], metavar="FILE",
+                       help="approve, reject: a file to attach (copied into the vault); repeat for more")
     vault.add_argument("--actor", default="", help="Who is acting (default: user@host)")
     # init: numbering and company properties (vault_setup); without them init makes a bare vault.
     vault.add_argument("--program", default="", help="init: program codes, e.g. BW,LE; import: the program")
@@ -125,7 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--properties-file", default="", help="init: company part properties (JSON list or layer)")
     vault.add_argument("--from", dest="source_folder", default="", help="import: folder of .FCStd files")
     vault.add_argument("--dry-run", action="store_true",
-                       help="import: show the plan, change nothing; settings --import: check only")
+                       help="import: show the plan, change nothing; settings --import: check only; "
+                            "approve, retire: show the checklist, change nothing")
     # settings: the vault's programs, document types and company properties as one CSV file.
     vault.add_argument("--export", dest="export_csv", default="", help="settings: write the tables to this CSV")
     vault.add_argument("--import", dest="import_csv", default="",
@@ -373,10 +384,10 @@ def _vault_command(args) -> int:
         vault.undo_checkout(args.pn)
     elif args.action == "submit":
         vault.submit(args.pn)
-    elif args.action == "approve":
-        vault.approve(args.pn)
-    elif args.action == "reject":
-        vault.reject(args.pn, args.comment)
+    elif args.action in ("approve", "reject", "retire"):
+        code = _vault_review(vault, args, payload)
+        if code is not None:
+            return code
     elif args.action == "fetch":
         payload["path"] = vault.fetch(args.pn, args.workspace or os.getcwd())
     if args.action == "status":
@@ -386,6 +397,65 @@ def _vault_command(args) -> int:
         payload["state"] = vault.items[args.pn].state
     emit(payload)
     return 0
+
+
+def _vault_review(vault, args, payload):
+    """approve, reject and retire with the release checklist (bruceworx.release_check), as the
+    Approve..., Reject... and Retire... panels do. Returns an exit code when it emitted already."""
+    from bruceworx import pdm, pdm_workspace, release_check as rc  # noqa: PLC0415
+
+    pn = args.pn
+    if pn not in vault.items:
+        raise ValueError(f"{pn} is not in the vault")
+    ws = pdm_workspace.Workspace(vault)
+    note = (args.note or (args.comment if args.action == "reject" else "")).strip()
+    if args.action == "retire":
+        rows = rc.where_used(ws, pn)
+        blockers = rc.retire_blockers(ws, pn, rows)
+        if not note:
+            blockers.append("Give the reason with --note")
+        payload.update({"where_used": rows, "blockers": blockers})
+        for row in rows:
+            print(f"used by {row['part_number']} {row['state']} {row['revision']} ({row['via']})")
+        for text in blockers:
+            print(f"blocker: {text}")
+        if args.dry_run or blockers:
+            payload["ok"] = not blockers
+            payload["dry_run"] = bool(args.dry_run)
+            emit(payload)
+            return 1 if blockers else 0
+        vault.retire(pn, note)
+        rc.lock_released(ws, [pn])
+        return None
+    item = vault.items[pn]
+    if item.latest.state != pdm.IN_REVIEW:
+        raise ValueError(f"{pn} rev {item.latest.code} is {item.state}, not {pdm.IN_REVIEW}; submit it first")
+    lines = rc.apply(rc.check_item(ws, pn, no_drawing=args.no_drawing), args.reviewed, args.waiver)
+    latest = vault.latest_version(pn)
+    checklist = rc.record(lines, args.no_drawing, latest.sha256 if latest else "")
+    payload["checklist"] = checklist
+    for line in lines:
+        mark = "-" if line.skipped else ("ok" if line.ok else "no")
+        print(f"{mark:2} {line.text}" + (f": {line.detail}" if line.detail else ""))
+    if args.action == "reject":
+        # The checklist as it stood is recorded with the reason; nothing in it blocks a rejection.
+        if not note:
+            raise ValueError("vault reject needs the reason: --note TEXT")
+        payload["revision_rejected"] = item.latest.code
+        vault.reject(pn, note, checklist=checklist, attachments=args.attach)
+        return None
+    blockers = rc.blockers(lines, note)
+    payload["blockers"] = blockers
+    for text in blockers:
+        print(f"blocker: {text}")
+    if args.dry_run or blockers:
+        payload["ok"] = not blockers
+        payload["dry_run"] = bool(args.dry_run)
+        emit(payload)
+        return 1 if blockers else 0
+    vault.approve(pn, note=note, checklist=checklist, attachments=args.attach)
+    rc.lock_released(ws, [pn])
+    return None
 
 
 def _has_setup_options(args) -> bool:

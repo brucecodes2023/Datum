@@ -1,31 +1,48 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Part numbers in the BruceWorx form ``{PROG}-{DT}-{PPPPP}-{SSS}-{REV}``.
-
-Example: ``LE-01-01001-001-A``.
+"""BruceWorx part numbers: ``{PROG}-{DT}-{PPPPP}-{SSS}``, for example ``LE-01-01001-001``.
 
 ``PPPPP`` is the next parent drawing for a program and document type.
 ``SSS`` is the next sub-assembly under that parent. Callers pass a
-:class:`NumberSource` (JSON today, BruceWorx Ops API later).
+:class:`NumberSource` (a local JSON file, or the BruceWorx Ops API).
+
+The part number carries no revision (decided 19 Oct 2026, BW-PDM-03). The
+revision is metadata of the item (``bruceworx.pdm``: 01, 02, ... in work, A at
+the first release) and is printed next to the number as ``P/N-REV``.
+
+Numbering files written before that decision declare the old form
+``{PROG}-{DT}-{PPPPP}-{SSS}-{REV}`` (:data:`LEGACY_FORMAT`) and still issue
+numbers with a revision until they are migrated
+(:func:`bruceworx.sources.migrate_numbering_file`). Existing numbers migrate
+unchanged except for the revision: :func:`migrate_part_number` and
+:func:`migrate_labels`.
 """
 
 from __future__ import annotations
 
 import re
 
-PART_NUMBER_FORMAT = "{PROG}-{DT}-{PPPPP}-{SSS}-{REV}"
+PN_FORMAT = "{PROG}-{DT}-{PPPPP}-{SSS}"
+LEGACY_FORMAT = "{PROG}-{DT}-{PPPPP}-{SSS}-{REV}"
+FORMATS = (PN_FORMAT, LEGACY_FORMAT)
+# The form numbering files declared before BW-PDM-03, and the one vault_setup
+# still writes; files in it issue P/N-REV until migrated.
+PART_NUMBER_FORMAT = LEGACY_FORMAT
 PARENT_WIDTH = 5
 SUB_WIDTH = 3
 DEFAULT_NEXT_PARENT = 1001
 DEFAULT_NEXT_SUB = 1
 _PROGRAM_RE = re.compile(r"[A-Z][A-Z0-9]{0,7}\Z")
 _REVISION_RE = re.compile(r"[A-Z]{1,3}\Z")
-PART_NUMBER_RE = re.compile(
+_FIELDS = (
     r"(?P<program>[A-Z][A-Z0-9]{0,7})-"
     r"(?P<document_type>\d{2})-"
     r"(?P<parent>\d{5})-"
-    r"(?P<sub>\d{3})-"
-    r"(?P<revision>[A-Z]{1,3})\Z"
+    r"(?P<sub>\d{3})"
 )
+PN_RE = re.compile(_FIELDS + r"\Z")
+PART_NUMBER_RE = re.compile(_FIELDS + r"-(?P<revision>[A-Z]{1,3})\Z")
+# A number as printed (P/N-REV): legacy letters, or a pdm pre-release such as 02.
+_PRINTED_RE = re.compile(_FIELDS + r"(?:-(?P<revision>[A-Z]{1,3}|\d{2,3}))?\Z")
 
 
 def normalize_program(program: str) -> str:
@@ -76,28 +93,73 @@ def format_part_number(
     document_type: str,
     parent,
     sub,
-    revision: str,
+    revision: str | None = None,
 ) -> str:
-    """Format one part number. ``parent`` and ``sub`` are unpadded integers or digits."""
+    """Format one part number. ``parent`` and ``sub`` are unpadded integers or digits.
+
+    Without ``revision`` this is the P/N. A ``revision`` (1-3 letters) gives the
+    legacy ``P/N-REV`` form, which only unmigrated numbering files still issue.
+    """
     program = normalize_program(program)
     document_type = normalize_document_type(document_type)
     parent = normalize_parent(parent)
     sub = normalize_sub(sub)
-    revision = normalize_revision(revision)
-    formatted = f"{program}-{document_type}-{parent}-{sub}-{revision}"
-    if not PART_NUMBER_RE.fullmatch(formatted):
+    formatted = f"{program}-{document_type}-{parent}-{sub}"
+    if revision is not None:
+        formatted = f"{formatted}-{normalize_revision(revision)}"
+        pattern = PART_NUMBER_RE
+    else:
+        pattern = PN_RE
+    if not pattern.fullmatch(formatted):
         raise ValueError(f"refusing to emit invalid part number {formatted!r}")
     return formatted
 
 
 def parse_part_number(text: str) -> dict:
-    """Split a part number into its fields. Values stay zero-padded."""
-    match = PART_NUMBER_RE.fullmatch(str(text).strip().upper())
+    """Split a part number into its fields. Values stay zero-padded.
+
+    Accepts the P/N and the legacy ``P/N-REV`` form; ``revision`` is None for a P/N.
+    """
+    candidate = str(text).strip().upper()
+    match = PART_NUMBER_RE.fullmatch(candidate) or PN_RE.fullmatch(candidate)
     if not match:
         raise ValueError(
-            f"part number {text!r} is not {PART_NUMBER_FORMAT} (example LE-01-01001-001-A)"
+            f"part number {text!r} is not {PN_FORMAT} (example LE-01-01001-001)"
         )
-    return match.groupdict()
+    fields = match.groupdict()
+    fields.setdefault("revision", None)
+    return fields
+
+
+def split_revision(text: str) -> tuple[str, str | None]:
+    """``LE-01-01001-001-A`` -> ``("LE-01-01001-001", "A")``.
+
+    A P/N comes back with None. A printed number with a pre-release revision
+    (``LE-01-01001-001-02``) splits too. Raises ValueError for anything that is
+    not a BruceWorx number, so a free-form label is never cut.
+    """
+    match = _PRINTED_RE.fullmatch(str(text).strip().upper())
+    if not match:
+        raise ValueError(
+            f"{text!r} is not a part number ({PN_FORMAT}, optionally followed by -REV)"
+        )
+    fields = match.groupdict()
+    pn = f"{fields['program']}-{fields['document_type']}-{fields['parent']}-{fields['sub']}"
+    return pn, fields["revision"]
+
+
+def migrate_part_number(text: str) -> str:
+    """The P/N of an existing number: unchanged except that ``-REV`` is dropped."""
+    return split_revision(text)[0]
+
+
+def is_part_number(text: str) -> bool:
+    """True for a P/N or a printed ``P/N-REV``."""
+    try:
+        split_revision(text)
+    except ValueError:
+        return False
+    return True
 
 
 def _bounded_int(value, upper: int, label: str) -> int:
@@ -177,6 +239,58 @@ def assign_part_numbers(
         )
     doc.Label = numbers[0]
     return _assignment_payload(doc, numbers[0], assignments)
+
+
+def migrate_labels(doc, objects=None) -> dict:
+    """Drop ``-REV`` from part-number labels (BW-PDM-03 migration).
+
+    Every object (default: all of ``doc.Objects``) whose ``Label`` or
+    ``PartNumber`` property is a printed ``P/N-REV`` gets the P/N; so does the
+    document Label. Free-form labels and labels that are already a P/N stay as
+    they are, so running it twice changes nothing. The revision is returned with
+    each change and written nowhere: the vault owns an item's revision (pdm.py).
+
+    Returns a dict suitable for JSON. Does not save the document.
+    """
+    targets = list(getattr(doc, "Objects", []) or []) if objects is None else list(objects)
+    changes = []
+    for obj in targets:
+        for attribute in ("Label", "PartNumber"):
+            value = getattr(obj, attribute, None)
+            migrated = _migrated(value)
+            if migrated is None:
+                continue
+            setattr(obj, attribute, migrated[0])
+            changes.append({
+                "name": obj.Name,
+                "property": attribute,
+                "old": value,
+                "part_number": migrated[0],
+                "revision": migrated[1],
+            })
+    document = None
+    migrated = _migrated(getattr(doc, "Label", None))
+    if migrated is not None:
+        document = {"old": doc.Label, "part_number": migrated[0], "revision": migrated[1]}
+        doc.Label = migrated[0]
+    return {
+        "document_name": getattr(doc, "Name", ""),
+        "document_label": getattr(doc, "Label", ""),
+        "document": document,
+        "changes": changes,
+        "changed": bool(changes or document),
+    }
+
+
+def _migrated(value):
+    """(P/N, revision) when ``value`` is a printed P/N-REV, else None."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        pn, revision = split_revision(value)
+    except ValueError:
+        return None
+    return (pn, revision) if revision is not None else None
 
 
 def _allocate_group(source, program, document_type, count, revision, parent):

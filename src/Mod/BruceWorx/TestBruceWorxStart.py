@@ -206,6 +206,49 @@ class TestVault(unittest.TestCase):
         self.assertEqual(start.storage_name("/Users/x/Dropbox/Vault"), "Dropbox")
 
 
+class TestMyWork(unittest.TestCase):
+    class St:  # stands in for pdm_workspace.FileStatus
+        part_number = "BW-01-01001-001"
+        display = "BW-01-01001-001-02"
+        description = "Plate"
+        label = "Checked out to me, modified"
+        code = "modified"
+        path = "/v/work/me/BW-01-01001-001.FCStd"
+        item_type = "part"
+
+    def test_work_row(self):
+        row = start.work_row(self.St())
+        self.assertEqual((row["display"], row["status"], row["kind"]),
+                         ("BW-01-01001-001-02", "Checked out to me, modified", "part"))
+
+    def test_sections_skip_empty_groups_and_keep_order(self):
+        snap = {"my_work": {"newer": [1], "checked_out": [1, 2], "in_review": []}}
+        self.assertEqual([t for t, _r in start.my_work_sections(snap)], ["Checked out to me", "Newer in the vault"])
+        self.assertEqual(start.my_work_sections(None), [])
+        self.assertEqual(start.my_work_sections({"error": "x"}), [])
+
+    def test_pinned_actor(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ref = os.path.join(tmp, "Acme.bwvault")
+        with open(ref, "w") as handle:
+            handle.write('{"vault_id": "abc"}')
+        saved = {"abc": "bruce@mac"}
+        self.assertEqual(start.pinned_actor(ref, lambda v: saved.get(v, "")), "bruce@mac")
+        self.assertEqual(start.pinned_actor(os.path.join(tmp, "none"), lambda v: "x"), "")
+
+    def test_signature_follows_work_state(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.makedirs(os.path.join(tmp, "journal"))
+        before = start.vault_signature(tmp)
+        state = os.path.join(tmp, "work", "me", ".bw", "state.json")
+        os.makedirs(os.path.dirname(state))
+        with open(state, "w") as handle:
+            handle.write("{}")
+        self.assertNotEqual(start.vault_signature(tmp), before)
+
+
 class TestText(unittest.TestCase):
     NOW = dt.datetime(2026, 10, 23, 15, 0)
 

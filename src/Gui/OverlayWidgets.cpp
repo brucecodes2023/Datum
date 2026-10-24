@@ -2552,6 +2552,15 @@ void OverlaySplitterHandle::leaveEvent(QEvent* ev)
 
 QSize OverlaySplitterHandle::sizeHint() const
 {
+    // [BW] UIX-12: a panel that draws its own tab strip (bruceworx_rightpanel sets "bwTabStrip")
+    // shows one dock at a time; the folded docks keep no header row.
+    if (auto splitter = parentWidget()) {
+        if (auto tabs = qobject_cast<OverlayTabWidget*>(splitter->parentWidget())) {
+            if (tabs->property("bwTabStrip").toBool()) {
+                return {0, 0};
+            }
+        }
+    }
     QSize size = QSplitterHandle::sizeHint();
     int minSize = widgetMinSize(this, true);
     if (this->orientation() == Qt::Vertical) {

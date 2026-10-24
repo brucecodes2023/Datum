@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- UIX-12 redesign mock (24 Oct): the right panel with tabs Properties, Vault, Parameters, Physical and a
+     command tab. Four states side by side. Rendered by render.sh-style headless Chrome into
+     fig/uix12_right_tabs.png (?dark for the dark variant). -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#e9ecf1; --card:#ffffff; --border:#d8dce3; --text:#1d1f23; --sec:#6b717c; --dim:#9aa0aa;
+          --accent:#007aff; --soft:#e3eefc; --hover:#f0f2f5; --field:#ffffff; --warn:#b26a00; }
+  body.dark { --bg:#202227; --card:#2b2d33; --border:#3b3e45; --text:#e8eaee; --sec:#a3a8b2; --dim:#767b85;
+          --accent:#2f8bff; --soft:#22344d; --hover:#34373e; --field:#1f2126; --warn:#e0a03c; }
+  html, body { margin:0; }
+  body { width:1300px; height:700px; background:var(--bg); font:12.5px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+         color:var(--text); display:flex; gap:22px; padding:22px; box-sizing:border-box; }
+  .col { width:300px; display:flex; flex-direction:column; gap:8px; }
+  .label { font-weight:600; color:var(--sec); font-size:11.5px; letter-spacing:.3px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; flex:1; display:flex; flex-direction:column;
+          box-shadow:0 2px 14px rgba(0,0,0,.08); overflow:hidden; }
+  .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 6px; }
+  .tab { padding:9px 7px 7px; color:var(--sec); font-size:11.5px; font-weight:600; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .tab.cmd { margin-left:auto; color:var(--accent); }
+  .tab.cmd.on { color:var(--text); }
+  .body { padding:8px 12px; flex:1; overflow:hidden; }
+  .sec { display:flex; align-items:center; gap:6px; margin:6px 0 4px; font-weight:600; }
+  .sec .tw { color:var(--dim); width:10px; font-size:10px; }
+  .sec .sub { color:var(--sec); font-weight:400; }
+  .sec .act { margin-left:auto; font-weight:500; border:1px solid var(--border); border-radius:6px; padding:1px 9px; font-size:11.5px; }
+  .sec .more { color:var(--dim); font-weight:400; }
+  .row { display:flex; align-items:center; height:26px; padding-left:16px; }
+  .row .k { width:92px; color:var(--sec); }
+  .row .v { flex:1; }
+  .f { background:var(--field); border:1px solid var(--border); border-radius:5px; height:20px; display:flex; align-items:center;
+       padding:0 7px; box-sizing:border-box; font-variant-numeric:tabular-nums; }
+  .f .u { margin-left:auto; color:var(--dim); }
+  .f.dd::after { content:"▾"; margin-left:auto; color:var(--dim); font-size:10px; }
+  .sep { border-top:1px solid var(--border); margin:8px -12px; }
+  .badge { font-size:10.5px; font-weight:600; padding:0 5px; border-radius:4px; border:1px solid var(--warn); color:var(--warn); }
+  .ro { font-variant-numeric:tabular-nums; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th { text-align:left; color:var(--sec); font-weight:600; font-size:11px; padding:4px 3px; border-bottom:1px solid var(--border); }
+  td { padding:4px 3px; border-bottom:1px solid var(--hover); }
+  td.n { font-family:"SF Mono", Menlo, monospace; font-size:11.5px; }
+  .grp td { color:var(--sec); font-weight:600; background:var(--hover); }
+  .foot { padding:6px 12px; border-top:1px solid var(--border); display:flex; color:var(--accent); font-weight:600; font-size:11.5px; }
+  .foot span:last-child { margin-left:auto; }
+  .btns { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); }
+  .btn { flex:1; text-align:center; border:1px solid var(--border); border-radius:6px; padding:4px; }
+  .btn.p { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .chk { display:inline-block; width:12px; height:12px; border:1px solid var(--border); border-radius:3px; vertical-align:-2px; }
+  .seg { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .seg div { flex:1; text-align:center; padding:2px 0; color:var(--sec); border-left:1px solid var(--border); }
+  .seg div:first-child { border-left:none; }
+  .seg div.on { background:var(--soft); color:var(--text); font-weight:600; }
+</style>
+</head>
+<body>
+<script>if (location.search.indexOf("dark") >= 0) document.body.classList.add("dark");</script>
+
+<!-- 1. Properties: a feature -->
+<div class="col"><div class="label">1 · PROPERTIES — the Boss pad selected</div>
+<div class="card">
+  <div class="tabs"><div class="tab on">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div></div>
+  <div class="body">
+    <div class="sec"><span class="tw">▾</span>Boss <span class="sub">Pad</span><span class="act">Edit</span><span class="more">⋯</span></div>
+    <div class="row"><span class="k">Distance</span><span class="v"><div class="f">14 mm<span class="u">ƒx</span></div></span></div>
+    <div class="row"><span class="k">Direction</span><span class="v"><div class="f dd">One side</div></span></div>
+    <div class="row"><span class="k">Extent</span><span class="v"><div class="f dd">Distance</div></span></div>
+    <div class="sec"><span class="tw">▸</span><span class="sub">More</span><span class="more" style="margin-left:auto">Taper, Flip, Sketch, Refine</span></div>
+    <div class="sep"></div>
+    <div class="sec"><span class="tw">▾</span>Part <span class="sub">Mounting plate</span></div>
+    <div class="row"><span class="k">Part number</span><span class="v ro">LE-01-01001 &nbsp;<span class="badge">WIP 02</span></span></div>
+    <div class="row"><span class="k">Description</span><span class="v"><div class="f">Mounting plate, 80 × 50</div></span></div>
+    <div class="row"><span class="k">Material</span><span class="v"><div class="f dd">Aluminium 6061-T6</div></span></div>
+    <div class="row"><span class="k">Appearance</span><span class="v"><div class="f dd">◼ From material</div></span></div>
+    <div class="row"><span class="k">Mass</span><span class="v ro">0.124 kg</span></div>
+    <div class="sec"><span class="tw">▸</span><span class="sub">More part data</span><span class="more" style="margin-left:auto">Vendor, Finish, Item type</span></div>
+  </div>
+  <div class="foot"><span>Show in Physical</span><span>All properties ›</span></div>
+</div></div>
+
+<!-- 2. Physical: the part -->
+<div class="col"><div class="label">2 · PHYSICAL — the Mounting plate part</div>
+<div class="card">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab on">Physical</div></div>
+  <div class="body">
+    <div class="sec">Mounting plate <span class="sub">Part · 1 body</span></div>
+    <div class="row"><span class="k">Material</span><span class="v ro">Aluminium 6061-T6</span></div>
+    <div class="row"><span class="k">Density</span><span class="v ro">2.70 g/cm³</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="k">Mass</span><span class="v ro">0.124 kg</span></div>
+    <div class="row"><span class="k">Volume</span><span class="v ro">45.9 cm³</span></div>
+    <div class="row"><span class="k">Area</span><span class="v ro">118.2 cm²</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="k">Bounding box</span><span class="v ro">80 × 50 × 22 mm</span></div>
+    <div class="row"><span class="k">Centre of mass</span><span class="v ro">38.6, 25.0, 6.1 mm</span></div>
+    <div class="sec"><span class="tw">▸</span><span class="sub">Moments of inertia</span></div>
+    <div class="sec"><span class="tw">▸</span><span class="sub">Principal axes</span></div>
+  </div>
+  <div class="foot"><span>Copy</span><span>Export CSV</span></div>
+</div></div>
+
+<!-- 3. Parameters -->
+<div class="col"><div class="label">3 · PARAMETERS — user and model parameters</div>
+<div class="card">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab on">Parameters</div><div class="tab">Physical</div></div>
+  <div class="body">
+    <div class="f" style="margin-bottom:6px;color:var(--dim)">⌕ Filter</div>
+    <table>
+      <tr><th>Name</th><th>Expression</th><th>Value</th></tr>
+      <tr class="grp"><td colspan="3">▾ User parameters &nbsp;<span style="font-weight:400;color:var(--accent)">＋</span></td></tr>
+      <tr><td class="n">plate_t</td><td class="n">8 mm</td><td>8 mm</td></tr>
+      <tr><td class="n">boss_h</td><td class="n">plate_t * 1.75</td><td>14 mm</td></tr>
+      <tr><td class="n">hole_d</td><td class="n">9 mm</td><td>9 mm</td></tr>
+      <tr class="grp"><td colspan="3">▾ Model parameters</td></tr>
+      <tr><td>Base plate</td><td class="n">plate_t</td><td>8 mm</td></tr>
+      <tr><td>Boss</td><td class="n">boss_h</td><td>14 mm</td></tr>
+      <tr><td>Hole · Ø</td><td class="n">hole_d</td><td>9 mm</td></tr>
+      <tr><td>Fillet · R</td><td class="n"></td><td>5 mm</td></tr>
+      <tr><td>Sketch · width</td><td class="n"></td><td>80 mm</td></tr>
+      <tr><td>Sketch · height</td><td class="n"></td><td>50 mm</td></tr>
+    </table>
+  </div>
+  <div class="foot"><span>＋ Parameter</span><span>Spreadsheet ›</span></div>
+</div></div>
+
+<!-- 4. Command tab -->
+<div class="col"><div class="label">4 · A COMMAND OPEN — its own tab</div>
+<div class="card">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div><div class="tab cmd on">Pad</div></div>
+  <div class="body">
+    <div class="sec">Pad parameters</div>
+    <div class="row"><span class="k">Type</span><span class="v"><div class="f dd">Dimension</div></span></div>
+    <div class="row"><span class="k">Length</span><span class="v"><div class="f">14 mm<span class="u">ƒx</span></div></span></div>
+    <div class="row"><span class="k">Offset</span><span class="v"><div class="f">0 mm<span class="u">ƒx</span></div></span></div>
+    <div class="row"><span class="k"></span><span class="v"><span class="chk"></span>&nbsp; Symmetric to plane</span></div>
+    <div class="row"><span class="k"></span><span class="v"><span class="chk"></span>&nbsp; Reversed</span></div>
+    <div class="row"><span class="k">Taper angle</span><span class="v"><div class="f">0°<span class="u">ƒx</span></div></span></div>
+    <div class="sep"></div>
+    <div style="color:var(--sec);line-height:1.5">FreeCAD's own dialog, unchanged. Flip to <b>Properties</b> or <b>Physical</b> while it is open; OK or Cancel closes the tab and the panel goes back to the tab you were on.</div>
+  </div>
+  <div class="btns"><div class="btn">Cancel</div><div class="btn p">OK</div></div>
+</div></div>
+</body>
+</html>

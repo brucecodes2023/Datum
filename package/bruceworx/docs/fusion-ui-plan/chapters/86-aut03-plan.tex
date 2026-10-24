@@ -1,0 +1,77 @@
+%======================================================================
+\subsection{AUT-03 plan: the BruceWorx harness for Claude Code (23 Oct 2026, building)}\label{sec:aut03-plan}
+%======================================================================
+
+You asked for a way to work with FreeCAD and KiCad through Claude Code, and chose to \textbf{build our own} rather
+than install a community server. This is \eref{AUT-03} (with the parts of \eref{AUT-02} it needs). Your answers
+(23 Oct):
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Question & Answer\\
+\midrule
+Tools in the first version & Modelling through named commands, running Python, and vault tools. Reading the model
+  (documents, tree, properties, selection) comes with them, since a command needs object names; a 3D-view
+  screenshot is included as a read tool.\\
+Connection & Ask once per session: the first connection shows ``Allow Claude Code to control FreeCAD?'', a
+  status-bar chip shows it is connected and disconnects it. This Mac only, a token, every action logged.\\
+KiCad & In the same server, file tools now and live KiCad control through KiCad~10's API.\\
+Without the window & Both: the running FreeCAD when there is one, otherwise a headless \code{FreeCADCmd} job.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{How it fits together.} Claude Code speaks MCP (the Model Context Protocol: JSON-RPC 2.0 messages over
+the server's standard input and output). Three pieces, no new software on the Mac for the FreeCAD part:
+\begin{enumerate}[nosep]
+  \item \textbf{The bridge inside FreeCAD} (\file{src/Mod/BruceWorx/bruceworx\_bridge.py}): a \code{QTcpServer}
+        on \code{127.0.0.1} only, with a random token written to \file{<UserAppData>/BruceWorx/bridge.json}
+        (readable by you only). Each request runs on the GUI thread; each modelling call is one undo step
+        (\emph{Edit $\rightarrow$ Undo} takes it back). Every call is written to the Report view and to
+        \file{bridge.log}.
+  \item \textbf{The MCP server} (\file{package/bruceworx/mcp/bruceworx\_mcp.py}): plain Python 3 (standard library
+        only), started by Claude Code. It lists the tools and forwards each call to the bridge; when FreeCAD is not
+        running it starts a headless \code{FreeCADCmd} with the same bridge code on a copy of your preferences (the
+        real ones are never written by a background job).
+  \item \textbf{Registration}: a \file{.mcp.json} in the repository root, so Claude Code offers the
+        \emph{bruceworx} server when it opens this project and asks you to approve it once. Nothing is added to
+        your global Claude Code settings.
+\end{enumerate}
+
+\paragraph{Tools (first version).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Group & Tools\\
+\midrule
+Read & documents, object tree, properties of an object, selection, mass and bounding box, a 3D-view screenshot\\
+Model & new document and body; sketch from a list of lines, arcs and circles on a plane or face; pad, pocket,
+  revolve, hole; fillet and chamfer on named edges; rectangular and circular pattern (BruceWorx); set a property
+  or a spreadsheet parameter; insert a component; add a joint; recompute; undo; save; export STEP\\
+Python & \code{run\_python}: runs code inside FreeCAD and returns its output and errors (logged, wrapped in one
+  undo step)\\
+Vault & status, my work, next part number, check out, check in (comment required), undo check-out, get latest,
+  import a folder (with a dry run), settings as CSV\\
+KiCad & board info (size, layers, parts), STEP export, render, DRC report, BOM (\code{kicad-cli}); live: open
+  board, list and select footprints, move a footprint, read the outline (KiCad's API)\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Security.} Only this Mac can connect (the bridge listens on the loopback address). A client must send the
+token from \file{bridge.json}; the file is mode 600. The first call in a FreeCAD session asks you in FreeCAD; until
+you allow it, every call is refused. The status-bar chip (``Claude connected'') disconnects with one click and
+refuses further calls until you allow again. Every call, with its arguments and result size, goes to the log.
+\code{run\_python} is as powerful as the Python console; that is why the session prompt exists.
+
+\paragraph{KiCad live control needs two changes on your Mac}, which wait for your OK: KiCad's API server is off
+(\emph{Preferences $\rightarrow$ Plugins $\rightarrow$ Enable KiCad API}), and its Python client
+(\code{kicad-python}) is not installed. The plan installs it into a private folder in the repository's tool
+environment, not into KiCad or the system Python. Until then the KiCad tools are the \code{kicad-cli} ones.
+
+\paragraph{Build order.} 1 bridge and session prompt, read tools, \code{run\_python}; 2 MCP server, headless mode,
+\file{.mcp.json}; 3 modelling tools; 4 vault tools (on \file{pdm\_workspace.py}); 5 KiCad file tools; 6 KiCad
+live tools (after your OK). Tests: the protocol and every tool against a headless FreeCAD, plus one live session
+on a config copy. \emph{Acceptance} (as the epic): an agent creates, queries and exports a part headless.

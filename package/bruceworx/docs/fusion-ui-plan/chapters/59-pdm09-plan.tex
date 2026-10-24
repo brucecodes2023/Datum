@@ -1,0 +1,406 @@
+%======================================================================
+\subsection{BW-PDM-09 --- Plan: metric and inch, the product tree with drawings, and New Project (24 Oct 2026, approved 24 Oct)}\label{sec:pdm09-plan}
+%======================================================================
+
+You asked on 24 Oct for three things the vault does not do yet. This plan covers all three, because they share their
+data: the units a project is drawn in, the tree of what a project is made of with each item's drawing, and a wizard
+that creates that tree in one go. Your answers so far:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.2cm}X@{}}
+\toprule
+Feature & Your answer (24 Oct)\\
+\midrule
+A. Metric and inch & ``We will also need metric and imperial support.'' Chosen: \textbf{a default per vault (mm or inch)
+  with an override per document}. New parts, drawing templates, title and tolerance blocks, sheet-metal gauges and
+  lumber follow it.\\
+B. Product tree with drawings & Top assembly $\rightarrow$ sub-assemblies $\rightarrow$ parts, each row with
+  \code{P/N-REV}, state and its drawing (open, missing, out of date), like SolidWorks PDM or Onshape's structure view.\\
+C. New Project wizard & Chosen: \textbf{structure and files}. Name the project, type or paste its structure with
+  quantities; it numbers every item, writes the files (assemblies linking their children, empty drawings from the
+  vault template), checks them in as WIP~01, and uses the units of~A.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+It builds on the folder vault (\eref{PDM-04}), the per-revision BOM (\eref{PDM-06}, \S\ref{sec:pdm06-plan}), the drawing
+standards (\eref{DRW-01}, \S\ref{sec:drw01-plan}) and the right panel's Vault tab (\eref{UIX-12},
+\S\ref{sec:uix12-plan}).
+
+%----------------------------------------------------------------------
+\subsubsection*{1. What the spikes showed (24 Oct)}
+
+Two scripts ran in \code{FreeCADCmd} 1.1.4 on a copy of your configuration, everything in a scratch folder
+(\file{project-plan/spike\_units.py} and \file{spike\_project.py}). The second made a scratch vault with program
+\code{DM} and inch drawing standards, then did by hand what the wizard would do for a small cart: seven items (two
+assemblies, four parts, one COTS caster), six drawings, every file checked in as WIP~01.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\hsize=1.1\hsize}X>{\hsize=0.9\hsize}X@{}}
+\toprule
+Units: check & Result\\
+\midrule
+Per-document unit system in 1.1 & \code{Document.UnitSystem}, an enumeration of the 10 schemas, saved in
+  \file{Document.xml} as an index (\code{3} = Imperial decimal), read back after reopening\\
+What is stored & always mm: a 2\,in box saves \code{Length = 50.8}\\
+Who switches the display & the GUI, when a document becomes active (\file{Gui/Application.cpp}), unless
+  \code{IgnoreProjectSchema} is set; headless nothing switches\\
+Decimals & \emph{one} global setting (\code{Units/Decimals}, default 2); no Python setter, and the per-document switch
+  does not touch it\\
+Imperial decimal, 2 decimals & $\tfrac18$\,in shows \code{0.13 in}, 0.001\,in shows \code{0.00 in}: too coarse\\
+US customary (the other inch schema) & 0.5\,mm shows \code{19.69 thou}, 48\,in shows \code{1.33 yd}; a 36\,in
+  dimension on a drawing reads \code{1.00 yd}: unusable for parts\\
+Building US (feet--inches) & fractions to $\tfrac18$, 0.5\,mm shows \code{0}\\
+Typed input & \code{1/4 in}, \code{1/4"}, \code{2' 3"} parse; \code{1 1/2 in} and \code{3/8in + 2mm} do not\\
+TechDraw dimension text & follows the \emph{global} schema at recompute: \code{914.40 mm}, \code{36.00 in},
+  \code{1.00 yd} or \code{3'} for the same edge; format \code{\%.2w}\\
+\bottomrule
+\end{tabularx}
+\end{center}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\hsize=1.1\hsize}X>{\hsize=0.9\hsize}X@{}}
+\toprule
+New project: check & Result\\
+\midrule
+Numbers & 13 numbers from \code{JsonNumberSource.allocate}, one parent each; \emph{family} numbers (subs under the
+  top's parent) collide, because the parent counters are per document type\\
+Assembly linking part files, headless & works: save the assembly first, then one \code{App::Link} per instance;
+  reopening the top loaded all 7 files, no broken link, \code{UnitSystem} kept\\
+Assembly BOM of the result & quantities right (2, 3, 4, 4); each part also lists its \code{Body} (the walker of
+  \eref{PDM-06} drops bodies)\\
+Empty drawing per item (\code{new\_drawing} on a link to the model) & works, with ``Source shape is Null'' warnings
+  while the part is empty; the drawing file's only XLink is its model, so \code{drawing\_of} can be read back\\
+\quad its title block & company, units (\code{inch}), standard, projection and tolerances filled; \textbf{P/N blank and
+  title ``Model''}: \code{part\_of} does not follow an \code{App::Link} to another file\\
+Template switch (ANSI B $\rightarrow$ ISO A3) & setting \code{Template} \textbf{drops every filled field}; only the fill
+  observer's merge (\code{\_ensure\_variant}) keeps them\\
+Check-in of 13 files as WIP~01 & works; FreeCAD left an \file{.FCBak} beside each work file (the GUI turns backups off for
+  vault files, the wizard must too)\\
+Out of date, by recorded version & after a side-rail change: only the side rail's drawing is out of date (exact)\\
+\code{release\_check.where\_used} of the side rail & lists the assemblies \emph{and} three drawings (they link a file
+  that links it): the tree must keep drawings out of the structure\\
+Drawing number with a suffix (PDM-07 Q4) & \code{\ldots-001-DWG} is read as revision \code{DWG} and stripped to the part's
+  key; \code{\ldots-001.DWG} is refused by the parser\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Four findings to act on.} (1) Inch needs three decimals while mm wants two, and FreeCAD has one global
+setting: the document switch must set decimals too (a small \code{[BW]} change). (2) Only \emph{Imperial decimal} suits
+inch parts; the vault must never offer US customary. (3) The drawing filler must follow a link into the model's file,
+or a drawing kept in its own file (as the vault wants it) gets no P/N. (4) A drawing key with a suffix needs explicit
+support in \file{numbering.py}; the form is \eref{PDM-07}'s to settle (Q4 there), and this plan only needs the
+lookup \emph{drawing of P/N} to work.
+
+%----------------------------------------------------------------------
+\subsubsection*{2. A --- Metric and inch}
+
+\paragraph{Theory: units are a view, not data.} Every length is stored in millimetres, so a value $v$ (mm) is shown in
+unit $u$ with $d$ decimals as $\mathrm{round}(v/u, d)$, with $u = 1$ for mm and $u = 25.4$ for inch (exact by
+definition since 1959). Converting loses nothing; only the \emph{display} rounds, with a worst-case error
+\[
+  e_{\max} = \tfrac12\, u\, 10^{-d}\ \text{mm}:
+  \qquad
+  \begin{array}{@{}l@{\quad}l@{}}
+  \text{mm},\ d=2:\ 0.005\,\text{mm} & \text{in},\ d=2:\ 0.127\,\text{mm}\\
+  \text{in},\ d=3:\ 0.0127\,\text{mm} & \text{in},\ d=4:\ 0.00127\,\text{mm}.
+  \end{array}
+\]
+A machinist reads \code{.125} as $\tfrac18$; at $d=2$ the screen says \code{0.13}, an error of 0.127\,mm, as large as
+a typical $\pm$.005\,in tolerance. So inch documents need $d \ge 3$, and $d = 4$ where ten-thousandths matter (bearing
+fits). Fractions are a second display, $\mathrm{round}(v/u \cdot 2^k)/2^k$ with $k$ from \code{FracInch} (8 = $\tfrac18$),
+useful for lumber and frames, wrong for machined parts. Typed values parse in the unit written (\code{1/4 in} is
+6.35\,mm); a \emph{bare} number in an expression is mm whatever the schema, the one trap the per-document switch
+cannot remove (risks).
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,node distance=4mm and 7mm,
+  b/.style={draw=bwblue!70,fill=bwblue!5,rounded corners=2pt,font=\scriptsize,align=center,minimum height=1.0cm,text width=2.5cm},
+  g/.style={b,draw=bwgreen!80,fill=bwgreen!8},
+  o/.style={b,draw=bworange!80,fill=bworange!8},
+  t/.style={font=\tiny\color{bwgrey},align=center}]
+\node[g] (v) {Vault default\\\texttt{units: mm | in}\\(Vault Settings, CSV)};
+\node[b,right=of v] (d) {New document\\\texttt{UnitSystem} = Standard or Imperial decimal};
+\node[o,right=of d] (a) {Document activated\\schema \emph{and} decimals switch\\(\code{[BW]})};
+\node[b,right=of a] (s) {Shown: Properties, Parameters, Physical, sketches, dimensions};
+\node[b,below=7mm of d] (dr) {New drawing\\sheet, tolerance block, format by unit};
+\node[b,below=7mm of a] (sm) {Sheet-metal rules\\gauge label, $T$ in the unit};
+\node[b,below=7mm of s] (fr) {Frame and lumber\\inch families, fractions};
+\draw[->] (v) -- (d); \draw[->] (d) -- (a); \draw[->] (a) -- (s);
+\draw[->] (v.south) |- (dr.west);
+\draw[->] (a) -- (sm); \draw[->] (a.south east) -- (fr.north west);
+\node[t,above=1mm of d] {override: the document's own setting};
+\node[t,above=1mm of s] {stored: always mm};
+\end{tikzpicture}
+\caption{Where the unit choice comes from and what follows it. Green is the vault's setting, orange the one upstream
+change.}
+\label{fig:pdm09-units}
+\end{figure}
+
+\paragraph{Design.}
+\begin{itemize}[nosep]
+  \item \textbf{The vault default} is the \code{units} setting that \file{drawing\_standards.json} already has (DRW-01:
+        \code{mm} or \code{in}, in Vault Settings and the CSV). It widens from ``what the title block says'' to ``what new
+        documents use''. The Create Vault wizard asks it on its first page.
+  \item \textbf{Two profiles, nothing else.} \code{mm} $\mapsto$ \emph{Standard (mm, kg, s, \textdegree)}, 2 decimals;
+        \code{in} $\mapsto$ \emph{Imperial decimal (in, lb)}, 3 decimals (question~2). US customary, feet--inches and the
+        rest stay available in FreeCAD's own menu but are never set by BruceWorx.
+  \item \textbf{The override} is the document's own \code{UnitSystem}, set when BruceWorx creates a document (New Part,
+        New Assembly, New Drawing, the wizard) from the vault or the project, and changed from the status bar's unit
+        button as today. The status-bar readout gains ``inch'' or ``mm'' beside the vault name, and a document whose units
+        differ from its vault's shows them in the Vault tab's header (the ``in'' badge in figure~\ref{fig:pdm09-tree}).
+  \item \textbf{Decimals per unit.} \code{[BW]} in \file{Gui/Application.cpp}: when the active document switches the
+        schema, decimals come from \code{Units/DecimalsMetric} (2) or \code{Units/DecimalsInch} (3) by the schema's
+        length unit; the pack writes both and keeps \code{IgnoreProjectSchema} off. About 15 lines, an upstream candidate
+        (upstream has one decimals setting for every schema).
+  \item \textbf{Drawings.} The vault's drawing standards get a pair of profiles: sheet and tolerances for mm (ISO A3 or
+        ANSI B with $\pm$0.5/0.25/0.1\,mm, as DRW-01) and for inch (ANSI B, X.X $\pm$.1, X.XX $\pm$.01, X.XXX $\pm$.005,
+        angles $\pm$1\textdegree), surface finish in $\mu$m or $\mu$in (already done). A new drawing takes the profile of
+        its \emph{model's} units; the dimension format is \code{\%.2w} for mm and \code{\%.3f} for inch (ASME: trailing
+        zeros to the tolerance's places). TechDraw cannot drop the leading zero (\code{.250}, ASME inch); a \code{[BW]}
+        option in \code{formatValueToSpec} is question~3. Changing a drawing's units later goes through the fill observer,
+        which keeps filled and hand-typed fields (finding: a bare template switch loses them).
+  \item \textbf{Sheet metal and lumber} (\S\ref{sec:mod06-plan}, \S\ref{sec:mod07-plan}). Rules stay in mm with the gauge
+        as an alias (decided); in an inch document the rule list reads ``16\,ga (0.060\,in)'' and $T$, $R$ and the relief
+        show in inch through the schema. Lumber keeps its nominal names and actual sizes; an inch document shows
+        $1.5\times3.5$\,in, and its stock lengths and kerf (already per vault in feet and inches) need no change.
+  \item \textbf{Mixed assemblies} need nothing: an inch part linked into a mm assembly is the same millimetres, shown
+        in the assembly's units while the assembly is active.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{3. B --- The product tree with drawings}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\linewidth]{fig/pdm09_tree.png}
+\caption{Mock: the Vault tab's \emph{Structure} view (left), the menu of a row, and why its drawing is out of date. The
+list view of today's Vault card stays as \emph{List}. Light mode; the dark one follows the panel's tokens.}
+\label{fig:pdm09-tree}
+\end{figure}
+
+\paragraph{Where it lives.} In the \textbf{Vault tab} of the right panel (\eref{UIX-12}; the tab is registered but still
+a placeholder, and the floating Vault card retires into it). A segmented switch at its top chooses \emph{List} (the
+card's list, unchanged) or \emph{Structure}. The root is picked at the top: a project (section~4), or any assembly; it
+follows the Browser when an assembly is selected there. The footer offers \emph{Open top}, \emph{Bill of materials}
+(\eref{PDM-06}) and \emph{Update drawings\ldots}, which checks out each out-of-date drawing, opens it, recomputes and
+offers the check-in. A row's menu adds \emph{Open drawing}, \emph{Update drawing}, \emph{Create drawing}, \emph{Where
+used\ldots} and \emph{Show in list}. Filter chips: \emph{Needs a drawing}, \emph{Out of date}, \emph{Checked out}; an
+assembly row that hides a problem below it carries the count.
+
+\paragraph{Where the rows come from.} The structure of revision $a$ is the per-revision BOM of \eref{PDM-06}
+(lines to child items with quantity, resolved to child revisions). Until PDM-06 is built, and for versions checked in
+before it, the rows come from the checked-in file's links (\code{release\_check.components\_of}), with the quantity
+counted from the links, marked ``from links''. Drawings never become rows: an item's drawings are
+\code{vault.drawings\_of(p)} (the \code{drawing\_of} link of \eref{PDM-02}), shown in the row's \emph{Drawing} cell. A
+part file that still holds its own TechDraw page (DRW-01's \emph{New Drawing} puts the page there today) shows
+``in model'' in that cell, so nothing looks missing that is not. The tree is rebuilt from the journal on every refresh,
+$O(|R|+|E|)$ as in \S\ref{sec:pdm06-plan}, and drawn lazily, one level at a time.
+
+\paragraph{Theory: when is a drawing out of date?} A drawing $D$ of model $m$ is right when it was last made from the
+model as it is now. A time comparison (``$D$ checked in before $m$'') is not that: a drawing checked in later only to fix
+a note was still made from whatever model its work folder held, and a drawing made from an older model fetched with
+\emph{Get Revision} would look current. So the check-in records what the drawing was made from. Let $v(x)$ be the
+latest version (SHA-256) of item $x$ and $C(D)$ the closure of files $D$ links to (for a part drawing, the part; for an
+assembly drawing, the assembly and everything under it). When $D$ is checked in, its event records
+\[
+  r_D = \{\,x \mapsto b(x) : x \in C(D)\,\},
+\]
+where $b(x)$ is the base version of $x$'s work copy (\code{state.json}), exactly the file FreeCAD had open. Then
+\[
+  \mathrm{state}(D) =
+  \begin{cases}
+    \text{missing} & \text{if } m \text{ needs a drawing and } \mathrm{drawings}(m) = \varnothing,\\
+    \text{out of date} & \text{if } \exists\, x \in C(D):\ r_D(x) \ne v(x),\\
+    \text{current} & \text{otherwise.}
+  \end{cases}
+\]
+For a released drawing, $v$ is the \emph{released} version of each $x$. Not every new version matters: a description
+edit changes the file's hash but not one line on the sheet (the fill observer refreshes the title block by itself).
+So each part check-in also records a geometry fingerprint $g$ (volume, area, centre of mass and bounding box, rounded
+to $10^{-6}$ relative, the same mass properties \eref{PDM-08} uses to check a migration), and a drawing whose $r_D(x)$
+differs only where $g$ is equal shows ``metadata only'' in grey instead of orange. Drawings checked in before this
+epic have no $r_D$; they fall back to the time comparison and say so.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,x=1.6cm,y=-1.0cm,
+  v/.style={circle,draw=bwblue,fill=white,inner sep=1.4pt,font=\tiny,minimum size=6mm},
+  d/.style={circle,draw=bworange,fill=white,inner sep=1.4pt,font=\tiny,minimum size=6mm},
+  t/.style={font=\scriptsize,anchor=east},
+  n/.style={font=\tiny\color{bwgrey},align=center}]
+\node[t] at (-0.3,0) {Side rail (part)};
+\node[t] at (-0.3,1.6) {Its drawing};
+\draw[black!25] (-0.2,0) -- (6.2,0); \draw[black!25] (-0.2,1.6) -- (6.2,1.6);
+\node[v] (p1) at (0.3,0) {01}; \node[v] (p2) at (2.2,0) {02}; \node[v] (p3) at (3.8,0) {02$'$};
+\node[d] (d1) at (1.1,1.6) {01}; \node[d] (d2) at (5.3,1.6) {01$'$};
+\draw[->,bworange] (d1) -- node[n,left=1pt,pos=0.4] {$r_D$} (p1);
+\draw[->,bworange] (d2.north west) .. controls (3.2,1.0) and (1.2,0.9) .. node[n,below=1pt,pos=0.5] {$r_D = 01$} (p1.south east);
+\draw[->,black!35,dashed] (d2.north) -- node[n,right=2pt,pos=0.45,text width=2.6cm,align=left] {had it been made from 02: ``metadata only''} (p2.south east);
+\node[n] at (0.3,-0.6) {created}; \node[n] at (2.2,-0.65) {geometry\\changed}; \node[n] at (3.8,-0.65) {description\\only};
+\node[n] at (1.1,2.25) {made from 01};
+\node[n] at (5.3,2.35) {note fixed, checked in last;\\its work copy still held part 01};
+\end{tikzpicture}
+\caption{Why the drawing records the version it was made from. Its second check-in comes after every part version, so a
+time rule calls it current; but it was made from part 01, and the geometry changed in 02, so it is out of date. Had it
+been made from 02, only the description would differ (same fingerprint): ``metadata only''.}
+\label{fig:pdm09-outofdate}
+\end{figure}
+
+\paragraph{Journal.} The check-in event gains an optional \code{made\_from} map (P/N $\rightarrow$ SHA-256) and, for
+parts, \code{fingerprint}; older journals replay unchanged. Both come from the FreeCAD side at check-in (it has the
+document open and the workspace's bases), so \file{pdm\_folder.py} stays free of FreeCAD. The release checklist
+(\eref{PDM-05}) gains a line ``drawing current'' that blocks a release of a part whose drawing is out of date
+(question~6).
+
+%----------------------------------------------------------------------
+\subsubsection*{4. C --- New Project}
+
+\paragraph{What a project is.} The vault has \emph{programs} (the numbering prefix: \code{LE}, \code{BW}) and items;
+work files live flat in \file{work/<user>/<P/N>.FCStd} and are named by number, so a folder per project would fight the
+vault's layout. Four options:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.1cm}XX@{}}
+\toprule
+A project is \ldots & For & Against\\
+\midrule
+a program code & exists today; numbers show it & a program is a product line with many projects (LE has the pedestal,
+  the arm, \ldots); programs are retired, never deleted\\
+a folder & familiar & the vault has no folders: files are named by P/N, the work folder is flat\\
+a record in vault settings & edited with the other settings & settings are one file one writer at a time, and they
+  have no history\\
+\textbf{a journal record} (proposed) & replays like every item; has history; one writer per file, sync-safe & a new
+  operation in the contract\\
+\bottomrule
+\end{tabularx}
+\end{center}
+Proposed: an operation \code{create\_project} with a code, name, program, top assembly P/N, units and drawing profile,
+and \code{update\_project} to rename or close it. The project's \emph{structure} is never stored twice: it is the top
+assembly's BOM, so it changes when the assembly does. A project is what the Structure view's picker lists, what the
+Start page shows as recent work, and the units default for new documents in it (sitting between the vault's and the
+document's).
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\linewidth]{fig/pdm09_wizard.png}
+\caption{Mock: \emph{New Project} as a task panel, the right panel's command tab, like Create Vault. Left: name,
+program, units and drawing profile, and the structure typed as indented lines. Right: the preview with numbers, each
+item's drawing, and what will be created. Nothing is reserved or written before \emph{Create project}. Drawings carry their
+part's number, as decided for \eref{PDM-07} (Q4).}
+\label{fig:pdm09-wizard}
+\end{figure}
+
+\paragraph{The structure, as typed.} One line per item; two spaces or a tab per level; \code{x}$n$ is the quantity per
+parent (default 1); a line with children is an assembly; \code{cots} marks a bought part (no drawing); a line that
+starts with a P/N reuses that vault item. A paste from a spreadsheet with columns \emph{level, name, qty, type} is read
+the same way, and \emph{Load CSV\ldots} takes the file. The text maps to a rooted tree $T$; the same name in two places
+is the same item (a bolt in two sub-assemblies), so $T$ is a DAG, and indentation cannot make a cycle. The preview shows
+$Q_t$ (the roll-up of \S\ref{sec:pdm06-plan}) as ``15 parts in all'', so a mistyped quantity shows before anything is
+made.
+
+\paragraph{What Create does.} In this order, so that a failure leaves nothing half-made in the vault:
+\begin{enumerate}[nosep]
+  \item \textbf{Check} (preview, nothing written): names, quantities, reused P/Ns exist and are not obsolete, program
+        and document types not retired.
+  \item \textbf{Write files in staging} (\file{<vault>/.import}, as the import does), children first: a part is an
+        \code{App::Part} with a body and the vault's part properties (\file{partprops.py}); an assembly is an
+        \code{Assembly::AssemblyObject} saved \emph{before} its links are made (spike), with one \code{App::Link} per
+        instance placed in a row, the first child grounded; a drawing is its own file with a hidden link to its model and
+        a page from the vault's template for the project's units, with front, top and right views that fill in once the
+        part has a shape. Every document gets the project's \code{UnitSystem}; backups off.
+  \item \textbf{Verify}: reopen the top from staging; every link resolves and every count matches $T$.
+  \item \textbf{Allocate and commit}: reserve the numbers (flat, one parent each; family numbers collide, see the spike),
+        rename the staged files to \file{<P/N>.FCStd} and rewrite their links (\code{rewrite\_links}, as the import
+        does), write the P/N into each file, then \code{create\_item} for every item and drawing,
+        \code{create\_project}, and one check-in per file with the comment, all WIP~01. A file that fails here leaves its
+        number unused and is listed, like \code{run\_import}.
+  \item \textbf{Open} the top assembly and show its Structure.
+\end{enumerate}
+The engine is a new FreeCAD-free module \file{bruceworx/project\_setup.py} (parse, check, plan numbers, the order of work)
+with a small FreeCAD side for steps 2--3 that can run headless, so the same thing is \code{bw-hooks project new
+--structure cart.txt} from the command line. Entry points: \emph{File $\rightarrow$ New Project\ldots}, the Start page,
+Cmd-K, and the Structure view's empty state.
+
+%----------------------------------------------------------------------
+\subsubsection*{5. Build order and effort}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+\# & Step & Effort\\
+\midrule
+1 & Units: vault default used for new documents; the two profiles; \code{[BW]} decimals per unit; pack entries;
+  status-bar readout; tests & 1.5\,d\\
+2 & Drawings by unit: mm and inch profiles in the drawing standards (CSV, Vault Settings), dimension format; fix
+  \code{part\_of} to follow links; template change through the observer & 1.5\,d\\
+3 & Sheet-metal and lumber labels in inch documents (with \eref{MOD-06} and \eref{MOD-07}, which are building) & 0.5\,d\\
+4 & Journal: \code{made\_from} and \code{fingerprint} on check-in, \code{create\_project}; contract tests; OpenAPI & 1\,d\\
+5 & Structure view: tree model (BOM, or links until \eref{PDM-06}), drawing states, filters, menu, \emph{Update drawings}
+  in the Vault tab & 2.5\,d\\
+6 & \file{project\_setup.py}: parser (text, paste, CSV), check, plan; FreeCAD-free tests & 1\,d\\
+7 & File writer (staging, verify, commit) and the New Project task panel & 2.5\,d\\
+8 & Release checklist line ``drawing current''; acceptance on a scratch vault, then a real one; write-up & 1\,d\\
+\midrule
+ & Total & 11.5\,d\\
+\bottomrule
+\end{tabularx}
+\end{center}
+Steps 1--3 stand alone and help the drawings now being built; step~5 needs the Vault tab of \eref{UIX-12} and is exact
+once \eref{PDM-06} keeps BOMs per revision. \emph{Acceptance:} a project typed as six lines becomes numbered part,
+assembly and drawing files checked in as WIP~01 in inch; changing one part marks exactly its drawing (and the drawings
+of the assemblies above it) out of date in the Structure view.
+
+\paragraph{Risks.} \emph{Bare numbers in expressions} are millimetres in an inch document (\code{=2} is 2\,mm); the
+Parameters tab will show each expression's unit, and the sketcher's typed values already carry the schema's unit
+\verify. \emph{Global schema}: two documents open side by side show the active one's units, so a mm assembly with an
+inch part open in another tab switches as you click; this is FreeCAD's behaviour and stays. \emph{Upstream change}:
+the decimals rule touches \file{Gui/Application.cpp} (one \code{[BW]} block). \emph{Empty drawings} warn in the report
+view until their part has a shape; the warning is harmless but noisy, so the views may instead be added on first
+open (question~8). \emph{Number gaps}: a failed commit leaves numbers unused, as an import does.
+
+%----------------------------------------------------------------------
+\paragraph{Your answers (24 Oct).} Recommendations for 1--5, 7, 9 and 11. Three changes:
+\textbf{6} an out-of-date drawing \emph{warns} at release (a checklist line, not a block);
+\textbf{8} the wizard creates \emph{blank} drawings (sheet and filled title block), with an option to insert the views
+(\emph{Insert views} on the drawing, and a wizard tick box, off by default);
+\textbf{10} a name typed twice is marked with a \emph{duplicate} bubble in the preview: you keep it as one item used
+twice, or rename a line to make two items.
+
+\subsubsection*{Questions before PDM-09 starts}
+
+\begin{enumerate}
+  \item \textbf{Three layers of units.} Vault default, project, document --- or only vault and document as you said?\\
+        \emph{Recommendation:} keep your two, and let a project store the units it was created with, so its new parts
+        follow it in a mm vault with one inch project. It costs one field.
+  \item \textbf{Inch decimals.} 3 decimals (\code{.125}) or 4 (\code{.1250}) on screen?\\
+        \emph{Recommendation:} 3 on screen and on drawings; 4 can be set per dimension where a fit needs it.
+  \item \textbf{ASME leading zero.} ASME inch drawings write \code{.250}; TechDraw writes \code{0.250}. Add a \code{[BW]}
+        option to drop it?\\
+        \emph{Recommendation:} yes, on by default for inch drawings under ASME; it is a few lines and an upstream
+        candidate.
+  \item \textbf{Inch sheets.} Inch drawings on ANSI sheets only, and mm on ISO or ANSI as the vault says?\\
+        \emph{Recommendation:} yes: inch $\rightarrow$ ANSI B with ASME; mm keeps DRW-01's choice (ANSI with mm).
+  \item \textbf{Where the tree lives.} The Vault tab's \emph{Structure} view, or a separate window?\\
+        \emph{Recommendation:} the Vault tab (figure~\ref{fig:pdm09-tree}), with \emph{Open in window} for a big tree
+        later if the panel is too narrow.
+  \item \textbf{Out-of-date drawings and release.} Block a release when a drawing is out of date, or warn?\\
+        \emph{Recommendation:} block, with ``metadata only'' allowed; waivable with a note, like the other checklist
+        lines.
+  \item \textbf{What a project is.} A journal record naming its top assembly (section~4)?\\
+        \emph{Recommendation:} yes; programs stay the numbering prefix, folders stay out of the vault.
+  \item \textbf{Empty drawings.} Create each drawing with its three views (filling in when the part has a shape), or
+        only the sheet and title block, views added on first open?\\
+        \emph{Recommendation:} with views; the warnings are silenced for empty sources.
+  \item \textbf{Assembly drawings.} Is an assembly's drawing out of date when \emph{any} part below it changes geometry,
+        or only when its own file changes?\\
+        \emph{Recommendation:} any part below it (the closure $C(D)$), since its views show them; the chip says which.
+  \item \textbf{Same name, same item.} When a name appears twice in a typed structure, is it one item used twice?\\
+        \emph{Recommendation:} yes, and the preview marks it ``used in 2 places''; rename a line to make two items.
+  \item \textbf{Drawing numbers.} The wizard needs the drawing key of \eref{PDM-07} Q4 (a drawing carries its part's
+        number). The spike shows \code{-DWG} is read as a revision. Settle the form there first?\\
+        \emph{Recommendation:} yes; until it is built the wizard numbers drawings with the drawing document type
+        (\code{03}), as the vault does today.
+\end{enumerate}

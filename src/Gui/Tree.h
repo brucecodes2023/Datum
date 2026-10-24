@@ -67,6 +67,7 @@ class TreeWidget: public QTreeWidget, public SelectionObserver
     Q_PROPERTY(QColor badgeTextColor MEMBER badgeTextColor)  // clazy:exclude=qproperty-without-notify
     Q_PROPERTY(QColor badgeWarnColor MEMBER badgeWarnColor)  // clazy:exclude=qproperty-without-notify
     Q_PROPERTY(QColor badgeAccentColor MEMBER badgeAccentColor)  // clazy:exclude=qproperty-without-notify
+    Q_PROPERTY(QColor badgeErrorColor MEMBER badgeErrorColor)  // clazy:exclude=qproperty-without-notify
     Q_PROPERTY(QColor iconPlateColor MEMBER iconPlateColor)  // clazy:exclude=qproperty-without-notify
 
 public:
@@ -309,6 +310,7 @@ private:
     QColor badgeTextColor;
     QColor badgeWarnColor;
     QColor badgeAccentColor;
+    QColor badgeErrorColor;  // [BW] kind "error" (bruceworx_picktrace error chips)
     QColor iconPlateColor;
 
 public:

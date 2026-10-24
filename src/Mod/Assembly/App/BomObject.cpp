@@ -174,7 +174,9 @@ void BomObject::addObjectChildrenToBom(
     int quantityColIndex = getColumnIndex("Quantity");
     bool hasQuantityCol = hasQuantityColumn();
 
-    size_t siblingsInitialRow = row;
+    // [BW] The rows added at this level. A repeated sibling is merged only into these:
+    // the rows in between belong to an earlier sibling's children (another level).
+    std::vector<size_t> siblingRows;
 
     if (index != "") {
         index = index + ".";
@@ -220,12 +222,12 @@ void BomObject::addObjectChildrenToBom(
             continue;
         }
 
-        if (hasQuantityCol && row != siblingsInitialRow) {
+        if (hasQuantityCol && !siblingRows.empty()) {
             // Check if the object is not already in (case of links). And if so just increment.
             // Note: an object can be used in several parts. In which case we do no want to blindly
             // increment.
             bool found = false;
-            for (size_t i = siblingsInitialRow; i <= row; ++i) {
+            for (size_t i : siblingRows) {  // [BW] this level only
                 size_t idInList = i - 1;  // -1 for the header
                 if (idInList < obj_list.size() && child == obj_list[idInList]) {
 
@@ -244,14 +246,19 @@ void BomObject::addObjectChildrenToBom(
         ++sub_i;
 
         addObjectToBom(child, row, sub_index);
+        siblingRows.push_back(row);  // [BW]
         if (hasQuantityCol && count != 1) {  // [BW]
             setCell(App::CellAddress(row, quantityColIndex), std::to_string(count).c_str());
         }
         ++row;
 
+        // [BW] A part with BomDetail = false is one BOM line (a KiCad board, PCBA).
+        auto* bomDetail = freecad_cast<App::PropertyBool*>(child->getPropertyByName("BomDetail"));
+        bool detailThis = !bomDetail || bomDetail->getValue();
+
         if ((child->isDerivedFrom<AssemblyObject>() && detailSubAssemblies.getValue())
             || (!child->isDerivedFrom<AssemblyObject>() && child->isDerivedFrom<App::Part>()
-                && detailParts.getValue())) {
+                && detailParts.getValue() && detailThis)) {
             addObjectChildrenToBom(child->getOutList(), row, sub_index);
         }
     }

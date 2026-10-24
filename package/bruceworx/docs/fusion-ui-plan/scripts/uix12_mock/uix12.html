@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>UIX-12 property inspector mock</title>
+<script src="points.js"></script>
+<style>
+/* Tokens: src/Gui/Stylesheets/parameters/BruceWorx.yaml and "BruceWorx Dark.yaml" (as in pdm04_mock) */
+:root {
+  --accent: #007aff; --accent-soft: rgba(0,122,255,.14); --accent-line: rgba(0,122,255,.55);
+  --chrome: #e9e9ec; --chrome-2: #f3f3f5; --chrome-line: #d9d9de;
+  --card: rgba(255,255,255,.80); --card-solid: #ffffff; --card-line: rgba(0,0,0,.10);
+  --field: #ffffff; --field-line: #d9d9de; --grid-line: #ebebef;
+  --text: #1d1d1f; --text-2: #6e6e73; --text-3: #86868b;
+  --hover: #e6e6ea; --shadow: 0 6px 24px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.08);
+  --vp: #e0e2e8; --vp-2: #eef0f4; --ok: #1f9d55; --warn: #c27c00; --err: #d93a3f;
+  --badge-bg: rgba(29,29,31,.086); --badge-text: rgba(29,29,31,.67);
+  --halo: rgba(238,240,244,.9); --seg: #ececef; --plate: transparent;
+}
+body.dark {
+  --accent: #0a84ff; --accent-soft: rgba(10,132,255,.22); --accent-line: rgba(10,132,255,.65);
+  --chrome: #232326; --chrome-2: #2a2a2d; --chrome-line: #3a3a3d;
+  --card: rgba(44,44,47,.80); --card-solid: #2c2c2f; --card-line: rgba(255,255,255,.10);
+  --field: #1c1c1e; --field-line: #3a3a3d; --grid-line: #333336;
+  --text: #ececef; --text-2: #a1a1a6; --text-3: #808085;
+  --hover: #38383b; --shadow: 0 8px 28px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.4);
+  --vp: #33353a; --vp-2: #45484f; --ok: #32d74b; --warn: #ffb340; --err: #ff6961;
+  --badge-bg: rgba(236,236,239,.086); --badge-text: rgba(236,236,239,.67);
+  --halo: rgba(51,53,58,.9); --seg: #3a3a3d; --plate: rgba(255,255,255,.10);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; overflow: hidden; }
+body { font: 13px/1.3 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color: var(--text);
+  background: var(--chrome); -webkit-font-smoothing: antialiased; }
+img.i16 { width: 16px; height: 16px; display: block; flex: none; }
+img.i20 { width: 20px; height: 20px; display: block; flex: none; }
+svg.g { width: 16px; height: 16px; stroke: var(--text-2); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.mono { font: 11.5px/1.2 "SF Mono", Menlo, monospace; }
+
+.vp { position: relative; background: radial-gradient(ellipse at 60% 35%, var(--vp-2), var(--vp) 70%); overflow: hidden; }
+.layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+/* Browser: transparent (Nxt look) over the model; text keeps a halo */
+.browser { position: absolute; left: 10px; top: 10px; bottom: 10px; width: 318px; display: flex; flex-direction: column; }
+.bhead { height: 30px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; font-size: 11.5px; font-weight: 700;
+  letter-spacing: .08em; color: var(--text-2); text-shadow: 0 0 4px var(--halo), 0 0 2px var(--halo); }
+.bhead .r { margin-left: auto; display: flex; gap: 10px; }
+.tree { padding: 0 0 6px; flex: none; }
+.row { height: 24px; display: flex; align-items: center; gap: 6px; padding-right: 10px; white-space: nowrap; position: relative; border-radius: 6px;
+  text-shadow: 0 0 4px var(--halo), 0 0 2px var(--halo), 0 0 1px var(--halo); }
+.row .chev { width: 12px; color: var(--text); font-size: 9px; text-align: center; flex: none; }
+.row .meta { color: var(--text-3); font-size: 12px; }
+.row.sel { background: var(--accent-soft); }
+.row.root .lbl { font-weight: 700; }
+.badge { font-size: 11px; padding: 1px 6px; border-radius: 5px; background: var(--badge-bg); color: var(--badge-text); font-weight: 600; flex: none; text-shadow: none; }
+.badge.warn { color: var(--warn); }
+svg.eye { width: 15px; height: 15px; flex: none; }
+.row img.i16 { background: var(--plate); border-radius: 4px; padding: 1px; box-sizing: content-box; margin: -1px 0; }
+
+/* Inspector (UIX-12): a frosted card at the bottom of the Browser column */
+.insp { background: var(--card); border: 1px solid var(--card-line); border-radius: 10px; box-shadow: var(--shadow);
+  backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4); display: flex; flex-direction: column; overflow: hidden; }
+.browser .insp { margin-top: auto; }
+.ihead { display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px 12px; border-bottom: 1px solid var(--card-line); }
+.ihead .t { min-width: 0; }
+.ihead .t b { font-size: 13.5px; display: block; white-space: nowrap; }
+.ihead .t span { font-size: 11.5px; color: var(--text-2); white-space: nowrap; }
+.ihead .r { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.btn { height: 22px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--field-line); background: var(--card-solid); font-size: 11.5px;
+  display: inline-flex; align-items: center; gap: 5px; color: var(--text); white-space: nowrap; }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ibody { padding: 2px 12px 6px; }
+.sec { height: 26px; display: flex; align-items: flex-end; padding-bottom: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--text-3); }
+.sec .r { margin-left: auto; font-weight: 500; letter-spacing: 0; font-size: 11px; color: var(--text-3); }
+.prow { display: grid; grid-template-columns: 96px 1fr; align-items: center; min-height: 28px; gap: 8px; }
+.prow .k { color: var(--text-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .k.lock::after { content: ""; }
+.fld { height: 24px; border-radius: 6px; border: 1px solid var(--field-line); background: var(--field); display: flex; align-items: center; padding: 0 4px 0 8px;
+  font-size: 12.5px; gap: 6px; min-width: 0; }
+.fld .u { color: var(--text-3); }
+.fld .fx { margin-left: auto; font: italic 600 11px Georgia, serif; color: var(--text-3); padding: 0 3px; }
+.fld.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.fld.expr { border-color: var(--accent-line); }
+.fld.expr .fx { color: var(--accent); }
+.fld.ro { background: transparent; border-color: transparent; color: var(--text-2); padding-left: 0; }
+.fld .dd { margin-left: auto; font-size: 8px; color: var(--text-2); padding-right: 4px; }
+.fld .step { margin-left: auto; display: flex; flex-direction: column; font-size: 6px; color: var(--text-3); line-height: 8px; padding-right: 2px; }
+.seg { display: flex; height: 24px; border-radius: 6px; background: var(--seg); padding: 2px; gap: 2px; }
+.seg span { flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 5px; font-size: 11.5px; color: var(--text-2); white-space: nowrap; }
+.seg span.on { background: var(--card-solid); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.15); font-weight: 600; }
+.sw { width: 30px; height: 18px; border-radius: 9px; background: var(--seg); position: relative; }
+.sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.sw.on { background: var(--accent); }
+.sw.on::after { left: 14px; }
+.chip { height: 22px; border-radius: 11px; padding: 0 8px 0 4px; display: inline-flex; align-items: center; gap: 5px; background: var(--badge-bg); font-size: 12px; white-space: nowrap; }
+.chip .ar { color: var(--text-3); font-size: 11px; }
+.swatch { width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--card-line); flex: none; }
+.slider { flex: 1; height: 4px; border-radius: 2px; background: var(--seg); position: relative; }
+.slider i { position: absolute; top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.state { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; }
+.state.wip { background: rgba(255,159,10,.16); color: var(--warn); }
+.ifoot { display: flex; align-items: center; padding: 7px 12px 9px; border-top: 1px solid var(--card-line); font-size: 12px; color: var(--text-2); gap: 6px; }
+.ifoot .more { margin-left: auto; color: var(--accent); font-weight: 600; }
+.note { color: var(--text-3); font-size: 11px; }
+.kv { display: flex; gap: 6px; align-items: baseline; }
+
+/* Callouts for the overview figure */
+.co { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #d2463c; color: #fff; font: 700 12px -apple-system;
+  display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); z-index: 9; }
+.nav { position: absolute; bottom: 12px; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 9px; background: var(--card-solid);
+  border: 1px solid var(--card-line); box-shadow: var(--shadow); }
+.nav span { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
+.nav .vs { width: 1px; height: 18px; background: var(--card-line); margin: 0 3px; }
+.sheet { padding: 18px; display: flex; gap: 16px; align-items: flex-start; }
+.sheet .col { width: 300px; }
+.sheet .cap { font-size: 12px; font-weight: 700; color: var(--text-2); margin: 0 0 8px 4px; letter-spacing: .02em; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const FIG = Q.get("fig") || "browser";
+if (Q.get("theme") === "dark") document.body.classList.add("dark");
+const ic = (n, c = "i16") => `<img class="${c}" src="icons/${n}.svg">`;
+const G = {
+  filter: '<svg class="g" viewBox="0 0 16 16"><path d="M2.5 3.5h11l-4.2 5v4l-2.6 1v-5z"/></svg>',
+  more: '<svg class="g" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12.5" cy="8" r=".9"/></svg>',
+  face: '<svg class="g" viewBox="0 0 16 16" style="width:20px;height:20px"><path d="M2.5 10.5 7 13.5l6.5-4L9 6.5z" fill="var(--accent-soft)" stroke="var(--accent)"/><path d="M2.5 10.5V5L9 1.5v5M13.5 9.5V4L9 1.5"/></svg>',
+  edit: '<svg class="g" viewBox="0 0 16 16" style="width:13px;height:13px"><path d="M3 13l.6-2.8 6.9-6.9a1.4 1.4 0 0 1 2 0l.2.2a1.4 1.4 0 0 1 0 2l-6.9 6.9z"/></svg>',
+  orbit: '<svg class="g" viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6" ry="2.6"/><path d="M8 2v12"/><circle cx="8" cy="8" r="1.2"/></svg>',
+  pan: '<svg class="g" viewBox="0 0 16 16"><path d="M8 1.8v12.4M1.8 8h12.4"/></svg>',
+  zoom: '<svg class="g" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14M5 7h4M7 5v4"/></svg>',
+  fit: '<svg class="g" viewBox="0 0 16 16"><path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/><rect x="5.5" y="5.5" width="5" height="5" rx="1"/></svg>',
+  ruler: '<svg class="g" viewBox="0 0 16 16" style="width:13px;height:13px"><path d="M2 11 11 2l3 3-9 9z M5 8l1.5 1.5M7 6l1 1M9 4l1.5 1.5"/></svg>',
+};
+const EYE = (on = true) => on
+  ? '<svg class="eye" viewBox="0 0 16 16"><path d="M1.2 8s2.6-4.4 6.8-4.4S14.8 8 14.8 8s-2.6 4.4-6.8 4.4S1.2 8 1.2 8z" fill="none" stroke="var(--text)" stroke-width="1.3"/><circle cx="8" cy="8" r="2.4" fill="var(--text)"/></svg>'
+  : '<svg class="eye" viewBox="0 0 16 16" opacity=".45"><path d="M1.2 8s2.6-4.4 6.8-4.4S14.8 8 14.8 8s-2.6 4.4-6.8 4.4S1.2 8 1.2 8z" fill="none" stroke="var(--text-2)" stroke-width="1.3"/><path d="M2.5 13.5 13.5 2.5" stroke="var(--text-2)" stroke-width="1.3"/></svg>';
+
+/* The model render (scripts/mod14_mock/views_mod14.py) with the selection drawn on top. */
+function hull(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of p.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+const path = (pts, close = true) => "M" + pts.map(p => p.join(" ")).join("L") + (close ? "Z" : "");
+function model(job, left, top, scale, overlay) {
+  const J = PTS[job];
+  return `<div class="layer" style="left:${left}px;top:${top}px;transform:scale(${scale})">
+    <img src="${job}.png" style="display:block;width:${J.w}px;height:${J.h}px">
+    <svg style="position:absolute;left:0;top:0" width="${J.w}" height="${J.h}" viewBox="0 0 ${J.w} ${J.h}">${overlay(J)}</svg></div>`;
+}
+const SELFILL = 'fill="var(--accent)" fill-opacity=".28" stroke="var(--accent)" stroke-width="5" stroke-linejoin="round"';
+const bossSel = J => `<path d="${path(hull(J.polys.top.concat(J.polys.bot)))} ${path(J.polys.in)}" fill-rule="evenodd" ${SELFILL}/>`;
+
+/* Browser tree ------------------------------------------------------------------------ */
+const TREE = [
+  [0, "Geofeaturegroup", "Mounting plate", { open: true, badges: [["BW-01-01008-001", ""], ["WIP 02", "warn"]] }],
+  [1, "PartDesign_Body", "Body", { open: true }],
+  [2, "Std_CoordinateSystem", "Origin", { open: false, eye: false }],
+  [2, "PartDesign_Pad", "Base plate", { open: false, meta: "Pad 8 mm" }],
+  [2, "PartDesign_Pad", "Boss", { open: false, meta: "Pad 14 mm", cls: "sel" }],
+  [2, "PartDesign_Hole", "Hole", { open: false, meta: "Ø9 × 2" }],
+  [2, "PartDesign_Fillet", "Fillet", { meta: "R5" }],
+];
+function tree(rows) {
+  return `<div class="tree">${rows.map(([lvl, icon, label, o]) => `<div class="row ${o.cls || ""}" style="padding-left:${4 + lvl * 16}px">
+    <span class="chev">${o.open === true ? "▼" : o.open === false ? "▶" : ""}</span>${EYE(o.eye !== false)}${ic(icon)}
+    <span class="lbl">${label}</span>${o.meta ? `<span class="meta">${o.meta}</span>` : ""}${(o.badges || []).map(([t, k]) => `<span class="badge ${k}">${t}</span>`).join("")}</div>`).join("")}</div>`;
+}
+
+/* Inspector contents ------------------------------------------------------------------ */
+const fld = (v, u = "mm", cls = "") => `<span class="fld ${cls}">${v}${u ? ` <span class="u">${u}</span>` : ""}<span class="fx">fx</span></span>`;
+const dd = v => `<span class="fld">${v}<span class="dd">▼</span></span>`;
+const seg = (opts, on) => `<span class="seg">${opts.map((o, i) => `<span class="${i === on ? "on" : ""}">${o}</span>`).join("")}</span>`;
+const sw = on => `<span class="sw ${on ? "on" : ""}"></span>`;
+const row = (k, v) => `<div class="prow"><span class="k">${k}</span>${v}</div>`;
+const sec = (t, r = "") => `<div class="sec">${t}${r ? `<span class="r">${r}</span>` : ""}</div>`;
+const ro = v => `<span class="fld ro">${v}</span>`;
+const head = (icon, name, sub, btns) => `<div class="ihead">${icon}<div class="t"><b>${name}</b><span>${sub}</span></div><div class="r">${btns}</div></div>`;
+const foot = (left = "") => `<div class="ifoot">${left}<span class="more">All properties ›</span></div>`;
+const appearance = (col, from) => sec("APPEARANCE") +
+  row("Colour", `<span class="kv"><span class="swatch" style="background:${col}"></span><span class="note">${from}</span></span>`) +
+  row("Opacity", `<span style="display:flex;align-items:center;gap:8px"><span class="slider"><i style="right:-2px"></i></span><span class="note">100 %</span></span>`);
+
+const INSP = {
+  pad: () => head(ic("PartDesign_Pad", "i20"), "Boss", "Pad · in Body", `<span class="btn">${G.edit}Edit</span>${G.more}`) +
+    `<div class="ibody">` +
+    sec("SIZE") + row("Distance", fld("14", "mm", "focus")) + row("Taper", fld("0", "°")) +
+    sec("EXTENT") + row("Type", dd("Distance")) + row("Direction", seg(["One side", "Two sides", "Symmetric"], 0)) + row("Flip", sw(false)) +
+    appearance("#a9abb2", "From body") +
+    sec("FEATURE") + row("Sketch", `<span class="chip">${ic("Sketcher_Sketch")}Sketch001<span class="ar">›</span></span>`) + row("Refine", sw(true)) +
+    `</div>` + foot('<span class="note">Undo: Ctrl+Z · one step per change</span>'),
+  fillet: () => head(ic("PartDesign_Fillet", "i20"), "Fillet", "Fillet · in Body", `<span class="btn">${G.edit}Edit</span>${G.more}`) +
+    `<div class="ibody">` + sec("SIZE") + row("Radius", fld("5")) +
+    sec("EDGES", "4 edges") + row("Edges", `<span class="chip">${ic("PartDesign_Fillet")}Edge 1, 2, 5, 8<span class="ar">›</span></span>`) + row("All edges", sw(false)) +
+    appearance("#a9abb2", "From body") + `</div>` + foot(),
+  face: () => head(`<span style="flex:none">${G.face}</span>`, "Face 14", "Plane · of Body", `<span class="btn pri">Edit Boss</span>`) +
+    `<div class="ibody">` + sec("FACE") + row("Surface", ro("Plane, normal +Z")) + row("Area", ro("452.4 mm²")) + row("Height", ro("22 mm above origin")) +
+    sec("MADE BY") + row("Feature", `<span class="chip">${ic("PartDesign_Pad")}Boss<span class="ar">›</span></span>`) + row("Sketch", `<span class="chip">${ic("Sketcher_Sketch")}Sketch001<span class="ar">›</span></span>`) +
+    sec("ON CANVAS") + row("Drag", `<span class="note">Double-click to drag the Boss distance (MOD-14)</span>`) +
+    `</div>` + foot(`<span class="btn">${G.ruler}Measure</span>`),
+  body: () => head(ic("PartDesign_Body", "i20"), "Body", "Body · in Mounting plate", `${G.more}`) +
+    `<div class="ibody">` + sec("SIZE") + row("Extent", ro("80 × 50 × 22 mm")) + row("Volume", ro("36 212 mm³")) + row("Mass", ro("284.3 g · Steel")) +
+    sec("POSITION") + row("Placement", ro("At the part origin")) +
+    sec("APPEARANCE") + row("Material", dd(`<span class="swatch" style="background:#9aa0a8;width:14px;height:14px"></span>Steel, generic`)) + row("Colour", `<span class="kv"><span class="swatch" style="background:#a9abb2"></span><span class="note">From material</span></span>`) +
+    `</div>` + foot(),
+  part: () => head(ic("Geofeaturegroup", "i20"), "Mounting plate", "Part · BW-01-01008-001", `${G.more}`) +
+    `<div class="ibody">` + sec("PART DATA", "vault") +
+    row("Part number", ro("BW-01-01008-001<span class=\"note\">· vault</span>")) + row("Revision", ro('02 <span class="state wip">WIP</span>')) +
+    row("Description", `<span class="fld">Mounting plate, 80 × 50</span>`) + row("Type", seg(["Part", "Assy", "COTS"], 0)) +
+    row("Material", ro("Steel, generic (from bodies)")) + row("Mass", ro("284.3 g (computed)")) + row("Finish", `<span class="fld" style="color:var(--text-3)">e.g. zinc plated</span>`) +
+    row("Vendor", `<span class="fld" style="color:var(--text-3)">—</span>`) +
+    sec("POSITION") + row("Offset", `<span style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">${fld("0", "")}${fld("0", "")}${fld("0", "")}</span>`) +
+    `</div>` + foot(),
+};
+
+/* Figures ----------------------------------------------------------------------------- */
+function browserFig() {
+  const W = 1180, H = 820;
+  document.body.style.cssText += `width:${W}px;height:${H}px`;
+  return `<div class="vp" style="width:${W}px;height:${H}px">
+    ${model("uix12", -60, -95, 0.40, bossSel)}
+    <div class="browser"><div class="bhead">BROWSER<span class="r">${G.filter}${G.more}</span></div>${tree(TREE)}
+      <div class="insp" style="max-height:560px">${INSP.pad()}</div></div>
+    <div class="nav" style="left:640px;transform:translateX(-50%)"><span>${G.orbit}</span><span>${G.pan}</span><span>${G.zoom}</span><span>${G.fit}</span><i class="vs"></i>
+      <span>${ic("DrawStyleShaded", "i20")}</span><span>${ic("view-isometric", "i20")}</span><span>${ic("view-measurement", "i20")}</span></div>
+    ${Q.get("notes") ? [[1, 334, 138], [2, 975, 290], [3, 334, 374], [4, 334, 444], [5, 334, 553], [6, 334, 636], [7, 334, 718], [8, 334, 780]].map(([n, x, y]) => `<span class="co" style="left:${x}px;top:${y}px">${n}</span>`).join("") : ""}
+  </div>`;
+}
+function statesFig() {
+  document.body.style.cssText += "width:1300px;height:470px;background:var(--chrome-2)";
+  const col = (cap, html) => `<div class="col"><div class="cap">${cap}</div><div class="insp">${html}</div></div>`;
+  return `<div class="sheet">${col("A FEATURE (FILLET)", INSP.fillet())}${col("A FACE", INSP.face())}${col("A BODY", INSP.body())}${col("A PART", INSP.part())}</div>`;
+}
+document.getElementById("app").innerHTML = { browser: browserFig, states: statesFig }[FIG]();
+</script>
+</body>
+</html>

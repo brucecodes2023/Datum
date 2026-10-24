@@ -5,7 +5,12 @@ self-contained add-on: it does not modify FreeCAD's C++ sources and it does
 not have to be compiled. Copy the folder out of this repository when the
 add-on is split into its own repo (FCB-P2-01/02 is still open; see below).
 
-Part numbers look like `LE-01-01001-001-A`: `{PROG}-{DT}-{PPPPP}-{SSS}-{REV}`.
+Part numbers look like `LE-01-01001-001`: `{PROG}-{DT}-{PPPPP}-{SSS}`. The
+revision is not part of the number (BW-PDM-03): it belongs to the item in the
+vault (01, 02, ... in work, A at the first release) and is printed next to it
+as `LE-01-01001-001-A`. Numbering files from before that change still issue
+`{PROG}-{DT}-{PPPPP}-{SSS}-{REV}` until migrated (see "Migrating to P/N
+without revision" below); the examples further down show that older form.
 
 ## Layout
 
@@ -225,7 +230,7 @@ Resolution when `--config` is omitted:
 Pass `--config` to keep a counter somewhere else. Do not allocate against the
 example file if you want it to stay at `LE-01-01001-001-A`.
 
-### Ops API later (FCB-P2-03)
+### Ops API (FCB-P2-03)
 
 Callers use `bruceworx.sources.NumberSource`:
 
@@ -238,22 +243,58 @@ Callers use `bruceworx.sources.NumberSource`:
 sub-assembly. A five-digit parent reserves only the next sub-assembly under
 that drawing.
 
-`open_number_source(path)` reads JSON. `open_number_source({"source": "ops",
-"base_url": "https://ops.example/api", "token_env": "BW_OPS_TOKEN"})` returns
-`OpsApiNumberSource`. Building that object is allowed. `allocate` and
-`preview` raise `NotImplementedError` and do not make a network call.
+The numbering file picks the source with its `source` key (`json` when
+absent, the default). `open_number_source(path)` reads it and returns
+`JsonNumberSource` or `OpsApiNumberSource`:
 
-The intended request, for the reader that replaces those two methods:
+```json
+{
+  "source": "ops",
+  "base_url": "https://ops.example/api",
+  "token_env": "BW_OPS_TOKEN",
+  "programs": {"LE": {}},
+  "document_types": {"01": {"name": "Part"}}
+}
+```
+
+`programs` and `document_types` are optional; when present they are what the
+pickers offer (Ops has no listing endpoint). The request, as in
+`docs/pdm-openapi.yaml`:
 
 ```http
 POST {base_url}/part-numbers
-{"program": "LE", "document_type": "01", "revision": "A", "parent": null}
+Authorization: Bearer <value of $BW_OPS_TOKEN>
+{"program": "LE", "document_type": "01", "parent": null}
 
-{"part_number": "LE-01-01001-001-A"}
+{"part_number": "LE-01-01001-001"}
 ```
 
-`parent` is `"01001"` when the caller wants the next sub-assembly only.
-Bearer token from the `token_env` variable (default `BW_OPS_TOKEN`).
+`parent` is `"01001"` when the caller wants the next sub-assembly only. A
+reply in the older `P/N-REV` form is accepted and its revision dropped. With
+no token in the environment nothing is sent. The token only goes over https;
+plain http is accepted for this machine only (tests, a local dev server).
+There is no documented preview endpoint, so `preview` raises
+`NotImplementedError` for the Ops source. The Ops app does not serve
+`/part-numbers` yet; the tests use a local stub server.
+
+### Migrating to P/N without revision (BW-PDM-03)
+
+```python
+from bruceworx.sources import migrate_numbering_file
+migrate_numbering_file("path/to/numbering.json")
+```
+
+The `format` becomes `{PROG}-{DT}-{PPPPP}-{SSS}`, each program's `revision`
+moves to a `migrated` record, and every counter stays as it was, so the next
+number is the one the old file would have issued without `-REV`. The old
+file is kept once as `numbering.json.pre-pdm03`. Running it again changes
+nothing. A migrated file refuses `--revision`.
+
+`bruceworx.numbering.migrate_labels(doc)` does the same for a document's
+labels and `PartNumber` properties (`LE-01-01001-001-A` becomes
+`LE-01-01001-001`; free-form labels are left alone) and returns the dropped
+revisions; it does not save. `migrate_part_number(text)` is the rule for one
+number.
 
 ## Macro
 

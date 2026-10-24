@@ -268,8 +268,9 @@ INVENTORY = [
         "DocumentTabPos",
         "int",
         1,
-        0,
-        note="Document tabs on top (0 North); stock is 1, South. [BW] MainWindow.cpp.",
+        1,
+        note="Document tabs at the bottom (1 South, the user's choice 24 Oct; 0 puts them in the title row "
+        "on top). Preferences > BruceWorx > Document tabs. [BW] MainWindow.cpp.",
     ),
     _e("BaseApp/Preferences/Themes", "ThemeAccentColor1", "uint", None, rgba(0, 122, 255), rgba(10, 132, 255)),
     _e("BaseApp/Preferences/Themes", "ThemeAccentColor2", "uint", None, rgba(90, 200, 250), rgba(64, 156, 255)),

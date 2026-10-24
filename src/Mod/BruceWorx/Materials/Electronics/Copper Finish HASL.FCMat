@@ -1,0 +1,17 @@
+---
+# BruceWorx electronics materials (ECD-06). Values are typical; check a datasheet for precise work.
+General:
+  UUID: "42226aec-f5df-4ee3-9202-dcc968761a91"
+  Author: "BruceWorx"
+  License: "LGPL-2.1-or-later"
+  Name: "Copper Finish HASL"
+  Description: "Hot-air solder levelled pad finish, tin (appearance only; the pads stay PCB Copper)."
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3200, 0.3200, 0.3280, 1.0)"
+    DiffuseColor: "(0.8000, 0.8000, 0.8200, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.9000, 0.9000, 0.9000, 1.0)"
+    Transparency: "0.0"

@@ -8,14 +8,15 @@ This module adds the BruceWorx page to that stack and shows it instead of
 page 1, so the Start tab, its close button and ShowOnStartup stay stock.
 
 * Left: New (Part, Assembly, Drawing, Sketch, Simulation study), Open and
-  Import, then the vault box. The New buttons do what the stock buttons do:
-  Std_New, the workbench, then its first command. The vault box reads the
-  folder vault named by Preferences/BruceWorx/VaultPath
-  (addons/BruceWorx/bruceworx/pdm_folder.py): checked out to me, waiting for
-  review, released this week, with links to Import files… and Settings…
-  (task dialogs in bruceworx_vaultwizard). Without one it says "No vault
-  open" and links to Create Vault and to picking the vault folder; picking a
-  folder that is not a vault opens Create Vault on it.
+  Import, then one line for the vault: its name (Preferences/BruceWorx/VaultPath)
+  with a menu to open, create, import into, configure or close a vault (task
+  dialogs in bruceworx_vaultwizard). Picking a folder that is not a vault
+  opens Create Vault on it. The New buttons do what the stock buttons do:
+  Std_New, the workbench, then its first command.
+* Right, with a vault open: My work (PDM-04 plan, 23 Oct): files checked out
+  to me, waiting for review, and newer in the vault than my work copy, read
+  with bruceworx/pdm_workspace.py as the actor pinned for the vault; a row
+  opens the work copy, fetching it first when there is none.
 * Right: the recent files (BaseApp/Preferences/RecentFiles, MRU0...) as cards
   with the thumbnail from the .FCStd zip, then as a table with part number,
   revision, lifecycle state, date and location. P/N, revision and state are
@@ -36,6 +37,7 @@ Preferences/BruceWorx/StartPage (default on). Off shows the stock page again.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import re
 import threading
@@ -248,14 +250,66 @@ def vault_summary(items, events, actor: str, now: _dt.datetime, eco_items=None) 
 
 
 def vault_signature(root: str):
-    """Changes whenever a journal file changes: the cache key for the vault."""
+    """Changes whenever a journal file or a work folder's state changes: the cache key for the vault."""
     folder = os.path.join(root, "journal")
     try:
         names = sorted(n for n in os.listdir(folder) if n.endswith(".jsonl"))
-        return tuple((n, os.stat(os.path.join(folder, n)).st_mtime, os.stat(os.path.join(folder, n)).st_size)
-                     for n in names)
+        sig = [(n, os.stat(os.path.join(folder, n)).st_mtime, os.stat(os.path.join(folder, n)).st_size)
+               for n in names]
     except OSError:
         return ()
+    work = os.path.join(root, "work")
+    try:
+        actors = sorted(os.listdir(work))
+    except OSError:
+        actors = []
+    for actor in actors:
+        state = os.path.join(work, actor, ".bw", "state.json")
+        try:
+            sig.append((state, os.stat(state).st_mtime))
+        except OSError:
+            pass
+    return tuple(sig)
+
+
+MY_WORK_SECTIONS = (
+    ("checked_out", "Checked out to me"),
+    ("in_review", "Waiting for review"),
+    ("newer", "Newer in the vault"),
+    ("ecos_open", "ECOs open"),  # PDM-05: bruceworx_changes.my_work_rows
+)
+
+
+def work_row(status) -> dict:
+    """A My work row from a pdm_workspace.FileStatus."""
+    return {
+        "pn": status.part_number,
+        "display": status.display,
+        "description": status.description,
+        "status": status.label,
+        "code": status.code,
+        "path": status.path,
+        "kind": status.item_type or "part",
+    }
+
+
+def my_work_sections(snapshot) -> list:
+    """[(title, rows)] for the non-empty My work groups of a vault snapshot, in page order."""
+    work = (snapshot or {}).get("my_work") or {}
+    return [(title, work.get(key, [])) for key, title in MY_WORK_SECTIONS if work.get(key)]
+
+
+def pinned_actor(ref_path: str, saved_for) -> str:
+    """The actor pinned for this vault (bruceworx_vaultclient saves it per vault id), or "".
+
+    saved_for(vault_id) returns the saved actor; reading the ref file is cheap (a small JSON).
+    """
+    try:
+        with open(ref_path, encoding="utf-8") as handle:
+            vault_id = json.load(handle).get("vault_id", "")
+    except (OSError, ValueError):
+        return ""
+    return saved_for(vault_id) if vault_id else ""
 
 
 def find_vault_ref(path: str) -> str:
@@ -269,11 +323,14 @@ def find_vault_ref(path: str) -> str:
     return os.path.join(path, refs[0]) if refs else ""
 
 
-def read_vault(path: str) -> dict:
-    """A snapshot of the vault for the page (replays the journal; worker thread)."""
+def read_vault(path: str, actor: str = "") -> dict:
+    """A snapshot of the vault for the page (replays the journal; worker thread).
+
+    actor is the identity pinned for this vault (see pinned_actor); "" uses user@mac.
+    """
     from bruceworx.pdm_folder import FolderVault  # the hooks add-on
 
-    vault = FolderVault(os.path.expanduser(path))
+    vault = FolderVault(os.path.expanduser(path), actor=actor or None)
     status = vault.status()
     events = [(e.op, e.at, e.args) for e in vault._read_events()]
     ecos = {num: list(eco.items) for num, eco in vault.ecos.items()}
@@ -287,7 +344,26 @@ def read_vault(path: str) -> dict:
                   for row in status["items"]},
         "missing": len(status.get("missing_objects", [])),
         "problems": len(status.get("problems", [])),
+        "my_work": _my_work(vault),
     }
+
+
+def _my_work(vault) -> dict:
+    try:
+        from bruceworx.pdm_workspace import Workspace
+    except ImportError:  # an older hooks add-on
+        return {}
+    work = Workspace(vault).my_work()
+    out = {key: [work_row(st) for st in getattr(work, key, [])] for key, _title in MY_WORK_SECTIONS}
+    for row in out["in_review"]:
+        row["status"] = "In review"  # the reason it is listed, not its file status
+    try:
+        import bruceworx_changes
+
+        out["ecos_open"] = bruceworx_changes.my_work_rows(vault)
+    except Exception:  # noqa: BLE001 -- the page shows the rest
+        pass
+    return out
 
 
 def storage_name(root: str) -> str:
@@ -549,6 +625,54 @@ def _shortcut(command):
     return QtGui.QKeySequence(text).toString(QtGui.QKeySequence.NativeText) if text else ""
 
 
+def open_vault_item(pn: str, path: str = "") -> None:
+    """Open a My work row: its work copy, fetched (read-only, latest) first when there is none."""
+    import FreeCAD
+    import FreeCADGui
+    from PySide import QtWidgets
+
+    try:
+        import bruceworx_vaultclient
+    except ImportError:
+        bruceworx_vaultclient = None
+    # The vault client offers a check-out when the file can be checked out.
+    if bruceworx_vaultclient is not None and bruceworx_vaultclient.open_from_vault(pn):
+        return
+    if path and os.path.isfile(path):
+        open_file(path)
+        return
+    vault_path = FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
+    try:
+        from bruceworx.pdm_folder import FolderVault
+        from bruceworx.pdm_workspace import Workspace
+
+        vault = FolderVault(os.path.expanduser(vault_path), actor=_actor_for(vault_path) or None)
+        path = Workspace(vault).get_latest(pn)
+    except Exception as exc:
+        QtWidgets.QMessageBox.warning(FreeCADGui.getMainWindow(), "Open from vault", f"{pn}: {exc}")
+        return
+    open_file(path)
+
+
+ACTORS_PATH = "User parameter:BaseApp/Preferences/BruceWorx/VaultActors"
+
+
+def _actor_for(path: str) -> str:
+    """The actor bruceworx_vaultclient pinned for the vault at path, or ""."""
+    import FreeCAD
+
+    ref = find_vault_ref(path)
+    group = FreeCAD.ParamGet(ACTORS_PATH)
+    return pinned_actor(ref, lambda vault_id: group.GetString(vault_id, "")) if ref else ""
+
+
+def close_vault(parent=None) -> None:
+    """Stop using the open vault (the vault folder is not touched)."""
+    import FreeCAD
+
+    FreeCAD.ParamGet(PREFS_PATH).SetString("VaultPath", "")
+
+
 def create_vault(parent=None, folder: str = "") -> None:
     """The Create Vault task dialog (bruceworx_vaultwizard); it sets VaultPath itself."""
     import bruceworx_vaultwizard
@@ -616,6 +740,7 @@ class _Loader:
     def __init__(self):
         self.cache = InfoCache()
         self.vault_cache = {}  # path -> (signature, snapshot)
+        self.actors = {}  # path -> the actor pinned for that vault
         self._cond = threading.Condition()
         self._queue = []
         self._thread = None
@@ -623,7 +748,8 @@ class _Loader:
     def request_file(self, path):
         self._put(("file", path))
 
-    def request_vault(self, path):
+    def request_vault(self, path, actor=""):
+        self.actors[path] = actor
         self._put(("vault", path))
 
     def cached_vault(self, path):
@@ -672,7 +798,7 @@ class _Loader:
         if hit and hit[0] == sig:
             return hit[1]
         try:
-            snap = read_vault(path)
+            snap = read_vault(path, self.actors.get(path, ""))
         except ImportError:
             snap = {"error": "The vault needs the BruceWorx hooks add-on"}
         except Exception as exc:
@@ -842,6 +968,39 @@ def _make_classes():
                 used += w
             self.setColumnWidth(len(self.WEIGHTS) - 1, max(width - used, 40))
 
+
+    class WorkTable(Table):
+        """My work: files checked out to me, waiting for review, newer in the vault."""
+
+        COLUMNS = ("PART NUMBER", "DESCRIPTION", "STATUS")
+        WEIGHTS = (1.4, 2.4, 1.6)
+
+        def _open(self, item, _col=0):
+            pn = item.data(0, QtCore.Qt.UserRole + 1)
+            if pn:
+                path = item.data(0, QtCore.Qt.UserRole)
+                QtCore.QTimer.singleShot(0, lambda: open_vault_item(pn, path))
+
+        def fill(self, sections):
+            self.clear()
+            for title, rows in sections:
+                head = QtWidgets.QTreeWidgetItem(self)
+                head.setText(0, f"{title.upper()}  ·  {len(rows)}")
+                head.setFlags(QtCore.Qt.NoItemFlags)
+                head.setFirstColumnSpanned(True)
+                head.setSizeHint(0, QtCore.QSize(0, self.ROW))
+                for row in rows:
+                    item = QtWidgets.QTreeWidgetItem(self)
+                    item.setText(0, row["display"])
+                    item.setIcon(0, _kind_icon(row["kind"]))
+                    item.setText(1, row["description"])
+                    item.setText(2, row["status"])
+                    item.setToolTip(0, row["path"] or "Not in your work folder yet: opening fetches it")
+                    item.setData(0, QtCore.Qt.UserRole, row["path"])
+                    item.setData(0, QtCore.Qt.UserRole + 1, row["pn"])
+                    item.setSizeHint(0, QtCore.QSize(0, self.ROW))
+            self.fit()
+
     class Page(QtWidgets.QWidget):
         """The BruceWorx page in StartView's stack."""
 
@@ -887,12 +1046,16 @@ def _make_classes():
             s.addWidget(importer)
             s.addSpacing(10)
             s.addWidget(label("VAULT", "bwStartCaption", side))
-            self.vault_box = QtWidgets.QFrame(side)
-            self.vault_box.setObjectName("bwStartVault")
-            self.vault_lay = QtWidgets.QVBoxLayout(self.vault_box)
-            self.vault_lay.setContentsMargins(12, 10, 12, 10)
-            self.vault_lay.setSpacing(3)
-            s.addWidget(self.vault_box)
+            # One line: the vault's name; its menu opens, creates, configures or closes a vault.
+            self.vault_button = QtWidgets.QToolButton(side)
+            self.vault_button.setObjectName("bwStartVaultSwitch")
+            self.vault_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            self.vault_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+            self.vault_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            self.vault_button.setCursor(QtCore.Qt.PointingHandCursor)
+            self.vault_menu = QtWidgets.QMenu(self.vault_button)
+            self.vault_button.setMenu(self.vault_menu)
+            s.addWidget(self.vault_button)
             s.addStretch(1)
             started = ItemButton("Getting started", _icon(("help-browser",)), "", side)
             started.clicked.connect(lambda: self.stack.setCurrentIndex(FIRST_START_PAGE))
@@ -912,6 +1075,18 @@ def _make_classes():
             m = QtWidgets.QVBoxLayout(main)
             m.setContentsMargins(24, 18, 24, 18)
             m.setSpacing(14)
+
+            self.work_box = QtWidgets.QWidget(main)
+            w = QtWidgets.QVBoxLayout(self.work_box)
+            w.setContentsMargins(0, 0, 0, 8)
+            w.setSpacing(8)
+            w.addWidget(label("My work", "bwStartTitle", self.work_box))
+            self.work_table = WorkTable(self.work_box)
+            w.addWidget(self.work_table)
+            self.work_empty = label("Nothing is checked out to you, waiting for review or newer in the vault.",
+                                    "bwStartMuted", self.work_box)
+            w.addWidget(self.work_empty)
+            m.addWidget(self.work_box)
 
             head = QtWidgets.QHBoxLayout()
             head.setSpacing(10)
@@ -1040,7 +1215,7 @@ def _make_classes():
                 snap = _loader.cached_vault(path)
                 self.vault = dict(snap, path=path) if snap else {"path": path, "loading": True}
                 if snap is None:
-                    _loader.request_vault(path)
+                    _loader.request_vault(path, _actor_for(path))
             else:
                 self.vault = None
             self._render()
@@ -1132,69 +1307,39 @@ def _make_classes():
             return self.pixmaps[key]
 
         def _render_vault(self):
-            lay = self.vault_lay
-            while lay.count():
-                item = lay.takeAt(0)
-                if item.widget() is not None:
-                    item.widget().deleteLater()
-                elif item.layout() is not None:
-                    sub = item.layout()
-                    while sub.count():
-                        w = sub.takeAt(0).widget()
-                        if w is not None:
-                            w.deleteLater()
-            box = self.vault_box
-
-            def pair(left, right, left_name="bwStartVaultText", right_name="bwStartVaultCount"):
-                row = QtWidgets.QHBoxLayout()
-                row.setSpacing(6)
-                row.addWidget(left if isinstance(left, QtWidgets.QWidget) else label(left, left_name, box))
-                row.addStretch(1)
-                if right is not None:
-                    row.addWidget(right if isinstance(right, QtWidgets.QWidget) else label(right, right_name, box))
-                lay.addLayout(row)
-
             vault = self.vault
+            menu = self.vault_menu
+            menu.clear()
             if vault is None:
-                pair(label("No vault open", "bwStartVaultName", box), None)
-                lay.addWidget(label("Part numbers, check-out and release live in a vault folder.",
-                                    "bwStartMuted", box))
-                lay.itemAt(lay.count() - 1).widget().setWordWrap(True)
-                links = QtWidgets.QHBoxLayout()
-                links.setSpacing(14)
-                links.addWidget(link("Create vault…", lambda: create_vault(self), box))
-                links.addWidget(link("Open vault…", lambda: open_vault(self), box))
-                links.addStretch(1)
-                lay.addLayout(links)
-                return
-            name = vault.get("name") or os.path.basename(vault.get("path", "").rstrip(os.sep)) or "Vault"
-            pair(label(name, "bwStartVaultName", box), link("Change…", lambda: open_vault(self), box))
-            if vault.get("loading"):
-                lay.addWidget(label("Reading the vault…", "bwStartMuted", box))
-                return
-            if vault.get("error"):
-                err = label(vault["error"], "bwStartMuted", box)
-                err.setWordWrap(True)
-                lay.addWidget(err)
-                return
-            summary = vault["summary"]
-            items = summary["items"]
-            pair(label(storage_name(vault.get("root", "")), "bwStartMuted", box),
-                 label(f"{items} item{'s' if items != 1 else ''}", "bwStartMuted", box))
-            lay.addSpacing(6)
-            pair("Checked out to me", str(summary["checked_out"]))
-            pair("Waiting for review", str(summary["in_review"]))
-            pair("Released this week", str(summary["released_week"]))
-            if vault.get("missing"):
-                warn = label(f"{vault['missing']} file(s) still syncing", "bwStartWarn", box)
-                lay.addWidget(warn)
-            links = QtWidgets.QHBoxLayout()
-            links.setSpacing(14)
-            links.addWidget(link("Import files…", lambda: import_files(self), box))
-            links.addWidget(link("Settings…", lambda: vault_settings(self), box))
-            links.addStretch(1)
-            lay.addSpacing(4)
-            lay.addLayout(links)
+                self.vault_button.setText("No vault open  \u25be")
+                self.vault_button.setToolTip("Part numbers, check-out and release live in a vault folder.")
+            else:
+                name = vault.get("name") or os.path.basename(vault.get("path", "").rstrip(os.sep)) or "Vault"
+                self.vault_button.setText(f"{name}  \u25be")
+                where = storage_name(vault.get("root", "")) if vault.get("root") else vault.get("path", "")
+                tip = [where]
+                if vault.get("missing"):
+                    tip.append(f"{vault['missing']} file(s) still syncing")
+                if vault.get("error"):
+                    tip.append(vault["error"])
+                self.vault_button.setToolTip("\n".join(t for t in tip if t))
+            self.vault_button.setIcon(_icon(("BruceWorx_Vault", "folder"), ""))
+            menu.addAction("Open Vault\u2026", lambda: open_vault(self))
+            menu.addAction("Create Vault\u2026", lambda: create_vault(self))
+            if vault is not None:
+                menu.addSeparator()
+                menu.addAction("Import Files\u2026", lambda: import_files(self))
+                menu.addAction("Vault Settings\u2026", lambda: vault_settings(self))
+                menu.addSeparator()
+                menu.addAction("Close Vault", lambda: close_vault(self))
+            # My work: only with a vault that has been read.
+            ready = vault is not None and not vault.get("loading") and not vault.get("error")
+            self.work_box.setVisible(ready)
+            if ready:
+                sections = my_work_sections(vault)
+                self.work_table.fill(sections)
+                self.work_table.setVisible(bool(sections))
+                self.work_empty.setVisible(not sections)
 
         def showEvent(self, event):
             super().showEvent(event)
@@ -1309,6 +1454,8 @@ class _PrefObserver:
     def onChange(self, _group, name):
         from PySide import QtCore
 
+        # A change in a sub-group (e.g. VaultActors/<id>) arrives with no name.
+        name = name or ""
         if name == PREF_NAME:
             QtCore.QTimer.singleShot(0, update)
         elif name in ("VaultPath", "ShowOnStartup") or name.startswith("MRU") or name == "RecentFiles":

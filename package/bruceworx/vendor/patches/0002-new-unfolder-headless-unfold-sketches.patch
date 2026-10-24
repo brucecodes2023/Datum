@@ -1,0 +1,32 @@
+Subject: [BW] New unfolder: unfold sketches without the GUI
+
+getUnfoldSketches set ViewObject.DrawStyle on the bend-line sketch and
+ViewObject.PointSize on the bend-label sketch unconditionally. Without
+the GUI (FreeCADCmd, the release package) ViewObject is None, so an
+unfold with "Generate sketch" and separate layers or bend labels failed.
+edges_to_sketch_object already guards its colours with FreeCAD.GuiUp.
+
+Upstream: shaise/FreeCAD_SheetMetal at cbf6595 (0.8.26). Offered upstream.
+Applies with: patch -p1 -d package/bruceworx/vendor/SheetMetal < this file
+---
+--- a/SheetMetalNewUnfolder.py
++++ b/SheetMetalNewUnfolder.py
+@@ -1579,7 +1579,8 @@
+             existing_sketches,
+             bend_sketch_color,
+         )
+-        bend_lines_doc_obj.ViewObject.DrawStyle = "Dashdot"
++        if bend_lines_doc_obj.ViewObject is not None:  # [BW] None without the GUI
++            bend_lines_doc_obj.ViewObject.DrawStyle = "Dashdot"
+         sketch_objects_list.append(bend_lines_doc_obj)
+     # Inner lines are sometimes not present.
+     if inner_wires:
+@@ -1607,6 +1608,7 @@
+             existing_sketches,
+             bend_label_color,
+         )
+-        bend_labels_doc_obj.ViewObject.PointSize = 0
++        if bend_labels_doc_obj.ViewObject is not None:  # [BW] None without the GUI
++            bend_labels_doc_obj.ViewObject.PointSize = 0
+         sketch_objects_list.append(bend_labels_doc_obj)
+     return sketch_objects_list

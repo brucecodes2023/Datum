@@ -14,6 +14,7 @@ What a new vault holds besides pdm_folder's ref file, objects/ and journal/::
       document_types.json    the document-type codes and names chosen in the wizard
       part_properties.json   the company layer of the part-property schema
                              (partprops.load_schema reads it as the vault layer)
+      drawing_standards.json the title-block settings (bruceworx.drawing_standards)
 
 Steps, in wizard order:
 
@@ -120,6 +121,7 @@ class VaultSetup:
     numbering: NumberingSetup = field(default_factory=NumberingSetup)
     properties: list = field(default_factory=list)  # part_properties.json entries
     make_default: bool = True  # becomes BruceWorx/VaultPath (done by the caller)
+    standards: dict = field(default_factory=dict)  # drawing standards, setting -> text (defaults for the rest)
 
 
 @dataclass
@@ -469,6 +471,10 @@ def create_vault(setup: VaultSetup, actor: str | None = None):
     problems += _errors(validate_numbering(setup.numbering))
     if setup.properties:
         problems += _errors(validate_properties(setup.properties))
+    from bruceworx import drawing_standards  # noqa: PLC0415
+
+    standards, found = drawing_standards.from_texts(setup.standards or {})
+    problems += _errors(found)
     if problems:
         raise ValueError("\n".join(issue.text for issue in problems))
     vault = FolderVault.init(os.path.expanduser(setup.folder), setup.name.strip(), actor=actor)
@@ -476,6 +482,7 @@ def create_vault(setup: VaultSetup, actor: str | None = None):
     _write_json(numbering_path(vault.root), numbering_data(setup.numbering))
     if setup.properties:
         _write_json(properties_path(vault.root), properties_layer(setup.properties))
+    drawing_standards.save(vault.root, standards)
     return vault
 
 
@@ -563,8 +570,6 @@ def scan_for_import(folder: str, recursive: bool = True, document_types: dict | 
     include=False and an Issue. With ``document_types`` (code -> name),
     document_type is filled too (else :func:`plan_numbers` does it).
     """
-    from bruceworx.pdm_folder import sha256_of  # noqa: PLC0415
-
     folder = os.path.abspath(os.path.expanduser(folder))
     if not os.path.isdir(folder):
         raise FileNotFoundError(folder)
@@ -578,42 +583,46 @@ def scan_for_import(folder: str, recursive: bool = True, document_types: dict | 
             for name in files:
                 if not name.startswith(".") and (name.lower().endswith(".fcstd") or _BACKUP_RE.search(name)):
                     paths.append(os.path.join(current, name))
-    candidates = []
     hashes = {}
-    for path in sorted(paths):
-        candidate = ImportCandidate(path=path, kind="part", label=os.path.splitext(os.path.basename(path))[0])
-        candidates.append(candidate)
-        if _BACKUP_RE.search(path):
-            candidate.include = False
-            candidate.issues.append(Issue("info", "FreeCAD backup file; not imported."))
-            continue
-        try:
-            info = _read_document(path)
-            digest = sha256_of(path)
-        except (OSError, KeyError, zipfile.BadZipFile, ET.ParseError, ValueError) as exc:
-            candidate.include = False
-            candidate.issues.append(Issue("error", f"Cannot read the file: {exc}"))
-            continue
-        candidate.kind = _kind(info["types"])
-        main = info["objects"][0] if info["objects"] and info["objects"][0][0] < 9 else None
-        if main and main[2].get("Label") and not _GENERIC_LABEL_RE.fullmatch(main[2]["Label"]):
-            candidate.label = main[2]["Label"]
-        candidate.existing_part_number = next(
-            (props["PartNumber"].upper() for _r, _o, props in info["objects"] if props.get("PartNumber")), "")
-        if candidate.existing_part_number and existing_key(candidate.existing_part_number) is None:
-            candidate.issues.append(Issue(
-                "warning",
-                f"PartNumber {candidate.existing_part_number!r} is not "
-                f"{numbering.PART_NUMBER_FORMAT}; it gets a new number.",
-            ))
-        if digest in hashes:
-            candidate.include = False
-            candidate.issues.append(Issue("warning", f"Same content as {hashes[digest]}; not imported twice."))
-        else:
-            hashes[digest] = path
-        if document_types:
-            candidate.document_type = document_type_for(candidate.kind, document_types)
-    return candidates
+    return [_candidate(path, hashes, document_types) for path in sorted(paths)]
+
+
+def _candidate(path: str, hashes: dict, document_types: dict | None = None) -> ImportCandidate:
+    """One file's ImportCandidate (scan_for_import); hashes (sha256 -> path) finds repeats."""
+    from bruceworx.pdm_folder import sha256_of  # noqa: PLC0415
+
+    candidate = ImportCandidate(path=path, kind="part", label=os.path.splitext(os.path.basename(path))[0])
+    if _BACKUP_RE.search(path):
+        candidate.include = False
+        candidate.issues.append(Issue("info", "FreeCAD backup file; not imported."))
+        return candidate
+    try:
+        info = _read_document(path)
+        digest = sha256_of(path)
+    except (OSError, KeyError, zipfile.BadZipFile, ET.ParseError, ValueError) as exc:
+        candidate.include = False
+        candidate.issues.append(Issue("error", f"Cannot read the file: {exc}"))
+        return candidate
+    candidate.kind = _kind(info["types"])
+    main = info["objects"][0] if info["objects"] and info["objects"][0][0] < 9 else None
+    if main and main[2].get("Label") and not _GENERIC_LABEL_RE.fullmatch(main[2]["Label"]):
+        candidate.label = main[2]["Label"]
+    candidate.existing_part_number = next(
+        (props["PartNumber"].upper() for _r, _o, props in info["objects"] if props.get("PartNumber")), "")
+    if candidate.existing_part_number and existing_key(candidate.existing_part_number) is None:
+        candidate.issues.append(Issue(
+            "warning",
+            f"PartNumber {candidate.existing_part_number!r} is not "
+            f"{numbering.PART_NUMBER_FORMAT}; it gets a new number.",
+        ))
+    if digest in hashes:
+        candidate.include = False
+        candidate.issues.append(Issue("warning", f"Same content as {hashes[digest]}; not imported twice."))
+    else:
+        hashes[digest] = path
+    if document_types:
+        candidate.document_type = document_type_for(candidate.kind, document_types)
+    return candidate
 
 
 def document_type_for(kind: str, document_types: dict) -> str:
@@ -743,11 +752,49 @@ def plan_numbers(candidates: list, vault_root: str, program: str, document_types
     return candidates
 
 
+def _children_first(candidates: list) -> list:
+    """Parts before the assemblies that link them (depth first), so links can be rewritten
+    to numbers that already exist. Input order is kept otherwise; cycles stop at the visit."""
+    by_path = {os.path.realpath(c.path): c for c in candidates}
+    out, seen = [], set()
+
+    def visit(candidate):
+        key = os.path.realpath(candidate.path)
+        if key in seen:
+            return
+        seen.add(key)
+        for child in _linked_files(candidate.path):
+            if child in by_path:
+                visit(by_path[child])
+        out.append(candidate)
+
+    for candidate in candidates:
+        visit(candidate)
+    return out
+
+
+def _link_mapper(original: str, staged: str, numbered: dict):
+    """mapper for pdm_workspace.rewrite_links: a link to an imported file becomes <P/N>.FCStd."""
+    names = {}
+    for real, key in numbered.items():
+        names.setdefault(os.path.basename(real), []).append(key)
+
+    def mapper(old):
+        for base in (os.path.dirname(os.path.abspath(original)), os.path.dirname(os.path.abspath(staged))):
+            real = os.path.realpath(old if os.path.isabs(old) else os.path.join(base, old))
+            if real in numbered:
+                return numbered[real] + ".FCStd"
+        keys = names.get(os.path.basename(old), [])
+        return keys[0] + ".FCStd" if len(keys) == 1 else None
+
+    return mapper
+
+
 class _Skip(Exception):
     """A candidate that cannot be imported, found before a number is reserved."""
 
 
-def run_import(vault, candidates: list, program: str, writer=None, progress=None) -> ImportReport:
+def run_import(vault, candidates: list, program: str, writer=None, progress=None, known=None) -> ImportReport:
     """Reserve numbers, copy each file to staging, call writer(copy, part_number), create_item, checkin.
 
     writer(path, part_number) writes the number into the copy (the FreeCAD side passes one);
@@ -760,7 +807,8 @@ def run_import(vault, candidates: list, program: str, writer=None, progress=None
     first imported part it shows (a drawing with none is skipped). The vault
     item is the number without revision; the staged copy is
     ``<vault>/.import/<number>.FCStd``, removed after check-in. Originals are
-    only read. ``proposed_part_number`` is set to the number given.
+    only read. ``proposed_part_number`` is set to the number given. ``known`` (real path ->
+    vault number) names files already in the vault, so links to them are rewritten too.
     """
     from bruceworx.pdm_folder import FolderVault  # noqa: PLC0415
     from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
@@ -784,9 +832,10 @@ def run_import(vault, candidates: list, program: str, writer=None, progress=None
         for key in kept:
             _claim(data, key)
         source._save(data)
-    ordered = [c for c in included if c.kind != "drawing"] + [c for c in included if c.kind == "drawing"]
+    ordered = _children_first([c for c in included if c.kind != "drawing"]) + [
+        c for c in included if c.kind == "drawing"]
     staging = os.path.join(vault.root, STAGING_DIR)
-    numbered = {}  # real path of an original -> vault number
+    numbered = dict(known or {})  # real path of an original -> vault number
     for done, candidate in enumerate(ordered, 1):
         try:
             key = _import_one(vault, source, candidate, program, types, writer, staging, numbered)
@@ -829,6 +878,12 @@ def _import_one(vault, source, candidate, program, types, writer, staging, numbe
     try:
         if writer is not None:
             writer(staged, key)
+        # Links to files imported before this one now point at their numbers (plan section 7.3).
+        from bruceworx.pdm_workspace import clear_link_errors, rewrite_links  # noqa: PLC0415
+
+        if rewrite_links(staged, _link_mapper(candidate.path, staged, numbered)):
+            # The writer opened the copy away from its parts: FreeCAD saved "Link not restored".
+            clear_link_errors(staged)
         vault.create_item(key, kind, candidate.label, drawing_of)
         vault.checkout(key)
         try:
@@ -850,16 +905,91 @@ def _import_one(vault, source, candidate, program, types, writer, staging, numbe
 
 
 
+def candidates_for_files(paths, known=None, vault_root: str = "") -> list:
+    """ImportCandidates for paths and, transitively, the files they link to (check-in, plan section 4).
+
+    Files in ``known`` (real path -> vault number) and files inside ``vault_root`` are not
+    candidates: links to them are rewritten instead.
+    """
+    known = known or {}
+    inside = os.path.realpath(vault_root) + os.sep if vault_root else None
+    hashes, out, seen = {}, [], set()
+    todo = [os.path.realpath(p) for p in paths]
+    while todo:
+        path = todo.pop(0)
+        if path in seen or path in known or (inside and path.startswith(inside)) or not os.path.isfile(path):
+            continue
+        seen.add(path)
+        candidate = _candidate(path, hashes)
+        out.append(candidate)
+        if candidate.include:
+            todo.extend(_linked_files(path))
+    return out
+
+
+def program_of(part_number: str, vault_root: str) -> str:
+    """The program for new numbers next to part_number: its own when the vault's numbering
+    has it, else the vault's first program, else the default."""
+    from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
+
+    try:
+        data = JsonNumberSource(numbering_path(vault_root))._load()
+        codes = {str(k).upper() for k in data.get("programs", {})}
+        offered = JsonNumberSource(numbering_path(vault_root)).programs()
+    except Exception:  # noqa: BLE001 -- a vault without numbering still answers
+        codes, offered = set(), []
+    try:
+        own = numbering.parse_part_number(pdm.strip_revision(part_number) + "-A")["program"]
+    except ValueError:
+        own = ""
+    if own and own in codes:
+        return own
+    return offered[0] if offered else (own or DEFAULT_PROGRAM)
+
+
+def import_linked_files(vault, paths, program: str, known=None, writer=None, progress=None):
+    """Import files a checked-in assembly links from outside the vault, with what they link in turn.
+
+    New part numbers come from the vault's numbering (``program``); a file the vault already
+    holds (same content or same original) is not imported again. Returns (ImportReport,
+    {real path: vault number}) for every given file now in the vault.
+    """
+    from bruceworx.pdm_folder import sha256_of  # noqa: PLC0415
+
+    known = dict(known or {})
+    candidates = candidates_for_files(paths, known, vault.root)
+    plan_numbers(candidates, vault.root, program)
+    report = run_import(vault, candidates, program, writer, progress, known=known)
+    mapping = {os.path.realpath(p): key for p, key in report.imported}
+    done = _already_imported(vault)
+    for path in paths:
+        real = os.path.realpath(path)
+        if real in mapping:
+            continue
+        found = known.get(real) or done.get(real)
+        if not found and os.path.isfile(real):
+            try:
+                found = done.get(sha256_of(real))
+            except OSError:
+                found = None
+        if found:
+            mapping[real] = found
+    return report, mapping
+
 
 # --- 6. CSV template and vault settings ----------------------------------------------------
 #
 # One CSV file holds every table the wizard and Vault Settings edit. Columns, in this order:
 #   table, code, name, description, type, values, default, bom, retired
-# table is "program", "document_type" or "property". Programs use code + description;
+# table is "program", "document_type", "property" or "standard". Programs use code + description;
 # document types code + name; properties code (the property name) + name (label) +
 # description + type (string/integer/enum, as the part_properties.json layer) + values
 # ("|"-separated, enum only) + default + bom (yes/no). retired (yes/no) hides a row from new
 # use without deleting it. Blank lines and rows whose first cell starts with "#" are ignored.
+# Drawing standards (bruceworx.drawing_standards, <vault>/drawing_standards.json) use code (the
+# setting, e.g. projection) + name (its value) + description (what it is; not read back); they are
+# settings, not codes: any value may change, nothing is retired. A CSV without standard rows (older
+# files) leaves the vault's standards as they are.
 #
 # After creation the tables only grow: Vault Settings may add rows, rename names and
 # descriptions, and retire or bring back a row, but not delete a row or change a code.
@@ -877,12 +1007,17 @@ CSV_COLUMNS = ("table", "code", "name", "description", "type", "values", "defaul
 CSV_TABLES = ("program", "document_type", "property")
 CSV_COMMENT = "# table: program | document_type | property"
 RETIRED_PROPERTIES = "retired_properties"  # part_properties.json key the schema loader ignores
-_TABLE_LABELS = {"program": "Program", "document_type": "Document type", "property": "Property"}
+STANDARD_TABLE = "standard"  # drawing standards rows; not in CSV_TABLES (nothing to retire)
+STANDARD_COMMENT = "# table standard: code = setting, name = value (drawing standards)"
+_TABLE_LABELS = {"program": "Program", "document_type": "Document type", "property": "Property",
+                 STANDARD_TABLE: "Drawing standard"}
 _TABLE_ALIASES = {
     "program": "program", "programs": "program",
     "document_type": "document_type", "document_types": "document_type", "doc_type": "document_type",
     "doc_types": "document_type", "documenttype": "document_type",
     "property": "property", "properties": "property",
+    "standard": STANDARD_TABLE, "standards": STANDARD_TABLE, "drawing_standard": STANDARD_TABLE,
+    "drawing_standards": STANDARD_TABLE,
 }
 # The property keys a CSV row carries; other keys of an entry (e.g. required) are kept on save.
 _CSV_PROPERTY_KEYS = ("type", "label", "doc", "values", "default", "bom")
@@ -900,6 +1035,7 @@ class VaultSettings:
     document_types: dict = field(default_factory=dict)  # code -> name
     properties: list = field(default_factory=list)  # part_properties.json entries
     retired: dict = field(default_factory=lambda: {t: set() for t in CSV_TABLES})  # table -> codes
+    standards: dict = field(default_factory=dict)  # drawing standards: setting -> text; {} leaves them alone
 
 
 def _flag(text):
@@ -928,13 +1064,17 @@ def _retired_of(settings: VaultSettings, table: str) -> set:
 
 
 def example_settings() -> VaultSettings:
-    """The rows of the downloadable template: one program, three document types, one property."""
+    """The rows of the downloadable template: one program, three document types, one property,
+    and the default drawing standards."""
+    from bruceworx import drawing_standards  # noqa: PLC0415
+
     material = suggested_properties()[0]
     return VaultSettings(
         programs=[ProgramSetup(DEFAULT_PROGRAM, "BruceWorx")],
         document_types=dict(DEFAULT_DOCUMENT_TYPES),
         properties=[{"name": material["name"], "type": "string", "label": "Material spec",
                      "doc": material["doc"], "bom": True}],
+        standards=drawing_standards.as_texts(drawing_standards.DrawingStandards()),
     )
 
 
@@ -963,6 +1103,11 @@ def _csv_rows(settings: VaultSettings):
             "default": _cell(entry.get("default")), "bom": _yes(entry.get("bom")),
             "retired": _yes(entry.get("name") in _retired_of(settings, "property")),
         }
+    if settings.standards:
+        from bruceworx.drawing_standards import DESCRIPTIONS  # noqa: PLC0415
+
+        for key, text in settings.standards.items():
+            yield {"table": STANDARD_TABLE, "code": key, "name": text, "description": DESCRIPTIONS.get(key, "")}
 
 
 def csv_template(settings: VaultSettings | None = None) -> str:
@@ -976,6 +1121,8 @@ def csv_template(settings: VaultSettings | None = None) -> str:
     writer = csv.writer(out, dialect="excel")
     writer.writerow(CSV_COLUMNS)
     writer.writerow([CSV_COMMENT])
+    if settings.standards:
+        writer.writerow([STANDARD_COMMENT])
     for row in _csv_rows(settings):
         writer.writerow([row.get(column, "") for column in CSV_COLUMNS])
     return out.getvalue()
@@ -1020,7 +1167,7 @@ def parse_csv(text) -> tuple:
         delimiter = next((d for d in (";", "\t") if d in first), ",")
     reader = csv.reader(io.StringIO(text, newline=""), dialect="excel", delimiter=delimiter)
     header = None
-    seen = {table: {} for table in CSV_TABLES}  # code -> line
+    seen = {table: {} for table in CSV_TABLES + (STANDARD_TABLE,)}  # code -> line
     start = 1
     for row in reader:
         line, start = start, reader.line_num + 1
@@ -1059,9 +1206,12 @@ def _parse_row(values: dict, line: int, settings: VaultSettings, seen: dict, iss
     raw_table = values.get("table", "")
     table = _TABLE_ALIASES.get(_key(raw_table))
     if table is None:
-        error(f"table {raw_table!r} must be program, document_type or property.")
+        error(f"table {raw_table!r} must be program, document_type, property or standard.")
         return
     label = _TABLE_LABELS[table]
+    if table == STANDARD_TABLE:
+        _parse_standard(values, line, settings, seen, issues)
+        return
     retired = _flag(values.get("retired"))
     if retired is None:
         error(f"retired {values.get('retired')!r} must be yes or no.")
@@ -1099,6 +1249,29 @@ def _parse_row(values: dict, line: int, settings: VaultSettings, seen: dict, iss
         settings.properties.append(entry)
     if retired:
         settings.retired[table].add(code)
+
+
+def _parse_standard(values: dict, line: int, settings: VaultSettings, seen: dict, issues: list) -> None:
+    """A drawing-standard row: code is the setting, name its value (checked, stored as canonical text)."""
+    from bruceworx import drawing_standards  # noqa: PLC0415
+
+    key = _key(values.get("code", ""))
+    if not key:
+        issues.append(Issue("error", f"Line {line}: drawing standard needs a code (the setting)."))
+        return
+    if key in seen[STANDARD_TABLE]:
+        issues.append(Issue("error", f"Line {line}: drawing standard {key} is already on line "
+                                     f"{seen[STANDARD_TABLE][key]}."))
+        return
+    seen[STANDARD_TABLE][key] = line
+    if _flag(values.get("retired")):
+        issues.append(Issue("warning", f"Line {line}: drawing standards cannot be retired; retired is ignored."))
+    scratch = drawing_standards.DrawingStandards()
+    found = drawing_standards.set_text(scratch, key, values.get("name", ""))
+    if found is not None:
+        issues.append(Issue("error", f"Line {line}: {found.text}"))
+        return
+    settings.standards[key] = drawing_standards.to_text(scratch, key)
 
 
 def _property_entry(name: str, values: dict, line: int, issues: list):
@@ -1277,6 +1450,10 @@ def load_settings(vault_root: str) -> VaultSettings:
     for entry in layer.get(RETIRED_PROPERTIES) or []:
         settings.properties.append(dict(entry))
         settings.retired["property"].add(entry.get("name"))
+    from bruceworx import drawing_standards  # noqa: PLC0415
+
+    if drawing_standards.exists(root):
+        settings.standards = drawing_standards.as_texts(drawing_standards.load(root))
     return settings
 
 
@@ -1375,6 +1552,11 @@ def validate_settings(settings: VaultSettings) -> list:
         issues.append(Issue("error", "Add at least one document type."))
     if settings.properties:
         issues.extend(validate_properties(settings.properties))
+    if settings.standards:
+        from bruceworx import drawing_standards  # noqa: PLC0415
+
+        _standards, found = drawing_standards.from_texts(settings.standards)
+        issues.extend(Issue(i.level, f"Drawing standard: {i.text}") for i in found)
     return issues
 
 
@@ -1446,6 +1628,10 @@ def check_settings_change(old: VaultSettings, new: VaultSettings, used: dict | N
                                                    f"to {new_map[code]!r}."))
                 continue
             issues.extend(_property_change(code, old_map[code], new_map[code], is_used(table, code)))
+    for key, text in (new.standards or {}).items():
+        before = (old.standards or {}).get(key)
+        if before is not None and before != text:
+            issues.append(Issue("info", f"Drawing standard {key} changes from {before!r} to {text!r}."))
     return issues
 
 
@@ -1517,6 +1703,11 @@ def save_settings(vault_root: str, new: VaultSettings) -> None:
     problems = _errors(settings_change_issues(root, new))
     if problems:
         raise ValueError("\n".join(issue.text for issue in problems))
+    standards = None
+    if new.standards:
+        from bruceworx import drawing_standards  # noqa: PLC0415
+
+        standards, _found = drawing_standards.from_texts(new.standards, drawing_standards.load(root))
     data = _numbering_raw(root)
     if data is None:
         data = {"source": "json", "format": numbering.PART_NUMBER_FORMAT, "document_types_file": DOCUMENT_TYPES_FILE,
@@ -1583,6 +1774,8 @@ def save_settings(vault_root: str, new: VaultSettings) -> None:
         _replace_json(types_path, raw_types)
     if layer is not None:
         _replace_json(properties_path(root), layer)
+    if standards is not None:
+        drawing_standards.save(root, standards)
 
 
 def _mark(entry: dict, retired: bool) -> None:

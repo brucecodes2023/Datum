@@ -1,0 +1,17 @@
+---
+# BruceWorx electronics materials (ECD-06). Values are typical; check a datasheet for precise work.
+General:
+  UUID: "057cfb8f-b29c-4787-b627-42a03d422d93"
+  Author: "BruceWorx"
+  License: "LGPL-2.1-or-later"
+  Name: "Copper Finish ENIG"
+  Description: "Electroless nickel, immersion gold pad finish (appearance only; the pads stay PCB Copper)."
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3440, 0.2800, 0.1400, 1.0)"
+    DiffuseColor: "(0.8600, 0.7000, 0.3500, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.7000"
+    SpecularColor: "(0.9500, 0.8500, 0.5000, 1.0)"
+    Transparency: "0.0"

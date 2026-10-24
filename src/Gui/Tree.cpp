@@ -698,7 +698,11 @@ void TreeWidgetItemDelegate::paintRowExtras(
         x += extrasGap;
         QRect box(x, row.top() + (row.height() - height) / 2, fm.horizontalAdvance(label) + 2 * badgePadding, height);
         painter->setPen(Qt::NoPen);
-        painter->setBrush(tree->badgeBackground.isValid() ? tree->badgeBackground : withAlpha(text, 22));
+        // [BW] An error chip is tinted with the error colour; its text is that colour too.
+        const QColor error = tree->badgeErrorColor.isValid() ? tree->badgeErrorColor : QColor(0xd9, 0x3a, 0x3f);
+        const bool isError = kind == QLatin1String("error");
+        painter->setBrush(isError ? withAlpha(error, 40)
+                                  : tree->badgeBackground.isValid() ? tree->badgeBackground : withAlpha(text, 22));
         painter->drawRoundedRect(QRectF(box), 4, 4);
         QColor color = tree->badgeTextColor.isValid() ? tree->badgeTextColor : withAlpha(text, 170);
         if (kind == QLatin1String("warn")) {
@@ -710,6 +714,9 @@ void TreeWidgetItemDelegate::paintRowExtras(
         }
         else if (kind == QLatin1String("dim")) {
             color = withAlpha(color, color.alpha() / 2);
+        }
+        else if (isError) {
+            color = error;
         }
         painter->setPen(color);
         painter->drawText(box, Qt::AlignCenter, label);

@@ -22,6 +22,10 @@ the right. There is no separate title strip any more.
 * Docks ignore the title strip's safe area and are laid out again when they
   show; otherwise the floating Browser kept its tree outside its card.
 
+With MainWindow/DocumentTabPos at the bottom (the pack's default since 24 Oct),
+the row keeps the traffic lights, quick commands and search but shows no tabs:
+the document area's own tab bar stays at the bottom of the window.
+
 Preferences/BruceWorx/TabsInTitleBar (default on). Off puts everything back
 (step B's tab row under the toolbars).
 """
@@ -49,6 +53,26 @@ QUICK_COMMANDS = ("Std_Save", "Std_Undo", "Std_Redo")
 MDI_TAB_SHEET = (
     "QTabBar::tab { height: 0px; min-height: 0px; padding: 0px; margin: 0px; border: none; }"
 )
+
+
+BOTTOM = 1  # MainWindow/DocumentTabPos: 0 top, 1 bottom
+
+
+def tabs_at_bottom():
+    """True when the document tabs sit at the bottom of the window (not in the title row)."""
+    import FreeCAD
+
+    return FreeCAD.ParamGet(MAINWINDOW_PATH).GetInt("DocumentTabPos", 1) == BOTTOM
+
+
+def _pinned_start(source, index):
+    """True for the Start page's tab while bruceworx_doctabs keeps it pinned (no close button)."""
+    try:
+        import bruceworx_doctabs
+
+        return index == 0 and bruceworx_doctabs._enabled() and source.tabText(0).replace("&", "") == "Start"
+    except Exception:
+        return False
 
 
 def double_click_action(value):
@@ -255,14 +279,15 @@ def _make_classes():
             self.tabs.installEventFilter(self)
             self.tabs.currentChanged.connect(self.tab_clicked)
             self.tabs.tabMoved.connect(self.tab_moved)
-            self.addWidget(self.tabs)
+            # A widget in a toolbar is shown and hidden through its action, not the widget.
+            self.tabs_action = self.addWidget(self.tabs)
 
             self.new = QtWidgets.QToolButton(self)
             self.new.setObjectName("BruceWorxNewTab")
             self.new.setText("+")
             self.new.setToolTip("New document")
             self.new.clicked.connect(lambda: FreeCADGui.runCommand("Std_New"))
-            self.addWidget(self.new)
+            self.new_action = self.addWidget(self.new)
 
             self.space = QtWidgets.QWidget(self)
             self.space.setObjectName("BruceWorxTitleSpace")
@@ -302,6 +327,18 @@ def _make_classes():
             source = self.mdi_tabs()
             if source is None or not _alive(self):
                 return
+            if tabs_at_bottom():
+                # The document area's tab bar does the job at the bottom; the row keeps no copy.
+                if self.tabs_action.isVisible():
+                    self.tabs_action.setVisible(False)
+                    self.new_action.setVisible(False)
+                    self.snapshot = None
+                if not source.isVisible() or source.styleSheet():
+                    self.hide_mdi_tabs(False)
+                return
+            if not self.tabs_action.isVisible():
+                self.tabs_action.setVisible(True)
+                self.new_action.setVisible(True)
             if source.isVisible():
                 self.hide_mdi_tabs(True)
             subs = self.mdi.subWindowList(QtWidgets.QMdiArea.CreationOrder)
@@ -324,6 +361,9 @@ def _make_classes():
                 self.tabs.setTabText(i, tab_title(text))
                 self.tabs.setTabIcon(i, source.tabIcon(i))
                 self.tabs.setTabToolTip(i, source.tabToolTip(i))
+                if _pinned_start(source, i):
+                    self.tabs.setTabButton(i, QtWidgets.QTabBar.RightSide, None)  # the Start tab stays
+                    continue
                 button = self.tabs.tabButton(i, QtWidgets.QTabBar.RightSide)
                 if not isinstance(button, TabButton):
                     button = TabButton(self.tabs)
@@ -512,7 +552,7 @@ def _turn_on():
     _row.set_fullscreen(mw.isFullScreen())
     _row.show()
     _row.take_search()
-    _row.hide_mdi_tabs(True)
+    _row.hide_mdi_tabs(not tabs_at_bottom())
     _row.snapshot = None
     _row.sync()
     _row.timer.start()

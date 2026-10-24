@@ -6,6 +6,8 @@ Preferences → BruceWorx. This file:
 
 * applies the BruceWorx preference pack on first start (bruceworx_defaults),
 * installs the preference page and the overlay model tree (default on),
+* adds the Properties, Vault, Parameters and Physical tabs to the right panel
+  (bruceworx_rightpanel),
 * starts the ground grid, which shows only while the preference pack is applied,
 * registers the Rectangular / Circular Pattern commands (bruceworx_pattern_gui),
 * creates the shared top-level BruceWorx menu (bruceworx_menu),
@@ -18,14 +20,42 @@ Preferences → BruceWorx. This file:
 * follows the macOS appearance and accent colour (bruceworx_appearance),
 * gives the floating task panel a dialog-style header (bruceworx_taskcard),
 * draws the Browser header, part badges and feature summaries (bruceworx_browser).
+* traces a picked face to its feature, marks failed features with an error
+  chip and draws dependency lines in the Browser (bruceworx_picktrace).
+* shows an undo toast after each command (bruceworx_toasts).
+* edits Pad/Pocket distance, fillet radius and hole depth in the 3D view on a
+  double-click (bruceworx_oncanvas).
+* puts a property inspector in the Browser in place of the View/Data tabs
+  (bruceworx_inspector).
+* offers to close the gaps of a sketch a Pad or Pocket fails on (bruceworx_sketchrepair).
 * puts the navigation pill on every 3D view (bruceworx_navpill).
-* shows the BruceWorx page in the Start tab (bruceworx_start).
+* shows the BruceWorx page in the Start tab (bruceworx_start), kept as the first
+  document tab (bruceworx_doctabs).
 * registers Create Vault…, Import Files into Vault… and Vault Settings…, task
   dialogs for the folder vault (bruceworx_vaultwizard).
+* brings the vault into the window: check out and in, the Vault panel, Browser
+  badges, the save prompt (bruceworx_vaultclient).
+* approve with the release checklist, reject, ECR and ECO (bruceworx_changes).
+* the BOM per revision at check-in, Where Used..., Bill of Materials... (bruceworx_bom).
+* registers New Drawing and fills drawing title blocks from the part and vault
+  (bruceworx_drawing).
+* lets Claude Code drive FreeCAD after asking once per session (bruceworx_bridge).
+* registers Insert Board… for KiCad boards (bruceworx_board_gui).
 
 It runs before the startup workbench is activated, so the first-run pack's
 startup workbench (PartDesign) is already used on that first start.
 """
+
+
+# Features whose build was stopped half-way (24 Oct 2026, the user paused the agents): not installed until
+# their work resumes and passes its checks. Remove a name here to switch it back on.
+_BW_PAUSED = (
+    "bruceworx_physical",
+    "bruceworx_parameters",
+    "bruceworx_oncanvas",
+    "bruceworx_bom",
+    "bruceworx_sheetmetal",
+)
 
 
 def _bw_warn(message):
@@ -47,6 +77,20 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
 import BruceWorx
 
 BruceWorx.install()
+
+try:
+    import bruceworx_testwindow
+
+    bruceworx_testwindow.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx test window placement was not installed: {exc}")
+
+try:
+    import bruceworx_rightpanel
+
+    bruceworx_rightpanel.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx right panel tabs were not installed: {exc}")
 
 try:
     import bruceworx_menu
@@ -141,11 +185,64 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx Browser extras were not installed: {exc}")
 
 try:
+    import bruceworx_picktrace
+
+    bruceworx_picktrace.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx pick-to-feature and error chips were not installed: {exc}")
+
+try:
+    import bruceworx_inspector
+
+    bruceworx_inspector.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx property inspector was not installed: {exc}")
+
+try:
+    if "bruceworx_physical" not in _BW_PAUSED:
+        import bruceworx_physical
+        import bruceworx_parameters
+
+        bruceworx_physical.install()
+        bruceworx_parameters.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Physical and Parameters tabs were not installed: {exc}")
+
+try:
+    import bruceworx_toasts
+
+    bruceworx_toasts.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx undo toasts were not installed: {exc}")
+
+try:
+    if "bruceworx_oncanvas" not in _BW_PAUSED:
+        import bruceworx_oncanvas
+
+        bruceworx_oncanvas.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx on-canvas editing was not installed: {exc}")
+
+try:
+    import bruceworx_sketchrepair
+
+    bruceworx_sketchrepair.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx sketch profile repair was not installed: {exc}")
+
+try:
     import bruceworx_statusbar
 
     bruceworx_statusbar.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx status-bar readouts were not installed: {exc}")
+
+try:
+    import bruceworx_doctabs
+
+    bruceworx_doctabs.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Start tab pinning was not installed: {exc}")
 
 try:
     import bruceworx_start
@@ -160,3 +257,54 @@ try:
     bruceworx_vaultwizard.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx Create Vault command was not installed: {exc}")
+
+try:
+    import bruceworx_vaultclient
+
+    bruceworx_vaultclient.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx vault client was not installed: {exc}")
+
+try:
+    import bruceworx_changes
+
+    bruceworx_changes.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx review and change control were not installed: {exc}")
+
+try:
+    if "bruceworx_bom" not in _BW_PAUSED:
+        import bruceworx_bom
+
+        bruceworx_bom.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx BOM and where-used were not installed: {exc}")
+
+try:
+    import bruceworx_drawing
+
+    bruceworx_drawing.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx New Drawing and title-block filling were not installed: {exc}")
+
+try:
+    import bruceworx_bridge
+
+    bruceworx_bridge.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Claude Code bridge was not installed: {exc}")
+
+try:
+    import bruceworx_board_gui
+
+    bruceworx_board_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Insert Board was not installed: {exc}")
+
+try:
+    if "bruceworx_sheetmetal" not in _BW_PAUSED:
+        import bruceworx_sheetmetal
+
+        bruceworx_sheetmetal.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx sheet-metal rules and Export Flat were not installed: {exc}")

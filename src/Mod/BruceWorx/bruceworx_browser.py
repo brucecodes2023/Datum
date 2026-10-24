@@ -18,7 +18,8 @@
 The tree draws the extras itself ([BW] in Gui/Tree.cpp). It asks
 ``FreeCADGui.BrowserRowInfo(obj)`` for (summary, [(text, kind), ...]) after
 each change; kind "warn" is drawn in the warning colour, "accent" in the
-accent, "dim" faded, anything else neutral. All switches default on.
+accent, "error" as a red chip (bruceworx_picktrace), "dim" faded, anything
+else neutral. All switches default on.
 """
 
 from __future__ import annotations
@@ -224,10 +225,20 @@ def held_badges(obj):
     return [(f"{len(held)} held", "warn")] if held else []
 
 
+# Filters (obj, meta, marks) -> (meta, marks) other modules add, e.g. the vault client's
+# revision, state and lock for vault files (bruceworx_vaultclient.browser_extra).
+ROW_EXTRAS = []
+
+
 def row_info(obj, badges=True, summary=True):
     """(summary text, [(badge, kind)]) for one tree row."""
     meta, marks = _row_info(obj, badges, summary)
-    return meta, marks + held_badges(obj) if badges else marks
+    if not badges:
+        return meta, marks
+    marks = marks + held_badges(obj)
+    for extra in ROW_EXTRAS:
+        meta, marks = extra(obj, meta, marks)
+    return meta, marks
 
 
 def _row_info(obj, badges, summary):
@@ -305,7 +316,7 @@ def apply_rows():
 
 def apply_header():
     import FreeCADGui
-    from PySide import QtGui, QtWidgets
+    from PySide import QtCore, QtGui, QtWidgets
 
     mw = FreeCADGui.getMainWindow()
     dock = mw.findChild(QtWidgets.QDockWidget, MODEL_DOCK)
@@ -318,6 +329,10 @@ def apply_header():
     title = HEADER_TITLE if on else _model_title
     if dock.windowTitle() != title:
         dock.setWindowTitle(title)
+    # The property editor under the tree paints its card in the transparent Browser (BruceWorxModelTree.qss).
+    for view in dock.findChildren(QtWidgets.QWidget):
+        if view.metaObject().className() == "Gui::PropertyView":
+            view.setAttribute(QtCore.Qt.WA_StyledBackground, True)
     for bar in mw.findChildren(QtWidgets.QWidget):
         if bar.metaObject().className() != "Gui::OverlayTitleBar":
             continue

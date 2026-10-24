@@ -1,0 +1,325 @@
+%======================================================================
+\subsection{BW-PDM-07 --- Plan: the LE-02001 pilot and the CAD register (24 Oct 2026, approved 24 Oct)}\label{sec:pdm07-plan}
+%======================================================================
+
+\eref{PDM-07} is the first real release: the Leonardo pedestal \code{LE-02001} and its parts go through the vault, the
+review and the release, and come out as rev~A with drawings and a release package, with no Fusion step. It is the exit
+test of M2, so it exercises almost every epic of the PDM, drawing and assembly tracks. This plan sets out the pilot as a
+sequence with a checklist, what each step exercises, what is still missing, and the facts found about the Leonardo files
+and register. The acceptance stays as written: \emph{\code{LE-02001} rev~A released entirely from FreeCAD, with drawings
+and package.} It depends on \eref{PDM-05} (building) and \eref{DRW-05} (not started).
+
+%----------------------------------------------------------------------
+\subsubsection*{1. What was found (24 Oct)}
+
+A read-only search of this Mac found two Leonardo repositories in \file{\textasciitilde/Documents/GitHub/}, and no
+FreeCAD or Fusion model of the pedestal.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm}X@{}}
+\toprule
+Where & What it holds\\
+\midrule
+\file{Leonardo}, branch \code{main} & READMEs only under \file{cad/source/LE-02001},
+  \file{cad/exports}, \file{cad/register}, \file{drawings}: ``Live design: Fusion project \emph{Leonardo} / folder
+  \emph{v0\_proto}''. No \file{.f3d}, \file{.f3z}, STEP or PDF of an LE part.\\
+\file{Leonardo-restructure}, restructure branch &
+  Branch \code{restructure/docs-designs-references}. ADR-0002 (proposed 16 Oct, awaiting you): \file{designs/register/register.csv} becomes the sequence log, checked by
+  \file{tools/numbering/check\_ids.py}; the Notion \emph{CAD \& Drawing Register} becomes its mirror; scripted parts
+  (build123d, CadQuery) have the script as master. STEP files there are scripted parts (link plates, cycloid, housing),
+  not the pedestal.\\
+\file{register.csv} (restructure) & 12 issued rows, all at \code{A.1}, source \code{fusion}: \code{LE-02001} Pedestal Assy and 11 parts
+  whose parent is \code{LE-02001}. 6 blocked rows, \code{LE-01012}--\code{LE-01017} (test-arm placeholder names).
+  No COTS rows yet.\\
+FreeCAD test arm & \file{tools/freecad/test\_arm/leonardo\_test\_arm.FCStd}: the phase-0 test arm, with placeholder names.\\
+LE-STD-0001 Rev A.2 & The numbering standard (below). Rev A.1 is on \code{main}, Rev A.2 on the restructure branch.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+So the pedestal exists only in Fusion, and the first question is where the pilot's files come from.
+
+\paragraph{The numbering standard and the vault disagree in four places.} The spike of \S\ref{sec:pdm06-plan} also
+parsed LE numbers with the vault's numbering code:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\toprule
+ & LE-STD-0001 Rev A.2 & The vault today\\
+\midrule
+Part number & \code{\{PROG\}-\{BB\}\{SSS\}}, band + sequence: \code{LE-01001} & \code{\{PROG\}-\{DT\}-\{PPPPP\}-\{SSS\}}:
+  \code{LE-01-01001-001}. \code{LE-01001-A.1} does not parse, so an import gives it a new number; the first assembly
+  becomes \code{LE-02-01001-001}, not \code{02001} (spike).\\
+Working revisions & \code{A.1}, \code{A.2}; after release, \code{B.1}, \code{B.2} towards B & \code{01}, \code{02};
+  after release, \code{B} in WIP under an ECO (your answer, 23 Oct)\\
+Skipped letters & I, O, Q & I, O, Q, S, X, Z (ASME Y14.35); \code{S}, \code{X}, \code{Z} are refused (spike)\\
+Drawing number & the part's number (``part number = drawing number'') & a drawing is its own item with its own number
+  (open question \ref{q:dwgpn})\\
+\bottomrule
+\end{tabularx}
+\end{center}
+LE-STD-0001 also has bands the vault's default document types lack (\code{03} tooling, \code{04} harness, \code{05}
+electronic, \code{08} reference, \code{09} COTS) and a register class per band. None of this blocks the pilot, but each
+needs a decision before the first LE item is created, because numbers never change afterwards.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[x=1cm,y=-0.47cm,
+  it/.style={font=\scriptsize,anchor=west,inner sep=1pt},
+  pbs/.style={font=\tiny\ttfamily\color{bwgrey},anchor=west}]
+\node[it,font=\scriptsize\bfseries] (top) at (0,0) {LE-02001\quad Pedestal Assy};
+\foreach \i/\pn/\t/\p in {1/LE-01001/Base plate/PED, 2/LE-01002/Column \slash{} riser/PED,
+  3/LE-01003/J1 yaw joint module/ACT, 4/LE-01004/Top deck \slash{} J2 interface/PED, 5/LE-01005/Rear EE shelf/PED,
+  6/LE-01006/E-stop mushroom bracket/SAF, 7/LE-01007/Cable guides \slash{} strain relief/HAR,
+  8/LE-01008/J2 pitch joint module/ACT, 9/LE-01009/Intermediate EE plate/PED, 10/LE-01010/Lower vertical supports/PED,
+  11/LE-01011/Upper vertical supports/PED} {
+  \draw[black!35] (0.15,\i-0.6) |- (0.5,\i);
+  \node[it] at (0.55,\i) {\pn\quad \t};
+  \node[pbs] at (6.2,\i) {\p};
+}
+\node[pbs] at (6.2,0) {PBS};
+\node[font=\tiny\color{bwgrey},align=left,anchor=north west] at (7.3,0.4) {All rows: rev \texttt{A.1}, status issued,\\
+source \texttt{fusion}.\\[3pt] \texttt{LE-01003}, \texttt{LE-01008}: class part,\\``holds the drive until it is split into\\an
+02xxx assembly''.\\[3pt] \texttt{LE-01005}: ``demote pending;\\EE moved to \texttt{LE-01009}''.\\[3pt]
+Blocked, never issued:\\\texttt{LE-01012}--\texttt{LE-01017}.};
+\end{tikzpicture}
+\caption{\code{LE-02001} as the register has it today (\file{register.csv}, restructure branch): one level, eleven
+parts, no hardware. The roadmap's stack order \code{LE-01001} $\rightarrow$ \code{01010} $\rightarrow$ \code{01009}
+$\rightarrow$ \code{01011} $\rightarrow$ \code{01002} is the order of assembly (joints), not sub-assemblies.}
+\label{fig:pdm07-register}
+\end{figure}
+
+%----------------------------------------------------------------------
+\subsubsection*{2. The pilot, step by step}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,x=1cm,y=-1.02cm,
+  st/.style={draw=black!30,fill=white,rounded corners=2pt,font=\scriptsize,anchor=west,minimum height=0.72cm,text width=6.1cm,align=left},
+  n/.style={circle,fill=bwdark,text=white,font=\tiny\bfseries,inner sep=0pt,minimum size=11pt}]
+\foreach \y/\txt in {
+  0/{Decide: files, number form, revisions, register master (Q1--Q5)},
+  1/{LE vault in iCloud Drive: program LE, bands, standards, properties},
+  2/{Register in: 12 issued rows become items, 6 blocked numbers reserved},
+  3/{Part files in: one file per part, properties filled, checked in},
+  4/{\code{LE-02001}: joints, BOM against a hand count, where-used},
+  5/{Drawings: 11 parts + the assembly, parts list, revision block},
+  6/{Design freeze (G1): checklist and validation macro, report kept},
+  7/{Review and release, children first, then \code{LE-02001}: rev A},
+  8/{Publish PDFs, build the release package with checksums},
+  9/{Register and Ops: rows to released A; BOM to the outbox},
+  10/{Afterwards: ECR $\rightarrow$ ECO $\rightarrow$ rev B on \code{LE-01001}}} {
+  \node[n] at (0,\y) {\y};
+  \node[st] at (0.3,\y) {\txt};
+}
+\def\chips#1#2{\node[anchor=west,inner sep=0pt] at (6.95,#1) {#2};}
+\def\ck#1#2{{\setlength{\fboxsep}{1.6pt}\colorbox{#1}{\tiny\bfseries\ttfamily\textcolor{white}{#2}}}}
+\chips{0}{\ck{bwgrey}{you}}
+\chips{1}{\ck{bwgreen}{PDM-01}\,\ck{bworange}{PDM-03}\,\ck{bworange}{DRW-01}}
+\chips{2}{\ck{bwgrey}{new: register link}}
+\chips{3}{\ck{bworange}{PDM-04}\,\ck{bwgrey}{ASM-01}\,\ck{bworange}{ASM-04 props}}
+\chips{4}{\ck{bworange}{ASM-03}\,\ck{bworange}{ASM-04}\,\ck{bwgrey}{PDM-06}}
+\chips{5}{\ck{bworange}{DRW-01}\,\ck{bwgrey}{DRW-02}\,\ck{bwgrey}{DRW-05}}
+\chips{6}{\ck{bwgrey}{new: freeze}\,\ck{bwgrey}{ASM-06}}
+\chips{7}{\ck{bworange}{PDM-05}}
+\chips{8}{\ck{bwgrey}{DRW-08}\,\ck{bwgrey}{MFG-04}}
+\chips{9}{\ck{bwgrey}{new: register sync}\,\ck{bwgrey}{PDM-06}}
+\chips{10}{\ck{bworange}{PDM-05}}
+\node[font=\tiny,anchor=west] at (0.3,11.0) {\ck{bwgreen}{\phantom{x}} built\quad \ck{bworange}{\phantom{x}} in progress\quad
+  \ck{bwgrey}{\phantom{x}} not started (or new in this plan)};
+\end{tikzpicture}
+\caption{The pilot as a sequence. Each step names the epics it exercises, coloured by their state on 24 Oct. Step~7 needs
+every step before it; steps 5 and 8 hold the most that is not built.}
+\label{fig:pdm07-flow}
+\end{figure}
+
+\providecommand{\tick}{\tikz[baseline=-0.6ex]\draw[black!50] (0,-0.9ex) rectangle (1.8ex,0.9ex);}
+\begin{center}
+\small
+\begin{longtable}{@{}p{0.4cm}>{\raggedright\arraybackslash}p{5.6cm}>{\raggedright\arraybackslash}p{6.8cm}p{0.5cm}@{}}
+\toprule
+\# & Do & Check (and what it proves) & OK\\
+\midrule\endhead
+\bottomrule\endfoot
+1 & Create the LE vault in \file{iCloud Drive/BruceWorx Vaults/} with program \code{LE} and the bands as document
+  types; drawing standards; properties \code{PBS}, \code{Source}, \code{Vendor}, \code{VendorPartNumber} &
+  The Create Vault panel does it without the command line; \code{LE-01001} is accepted as a number (Q2) & \tick\\
+2 & Read \file{register.csv}: create the 12 issued items, mark the 6 blocked numbers used & Next free part is
+  \code{LE-01018}, as \code{check\_ids.py --next 01} says; nothing is renumbered & \tick\\
+3 & Put each part's file in (model, or import its STEP, Q1); fill Description and material; check in with a comment &
+  Vault panel shows 11 parts, WIP, checked in; mass is computed for every part & \tick\\
+4 & Build \code{LE-02001} from the parts in stack order with joints; add the fasteners as COTS items (Q9) &
+  Opens from a moved vault with no broken links (\eref{ASM-01}); BOM equals a hand count; where-used of a screw lists
+  \code{LE-02001} (\eref{PDM-06}) & \tick\\
+5 & One drawing per part and one for the assembly, from the vault's template & Title blocks fill themselves
+  (\eref{DRW-01}); parts list matches the BOM (\eref{DRW-02}); revision block and PRELIMINARY stamp (\eref{DRW-05}) & \tick\\
+6 & Run \emph{Design freeze\ldots} on \code{LE-02001} & Every automatic line passes or is waived with a reason; the
+  report is kept with the release (section~3) & \tick\\
+7 & Submit and approve the parts and drawings, then the assembly (Q11) & Each approval records its checklist; files turn
+  read-only; Browser shows \code{A} & \tick\\
+8 & Publish and package & PDFs print \code{LE-01001-A}; the package (STEP AP242, PDF, 3MF) rebuilds byte-identically
+  (\eref{MFG-04}) & \tick\\
+9 & Sync the register & \file{register.csv} rows read \code{A}, released; the diff is yours to commit; the Ops outbox
+  holds the BOM & \tick\\
+10 & Raise an ECR against \code{LE-01001}, open the ECO, change it, release B & \eref{PDM-05}'s acceptance on a real
+  part; \code{LE-02001} A still lists \code{LE-01001} A (pinned, \S\ref{sec:pdm06-plan}) & \tick\\
+\end{longtable}
+\end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{3. Theory: the release closure and the order of release}
+
+To release $t = $ \code{LE-02001} the vault must release its \emph{closure}: every item reachable from $t$ in the BOM
+graph of \S\ref{sec:pdm06-plan}, plus each item's drawing,
+\[
+  C(t) = D(t) \cup \{\,\mathrm{dwg}(x) : x \in D(t)\,\},\qquad D(t) = \{t\} \cup \{\,x : t \rightsquigarrow x\,\}.
+\]
+The release checklist allows an assembly to be approved only when its components are released (\eref{PDM-05}, line~3),
+so the order of approvals is a \emph{reverse topological order} of the BOM graph: leaves first. Grouping items by their
+height $h(x)$ (0 for a leaf, $1 + \max h(\text{child})$ otherwise) gives \emph{waves} that can be approved in any
+order inside a wave:
+\[
+  \text{wave}_k = \{\,x \in D(t) : h(x) = k\,\},\qquad k = 0, \ldots, h(t).
+\]
+For the register's tree (figure~\ref{fig:pdm07-register}), $h(t)=1$: wave~0 is the 11 parts and the fasteners, wave~1 is
+\code{LE-02001}. With drawings that is $|C(t)| = 2\cdot12 = 24$ items, plus the COTS items (which have no drawing), and
+each needs a submit and an approval: about fifty actions by hand. A \emph{Release tree\ldots} command that walks the waves
+and shows one checklist after another keeps that to one pass (question~11). The same walk gives a readiness figure for
+the Start page, $\lvert\{x \in C(t) : \text{ready}(x)\}\rvert / \lvert C(t)\rvert$.
+
+\paragraph{The design-freeze checklist (G1).} Your Notion gate ``LE G1 --- Spec lock / CAD freeze ready'' holds the
+criteria, which are not readable from here (question~7). Proposed, split by who checks:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+Line & Check & By\\
+\midrule
+Recompute & Every document of $D(t)$ recomputes with no invalid or touched object & macro\\
+Links & Every link resolves inside the vault; no absolute path; no file outside the vault & macro\\
+BOM & Every line is a vault item; no cycle; COTS lines have vendor and MPN & macro\\
+Properties & Every property the schema marks \code{required} for release has a value (\file{partprops.py}) & macro\\
+Register & Every item of $D(t)$ has an issued register row whose title matches its description & macro\\
+Interference & No clash between occurrences (\eref{ASM-06}), or each one waived with a reason & macro, when built\\
+Drawings & Each item of $D(t)$ that needs one has a drawing whose title block shows its P/N (\file{release\_check.py}) & macro\\
+Mass & Total mass $\sum_x Q_t(x)\,m_x$ against the LE-PAR-0001 budget & you\\
+Spec lock & The SPC and ICD revisions the design answers to are issued & you\\
+\bottomrule
+\end{tabularx}
+\end{center}
+The macro runs headless (\code{FreeCADCmd}) on the checked-in versions, so its result does not depend on what happens to
+be open; its report (JSON, and a one-page PDF) is attached to the release as the approval's attachment, which the
+journal already supports.
+
+%----------------------------------------------------------------------
+\subsubsection*{4. Gaps: what rev A needs that is not built}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Needed & Epic, state & Without it\\
+\midrule
+Revision block, PRELIMINARY stamp & \eref{DRW-05}, not started & drawings print no revision history: not a real release\\
+Parts list and balloons & \eref{DRW-02}, not started & assembly drawing without a parts list; BOM attached as CSV\\
+Publish PDF & \eref{DRW-08}, not started & TechDraw's own export, by hand, sheet by sheet\\
+Release package & \eref{MFG-04}, not started & a zip made by hand: fails ``entirely from FreeCAD''\\
+BOM per revision, where-used & \eref{PDM-06}, not started (\S\ref{sec:pdm06-plan}) & hand count only\\
+Indented and flattened BOM, CSV & \eref{ASM-04}, in progress & the Assembly BOM spreadsheet, with its merge bug\\
+One part per file tooling & \eref{ASM-01}, not started & the files must already be one per part\\
+LE number form, register & \eref{PDM-03}, in progress; register link new & numbers typed by hand (Q2, Q5)\\
+Interference & \eref{ASM-06}, not started & that freeze line is skipped\\
+Hardware library & \eref{MOD-05}, not started & fasteners modelled and numbered by hand\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{5. Build order and effort}
+
+The pilot mostly \emph{uses} other epics; what it builds itself is small.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+\# & Step & Effort\\
+\midrule
+1 & LE-STD-0001 numbers in the vault (per-program format, bands as types, revision display; with \eref{PDM-03}) & 1.5\,d\\
+2 & Register link: read \file{register.csv} (issued, blocked, next free), create items, write state and revision back
+  as a diff & 1.5\,d\\
+3 & LE vault set-up, part files in (Q1), \code{LE-02001} and its BOM checked by hand & 1\,d\\
+4 & Twelve drawings from the template (with \eref{DRW-01}) & 2\,d\\
+5 & \emph{Design freeze\ldots}: the headless validation macro, its report, the manual lines & 2\,d\\
+6 & \emph{Release tree\ldots}: waves, one checklist per item (optional, Q11) & 1\,d\\
+7 & Dry run on a copy of the vault; the real release; register sync; write-up & 1\,d\\
+\midrule
+ & Total (excluding the epics in section~4 and any modelling) & 10\,d\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Risks.} \emph{The files.} If the pilot imports STEP from Fusion, the parts are dumb solids: a change during
+the pilot means direct editing (\eref{MOD-04}) or remodelling. \emph{Number decisions are permanent}: once an LE item is
+created in the vault its number never changes, so Q2--Q4 must be settled first; the dry run on a copy is there to catch
+anything missed. \emph{Two registers} (the CSV and Notion) can disagree; ADR-0002 is still proposed. \emph{Dependencies}:
+four of the epics in section~4 are not started; the real release waits for them, the dry run does not.
+
+%----------------------------------------------------------------------
+\paragraph{Your answers to the questions below (24 Oct).} Q1 changed: \textbf{start fresh, no importing of files}
+(``for H, lets start fresh, no importing files''). \code{LE-02001} and its parts are \textbf{modelled from scratch in
+FreeCAD}; nothing is exported from Fusion as STEP, so the dumb-solid risk above falls away and the modelling becomes
+part of the pilot (it was left out of the 10\,d). That modelling needs \textbf{your design data} (dimensions, materials,
+hardware, the Fusion model to read from): no part is invented, and every number follows LE-STD-0001. Q2--Q11 as
+recommended. 2: a \textbf{per-program number format}, LE keeps \code{LE-01001}. 3: the vault's lifecycle with a
+per-program revision \emph{display} (\code{A.}$n$, \code{B.}$k$); LE-STD-0001 is amended to skip S, X and Z too. 4: a
+drawing stays its own item but carries and prints its part's number. 5: \textbf{ADR-0002 accepted}: the CSV is the
+sequence log, the vault writes state and revision back as a diff you commit, Notion mirrors the CSV. 6: each register
+row shows \code{P/N-REV}, state and \emph{Open in FreeCAD}. 7: the proposed design-freeze lines, plus anything G1 has
+that they miss. 8: a \textbf{dry run now} on a copy of the vault; the real release once \eref{DRW-05}, \eref{DRW-08}
+and \eref{MFG-04} are built. 9: screws, inserts and bearings numbered as COTS items (\code{09xxx}). 10: \code{LE-01003}
+and \code{LE-01008} released as parts now, split later through an ECO. 11: \emph{Release tree\ldots} is added.
+
+\subsubsection*{Questions before PDM-07 starts}
+
+\begin{enumerate}
+  \item \textbf{Where are the \code{LE-02001} and \code{LE-01001} files?} Neither Leonardo repository holds a model of
+        the pedestal (section~1); the live design is in Fusion (\emph{Leonardo / v0\_proto}). Is there a FreeCAD model
+        anywhere (M1 asks for one modelled from scratch), or should the pilot run on STEP exports from Fusion?\\
+        \emph{Recommendation:} tell us the path if FreeCAD files exist. If not, export the 12 items from Fusion as STEP,
+        one file per component, into a staging folder, and run the pilot on those; remodelling natively stays M1's exit,
+        not the pilot's.
+  \item \textbf{Part-number form for LE.} Keep LE-STD-0001's \code{LE-01001} or map to the vault's
+        \code{LE-01-01001-001}?\\
+        \emph{Recommendation:} the vault learns a per-program format, so LE keeps \code{LE-01001} (band = document type,
+        sequence 001--999) and nothing the team already uses changes. Other programs keep the current form.
+  \item \textbf{Working revisions.} LE-STD-0001 writes \code{A.1}, \code{A.2} and \code{B.1}; the vault uses
+        \code{01}, \code{02} and \code{B} in WIP (your 23 Oct answer). The skipped letters also differ.\\
+        \emph{Recommendation:} keep the vault's lifecycle and add a per-program revision \emph{display}: for LE, pre-release
+        \code{0}$n$ prints as \code{A.}$n$ and the $k$-th review round of an ECO towards B prints as \code{B.}$k$. The
+        mapping is one to one, so nothing is lost. Amend LE-STD-0001 to skip S, X and Z as well (no LE item has passed A).
+  \item \textbf{Drawing numbers.} LE-STD-0001 gives a drawing its part's number; the vault makes a drawing its own item
+        (open question \ref{q:dwgpn}).\\
+        \emph{Recommendation:} a drawing stays its own item (its file and revision are tracked) but carries and prints its
+        part's number; internally its key is the part's number with a drawing suffix.
+  \item \textbf{Which register is the master.} \file{register.csv} (ADR-0002, proposed), Notion, or the vault?\\
+        \emph{Recommendation:} accept ADR-0002. The CSV stays the sequence log: the vault reads it to allocate numbers and
+        never issues a blocked one. For items it holds, the vault writes state and revision back as a diff you commit;
+        Notion mirrors the CSV.
+  \item \textbf{``CAD register links in the BruceWorx app''.} What should a link do?\\
+        \emph{Recommendation:} each register row shows the vault's \code{P/N-REV} and state, and an \emph{Open in
+        FreeCAD} link that opens the item from the vault; the Ops register tile counts the same rows once Ops reads them.
+  \item \textbf{The design-freeze checklist.} The G1 criteria are in Notion. Use the proposed lines (section~3), or send
+        the gate's list?\\
+        \emph{Recommendation:} the proposed lines, plus anything G1 has that they miss.
+  \item \textbf{Dry run first.} Run the pilot now on a copy of the vault, gaps and all, or wait for \eref{DRW-05},
+        \eref{DRW-08} and \eref{MFG-04}?\\
+        \emph{Recommendation:} dry run now (it finds the next gaps early and releases nothing for real); the real
+        release when those three are built.
+  \item \textbf{Hardware.} Number the screws, inserts and bearings of \code{LE-02001} as COTS items (\code{09xxx})?\\
+        \emph{Recommendation:} yes; the BOM hand count and \eref{PDM-06}'s acceptance need them.
+  \item \textbf{Joint modules.} \code{LE-01003} and \code{LE-01008} hold drives but are parts in the register. Split them
+        into \code{02xxx} assemblies before the pilot?\\
+        \emph{Recommendation:} no; release them as parts now and split them later through an ECO.
+  \item \textbf{Releasing a tree.} Approve the 24 parts and drawings one by one, or add \emph{Release tree\ldots}
+        (children first, one checklist per item, one pass)?\\
+        \emph{Recommendation:} add it; it is a day's work and every later release uses it.
+\end{enumerate}

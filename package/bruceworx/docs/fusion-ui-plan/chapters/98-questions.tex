@@ -8,12 +8,15 @@ These are decisions the roadmap cannot make for you. None of them blocks M0. Eac
   \item\label{q:fct01} \textbf{FC-T01 switch criteria} (\eref{PDM-08}, M6). The Ops data shows the gate
         ``Bruce sets FC-T01 switch criteria'' as done, but the criteria aren't recorded. What are they? They
         become M6's checklist and the scope filter on the parity matrix.
+        \emph{Answered 24 Oct:} the nine criteria proposed in \S\ref{sec:pdm08-plan} are M6's checklist.
   \item\label{q:cfgpn} \textbf{Part numbers for configurations} (\eref{MOD-03}). Proposed: each configuration
         that is manufactured separately gets its own P/N (\S\ref{sec:mod}). Or should variants share a P/N with
         a dash suffix?
   \item\label{q:dwgpn} \textbf{Drawing numbers} (\eref{PDM-02}, \eref{DRW-01}). Is a drawing its own item with
         a document-type code (\code{\{DT\}}) different from its part, or does it share the part's P/N? Their
         revisions move together either way.
+        \emph{Answered 24 Oct} (\S\ref{sec:pdm07-plan}, Q4): a drawing stays its own item but carries and prints its
+        part's number.
   \item\label{q:cnc} \textbf{CNC machine and controller} (\eref{MFG-02}). Which machine(s) and controller
         (GRBL, LinuxCNC, Haas, \ldots)? This picks the post-processor and the tool library.
   \item\label{q:openscad} \textbf{OpenSCAD binary} (\eref{AUT-05}). Ship the official OpenSCAD app (GPL-2, as a

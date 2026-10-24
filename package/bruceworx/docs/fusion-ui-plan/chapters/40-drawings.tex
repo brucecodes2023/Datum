@@ -85,13 +85,15 @@ released); title block filled from item metadata, printed as \code{P/N-REV}.}
 \label{fig:sheet-mock}
 \end{figure}
 
-\begin{epic}{DRW-01}{ASME templates \& title block}{M2}{\stTodo}{FCB-P2-06/07/08}
+\begin{epic}{DRW-01}{ASME templates \& title block}{M2}{\stProg}{FCB-P2-06/07/08}
 ANSI A--D sheet templates with the third-angle symbol, a general tolerance block, and fields for P/N, revision,
 title, material, finish, mass, scale, sheet and approvals. Fields fill from PDM item metadata
 (\eref{PDM-02}) through TechDraw's existing autofill, which is extended for the new keys. The \code{LE-01001}
 sample drawing (overall size, thickness, print Z, PETG/ABS, heat-set inserts) is the first user.
-\emph{Acceptance:} the \code{LE-01001} drawing fills every field automatically.
+\emph{Acceptance:} the \code{LE-01001} drawing fills every field automatically. Plan: section~\ref{sec:drw01-plan}.
 \end{epic}
+
+\input{chapters/42-drw01-plan}
 
 \begin{epic}{DRW-02}{Associative BOM table \& balloons}{M2}{\stTodo}{FCB-P2A-06}
 A native TechDraw \textbf{parts list} object (ASME Y14.34 columns: item, P/N, rev, description,

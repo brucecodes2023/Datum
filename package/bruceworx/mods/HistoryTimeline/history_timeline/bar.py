@@ -222,6 +222,12 @@ class FeatureButton(QtWidgets.QWidget):
             painter.setOpacity(1.0)
             painter.setPen(QtGui.QPen(QtGui.QColor(_SLASH), 2))
             painter.drawLine(8, self.height() - 6, self.width() - 8, 6)
+        if self.property("traced"):
+            # [BW] The feature that made the face picked in the 3D view (bruceworx_picktrace).
+            painter.setOpacity(1.0)
+            painter.setPen(QtGui.QPen(colors["accent"], 2))
+            painter.setBrush(qt_enum(QtCore.Qt, ("BrushStyle", "NoBrush"), ("NoBrush",)))
+            painter.drawRoundedRect(QtCore.QRectF(self.rect()).adjusted(1, 1, -1, -1), 5, 5)
         painter.end()
 
     def mouseReleaseEvent(self, event):
@@ -313,6 +319,8 @@ class TimelineBar(QtWidgets.QWidget):
         scroll.setVerticalScrollBarPolicy(_scroll_off())
         scroll.setWidget(row_host)
         scroll.setObjectName("HistoryTimelineScroll")
+        self._scroll = scroll
+        self._traced = None
 
         outer = QtWidgets.QHBoxLayout(self)
         outer.setContentsMargins(8, 2, 4, 2)
@@ -380,9 +388,22 @@ class TimelineBar(QtWidgets.QWidget):
             # the bar does not look like history has no playhead.
             self._row.addWidget(MarkerWidget())
         self._row.addStretch(1)
+        self.set_traced(self._traced)
 
     def button_widget(self, name):
         return self._buttons.get(name)
+
+    def set_traced(self, name):
+        """Ring the chip of feature ``name`` (None clears) and scroll it into view."""
+        self._traced = name
+        for key, button in self._buttons.items():
+            on = key == name
+            if bool(button.property("traced")) != on:
+                button.setProperty("traced", on)
+                button.update()
+        button = self._buttons.get(name) if name else None
+        if button is not None:
+            self._scroll.ensureWidgetVisible(button, 24, 0)
 
     def _schedule_click(self, name):
         self._pending_name = name

@@ -99,6 +99,20 @@ class _Card:
             if i == index or button is None or not button.text().strip():
                 frame.hide()
                 self.hidden.append(frame)
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(50, self.settle_title_bar)
+
+    def settle_title_bar(self):
+        """Lay the overlay title bar out again: after documents open and close its layout can keep
+        a stale 8 px width, and the overlay then elides the title to nothing (found by PDM-05)."""
+        try:
+            bar = self.dock.titleBarWidget()
+            if bar is not None and bar.layout() is not None and bar.layout().geometry().width() < bar.width() - 4:
+                bar.layout().setGeometry(bar.rect())
+                bar.update()
+        except RuntimeError:
+            pass
 
 
 _card = None

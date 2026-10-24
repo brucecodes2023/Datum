@@ -1,0 +1,103 @@
+%======================================================================
+\subsection{PDM-05 plan: review, release and change control in FreeCAD (23 Oct 2026, built 24 Oct)}\label{sec:pdm05-plan}
+%======================================================================
+
+The lifecycle rules of figure~\ref{fig:lifecycle-sm} are already code (\file{bruceworx/pdm.py}, replayed by the folder
+vault): submit, reject, approve to rev A, ECR $\rightarrow$ ECO, and releasing an ECO's items together. \eref{PDM-05}
+puts them in FreeCAD on top of the vault client (\S\ref{sec:pdm04-plan}). \textbf{Your answer (23 Oct):} with one person,
+\textbf{you approve your own work, with a checklist} that is recorded with the approval; a second approver can be required
+per vault later. Approvals happen in FreeCAD; Ops takes them over when \eref{PDM-04}'s multi-user step comes.
+
+\paragraph{Review and first release.}
+\begin{itemize}[nosep]
+  \item \emph{Submit for review} (from \eref{PDM-04}): the file must be checked in; the item goes to \emph{In Review}.
+  \item \emph{Reject\ldots}: a reason is required. The rejected number is superseded and work continues on the next
+        one (01 $\rightarrow$ 02), as ASME Y14.35 practice.
+  \item \emph{Approve\ldots} opens a task panel with the release checklist. Each line is checked by the tool where it
+        can be and ticked by you where it cannot:
+        \begin{enumerate}[nosep]
+          \item the file is checked in, with no local changes (automatic);
+          \item a drawing exists, is checked in, and its title block shows this P/N (automatic; a COTS item or an
+                assembly marked ``no drawing'' skips it);
+          \item for an assembly, every component is released, or is listed with the reason it is not (automatic list);
+          \item the drawing has been reviewed against the model (your tick);
+          \item a release note (required text).
+        \end{enumerate}
+        OK releases rev~A and writes the checklist and the note into the journal with the approval.
+\end{itemize}
+
+\paragraph{Change control (ECR $\rightarrow$ ECO).}
+\begin{itemize}[nosep]
+  \item \emph{Raise ECR\ldots}: the problem (required), the affected released items (from the selection, the Browser or
+        the Vault panel), optional attachments (screenshots, PDFs) copied into the vault. Numbered
+        \code{ECR-0001}, \code{ECR-0002}, \ldots{} per vault.
+  \item \emph{Decide ECR}: approve or reject, with a reason; recorded.
+  \item \emph{Open ECO\ldots} from one or more approved ECRs (\code{ECO-0001}, \ldots): the affected items and their
+        drawings get their next letter in WIP (A $\rightarrow$ B), and are offered for check-out together.
+  \item Work, check in and submit each item as usual.
+  \item \emph{Release ECO\ldots}: the same checklist per item, then all items release together; the old letters are
+        flagged superseded.
+\end{itemize}
+The Vault panel gets a \emph{Changes} filter listing ECRs and ECOs with their state, and the Start page's \emph{My work}
+gains ``ECOs open'' when there are any.
+
+\paragraph{Released means read-only.} A released revision cannot be checked out (the engine refuses already); the client
+explains why and offers \emph{Raise ECR\ldots} instead of an error. Released work copies are read-only on disk, and the
+Browser shows the letter.
+
+\paragraph{Build order.} 1 checklist engine and journal fields (FreeCAD-free, tests); 2 Approve and Reject panels;
+3 ECR and ECO panels, numbering, the Changes filter; 4 the round trip on a sample part and drawing (acceptance:
+rev A $\rightarrow$ ECR $\rightarrow$ ECO $\rightarrow$ rev B with its drawing); 5 write-up. About 4 days. Publishing PDFs
+(\eref{DRW-08}) and the release package (\eref{MFG-04}) stay in their own epics.
+
+\subsubsection*{Built (24 Oct 2026)}
+\begin{itemize}[nosep]
+  \item \textbf{Checklist engine.} \file{bruceworx/release\_check.py} computes lines 1--3 without FreeCAD and records the
+        whole checklist (with the checked-in version) in the journal with the approval, the rejection or each item of a
+        Release ECO. Older journals replay unchanged: the new fields are optional and written only when set.
+  \item \textbf{In FreeCAD} (\file{bruceworx\_changes.py}): Approve\ldots, Reject\ldots, Raise ECR\ldots, Decide ECR\ldots,
+        Open ECO\ldots{} and Release ECO\ldots{} as task panels, in the \emph{BruceWorx} $\rightarrow$ \emph{Vault} menu, the
+        Browser and Vault-panel right-click menus and Cmd-K; the Vault panel's \emph{Changes} filter and the Start page's
+        ``ECOs open''.
+  \item \textbf{Retire\ldots{} (Obsolete).} Only a released item with no ECO in work. The panel lists what uses it, as far
+        as the vault can tell: assemblies whose checked-in file links to it or whose BOM lists it, directly or through a
+        sub-assembly. A released user blocks it (change that one through an ECR first); users still in work need a
+        ``Retire anyway'' tick. Its released drawings retire with it unless you untick them. The reason is required and
+        recorded; there is no way back.
+  \item \textbf{Released means read-only.} A check-in leaves the work copy read-only, and every release (approve, Release
+        ECO, retire) sets it read-only again in case it was made writable by hand. Check Out on a released item explains
+        why it cannot change and offers \emph{Raise ECR\ldots}, with the item already ticked. Submit for Review is refused
+        while the file is checked out, so the file in review is the one in the vault.
+  \item \textbf{Command line.} \code{vault approve -{}-note TEXT -{}-reviewed} runs the same checklist and refuses while
+        anything blocks it (\code{-{}-no-drawing} and \code{-{}-waiver TEXT} for assemblies, \code{-{}-dry-run} shows the lines,
+        \code{-{}-attach FILE}); \code{vault reject -{}-note REASON} and \code{vault retire -{}-note REASON} record the reason,
+        the rejection with the checklist as it stood.
+  \item \textbf{Tests.} Contract tests for retire (reason, refusals, obsolete items take no ECR or ECO, a retired drawing
+        stays out of an ECO), the where-used walk, the read-only rule and the command line: 289 add-on tests,
+        \code{TestBruceWorxChanges} 12 and \code{TestBruceWorxVaultClient} 21 pass.
+\end{itemize}
+
+\paragraph{Your answer (24 Oct): the revision in the title block at the first release.} The drawing file is frozen
+showing \code{WIP 01} in its title block (\eref{DRW-01} fills it at check-in) while the vault releases it as A. Approval
+does \textbf{not} rewrite the released file: the first-release title block shows \textbf{the vault's revision when the
+PDF is published} (\eref{DRW-08}). For an ECO revision the title block already shows the new letter before release, so
+only the first release had this gap.
+
+\paragraph{Acceptance, to repeat on LE-01001.} Run in a scratch vault on a sample part and its drawing (made with our
+ANSI~B template, title block filled by \eref{DRW-01}), light and dark, through the panels: all checks passed. The same
+steps on LE-01001 and its drawing:
+\begin{enumerate}[nosep]
+  \item Check in the part and the drawing; the drawing's title block shows the part's P/N.
+  \item Select the part $\rightarrow$ \emph{Submit for Review}, then \emph{Reject\ldots} with a reason: 01 is kept as
+        rejected and the part is at 02, in work.
+  \item Check out, edit, check in, submit again. \emph{Approve\ldots}: lines 1--3 are ticked by the tool; tick ``Drawing
+        reviewed'', write a note $\rightarrow$ \emph{Release as A}. Approve the drawing the same way. Both work copies are
+        now read-only.
+  \item \emph{Check Out} on the part: the message offers \emph{Raise ECR\ldots}. Click it, describe the problem, attach a
+        photo $\rightarrow$ \emph{Raise ECR-0001}.
+  \item Vault panel $\rightarrow$ \emph{Changes} $\rightarrow$ double-click ECR-0001: approve with a reason, then
+        \emph{Open ECO\ldots}: part and drawing go A $\rightarrow$ B, checked out.
+  \item Edit both, check them in, submit the part. \emph{Release ECO\ldots}: submit the drawing from the panel, tick both
+        checklists, write a note $\rightarrow$ \emph{Release 2 Items}. Both are B; A is superseded; the work copies are
+        read-only.
+\end{enumerate}

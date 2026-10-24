@@ -960,6 +960,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "BruceWorx Start page",
+"tip": "On by default. The Start tab shows the BruceWorx page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "BruceWorx features",
 "tip": "",
 "page": "BruceWorx",
@@ -984,6 +990,24 @@
 "area": "BruceWorx"
 },
 {
+"text": "Claude Code bridge (asks once per session)",
+"tip": "On by default. Lets Claude Code (the BruceWorx MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call in a session asks you; a \"Claude connec",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Constraint up to",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Dependency lines on hover",
+"tip": "Hovering a Browser row draws thin lines to the rows it uses (Sketch to Pad) and the rows that use it.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Document tabs",
 "tip": "",
 "page": "BruceWorx",
@@ -996,8 +1020,20 @@
 "area": "BruceWorx"
 },
 {
+"text": "Document tabs in the title bar (macOS)",
+"tip": "On by default (macOS). The title bar becomes the first toolbar row: traffic lights, save, undo, redo, the document tabs and the search field. Off brings back the title bar and the tab row under the to",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Dot on modified document tabs",
 "tip": "On by default. A modified document shows a dot on its tab instead of the close button; the close button appears on hover. Unmodified tabs show it on the current tab only.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Error chip on failed features",
+"tip": "A feature whose recompute failed gets a red ERROR chip in the Browser; click it to open the feature.",
 "page": "BruceWorx",
 "area": "BruceWorx"
 },
@@ -1010,6 +1046,12 @@
 {
 "text": "Feature summary in the Browser",
 "tip": "On by default. Quiet text after a feature's name with its main dimension: Pad 8 mm, R5, Ø9 × 4.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Fill drawing title blocks from the part and the vault",
+"tip": "On by default. Drawings on the BruceWorx sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard,",
 "page": "BruceWorx",
 "area": "BruceWorx"
 },
@@ -1056,6 +1098,18 @@
 "area": "BruceWorx"
 },
 {
+"text": "Keep the Start page as the first tab",
+"tip": "On by default. The Start page, where the vault is, stays the first document tab and has no close button, so one click goes back to it.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "KiCad boards (Insert Board command)",
+"tip": "On by default. Adds Insert Board… (Assemble group and BruceWorx menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Left inset",
 "tip": "",
 "page": "BruceWorx",
@@ -1080,6 +1134,18 @@
 "area": "BruceWorx"
 },
 {
+"text": "New sheet-metal parts take the vault's default rule",
+"tip": "On by default. The first sheet-metal wall of a document without a rule gets the vault's default sheet-metal rule (thickness, bend radius, K-factor, relief); change it with Sheet Metal > Rules.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Offer to close the gaps of an open sketch profile",
+"tip": "When a Pad, Pocket, Revolution or Groove fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing changes without a click",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "On by default. Puts the model tree on the existing left overlay panel (auto-hide, transparency, width, and insets below)",
 "tip": "",
 "page": "BruceWorx",
@@ -1088,6 +1154,12 @@
 {
 "text": "On by default. Unified title bar and toolbar, with the native close, minimize, and zoom buttons in that bar. Uncheck to ",
 "tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "On-canvas editing (double-click a face: drag arrow and value field)",
+"tip": "Double-click a face of a Pad, Pocket, Fillet or Hole in the 3D view (or Alt-double-click its Browser row): a drag arrow, a value field and a command bar appear. Drag or type; one drag is one undo step",
 "page": "BruceWorx",
 "area": "BruceWorx"
 },
@@ -1104,6 +1176,18 @@
 "area": "BruceWorx"
 },
 {
+"text": "Pick a face: show the feature that made it",
+"tip": "Picking a face, edge or vertex in the 3D view highlights the feature that made it in the Browser and on the history timeline. The selection is not changed.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Preview while dragging when a recompute takes over",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Quiet property group captions",
 "tip": "On by default. Property groups are small-caps captions instead of grey bars (BruceWorx theme).",
 "page": "BruceWorx",
@@ -1112,6 +1196,24 @@
 {
 "text": "Rectangular and Circular Pattern commands",
 "tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly componen",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Right panel tabs: Properties, Vault, Parameters, Physical",
+"tip": "Properties, Vault, Parameters and Physical as tabs of the right panel; a command opens as a tab of its own. Cmd-I hides and shows the panel. Takes effect after a restart.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Search field (Cmd-K)",
+"tip": "On by default. A search field on the first toolbar row (Cmd-K) finds commands, objects in the document and settings. The SearchBar add-on's toolbar is hidden while it is on.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Sheet metal add-on (Design > Sheet Metal tab)",
+"tip": "On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design > Sheet Metal tab: base wall, flanges, relief, unfold, and BruceWorx's sheet-metal rules and Export Flat (shop ",
 "page": "BruceWorx",
 "area": "BruceWorx"
 },
@@ -1164,6 +1266,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "Undo toast after each command",
+"tip": "A small card above the navigation pill after each command (Pad created, Deleted) with an Undo button; it fades after four seconds. Not shown for property edits or while a sketch is open.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Unified title bar and toolbar on macOS",
 "tip": "On by default. Calls QMainWindow.setUnifiedTitleAndToolBarOnMac. Uncheck to set that property false, which is Qt stock. Known risk: Qt 6.8 documents painting problems when the window contains an OpenG",
 "page": "BruceWorx",
@@ -1172,6 +1280,12 @@
 {
 "text": "Use the macOS accent colour",
 "tip": "On by default. The accent from System Settings > Appearance colours buttons, checkboxes, selection and the view cube highlight. Text on it turns dark when white would be hard to read.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Vault client: check out, check in, Vault panel",
+"tip": "On by default. Check out and check in from FreeCAD: the Vault panel, vault status in the Browser and the status bar, a check-out offer when you save or edit a vault file that is not checked out to you",
 "page": "BruceWorx",
 "area": "BruceWorx"
 },
@@ -1189,6 +1303,12 @@
 },
 {
 "text": "macOS window",
+"tip": "",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "short line up to",
 "tip": "",
 "page": "BruceWorx",
 "area": "BruceWorx"

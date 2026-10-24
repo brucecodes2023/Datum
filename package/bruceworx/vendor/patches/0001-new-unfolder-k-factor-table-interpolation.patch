@@ -1,0 +1,26 @@
+Subject: [BW] New unfolder: interpolate K-factor tables in the right segment
+
+BendAllowanceCalculator.get_k_factor walked the table with
+"while r_over_t <= values[i]", which is false at i = 0 for any ratio
+inside the table, so it always used the first segment and extrapolated.
+Table R/T 1, 2, 3, 5 -> K 0.30, 0.40, 0.45, 0.50 gave 0.45 at R/T 2.5
+(right: 0.425) and 0.60 at R/T 4 (right: 0.475). Single values and
+two-row tables were not affected.
+
+Upstream: shaise/FreeCAD_SheetMetal at cbf6595 (0.8.26). Offered upstream.
+Applies with: patch -p1 -d package/bruceworx/vendor/SheetMetal < this file
+---
+--- a/SheetMetalNewUnfolder.py
++++ b/SheetMetalNewUnfolder.py
+@@ -735,8 +735,10 @@
+         # If we are within the range of specified radius: thickness
+         # values, perform piecewise linear interpolation.
+         else:
++            # [BW] find the segment that holds r_over_t (the old test,
++            # "while r_over_t <= values[i]", always stopped at the first one).
+             i = 0
+-            while r_over_t <= self.radius_thickness_values[i]:
++            while r_over_t > self.radius_thickness_values[i + 1]:
+                 i += 1
+             kf1 = self.k_factor_values[i]
+             kf2 = self.k_factor_values[i + 1]

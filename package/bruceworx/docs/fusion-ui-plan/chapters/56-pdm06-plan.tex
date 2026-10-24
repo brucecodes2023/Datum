@@ -1,0 +1,296 @@
+%======================================================================
+\subsection{BW-PDM-06 --- Plan: the BOM per revision, where-used, and the push to Ops (24 Oct 2026, approved 24 Oct)}\label{sec:pdm06-plan}
+%======================================================================
+
+\eref{PDM-06} makes the vault know what every assembly revision is made of. Two things follow from that: the indented
+BOM of a revision can be shown, exported and sent to Ops, and \emph{where-used} can answer which assembly revisions
+contain a part. The acceptance stays as written: \emph{where-used of a bolt lists every assembly revision that uses it.}
+It depends on the vault client (\eref{PDM-04}, building) and on the assembly BOM (\eref{ASM-04}, in progress). A spike
+in this build (below) showed that the reference model can already explode a BOM and walk it backwards, but it keeps one
+BOM per \emph{item}, not per revision, and nothing writes it yet.
+
+\paragraph{Already decided.}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Decision (when) & What it means here\\
+\midrule
+Data model (19 Oct, figure~\ref{fig:pdm-model}) & A BOM line points from a parent \emph{revision} to a child \emph{item}, with
+  quantity and find number. A released assembly picks up the child's latest released revision unless it is pinned.\\
+One part per file (19 Oct, \eref{ASM-01}) & Every BOM line is a file with its own P/N; bodies inside a part are not
+  BOM lines.\\
+Links by P/N (23 Oct, \eref{PDM-04}) & Work files are \file{<P/N>.FCStd} and links are rewritten to that name, so a link
+  names its child item.\\
+PCBA as one line (23 Oct, \eref{ECD-05}) & A part with \code{BomDetail} off is a leaf (\file{BomObject.cpp}, \code{[BW]}).\\
+Approvals in FreeCAD for now (23 Oct, \eref{PDM-05}) & Ops takes over approvals later; today Ops only needs to
+  \emph{receive} BOMs.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{1. What the spike showed (24 Oct)}
+
+A script (\file{pdm-plans/spike\_bom.py}, headless \code{FreeCADCmd} on a copy of your configuration) made five
+files: a bolt, a plate and a riser as parts; a \emph{bracket} assembly with one plate and a link array of four bolts;
+and a \emph{top} assembly with the riser, two brackets and two loose bolts. It imported them into a scratch folder vault
+with the Create Vault engine (\file{vault\_setup.py}), revised the bracket twice, and compared three sources of truth:
+the vault's model, the links in each checked-in file, and FreeCAD's Assembly BOM.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\hsize=1.15\hsize}X>{\hsize=0.85\hsize}X@{}}
+\toprule
+Check & Result\\
+\midrule
+Who calls \code{set\_bom} in the product code (\code{grep}) & nobody: every vault's BOM is empty today\\
+\code{release\_check.where\_used} (new with \eref{PDM-05}'s Retire) & item-level: latest file's links plus BOM
+  lines, through sub-assemblies; one revision (the latest) per user\\
+Vault model after \code{set\_bom} of the top and the bracket & explode: bolt 10, plate 2, bracket 2, riser 1 (correct)\\
+Bracket's BOM replaced by one without bolts & where-used of the bolt drops the bracket \emph{and} the top: the model keeps
+  one BOM per item, so the earlier revision's use is lost\\
+Revision of the bracket after two check-ins & still \code{01} (three versions); a check-in makes a version, not a revision\\
+Links read from each stored version (\code{linked\_files}) & child P/Ns per version; 7 versions read in 0.6\,ms\\
+Bracket with the bolt array deleted headless & 4 orphan \code{App::LinkElement}s stay and still carry an XLink to the
+  bolt: the raw links \emph{over-report}\\
+Assembly BOM, headless (\code{Assembly::BomObject} in a BOM group) & works in \code{FreeCADCmd}\\
+\quad top level only & riser 1, bracket 2, bolt 2 (correct)\\
+\quad indented & bracket 2, plate 1, \textbf{bolt 6} under the bracket, \textbf{no top-level bolt row}\\
+Ops (\file{bruceworks}, local \code{main}) & one route, \code{/api/health}; the dashboard's CAD-register tile is sample
+  data; no BOM endpoint\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Three findings to act on.}
+\begin{enumerate}[nosep]
+  \item \textbf{BOMs must be kept per revision.} \code{Vault.set\_bom(parent, lines)} replaces the item's BOM, so
+        where-used can only describe today. The acceptance (``every assembly revision'') needs the BOM of each revision
+        kept, and the released one frozen with its file, as \code{released\_files} already does for the file.
+  \item \textbf{The BOM comes from the assembly, not from raw links.} Links are right for fetching the files an assembly
+        needs (\eref{PDM-04}), but they include stale references and say nothing about quantities. The same applies to
+        the release checklist's component line (\file{release\_check.py}, \code{components\_of}) and to
+        \code{release\_check.where\_used}, which Retire\ldots{} uses: both read the \emph{latest} file's links, so they
+        over-report stale links and cannot name an older revision.
+  \item \textbf{The indented Assembly BOM merges across levels.} In \code{BomObject::addObjectChildrenToBom} the loop that
+        adds a repeated sibling to its first row scans every row since the first sibling, which includes the rows of an
+        earlier sibling's children. The top's two loose bolts were added to the bolt row inside the bracket (4 + 2 = 6)
+        and their own row vanished. The fix keeps a list of this level's rows and searches only that (about ten lines,
+        \code{[BW]}, and an upstream candidate: upstream main has the same loop).
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\subsubsection*{2. Theory: the BOM graph over revisions}
+
+\paragraph{The graph.} Let $R$ be the set of revisions, each written $p@r$ (item $p$ at revision $r$). A checked-in
+assembly revision $a$ has BOM lines $(a, c, q_{ac}, n_{ac})$ to child items $c$ with quantity $q_{ac}$ and find number
+$n_{ac}$. A line names an \emph{item}, so to walk the graph each line must be \emph{resolved} to a child revision:
+\[
+  \rho(a, c) \;=\;
+  \begin{cases}
+    \text{the revision of } c \text{ recorded when } a \text{ was checked in or released} & \text{(resolved, ``as built'')}\\
+    \text{the latest released revision of } c \text{ now} & \text{(floating, ``as current'')}
+  \end{cases}
+\]
+With $\rho$ fixed, the BOM is a directed graph $G = (R, E)$ with an edge $a \to \rho(a,c)$ weighted $q_{ac}$. FreeCAD
+allows two files to link each other, but a BOM cannot contain itself, so $G$ must be acyclic; the reference model
+already refuses a cycle (\code{\_has\_cycle}, a depth-first search with three colours) and the check-in will report the
+cycle's path.
+
+\paragraph{Roll-up.} The total quantity of revision $v$ under the top revision $t$ is the sum over paths of the product
+of quantities (as in \S\ref{sec:asm}),
+\[
+  Q_t(v) = \sum_{\pi:\,t \rightsquigarrow v}\ \prod_{(x,y)\in\pi} q_{xy},
+  \qquad
+  Q(t)=1,\quad Q(y) = \sum_{x \to y} Q(x)\,q_{xy}\ \text{in topological order,}
+\]
+which costs $O(|R|+|E|)$. The \emph{indented} BOM lists the paths with the per-parent quantity $q$ on each row; the
+\emph{flattened} BOM lists $Q_t(v)$ for the leaves. In the spike, $Q(\text{bolt}) = 2\cdot4 + 2 = 10$. Leaves are parts,
+COTS items and any part with \code{BomDetail} off. Quantities are counts for now (question~6).
+
+\paragraph{Where-used as reverse reachability.} Where-used of revision $v$ is the set of revisions from which $v$ can be
+reached,
+\[
+  W(v) = \{\,a \in R : a \rightsquigarrow v\,\},
+  \qquad
+  W(p) = \bigcup_{r} W(p@r)\ \text{for an item } p,
+\]
+found by a breadth-first walk over the reversed edges with a visited set, $O(|R|+|E|)$. For a few thousand revisions
+this is milliseconds, so it is computed from the journal on demand, with no index to keep in step. Each answer carries
+the path and $Q_a(v)$, so ``\code{LE-02001} A uses 10'' can be expanded to ``via the bracket, $2\times4$, and 2 direct''.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,x=2.9cm,y=-1.6cm,
+  r/.style={draw=black!35,fill=white,rounded corners=2pt,font=\scriptsize,minimum width=2.2cm,minimum height=0.6cm,align=center},
+  hit/.style={r,draw=bwred,fill=bwred!8,line width=0.8pt},
+  q/.style={font=\tiny,fill=white,inner sep=1pt},
+  e/.style={->,black!45},
+  he/.style={->,bwred,line width=0.9pt}]
+\node[hit] (pa) at (0.55,0) {Pedestal \textbf{A}\\[-1pt]\tiny released};
+\node[r]   (pb) at (2.0,0) {Pedestal \textbf{B}\\[-1pt]\tiny released (ECO)};
+\node[hit] (ka) at (0,1) {Bracket \textbf{A}};
+\node[r]   (ri) at (1.25,1) {Riser A};
+\node[r]   (kb) at (2.5,1) {Bracket \textbf{B}};
+\node[hit] (bo) at (0,2) {\textbf{Bolt M5$\times$12} A\\[-1pt]\tiny COTS};
+\node[r]   (pl) at (1.25,2) {Plate A};
+\node[r]   (rv) at (2.5,2) {Rivet A\\[-1pt]\tiny COTS};
+\draw[he] (pa) -- node[q]{$\times2$} (ka);
+\draw[he] (pa.west) -- ++(-1.25,0) |- node[q,pos=0.25]{$\times2$} (bo.west);
+\draw[e] (pa) -- node[q]{$\times1$} (ri);
+\draw[e] (pb) -- node[q]{$\times1$} (ri);
+\draw[e] (pb) -- node[q]{$\times2$} (kb);
+\draw[he] (ka) -- node[q]{$\times4$} (bo);
+\draw[e] (ka) -- node[q]{$\times1$} (pl);
+\draw[e] (kb) -- node[q]{$\times1$} (pl);
+\draw[e] (kb) -- node[q]{$\times4$} (rv);
+\end{tikzpicture}
+
+\vspace{6pt}
+\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.2cm}Xl@{}}
+\toprule
+How the graph is kept & Where-used of the bolt & Verdict\\
+\midrule
+One BOM per item, latest wins (today's model) & nothing (the bracket's BOM is now B, with rivets) & misses Pedestal A\\
+Per revision, lines to items, not resolved & Bracket A $\rightarrow$ ``Bracket'' $\rightarrow$ Pedestal A \emph{and B} & reports B wrongly\\
+Per revision, lines resolved (proposed) & Bracket A (4), Pedestal A (10) & exact\\
+\bottomrule
+\end{tabularx}
+\caption{Where-used as reverse reachability over revisions (example). An ECO replaced the bracket's bolts with rivets:
+Bracket~B and Pedestal~B no longer use the bolt. Walking the red edges backwards from the bolt finds exactly the
+revisions that use it; quantities multiply along the path ($2\times4+2=10$).}
+\label{fig:pdm06-whereused}
+\end{figure}
+
+\paragraph{Resolved or floating.} The data model (figure~\ref{fig:pdm-model}) lets a released assembly float to its
+children's latest released revisions. Your numbering standard for Leonardo (LE-STD-0001) says the opposite in practice:
+\emph{``if a child's released config changes an assembly's BOM, bump the parent rev''}, which is the resolved reading.
+Both can be stored at no cost: each line records the child item \emph{and} the child revision seen at check-in, frozen at
+release. Where-used then answers exactly (resolved), and can also show ``may pick up'' (floating) as a second list
+(question~2).
+
+%----------------------------------------------------------------------
+\subsubsection*{3. Design}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,node distance=4mm and 6mm,
+  b/.style={draw=bwblue!70,fill=bwblue!5,rounded corners=2pt,font=\scriptsize,align=center,minimum height=0.95cm,text width=2.05cm},
+  g/.style={b,draw=black!30,fill=black!3},
+  t/.style={font=\tiny\color{bwgrey},align=center}]
+\node[b] (ci) {Check in an assembly (\eref{PDM-04})};
+\node[b,right=of ci] (bom) {BOM walker: parts only, per-parent qty};
+\node[b,right=of bom] (j) {Journal: \code{set\_bom} with revision, version, resolved children};
+\node[b,right=of j] (rel) {Release freezes the version's BOM (\eref{PDM-05})};
+\node[g,right=of rel] (ops) {Outbox $\rightarrow$ Ops (when its API exists)};
+\draw[->] (ci) -- (bom); \draw[->] (bom) -- (j); \draw[->] (j) -- (rel); \draw[->] (rel) -- (ops);
+\node[t,below=1mm of bom] {refuses a cycle;\\names children not in the vault};
+\node[t,below=1mm of j] {older lines (child, qty)\\still replay};
+\node[t,below=1mm of ops] {idempotent by\\(P/N, rev, SHA-256)};
+\end{tikzpicture}
+\caption{Where a revision's BOM is made, kept and sent.}
+\label{fig:pdm06-flow}
+\end{figure}
+
+\begin{itemize}[nosep]
+  \item \textbf{The BOM walker} (\file{bruceworx\_bom.py}, FreeCAD side) walks an open assembly the way
+        \code{BomObject} does (links, link arrays counting visible elements, \code{AssemblyLink}, \code{BomDetail}) but
+        returns structured rows: P/N (the child's \code{PartNumber}, else its file name), quantity per parent, find
+        number, and the child's revision from the vault. It keeps only items: a part's bodies are not rows. It is the
+        same walker \eref{ASM-04} needs for its indented, flattened and CSV views and \eref{DRW-02} for the parts list,
+        so it is built once, under ASM-04 if that comes first. The \code{BomObject} merge bug is fixed alongside, because
+        that spreadsheet is what you see in the tree.
+  \item \textbf{Check-in.} When the file is an assembly, the walker runs on the open document before the file is
+        stored. A child that is not a vault item is listed with \emph{Import\ldots} (the check-in panel already offers it
+        for links), and a cycle stops the check-in with its path. The lines go into the journal with the version they
+        describe.
+  \item \textbf{Journal and model.} \code{set\_bom} gains \code{revision}, \code{sha256} and per line the child revision
+        and find number; lines with only (child, qty) from older journals still replay. \code{pdm.Vault} keeps
+        \code{bom[(parent, revision)]}, with the BOM of the version that was released frozen beside
+        \code{released\_files}. \code{explode}, \code{flattened} and \code{where\_used} take a revision, and
+        \code{where\_used} returns (P/N, revision, total quantity, path). \code{release\_check.where\_used} is not replaced
+        but widened: it keeps its rows and its \code{via} column (``BOM'', ``file link''), gains the revision, the
+        quantity and the path, reads the per-revision BOM first, and falls back to file links only for versions that have
+        no BOM yet (marked ``file link only''). Retire\ldots{} keeps using it, so its rule (no retiring a part a released
+        assembly still uses) becomes per revision with no change to the panel. The OpenAPI contract changes the same way:
+        \code{/items/\{pn\}/revisions/\{rev\}/bom} and a where-used that returns revisions.
+  \item \textbf{Release.} The release checklist's component line reads the BOM lines instead of raw links (finding~2).
+        Releasing an assembly freezes its BOM; an ECO that releases a child does not change a parent's released BOM.
+  \item \textbf{In the window.} Right-click an item in the Vault panel or the Browser: \emph{Where used\ldots} opens a
+        list of assembly revisions with state chips, the path and the quantity (toggle: \emph{exact} or \emph{may pick
+        up}); \emph{Bill of materials\ldots} shows a revision's BOM as indented or flattened, with \emph{Export CSV}.
+  \item \textbf{Ops.} Each release appends one line per BOM to \file{outbox/<user>@<mac>.jsonl} in the vault (one
+        writer per file, the journal's rule). When the Ops API exists (\eref{PDM-03}'s reader, bearer token from
+        \code{BW\_OPS\_TOKEN}), a sender posts the lines it has not posted yet; Ops stores them by (P/N, revision,
+        SHA-256), so sending twice changes nothing. Until then the outbox is the record, and \emph{Export CSV} covers
+        anyone who needs the BOM now.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{4. Build order and effort}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+\# & Step & Effort\\
+\midrule
+1 & Reference model: BOM per revision, resolved children, explode, flattened and where-used per revision; contract tests
+  (FreeCAD-free) & 1\,d\\
+2 & Journal format with old lines still replaying; folder tests; OpenAPI update & 0.5\,d\\
+3 & BOM walker (shared with \eref{ASM-04}) and the \code{[BW]} fix of the indented merge, with a test on the spike's
+  files & 1.5\,d\\
+4 & Check-in hook: lines from the open assembly, children not in the vault, cycle report & 1\,d\\
+5 & Release: freeze the BOM, component line from BOM lines & 0.5\,d\\
+6 & Widen \code{release\_check.where\_used}; Where used\ldots{} and Bill of materials\ldots{} panels, CSV export & 1.5\,d\\
+7 & Ops outbox and sender (off until Ops answers) & 1\,d\\
+8 & Acceptance: the bolt across Pedestal A and B (figure~\ref{fig:pdm06-whereused}), then on \code{LE-02001};
+  write-up & 0.5\,d\\
+\midrule
+ & Total & 7.5\,d\\
+\bottomrule
+\end{tabularx}
+\end{center}
+Steps 1--2 need nothing else and can start at once; step~3 is shared with \eref{ASM-04}, so whichever epic comes first
+carries it.
+
+\paragraph{Risks.} \emph{Re-reading old versions}: versions checked in before this epic have no BOM; a one-off
+\emph{Rebuild BOMs} runs the walker in \code{FreeCADCmd} over each stored assembly version (opening every linked part, so
+slow on large trees, but once). \emph{Configurations} (\eref{MOD-03}) will add a configuration to each line; the line
+format leaves room for it. \emph{Ops} has no API yet, so the push cannot be tested end to end in this epic; the outbox
+keeps that from blocking it. The \code{BomObject} fix touches an upstream file (one \code{[BW]} block).
+
+%----------------------------------------------------------------------
+\paragraph{Your answers to the questions below (24 Oct).} All seven as recommended. 1: where-used is \textbf{exact} by
+default, with \emph{may pick up} as a second list in the same panel. 2: children are \textbf{pinned at release} (the
+child revision is recorded) and the parent shows ``newer child released'', as LE-STD-0001 has it. 3: Ops receives
+\textbf{released BOMs only} (first release and each ECO release). 4: the \textbf{outbox and Export CSV}; no Ops change
+in this epic. 5: \textbf{every BOM line is a vault item}, bought parts included; check-in lists a child that is not an
+item and release refuses one. 6: \textbf{counts} now, units later. 7: the indented merge in \file{BomObject.cpp} is
+fixed now (\code{[BW]}) and offered upstream, the spike's files as the test. Building started 24 Oct.
+
+\subsubsection*{Questions before PDM-06 starts}
+
+\begin{enumerate}
+  \item \textbf{What where-used answers.} Exactly the assembly revisions that were built with the part (resolved), or
+        also those that could pick it up because they float to the latest released child?\\
+        \emph{Recommendation:} exact by default, with \emph{may pick up} as a second list in the same panel.
+  \item \textbf{Released assemblies: pinned or floating children.} The data model floats to the latest released child;
+        LE-STD-0001 bumps the parent when a child change alters its BOM, which is pinning.\\
+        \emph{Recommendation:} pin at release (record the child revision), and show ``newer child released'' on the
+        parent so you decide whether it needs an ECO. This matches LE-STD-0001.
+  \item \textbf{What Ops receives, and when.} Every check-in's BOM, or released BOMs only?\\
+        \emph{Recommendation:} released BOMs only (first release and each ECO release); WIP BOMs stay in the vault.
+  \item \textbf{Until Ops has an API.} Is the outbox in the vault plus \emph{Export CSV} enough, or do you want a file
+        dropped somewhere Ops already reads?\\
+        \emph{Recommendation:} outbox and CSV; no Ops change in this epic.
+  \item \textbf{Hardware as items.} The acceptance needs the bolt to be a vault item. Should every BOM line be a vault
+        item, including bought parts (a COTS item, \code{09xxx} in LE-STD-0001)?\\
+        \emph{Recommendation:} yes; check-in lists any child that is not an item, and release refuses one.
+  \item \textbf{Quantities.} Counts only, or units too (cable by length, adhesive by mass)?\\
+        \emph{Recommendation:} counts now; a unit and quantity-per property later, when the first harness needs it.
+  \item \textbf{The Assembly BOM bug.} Fix the indented merge in \file{BomObject.cpp} now (\code{[BW]}) and offer it
+        upstream?\\
+        \emph{Recommendation:} yes, with the spike's files as the test.
+\end{enumerate}

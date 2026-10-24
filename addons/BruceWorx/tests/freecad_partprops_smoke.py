@@ -135,7 +135,7 @@ def lifecycle_state(schema) -> None:
         FreeCAD.closeDocument(doc.Name)
 
         # Approved while the file was closed: opening it takes the vault's record.
-        vault.approve("LE-01-01001-001")
+        vault.approve("LE-01-01001-001", note="released")
         prefs.SetString("VaultPath", vault.root)
         partprops.install_observer()
         doc = FreeCAD.openDocument(path)

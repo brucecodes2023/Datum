@@ -17,7 +17,14 @@ one writer at a time for now. The folder layout is designed so a sync service ha
 \end{epic}
 
 \input{chapters/52-pdm-eval}
+\input{chapters/51-pdm02-spec}
+\input{chapters/53-pdm03}
 \input{chapters/54-pdm04-plan}
+\input{chapters/55-pdm05-plan}
+\input{chapters/56-pdm06-plan}
+\input{chapters/57-pdm07-plan}
+\input{chapters/58-pdm08-plan}
+\input{chapters/59-pdm09-plan}
 
 \subsection{Data model}
 
@@ -53,6 +60,9 @@ revision moves \emph{with} the part's: one ECO releases both.
 lifecycle, ECR/ECO, drawing coupling, BOM explosion, where-used, cycle rejection) with 18 contract tests in
 \file{tests/test\_pdm.py}, and the API contract \file{addons/BruceWorx/docs/pdm-openapi.yaml} (17 endpoints,
 including check-in/out and locks).
+\textbf{Brought up to date 24 Oct (\S\ref{sec:pdm02-spec}):} the YAML (0.2.0-draft, 21 operations) now says what the
+folder vault, review and release do; table~\ref{tab:pdm-transitions} lists every transition and
+\file{tests/test\_pdm\_contract.py} tests each one and its refusals. Eleven items wait for your approval.
 \emph{Acceptance:} spec approved; every transition in Figure~\ref{fig:lifecycle-sm} has an endpoint and a test.
 \end{epic}
 
@@ -80,7 +90,8 @@ including check-in/out and locks).
 \draw[->] ([xshift=0.6cm]rl.south) -- ++(0,0.22) -| node[t,pos=0.25,above]{problem reported} (ecr.north);
 \draw[->] (ecr) -- node[t,above]{approved} (eco);
 \draw[->] (eco) -- node[t,above]{submit} (rv2);
-\draw[->] (rv2.west) -- ++(-0.1,0) |- node[t,pos=0.72,below]{approve: rev B released, rev A superseded} ($([xshift=-0.5cm]rl.south)+(0,-0.45cm)$) -- ([xshift=-0.5cm]rl.south);
+\draw[->] (rv2.south east) to[bend right=25] node[t,below]{reject: keeps letter} (eco.south west);
+\draw[->] (rv2.west) -- ++(-0.1,0) |- node[t,pos=0.72,below]{release ECO: rev B released, rev A superseded} ($([xshift=-0.5cm]rl.south)+(0,-0.45cm)$) -- ([xshift=-0.5cm]rl.south);
 \end{tikzpicture}
 \caption{Lifecycle. Pre-release revisions are numeric (ASME Y14.35 practice) and every review rejection
 increments them. The first approval releases rev A. After that, letters change only through an approved ECR
@@ -98,8 +109,8 @@ stored on the item never includes the revision (decided).
 \paragraph{Theory: why pessimistic locking.} \code{.FCStd} files are zip archives of XML and B-rep data. Two
 concurrent edits cannot be merged, so optimistic concurrency, where both editors save and a merge resolves
 it, would always end with one person's work discarded. With 2--5 editors, \emph{pessimistic} locking (check-out
-grants an exclusive lock; check-in releases it) costs little waiting and avoids lost work. Locks carry a lease,
-and an administrator can break a stale one. A file version is identified by its SHA-256, so an unchanged
+grants an exclusive lock; check-in releases it) costs little waiting and avoids lost work. Locks never expire
+(decided 23 Oct); a stale one is broken by hand (\emph{Break lock}), and that is recorded. A file version is identified by its SHA-256, so an unchanged
 check-in is a no-op and duplicate content is stored once.
 
 \begin{epic}{PDM-03}{Numbering service}{M2}{\stProg}{FCB-P2-03/04/05}
@@ -107,10 +118,12 @@ The local-JSON numbering source and macro are merged (\#5). The format is
 \code{\{PROG\}-\{DT\}-\{PPPPP\}-\{SSS\}-\{REV\}}. Under the decision, \code{\{REV\}} moves out of the P/N into
 revision metadata, and label and file names drop it. Then the Ops API reader (stubbed as
 \code{OpsApiNumberSource}) allocates numbers centrally, with a bearer token from \code{BW\_OPS\_TOKEN}.
+\textbf{Built 24 Oct (\S\ref{sec:pdm03}):} numbers without \code{-REV}, the migration of numbering files and labels,
+and the Ops reader, tested against a local stub; Ops itself does not serve the endpoint yet.
 \emph{Acceptance:} P/Ns come from Ops; existing LE numbers migrate with only the revision suffix removed.
 \end{epic}
 
-\begin{epic}{PDM-04}{FreeCAD vault client}{M2}{\stTodo}{(new)}
+\begin{epic}{PDM-04}{FreeCAD vault client}{M2}{\stProg}{(new)}
 A Vault panel and tree overlays: \emph{checked in}, \emph{checked out by me}, \emph{locked by someone
 else}, \emph{newer version available}. Commands: check out, check in (with comment), undo check-out, get
 latest, and get a specific revision. Opening a locked file opens it read-only. Saving a file you have not
@@ -122,7 +135,7 @@ drive it.
 the status icons are always correct. Locking between several users is a later step.
 \end{epic}
 
-\begin{epic}{PDM-05}{Lifecycle \& change control}{M2}{\stTodo}{(new)}
+\begin{epic}{PDM-05}{Lifecycle \& change control}{M2}{\stProg}{(new)}
 Implements Figure~\ref{fig:lifecycle-sm}, with approvals in Ops. Release freezes files read-only, publishes
 drawings (\eref{DRW-08}), and builds the release package (\eref{MFG-04}). The ECR captures the problem;
 the ECO groups affected items, opens their next letter revision in WIP, and releases them together.
@@ -130,10 +143,11 @@ the ECO groups affected items, opens their next letter revision in WIP, and rele
 and its drawing.
 \end{epic}
 
-\begin{epic}{PDM-06}{BOM sync \& where-used}{M2}{\stTodo}{(new)}
+\begin{epic}{PDM-06}{BOM sync \& where-used}{M2}{\stProg}{(new)}
 On check-in of an assembly, push its BOM (\eref{ASM-04}) to Ops as BOM lines. Where-used is the reverse
 traversal from \S\ref{sec:asm}. Released assemblies resolve children to the latest \emph{released}
 revision. A WIP assembly may also use WIP children, and is flagged when it does.
+\textbf{Plan approved 24 Oct, building} (\S\ref{sec:pdm06-plan}): children pinned at release, released BOMs only.
 \emph{Acceptance:} where-used of a bolt lists every assembly revision that uses it.
 \end{epic}
 
@@ -142,12 +156,14 @@ The first real release: build the pedestal tree (\code{LE-01001} $\rightarrow$ \
 $\rightarrow$ \code{LE-01009} $\rightarrow$ \code{LE-01011} $\rightarrow$ \code{LE-01002}), link the CAD
 register in the BruceWorx app, run the design-freeze checklist and validation macro, and release rev A with
 drawings and package.
+\textbf{Plan approved 24 Oct} (\S\ref{sec:pdm07-plan}): the pilot starts fresh, modelled in FreeCAD with no imported
+files; it waits on your design data and on \eref{DRW-05}, \eref{DRW-08} and \eref{MFG-04}.
 \emph{Acceptance:} \code{LE-02001} rev A released entirely from FreeCAD.
 \end{epic}
 
 \begin{epic}{PDM-08}{Migration from Fusion}{M6}{\stTodo}{FC-T01, FCB-P2-22}
 Bulk-import Fusion exports (STEP, plus drawings as PDF) into the vault with P/N and revision mapping,
 re-establish assembly structure, and record provenance. The FC-T01 switch criteria become the checklist for
-M6.
+M6. \textbf{Plan approved 24 Oct} (\S\ref{sec:pdm08-plan}); the pilot starts fresh, so migration stays M6 work.
 \emph{Acceptance:} every LE part imported, numbered and released; FC-T01 criteria met.
 \end{epic}

@@ -1,0 +1,151 @@
+%======================================================================
+\subsection{BW-PDM-02 --- The spec as built (24 Oct 2026, approved 24 Oct)}\label{sec:pdm02-spec}
+%======================================================================
+
+The 19 Oct draft of \eref{PDM-02} was written before the folder vault (\S\ref{sec:pdm-decision}), the vault client
+(\S\ref{sec:pdm04-plan}) and review and release (\S\ref{sec:pdm05-plan}) were built. Since then the code gained the
+journal fields of \eref{PDM-05} (release checklist and note, rejection reason, ECR and ECO records and numbers,
+retire with a reason), the working folder (\file{work/<actor>/}, \file{.rev/}), Vault Settings and Move Vault. This
+section restates the spec from the code. Where the code and the 19 Oct text disagreed, the documents now say what
+the code does, and the difference is listed under \emph{For approval} below. No behaviour was added for the spec.
+
+\paragraph{What the spec is.} Three files and their tests:
+\begin{itemize}[nosep]
+  \item \file{bruceworx/pdm.py}: the rules (revisions, lifecycle, change control, BOM); storage-free.
+  \item \file{bruceworx/pdm\_folder.py}: files, locks and the journal; every operation is one journal event, replayed
+        through \file{pdm.py}.
+  \item \file{docs/pdm-openapi.yaml}, version 0.2.0-draft: 21 operations. Each state-changing operation's
+        \code{operationId} is its journal operation, so a later server (Ops) and the folder vault name the same things.
+        The Ops numbering call of \eref{PDM-03} (\code{POST /part-numbers}) is in it too.
+  \item Tests: the 19 Oct contract \file{tests/test\_pdm.py}, also re-run on a folder, and the new
+        \file{tests/test\_pdm\_contract.py} (48 tests): every row of table~\ref{tab:pdm-transitions} on the
+        reference model and on a folder vault (with a reopen after each test, so the journal replays to the same
+        states), every refusal in the right-hand column, and a check that the table, the OpenAPI operations and the
+        journal operations are the same list.
+\end{itemize}
+
+{\small
+\begin{longtable}{@{}l>{\raggedright\arraybackslash}p{3.2cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.6cm}@{}}
+\caption{Every transition of the PDM spec. IDs are the test names in \file{test\_pdm\_contract.py}.}\label{tab:pdm-transitions}\\
+\toprule
+ID & Operation & From $\rightarrow$ to & Refused when\\
+\midrule
+\endfirsthead
+\toprule
+ID & Operation & From $\rightarrow$ to & Refused when\\
+\midrule
+\endhead
+T1 & \code{create\_item} \newline \code{POST /items} & new $\rightarrow$ rev 01, WIP & the P/N exists; a drawing names no
+  existing part\\
+T2 & \code{submit} & WIP $\rightarrow$ In Review & not WIP; the file is checked out (folder)\\
+T3 & \code{reject} & In Review (01, 02, \ldots) $\rightarrow$ next number in WIP; the rejected one is superseded &
+  not In Review\\
+T4 & \code{reject} & In Review (ECO letter) $\rightarrow$ WIP, same letter & not In Review\\
+T5 & \code{approve} & In Review (pre-release) $\rightarrow$ Released as A; its file is frozen & not In Review; an ECO
+  revision; already released\\
+T6 & \code{raise\_ecr} \newline \code{POST /ecrs} & released items $\rightarrow$ ECR Open & an item not released, or
+  obsolete; empty problem, no items, number taken (folder)\\
+T7, T8 & \code{decide\_ecr} & ECR Open $\rightarrow$ Approved, or Rejected & already decided\\
+T9 & \code{open\_eco} \newline \code{POST /ecos} & released + approved ECRs $\rightarrow$ next letter in WIP for every
+  item and its drawings (retired drawings stay retired) & an ECR not Approved; an item obsolete or with a revision in
+  WIP or In Review. A refusal changes nothing.\\
+T10 & \code{submit} & WIP (ECO letter) $\rightarrow$ In Review & as T2\\
+T11 & \code{release\_eco} & every ECO revision In Review $\rightarrow$ all Released together; older letters
+  superseded; files frozen; ECO Released & the ECO is not Open; an item is not In Review\\
+T12 & \code{retire} & Released $\rightarrow$ Obsolete; never changes again & not released; already obsolete; its next
+  letter is in work under an ECO; a released assembly uses it; no reason (folder). The clients also refuse while a
+  released item's file links to it.\\
+F1 & \code{checkout} & WIP, unlocked $\rightarrow$ locked by me & not WIP (so never a released file); locked by
+  someone else\\
+F2 & \code{checkin} & locked by me $\rightarrow$ new version, unlocked (or kept) & not locked by me; not WIP. The
+  same content adds no version and only unlocks. A comment is required (client).\\
+F3 & \code{undo\_checkout} & locked by me $\rightarrow$ unlocked & ---\\
+F4 & \code{undo\_checkout} \newline (\code{force}) & locked by someone else $\rightarrow$ unlocked, recorded &
+  without \code{force}\\
+B1 & \code{set\_bom} \newline \code{PUT /items/\{pn\}/bom} & BOM replaced & unknown child; quantity below 1; the BOM
+  would contain itself (the old BOM is kept)\\
+\bottomrule
+\end{longtable}}
+
+Figure~\ref{fig:lifecycle-sm} now shows T4 (an ECO letter rejected keeps its letter) and labels T11 \emph{release
+ECO}: an ECO letter is never released by \emph{approve}.
+
+\paragraph{Decision records.} Every decision is recorded on the revision (or the ECR or ECO) with who (\code{user@mac})
+and when: \emph{approve} with the release note, the checklist as ticked (\file{release\_check.py}) and attachments;
+\emph{reject} with its reason; \emph{retire} with its reason; an ECR with its problem, attachments and the decision's
+reason; an ECO with its release note and one checklist per item. Attachments are write-once objects like file
+versions. ECRs and ECOs are numbered per vault (\code{ECR-0001}, \code{ECO-0001}) when no number is given. Fields are
+written only when set, so journals from before 23 Oct replay unchanged.
+
+\paragraph{The vault folder as built.}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Path & Holds\\
+\midrule
+\file{<name>.bwvault} & The ref file: format, version, vault id, name. Written once.\\
+\file{objects/<ab>/<sha256>.<ext>} & File versions and attachments; write-once, verified on every read.\\
+\file{journal/<actor>.jsonl} & Append-only events, one writer per file; sync-service duplicates are merged by event id.\\
+\file{work/<actor>/<P/N>.FCStd} & Working files (\S\ref{sec:pdm04-plan}); writable only while checked out to you.\\
+\file{work/<actor>/.bw/state.json} & Per file: the version it started from.\\
+\file{work/<actor>/.rev/<P/N>-<rev>-<sha8>.FCStd} & Older versions from \emph{Get revision}, read-only, links pointed
+  at the work copies.\\
+\file{numbering.json}, \file{document\_types.json} & Part numbering (\S\ref{sec:pdm03}); Vault Settings adds, renames
+  and retires rows, never deletes them or changes a code.\\
+\file{part\_properties.json}, \file{drawing\_standards.json} & Company part properties; title-block standards.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+\emph{Move Vault} copies the whole folder, compares every file by SHA-256, opens the copy and requires it to replay to
+the same items, versions and locks, and only then renames it into place (staged as \file{<name>.moving}); the old
+folder is left as it was. None of this changes the API: the work folder, settings files and moving are the folder
+vault's business, not operations of the spec.
+
+\paragraph{Your answers (24 Oct).} A1--A11 all as recommended. Approved as built: A1 (the spec is the three files
+and table~\ref{tab:pdm-transitions}), A2, A4 (per-revision BOMs come with \eref{PDM-06}), A6, A7, A8 and A11. To
+change: \textbf{A3}, the required texts (check-in comment, reject reason, release note, ECR problem, decision reason,
+retire reason) move into \file{pdm.py} and the folder's check-in, so every client gets the same rule; \textbf{A9}, the
+folder-only refusals that need no files (empty problem, no items, number taken, no retire reason) move into
+\file{pdm.py} too; \textbf{A5}, the ECO state \emph{Cancelled} is dropped from the spec until a \emph{Cancel ECO} is
+designed; \textbf{A10}, the file-link check of ``used by'' (\file{release\_check.where\_used}) becomes part of the spec,
+until \eref{PDM-06} pushes BOMs on check-in and the BOM check alone is enough.
+
+\paragraph{For approval (approved 24 Oct).} What you approve, with my recommendation.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}p{6.2cm}X@{}}
+\toprule
+\# & Item & Recommendation\\
+\midrule
+A1 & The spec is \file{pdm.py} + \file{pdm\_folder.py} + \file{pdm-openapi.yaml} 0.2.0-draft, with
+  table~\ref{tab:pdm-transitions} as its state machine. & Approve. It is what runs today.\\
+A2 & Locks never expire; anyone can break one with \code{force}, and it is recorded. The draft had leases and an
+  administrator. & Approve (your 23 Oct decision). Revisit roles with several users.\\
+A3 & Required texts: the clients (FreeCAD panels; \code{bw-hooks vault approve}, \code{reject}, \code{retire
+  --note}) require a check-in comment, a reject reason, a release note, an ECR problem, a decision reason and a retire
+  reason; the folder vault enforces only the problem and the retire reason; the
+  reference model none. & Move all of them into \file{pdm.py} (and the folder's check-in), so every client gets the
+  same rule.\\
+A4 & One BOM per item, not per revision; find number, configuration and pinned revision are not stored. The figure
+  draws BOM lines from a parent \emph{revision}. & Approve for now; per-revision BOMs and those fields belong to
+  \eref{PDM-06}.\\
+A5 & The draft's ECO state \emph{Cancelled} has no operation. & Drop it from the spec (done in the YAML) until a
+  \emph{Cancel ECO} is designed: what happens to its WIP letters is your call.\\
+A6 & Retire as built: reason required, refused while the next letter is in work under an ECO, an obsolete item never
+  changes again, a part's drawing is not retired with it (the dialog offers it). & Approve.\\
+A7 & Unreleased work cannot be retired or deleted: it ``simply stops'' and stays listed in WIP. & Approve; add a
+  \emph{Cancel} only if the WIP list gets cluttered.\\
+A8 & Submit is refused while the file is checked out (folder). & Approve; the reviewed file must be the vault's.\\
+A9 & Refusals that live only in the folder vault (empty problem, no items, number taken, no retire reason, submit while
+  checked out) are not in the reference model, so a server written from \file{pdm.py} alone would accept them. &
+  Move the ones that need no files into \file{pdm.py}.\\
+A10 & ``Used by'' for retiring: the engine looks at BOM lines only; the clients also count released items whose
+  checked-in file links to the part (\file{release\_check.where\_used}), so the API and FreeCAD can disagree. &
+  Make the file-link check part of the spec: \eref{PDM-06} pushes BOMs on check-in, after which the BOM check alone
+  is enough.\\
+A11 & \emph{Get revision} names files \file{<P/N>-<rev>-<sha8>.FCStd}, not \file{<P/N>-<rev>.FCStd} as the
+  \eref{PDM-04} plan says, so two versions of one revision can sit side by side. & Approve; the plan text follows.\\
+\bottomrule
+\end{tabularx}
+\end{center}

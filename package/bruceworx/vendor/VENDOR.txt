@@ -1,0 +1,47 @@
+BruceWorx vendored add-ons (MOD-06)
+===================================
+
+SheetMetal/  -- the SheetMetal workbench, installed as Mod/SheetMetal
+  Upstream   https://github.com/shaise/FreeCAD_SheetMetal
+  Version    0.8.26
+  Commit     cbf6595b68ad015266923749c160c3555a72e1fd (2026-10-17,
+             "Fix broken links, licence and typos in README (#628)")
+  Licence    LGPL-2.1-or-later (LICENSE, package.xml). Eight files still carry
+             GPL-2.0-or-later headers: SheetMetalCmd.py, ExtrudedCutout.py,
+             SheetMetalCornerReliefCmd.py, SheetMetalFromSolid.py, SheetMetalHem.py,
+             SheetMetalJunction.py, SheetMetalSketch.py, SheetMetalText.py. They are
+             shipped as they are (see NOTICE); upstream is asked to align them.
+  Taken      `git archive <commit>` of the upstream tree, minus .github/ and
+             .vscode/ (FreeCAD's .gitignore skips dot folders).
+  Needs      networkx >= 3.4.2, < 3.6 for the new unfolder (pixi.toml). Without it
+             the add-on falls back to its old unfolder, and BruceWorx_ExportFlat
+             writes bend lines without up/down (layer BEND).
+
+Patches (applied to the tree above, in order; each is offered upstream):
+  patches/0001-new-unfolder-k-factor-table-interpolation.patch
+      BendAllowanceCalculator.get_k_factor used the first table segment for
+      every ratio. One line.
+  patches/0002-new-unfolder-headless-unfold-sketches.patch
+      getUnfoldSketches set ViewObject properties without the GUI.
+  Every changed line is marked "[BW]".
+
+Updating (every BruceWorx release, decided 24 Oct 2026):
+  1. In a clone of upstream: git archive <new commit> | tar -x -C SheetMetal.new
+  2. Drop .github/ and .vscode/, then apply the patches in order:
+       patch -p1 -d SheetMetal.new < patches/0001-...patch   (and 0002)
+     A patch upstream has taken no longer applies: delete it here.
+  3. Replace SheetMetal/ with SheetMetal.new, update this file (version, commit,
+     the GPL file list: grep -L "Lesser" SheetMetal/*.py).
+  4. Check the file lists in CMakeLists.txt still match (new top-level modules,
+     Resources folders), rebuild, then run
+       FreeCADCmd -t TestSheetMetal          (the add-on's own tests)
+       FreeCADCmd -t TestBruceWorxSheetMetal (the bracket, rules and DXF)
+     with networkx on the path.
+
+A user copy wins: FreeCAD keys modules by lower-case folder name and reads the
+user's Mod folder after the built-in one, so a SheetMetal installed from the
+Addon Manager replaces this one; BruceWorx says so once in the status bar.
+
+third-party/ -- licence texts installed to share/doc/BruceWorx/third-party/
+  SheetMetal-LICENSE.txt is SheetMetal/LICENSE; networkx-LICENSE.txt is the
+  BSD-3-Clause text of networkx 3.5 (shipped from the pixi environment).

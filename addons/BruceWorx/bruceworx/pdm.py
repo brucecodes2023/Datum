@@ -20,10 +20,30 @@ Decisions this encodes (roadmap interview, 18-19 Oct 2026):
 * Released revisions are read-only.
 * A drawing is its own item, linked to its part. An ECO that opens the part
   opens the drawing too, and both release together.
+
+Approved 24 Oct 2026 (PDM-02 A3, A9, A10 and the PDM-06 plan):
+
+* Every decision needs its text here, so every client and a server get the
+  same rule: a release note (approve, release ECO), a reject reason, an ECR
+  problem, a decision reason and a retire reason.
+* The BOM is kept per revision. Each line names the child item and the child
+  revision seen when the BOM was recorded; release pins it. Where-used walks
+  these resolved lines backwards, so it names exact assembly revisions; the
+  ones that only float to a newer child are a second list ("may pick up").
+* Every BOM line is a vault item: lines that are not are kept as ``missing``
+  and stop the release.
+* Retire is refused while a current released revision uses the item, by its
+  BOM or, for a revision without a recorded BOM, by its released file's links
+  (``file_link_users``, set by a store that has files).
+
+``Vault.strict`` (default on) applies these rules. A store replaying a journal
+written before them turns it off while replaying: history is accepted as it
+was recorded, new operations are checked.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 WIP = "WIP"
@@ -38,6 +58,11 @@ ITEM_TYPES = ("part", "assembly", "drawing", "cots")
 # ASME Y14.35: skip letters that read like digits.
 RELEASE_LETTERS = "ABCDEFGHJKLMNPRTUVWY"
 PRERELEASE_WIDTH = 2
+
+# Change numbers, per vault: ECR-0001, ECO-0001 (PDM-05, 23 Oct 2026).
+ECR_PREFIX = "ECR"
+ECO_PREFIX = "ECO"
+CHANGE_WIDTH = 4
 
 
 class LifecycleError(ValueError):
@@ -103,6 +128,19 @@ def display_part_number(part_number: str, revision: str) -> str:
     return f"{part_number}-{validate_revision(revision)}"
 
 
+def next_change_number(prefix: str, existing) -> str:
+    """The next ``PREFIX-0001`` number after the highest one in ``existing``.
+
+    Numbers written by hand in another form are ignored, never reused or parsed."""
+    pattern = re.compile(rf"{re.escape(prefix)}-(\d+)")
+    highest = 0
+    for number in existing:
+        match = pattern.fullmatch(str(number))
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"{prefix}-{highest + 1:0{CHANGE_WIDTH}d}"
+
+
 def strip_revision(legacy: str) -> str:
     """``LE-01-01001-001-A`` -> ``LE-01-01001-001`` (migration of old labels)."""
     head, sep, tail = legacy.rpartition("-")
@@ -122,6 +160,20 @@ class Revision:
     eco: str | None = None  # ECO that opened it; None for the pre-release line
     superseded: bool = False
     history: list = field(default_factory=list)
+    # Review decisions as dicts: {"op": "approve" | "reject" | "release_eco" | "retire", "note" / "reason",
+    # "checklist", "attachments", and "by" / "at" when the store knows them}. Optional fields
+    # (PDM-05); older journals simply have none.
+    records: list = field(default_factory=list)
+    # PDM-06: this revision's BOM ([BomLine]; None until one is recorded), the file version it
+    # was read from, and lines that are not vault items ([{"name", "qty"}]).
+    bom: list | None = None
+    bom_version: str = ""
+    bom_missing: list = field(default_factory=list)
+    was: str = ""  # the pre-release number a first release came from ("01" for A)
+
+    def record(self, op):
+        """The last decision of kind ``op`` on this revision, or None."""
+        return next((r for r in reversed(self.records) if r.get("op") == op), None)
 
     @property
     def editable(self) -> bool:
@@ -160,6 +212,9 @@ class ECR:
     problem: str
     items: list
     status: str = "Open"  # Open -> Approved | Rejected
+    attachments: list = field(default_factory=list)  # [{"sha256", "size", "filename"}]
+    reason: str = ""  # why it was approved or rejected
+    records: list = field(default_factory=list)  # raise, decide (see Revision.records)
 
 
 @dataclass
@@ -167,7 +222,63 @@ class ECO:
     number: str
     ecrs: list
     items: list
-    status: str = "Open"  # Open -> Released | Cancelled
+    status: str = "Open"  # Open -> Released (no Cancel until one is designed, PDM-02 A5)
+    note: str = ""  # the release note
+    records: list = field(default_factory=list)  # open, release
+
+
+@dataclass
+class BomLine:
+    """One BOM line of a parent revision (PDM-06): a child item, how many per parent, the find
+    number, and the child revision it resolves to (seen at check-in, pinned at release)."""
+
+    child: str
+    qty: int = 1
+    find: int | None = None
+    rev: str | None = None
+
+    def as_dict(self) -> dict:
+        out = {"child": self.child, "qty": self.qty}
+        if self.find is not None:
+            out["find"] = self.find
+        if self.rev:
+            out["rev"] = self.rev
+        return out
+
+
+def bom_line(raw) -> BomLine:
+    """A BomLine from a BomLine, a dict ({"child", "qty", "find", "rev"}) or a tuple
+    ``(child, qty[, find[, rev]])``, as older journals and callers write them."""
+    if isinstance(raw, BomLine):
+        return BomLine(raw.child, raw.qty, raw.find, raw.rev)
+    if isinstance(raw, dict):
+        find = raw.get("find")
+        return BomLine(str(raw["child"]), _count(raw.get("qty", 1)), None if find in (None, "") else int(find),
+                       raw.get("rev") or None)
+    raw = list(raw)
+    find = raw[2] if len(raw) > 2 else None
+    return BomLine(str(raw[0]), _count(raw[1] if len(raw) > 1 else 1),
+                   None if find in (None, "") else int(find), (raw[3] if len(raw) > 3 else None) or None)
+
+
+def _count(qty) -> int:
+    """Quantities are counts (PDM-06: units come later)."""
+    if isinstance(qty, bool) or (isinstance(qty, float) and not qty.is_integer()):
+        raise ValueError(f"quantity must be a whole number, not {qty!r}")
+    return int(qty)
+
+
+@dataclass
+class Use:
+    """One where-used answer: an assembly revision that holds the part (PDM-06)."""
+
+    part_number: str
+    revision: str
+    state: str
+    current: bool  # the item's current released revision (or its latest, when nothing is released)
+    quantity: int  # in total, through every path
+    path: list  # [(P/N, revision)] from this revision down to the part
+    exact: bool = True  # False: "may pick up", it floats to a newer released child
 
 
 class Vault:
@@ -178,7 +289,26 @@ class Vault:
         self.items: dict[str, Item] = {}
         self.ecrs: dict[str, ECR] = {}
         self.ecos: dict[str, ECO] = {}
-        self.bom: dict[str, list[tuple[str, int]]] = {}  # parent P/N -> [(child P/N, qty)]
+        # Merged into every decision record; a store sets who and when ({"by", "at"}).
+        self.context: dict = {}
+        # The rules of 24 Oct (required texts, BOM items, file links); a store replaying an older
+        # journal turns this off while it replays.
+        self.strict = True
+        # file_link_users(part_number) -> {P/N}: released items whose released revision has no BOM
+        # but whose released file links to part_number. A store with files sets it (A10).
+        self.file_link_users = None
+
+    def _entry(self, op, **fields):
+        entry = {"op": op}
+        entry.update(self.context)
+        entry.update({k: v for k, v in fields.items() if v not in (None, "", [], {})})
+        return entry
+
+    def next_ecr_number(self):
+        return next_change_number(ECR_PREFIX, self.ecrs)
+
+    def next_eco_number(self):
+        return next_change_number(ECO_PREFIX, self.ecos)
 
     # ----- items ------------------------------------------------------
 
@@ -206,11 +336,13 @@ class Vault:
         rev.history.append("submitted")
         return rev
 
-    def reject(self, part_number, reason=""):
+    def reject(self, part_number, reason="", checklist=None, attachments=None):
         item = self.items[part_number]
         rev = item.latest
         self._require(rev, IN_REVIEW, "reject")
+        self._text(reason, "a reason for the rejection")
         rev.history.append(f"rejected: {reason}" if reason else "rejected")
+        rev.records.append(self._entry("reject", reason=reason, checklist=checklist, attachments=attachments))
         if rev.eco is None:
             # Pre-release line: the rejected number stays in history; work
             # continues on the next number.
@@ -221,9 +353,12 @@ class Vault:
         rev.state = WIP  # ECO working letter is only spent on release
         return rev
 
-    def approve(self, part_number):
+    def approve(self, part_number, note="", checklist=None, attachments=None):
         """Release a pre-release revision as ``A``. ECO revisions release
-        through :meth:`release_eco`, together with the rest of the ECO."""
+        through :meth:`release_eco`, together with the rest of the ECO.
+
+        ``note`` (the release note) and ``checklist`` (the release checklist as
+        ticked, see ``release_check.py``) are recorded with the approval."""
         item = self.items[part_number]
         rev = item.latest
         self._require(rev, IN_REVIEW, "approve")
@@ -231,39 +366,85 @@ class Vault:
             raise LifecycleError(f"{part_number} rev {rev.code} releases with {rev.eco}")
         if item.released is not None:
             raise LifecycleError(f"{part_number} is already released; changes need an ECO")
+        self._text(note, "a release note")
+        self._require_bom_items(part_number, rev)
         rev.history.append(f"released from {rev.code}")
+        rev.records.append(self._entry("approve", note=note, checklist=checklist, attachments=attachments))
+        rev.was = rev.code
         rev.code = first_release()
         rev.state = RELEASED
+        self._pin(rev)
         return rev
 
-    def retire(self, part_number):
+    def retire(self, part_number, reason=""):
+        """Retire a released item (Obsolete): its released revision becomes Obsolete and
+        nothing changes it again. Refused while a current released revision of an assembly
+        uses it (by its BOM, or by its released file's links when it has no BOM), or while an
+        ECO has its next revision in work. ``reason`` is required and recorded."""
         item = self.items[part_number]
+        if item.obsolete:
+            raise LifecycleError(f"{part_number} is already obsolete")
         if item.released is None:
             raise LifecycleError(f"{part_number} has no released revision to retire")
-        users = self.where_used(part_number, released_only=True)
+        latest = item.latest
+        if latest.state in (WIP, IN_REVIEW) and latest.eco is not None:
+            raise LifecycleError(f"{part_number} rev {latest.code} is in work under {latest.eco}; "
+                                 f"release {latest.eco} first")
+        self._text(reason, "a reason for retiring it")
+        users = {f"{use.part_number} rev {use.revision}" for use in self.where_used_revisions(part_number)
+                 if use.exact and use.current and use.state == RELEASED}
+        if self.strict and self.file_link_users is not None:
+            for pn in self.file_link_users(part_number) or ():
+                other = self.items.get(pn)
+                if other is not None and other.released is not None and pn != part_number:
+                    users.add(f"{pn} rev {other.released.code} (file link)")
         if users:
             raise LifecycleError(f"{part_number} is still used by {', '.join(sorted(users))}")
-        item.released.state = OBSOLETE
+        rev = item.released
+        rev.history.append(f"retired: {reason}" if reason else "retired")
+        rev.records.append(self._entry("retire", reason=reason))
+        rev.state = OBSOLETE
         item.obsolete = True
+        return rev
 
     # ----- change control ----------------------------------------------
 
-    def raise_ecr(self, number, problem, items):
+    def raise_ecr(self, number, problem, items, attachments=None):
+        """``number`` None takes the next ``ECR-0001`` number."""
+        number = number or self.next_ecr_number()
+        if number in self.ecrs:
+            raise LifecycleError(f"{number} already exists")
+        if not items:
+            raise LifecycleError("an ECR needs at least one affected item")
+        self._text(problem, "a problem description")
         for pn in items:
+            if self.items[pn].obsolete:
+                raise LifecycleError(f"{pn} is obsolete and no longer changes")
             if self.items[pn].released is None:
                 raise LifecycleError(f"{pn} is not released; fix it in its pre-release line")
-        ecr = ECR(number, problem, list(items))
+        ecr = ECR(number, problem, list(items), attachments=list(attachments or []))
+        ecr.records.append(self._entry("raise_ecr"))
         self.ecrs[number] = ecr
         return ecr
 
-    def decide_ecr(self, number, approved):
+    def decide_ecr(self, number, approved, reason="", attachments=None):
         ecr = self.ecrs[number]
         if ecr.status != "Open":
             raise LifecycleError(f"{number} is already {ecr.status}")
+        self._text(reason, "a reason for the decision")
         ecr.status = "Approved" if approved else "Rejected"
+        ecr.reason = reason or ""
+        ecr.records.append(self._entry("decide_ecr", approved=bool(approved), reason=reason,
+                                       attachments=attachments))
         return ecr
 
     def open_eco(self, number, ecr_numbers):
+        """``number`` None takes the next ``ECO-0001`` number."""
+        number = number or self.next_eco_number()
+        if number in self.ecos:
+            raise LifecycleError(f"{number} already exists")
+        if not ecr_numbers:
+            raise LifecycleError("an ECO needs at least one approved ECR")
         ecrs = [self.ecrs[n] for n in ecr_numbers]
         for ecr in ecrs:
             if ecr.status != "Approved":
@@ -271,12 +452,15 @@ class Vault:
         affected = []
         for ecr in ecrs:
             for pn in ecr.items:
-                for related in [pn] + [d.part_number for d in self.drawings_of(pn)]:
+                # A retired drawing stays retired; the part's live drawings come along.
+                for related in [pn] + [d.part_number for d in self.drawings_of(pn) if not d.obsolete]:
                     if related not in affected:
                         affected.append(related)
         # Check every item before changing any, so a refusal leaves no partial ECO.
         for pn in affected:
             item = self.items[pn]
+            if item.obsolete:
+                raise LifecycleError(f"{pn} is obsolete and no longer changes")
             if item.latest.state in (WIP, IN_REVIEW):
                 raise LifecycleError(f"{pn} already has work in progress ({item.latest.code})")
         for pn in affected:
@@ -285,16 +469,24 @@ class Vault:
             code = next_release(base) if base else first_release()
             item.revisions.append(Revision(code, eco=number, history=[f"opened by {number}"]))
         eco = ECO(number, list(ecr_numbers), affected)
+        eco.records.append(self._entry("open_eco"))
         self.ecos[number] = eco
         return eco
 
-    def release_eco(self, number):
+    def release_eco(self, number, note="", checklists=None, attachments=None):
+        """Release every item of the ECO together. ``checklists`` maps a part
+        number to its release checklist; each released revision records its own
+        with the shared ``note``."""
         eco = self.ecos[number]
         if eco.status != "Open":
             raise LifecycleError(f"{number} is {eco.status}")
         pending = [pn for pn in eco.items if self.items[pn].latest.state != IN_REVIEW]
         if pending:
             raise LifecycleError(f"{number}: not in review yet: {', '.join(pending)}")
+        self._text(note, "a release note")
+        for pn in eco.items:
+            self._require_bom_items(pn, self.items[pn].latest)
+        released = []
         for pn in eco.items:
             item = self.items[pn]
             old = item.released
@@ -303,56 +495,175 @@ class Vault:
             rev = item.latest
             rev.state = RELEASED
             rev.history.append(f"released by {number}")
+            rev.records.append(self._entry("release_eco", eco=number, note=note,
+                                           checklist=(checklists or {}).get(pn)))
+            released.append(rev)
+        for rev in released:  # after all are released, so items of this ECO pin each other's new letter
+            self._pin(rev)
         eco.status = "Released"
+        eco.note = note or ""
+        eco.records.append(self._entry("release_eco", note=note, attachments=attachments))
         return eco
 
-    # ----- BOM -----------------------------------------------------------
+    # ----- BOM (per revision, PDM-06) -------------------------------------------
 
-    def set_bom(self, parent, lines):
-        for child, qty in lines:
-            if child not in self.items:
-                raise LifecycleError(f"unknown child {child}")
-            if qty <= 0:
+    @property
+    def bom(self):
+        """Each item's current BOM as ``{parent: [(child, qty)]}``: the lines of its latest
+        revision that has a BOM. The per-revision lines are :attr:`Revision.bom`."""
+        out = {}
+        for pn, item in self.items.items():
+            rev = self._bom_revision(item)
+            if rev is not None:
+                out[pn] = [(line.child, line.qty) for line in rev.bom]
+        return out
+
+    def set_bom(self, parent, lines, revision=None, sha256="", missing=None):
+        """Record the BOM of ``parent`` at ``revision`` (default: its latest revision), read from
+        the file version ``sha256``. ``lines`` are BomLines, dicts or ``(child, qty[, find[, rev]])``;
+        a line without ``rev`` resolves to the child's latest revision now. ``missing`` lists what
+        the assembly holds that is not a vault item (``[{"name", "qty"}]``); it stops the release.
+
+        Refused for an unknown child, a quantity below 1, a revision that is not WIP (a released
+        BOM is frozen), or a BOM that would contain itself; the previous BOM is kept."""
+        item = self.items.get(parent)
+        if item is None:
+            raise LifecycleError(f"unknown item {parent}")
+        rev = self._revision(item, revision) if revision else item.latest
+        if rev is None:
+            raise LifecycleError(f"{parent} has no revision {revision}")
+        if self.strict and rev.state != WIP:
+            raise LifecycleError(f"{parent} rev {rev.code} is {rev.state}: its BOM is frozen")
+        new = []
+        for raw in lines:
+            line = bom_line(raw)
+            child = self.items.get(line.child)
+            if line.qty <= 0:
                 raise ValueError("quantity must be positive")
-        previous = self.bom.get(parent)
-        self.bom[parent] = list(lines)
-        if self._has_cycle():
-            if previous is None:
-                del self.bom[parent]
-            else:
-                self.bom[parent] = previous
-            raise LifecycleError(f"BOM of {parent} would contain itself")
+            if child is None:
+                raise LifecycleError(f"unknown child {line.child}")
+            if line.rev and self._revision(child, line.rev) is None:
+                raise LifecycleError(f"{line.child} has no revision {line.rev}")
+            line.rev = line.rev or child.latest.code
+            new.append(line)
+        gaps = []
+        for entry in missing or ():
+            name, qty = (entry.get("name"), entry.get("qty", 1)) if isinstance(entry, dict) else (entry, 1)
+            gaps.append({"name": str(name), "qty": _count(qty)})
+        previous = (rev.bom, rev.bom_version, rev.bom_missing)
+        rev.bom, rev.bom_version, rev.bom_missing = new, sha256 or "", gaps
+        cycle = self._cycle()
+        if cycle:
+            rev.bom, rev.bom_version, rev.bom_missing = previous
+            raise LifecycleError(f"BOM of {parent} would contain itself: {' -> '.join(cycle)}")
+        return rev
 
-    def explode(self, top):
-        """Total quantity of every item under ``top`` (``top`` itself excluded):
-        sum over paths of the product of quantities, in topological order."""
-        order = self._topological(top)
-        total = {top: 1}
-        for node in order:
-            for child, qty in self.bom.get(node, []):
-                total[child] = total.get(child, 0) + total.get(node, 0) * qty
-        total.pop(top)
-        return total
+    def cycle_path(self, parent, children):
+        """``[parent, child, ..., parent]`` when a BOM of ``parent`` holding ``children`` would
+        contain itself (through the items' current BOMs), else None. Lets a client stop a check-in
+        before it stores anything."""
+        graph = self.bom
+        for start in children:
+            back = {start: None}
+            queue = [start]
+            while queue:
+                node = queue.pop(0)
+                if node == parent:
+                    path = []
+                    while node is not None:
+                        path.append(node)
+                        node = back[node]
+                    return [parent] + list(reversed(path))
+                for child, _qty in graph.get(node, ()):
+                    if child not in back:
+                        back[child] = node
+                        queue.append(child)
+        return None
 
-    def flattened(self, top):
-        """Leaf items only (parts, COTS), with total quantities."""
-        return {pn: q for pn, q in self.explode(top).items() if not self.bom.get(pn)}
+    def bom_of(self, part_number, revision=None) -> list:
+        """The BomLines of a revision (default: the latest revision with a BOM); [] when none."""
+        rev = self._start(part_number, revision)
+        return list(rev.bom or ())
+
+    def explode(self, top, revision=None):
+        """Total quantity of every item under ``top`` at ``revision`` (default: its latest revision
+        with a BOM), ``top`` itself excluded: sum over paths of the product of quantities, in
+        topological order over the resolved revisions."""
+        return self._totals(top, revision)[0]
+
+    def flattened(self, top, revision=None):
+        """Leaf items only (parts, COTS, revisions without a BOM), with total quantities."""
+        return self._totals(top, revision)[1]
+
+    def indented(self, top, revision=None) -> list:
+        """The indented BOM of a revision, depth first in line order. Rows: {"level", "find",
+        "part_number", "revision", "qty" (per parent), "total", "leaf", "missing"}; lines that are
+        not vault items come last at their level, with "missing" True and the name as part number."""
+        start = self._start(top, revision)
+        rows = []
+
+        def walk(rev, level, mult, seen):
+            for line in rev.bom or ():
+                child = self._resolve(line)
+                if child is None:
+                    continue
+                total = mult * line.qty
+                deeper = bool(child.bom) and id(child) not in seen
+                rows.append({"level": level, "find": line.find, "part_number": line.child,
+                             "revision": child.code, "qty": line.qty, "total": total,
+                             "leaf": not deeper, "missing": False})
+                if deeper:
+                    walk(child, level + 1, total, seen | {id(child)})
+            for gap in rev.bom_missing:
+                rows.append({"level": level, "find": None, "part_number": gap["name"], "revision": "",
+                             "qty": gap["qty"], "total": mult * gap["qty"], "leaf": True, "missing": True})
+
+        walk(start, 1, 1, {id(start)})
+        return rows
 
     def where_used(self, part_number, released_only=False):
-        """Every assembly that contains ``part_number`` directly or indirectly."""
-        parents = {}
-        for parent, lines in self.bom.items():
-            for child, _qty in lines:
-                parents.setdefault(child, set()).add(parent)
-        found, stack = set(), [part_number]
-        while stack:
-            for parent in parents.get(stack.pop(), ()):
-                if parent not in found:
-                    found.add(parent)
-                    stack.append(parent)
-        if released_only:
-            found = {pn for pn in found if self.items[pn].released is not None}
-        return found
+        """Every assembly with a revision that holds ``part_number`` (any revision of it) through
+        resolved BOM lines, directly or indirectly. ``released_only``: only assemblies whose current
+        released revision holds it (what stops a retire)."""
+        return {use.part_number for use in self.where_used_revisions(part_number)
+                if use.exact and (not released_only or (use.current and use.state == RELEASED))}
+
+    def where_used_revisions(self, part_number, revision=None) -> list:
+        """Which assembly revisions use ``part_number`` (at ``revision``, default any), as
+        :class:`Use` rows: first the exact ones (reverse reachability over the resolved lines),
+        then "may pick up": live revisions (current released, or in work) that reach it only when
+        their lines float to the latest released child."""
+        item = self.items[part_number]
+        if revision:
+            target = self._revision(item, revision)
+            if target is None:
+                raise LifecycleError(f"{part_number} has no revision {revision}")
+            targets = {id(target)}
+        else:
+            targets = {id(rev) for rev in item.revisions}
+        owner, exact_edges = self._graph()
+        exact = self._reach(targets, exact_edges)
+        uses = [self._use(owner, exact_edges, node, path, targets, True) for node, path in exact.items()]
+        _owner, float_edges = self._graph(floating=True)
+        for node, path in self._reach(targets, float_edges).items():
+            pn, rev = owner[node]
+            if node not in exact and self._live(self.items[pn], rev):
+                uses.append(self._use(owner, float_edges, node, path, targets, False))
+        uses.sort(key=lambda u: (not u.exact, not u.current, u.part_number, self._order(u.part_number, u.revision)))
+        return uses
+
+    def newer_children(self, parent, revision=None) -> list:
+        """"Newer child released": lines of a revision whose child has a newer released letter than
+        the revision the line is pinned to, as ``[(child, pinned, released)]``."""
+        out = []
+        for line in self._start(parent, revision).bom or ():
+            child = self.items.get(line.child)
+            target = self._resolve(line)
+            if child is None or target is None or child.released is None or target is child.released:
+                continue
+            if is_prerelease(target.code) or release_index(target.code) < release_index(child.released.code):
+                out.append((line.child, target.code, child.released.code))
+        return out
 
     # ----- helpers ---------------------------------------------------------
 
@@ -364,33 +675,182 @@ class Vault:
         if rev.state != state:
             raise LifecycleError(f"cannot {action} rev {rev.code}: it is {rev.state}, not {state}")
 
-    def _topological(self, top):
+    def _text(self, text, what):
+        """Required texts (PDM-02 A3): every decision says why."""
+        if self.strict and not (text or "").strip():
+            raise LifecycleError(f"{what} is required")
+
+    def _require_bom_items(self, part_number, rev):
+        """Every BOM line must be a vault item before a release (PDM-06)."""
+        if self.strict and rev.bom_missing:
+            names = ", ".join(gap["name"] for gap in rev.bom_missing)
+            raise LifecycleError(f"{part_number} rev {rev.code} has BOM lines that are not vault items: {names}. "
+                                 "Add them to the vault and check the assembly in again")
+
+    @staticmethod
+    def _revision(item, code):
+        """The revision called ``code`` now, or the release that came from pre-release ``code``."""
+        for rev in reversed(item.revisions):
+            if rev.code == code:
+                return rev
+        for rev in reversed(item.revisions):
+            if rev.was == code:
+                return rev
+        return None
+
+    @staticmethod
+    def _bom_revision(item):
+        for rev in reversed(item.revisions):
+            if rev.bom is not None:
+                return rev
+        return None
+
+    def _start(self, part_number, revision):
+        item = self.items.get(part_number)
+        if item is None:
+            raise LifecycleError(f"unknown item {part_number}")
+        if revision:
+            rev = self._revision(item, revision)
+            if rev is None:
+                raise LifecycleError(f"{part_number} has no revision {revision}")
+            return rev
+        return self._bom_revision(item) or item.latest
+
+    def _resolve(self, line):
+        """The child revision a line stands for: its recorded (pinned) revision; a line without one
+        floats."""
+        child = self.items.get(line.child)
+        if child is None:
+            return None
+        rev = self._revision(child, line.rev) if line.rev else None
+        return rev or child.released or child.latest
+
+    def _float(self, line):
+        child = self.items.get(line.child)
+        return None if child is None else (child.released or child.latest)
+
+    def _pin(self, rev):
+        """At release, each line keeps the child revision it was recorded with; a rejected number
+        moves on to the child's released (else latest) revision."""
+        for line in rev.bom or ():
+            child = self.items.get(line.child)
+            if child is None:
+                continue
+            target = self._revision(child, line.rev) if line.rev else None
+            if target is None or (target.superseded and is_prerelease(target.code)):
+                target = child.released or child.latest
+            line.rev = target.code
+
+    @staticmethod
+    def _live(item, rev):
+        if item.obsolete:
+            return False
+        return rev is item.released or (rev is item.latest and rev.state in (WIP, IN_REVIEW))
+
+    def _order(self, part_number, code):
+        item = self.items.get(part_number)
+        revs = item.revisions if item else []
+        return next((i for i, r in enumerate(revs) if r.code == code), len(revs))
+
+    def _graph(self, floating=False):
+        """({id(rev): (P/N, rev)}, {id(parent rev): [(id(child rev), qty)]}) over every revision."""
+        owner, edges = {}, {}
+        for pn, item in self.items.items():
+            for rev in item.revisions:
+                owner[id(rev)] = (pn, rev)
+        for item in self.items.values():
+            for rev in item.revisions:
+                if not rev.bom:
+                    continue
+                out = edges.setdefault(id(rev), [])
+                for line in rev.bom:
+                    target = self._float(line) if floating else self._resolve(line)
+                    if target is not None:
+                        out.append((id(target), line.qty))
+        return owner, edges
+
+    @staticmethod
+    def _reach(targets, edges):
+        """Every node that reaches one of ``targets``, with one path down to it (breadth first over
+        the reversed edges, so the path is a shortest one)."""
+        parents = {}
+        for parent, lines in edges.items():
+            for child, _qty in lines:
+                parents.setdefault(child, []).append(parent)
+        path = {t: [t] for t in targets}
+        queue = list(targets)
+        while queue:
+            node = queue.pop(0)
+            for parent in parents.get(node, ()):
+                if parent not in path:
+                    path[parent] = [parent] + path[node]
+                    queue.append(parent)
+        return {node: p for node, p in path.items() if node not in targets}
+
+    def _use(self, owner, edges, node, path, targets, exact):
+        memo = {}
+
+        def count(n):
+            if n not in memo:
+                memo[n] = 0  # acyclic; guards a damaged journal
+                memo[n] = sum(q * (1 if c in targets else count(c)) for c, q in edges.get(n, ()))
+            return memo[n]
+
+        pn, rev = owner[node]
+        item = self.items[pn]
+        current = rev is item.released or (item.released is None and rev is item.latest and not item.obsolete)
+        return Use(pn, rev.code, rev.state, current, count(node),
+                   [(owner[n][0], owner[n][1].code) for n in path], exact)
+
+    def _totals(self, top, revision):
+        start = self._start(top, revision)
+        owner, edges = self._graph()
         order, seen = [], set()
 
         def visit(node):
             if node in seen:
                 return
             seen.add(node)
-            for child, _qty in self.bom.get(node, []):
+            for child, _qty in edges.get(node, ()):
                 visit(child)
             order.append(node)
 
-        visit(top)
-        return list(reversed(order))
+        visit(id(start))
+        total = {id(start): 1}
+        for node in reversed(order):
+            for child, qty in edges.get(node, ()):
+                total[child] = total.get(child, 0) + total.get(node, 0) * qty
+        total.pop(id(start))
+        exploded, leaves = {}, {}
+        for node, qty in total.items():
+            pn = owner[node][0]
+            exploded[pn] = exploded.get(pn, 0) + qty
+            if not edges.get(node):
+                leaves[pn] = leaves.get(pn, 0) + qty
+        return exploded, leaves
 
-    def _has_cycle(self):
-        state = {}
+    def _cycle(self):
+        """A path that comes back to its start in the items' current BOMs, or None."""
+        graph = {pn: [child for child, _qty in lines] for pn, lines in self.bom.items()}
+        state, stack = {}, []
 
         def visit(node):
             if state.get(node) == 1:
-                return True
+                return stack[stack.index(node):] + [node]
             if state.get(node) == 2:
-                return False
+                return None
             state[node] = 1
-            for child, _qty in self.bom.get(node, []):
-                if visit(child):
-                    return True
+            stack.append(node)
+            for child in graph.get(node, ()):
+                found = visit(child)
+                if found:
+                    return found
+            stack.pop()
             state[node] = 2
-            return False
+            return None
 
-        return any(visit(n) for n in list(self.bom))
+        for node in list(graph):
+            found = visit(node)
+            if found:
+                return found
+        return None

@@ -61,6 +61,7 @@ Gui--OverlayTabWidget Gui--TreeWidget {
   qproperty-badgeTextColor: @TextSecondaryColor;
   qproperty-badgeWarnColor: @WarnColor;
   qproperty-badgeAccentColor: @AccentColor;
+  qproperty-badgeErrorColor: @ErrorColor;
 }
 
 Gui--OverlayTabWidget Gui--PropertyEditor--PropertyEditor {
@@ -117,30 +118,39 @@ Gui--OverlayTabWidget#OverlayLeft[transparent="true"] {
 }
 
 Gui--OverlayTabWidget#OverlayLeft[transparent="true"],
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] QTreeView,
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--TreePanel,
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyEditor--PropertyEditor,
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] QHeaderView::section {
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--TreeWidget,
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--TreePanel {
   background-color: transparent;
   alternate-background-color: transparent;
   border-color: transparent;
 }
 
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] QTabWidget::pane,
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] QTabBar::tab {
-  background-color: transparent;
+/* The property editor under the tree (FreeCAD's View/Data tabs) keeps a solid card in the transparent
+   Browser (24 Oct): its rows are fields, and a model showing through them is hard to read. The tree above
+   stays transparent. Gui::PropertyView paints this background (bruceworx_browser sets WA_StyledBackground). */
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyView {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 9px;
+}
+
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyView QTabWidget::pane,
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyView QTabBar::tab,
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyEditor--PropertyEditor,
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyView QHeaderView::section {
+  background-color: @CardBackgroundColor;
+  alternate-background-color: @CardBackgroundColor;
   border-color: transparent;
 }
 
-Gui--OverlayTabWidget#OverlayLeft[transparent="true"] QTabBar::tab:selected {
+Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyView QTabBar::tab:selected {
   color: @TextForegroundColor;
   border-bottom: 2px solid @AccentColor;
 }
 
 Gui--OverlayTabWidget#OverlayLeft[transparent="true"] Gui--PropertyEditor--PropertyEditor {
-  /* Literal colours: the token engine would drop the alpha. */
-  qproperty-itemBackground: rgba(0, 0, 0, 0);
-  qproperty-groupBackground: rgba(0, 0, 0, 0);
+  qproperty-itemBackground: @CardBackgroundColor;
+  qproperty-groupBackground: @CardBackgroundColor;
 }
 
 /* Command dialog: one card. The task boxes inside are flat sections divided by hairlines. Every

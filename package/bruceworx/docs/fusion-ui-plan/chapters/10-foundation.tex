@@ -18,6 +18,10 @@ on both.
 The version string already reads \code{1.1.4-bw.1}, and the unsigned arm64 \code{.dmg} script is merged
 (\#3). Remaining: tag a release carrying the dmg plus a source tarball, and decide on signing and
 notarisation before anyone outside the team installs it.
+\textbf{The KEYSTONE splash ships} (your decision, 24 Oct): only the splash screen is branded
+(\file{package/bruceworx/branding/}: \file{branding.xml}, \file{splash.html}, \file{render\_splash.sh} drawing the
+version into the image); the application and executable names stay FreeCAD's, so preferences, add-ons and paths are
+unchanged.
 \emph{Acceptance:} the tagged release installs on a clean Mac and opens a Fusion STEP export
 (\code{LE-01001}, 200$\times$200$\times$8 envelope).
 \end{epic}
