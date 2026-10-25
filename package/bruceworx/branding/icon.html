@@ -1,0 +1,55 @@
+<!doctype html>
+<!-- KEYSTONE app icon. Rendered by make-keystone.sh at 1024x1024 into the .icns (and a PNG for the
+     window icon). The macOS icon grid: an 824 px rounded square centred on the 1024 px canvas. The arch is
+     the splash screen's (splash.html): nine voussoirs, the keystone in the accent. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { width: 1024px; height: 1024px; position: relative; overflow: hidden; }
+  .tile {
+    position: absolute; left: 100px; top: 100px; width: 824px; height: 824px; border-radius: 185px;
+    background: radial-gradient(120% 120% at 50% 30%, #243041 0%, #141b25 55%, #0b0f15 100%);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.05) 2px, transparent 2px),
+      linear-gradient(90deg, rgba(255,255,255,0.05) 2px, transparent 2px);
+    background-size: 103px 103px;
+    -webkit-mask-image: radial-gradient(70% 70% at 50% 45%, #000 30%, transparent 100%);
+  }
+  svg { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div class="tile"><div class="grid"></div></div>
+<svg id="arch" width="1024" height="1024" viewBox="0 0 300 300"></svg>
+<script>
+  const svg = document.getElementById("arch");
+  const NS = "http://www.w3.org/2000/svg";
+  const cx = 150, cy = 190, r1 = 46, r2 = 84, n = 9, gap = 0.018;
+  function pt(r, a) { return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; }
+  function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; }
+  const defs = el("defs", {});
+  defs.innerHTML = '<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2f7bff" stop-opacity="0.6"/><stop offset="1" stop-color="#2f7bff" stop-opacity="0"/></radialGradient>' +
+                   '<linearGradient id="k" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6aa6ff"/><stop offset="1" stop-color="#1f5fd6"/></linearGradient>';
+  el("circle", { cx: cx, cy: cy - (r1 + r2) / 2, r: 46, fill: "url(#g)" });
+  for (let i = 0; i < n; i++) {
+    const a0 = Math.PI * i / n + gap, a1 = Math.PI * (i + 1) / n - gap;
+    const key = i === (n - 1) / 2;
+    const ro = key ? r2 + 9 : r2;
+    const p = [pt(r1, a0), pt(ro, a0), pt(ro, a1), pt(r1, a1)];
+    const d = `M${p[0]} L${p[1]} A${ro},${ro} 0 0 0 ${p[2]} L${p[3]} A${r1},${r1} 0 0 1 ${p[0]} Z`;
+    el("path", key
+      ? { d, fill: "url(#k)", stroke: "#a9c9ff", "stroke-width": 1.6 }
+      : { d, fill: "rgba(255,255,255,0.07)", stroke: "rgba(214,226,240,0.75)", "stroke-width": 1.6 });
+  }
+  el("rect", { x: cx - r2, y: cy, width: r2 - r1, height: 30, fill: "rgba(255,255,255,0.06)", stroke: "rgba(214,226,240,0.6)", "stroke-width": 1.6 });
+  el("rect", { x: cx + r1, y: cy, width: r2 - r1, height: 30, fill: "rgba(255,255,255,0.06)", stroke: "rgba(214,226,240,0.6)", "stroke-width": 1.6 });
+</script>
+</body>
+</html>
