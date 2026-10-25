@@ -26,6 +26,7 @@ FreeCAD.__unit_test__.append("TestBruceWorxBom")
 FreeCAD.__unit_test__.append("TestBruceWorxBridge")
 FreeCAD.__unit_test__.append("TestBruceWorxDrawing")
 FreeCAD.__unit_test__.append("TestBruceWorxBoard")
+FreeCAD.__unit_test__.append("TestBruceWorxInterference")
 FreeCAD.__unit_test__.append("TestBruceWorxStudio")
 
 # BruceWorx's own material library (FR-4, PCB copper, ...), also used headless.

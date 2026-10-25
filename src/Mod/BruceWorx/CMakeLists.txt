@@ -75,6 +75,8 @@ SET(BruceWorx_SRCS
     bruceworx_toasts.py
     TestBruceWorxToasts.py
     TestBruceWorxSection.py
+    bruceworx_interference.py
+    TestBruceWorxInterference.py
     TestBruceWorxStudio.py
     bruceworx_oncanvas.py
     TestBruceWorxOnCanvas.py
