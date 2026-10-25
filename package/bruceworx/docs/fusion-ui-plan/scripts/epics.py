@@ -122,11 +122,13 @@ EPICS = [
       "(new)",
       "Mesh repair, segmentation, primitive fitting, rebuild as features; faceted fallback.",
       "Scanned bracket STL becomes a solid with planar/cylindrical faces within 0.1 mm."),
-    E("MOD-11", "Inspect tools", "M1", "In progress", [],
+    E("MOD-11", "Inspect tools", "M1", "Done", [],
       "FCB-P2R-07 (mass), (new)",
       "Measure, mass/CG/inertia, section analysis, curvature/zebra, draft and overhang, wall thickness. "
-      "Plan written 25 Oct on your recommendations (5 questions): colour maps drawn in their own nodes over the "
-      "parts (studio stays on), nothing saved in the file; mass properties stay in the Physical tab.",
+      "Planned and built 25 Oct on your recommendations (7 questions): Overhang, Draft, Wall Thickness, Curvature "
+      "and Zebra maps drawn in their own nodes over the parts (studio stays on), nothing saved in the file; Mass "
+      "Properties opens the Physical tab (hand-worked fixture). Found on the gearbox: the sun gear's set-screw hole "
+      "leaves 0.5 mm to the hub's end face.",
       "Mass/CG matches a hand calculation fixture; overhang map on a printed part."),
     E("MOD-12", "Sketcher parity audit", "M1", "To do", [],
       "(new)",
