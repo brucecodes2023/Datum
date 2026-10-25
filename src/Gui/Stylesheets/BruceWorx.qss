@@ -2006,7 +2006,9 @@ QToolButton#bwVaultTool::menu-indicator {
   width: 0px;
 }
 
-QListView#bwVaultList {
+QTreeView#bwVaultList {
+  selection-background-color: transparent;
+  show-decoration-selected: 0;
   background: transparent;
   border: none;
   border-top: 1px solid @GeneralBorderColor;
@@ -2020,6 +2022,14 @@ QListView#bwVaultList {
   qproperty-hoverColor: @HoverColor;
   qproperty-selectedColor: @AccentSoftColor;
   qproperty-cardColor: @CardBackgroundColor;
+}
+
+QTreeView#bwVaultList::item,
+QTreeView#bwVaultList::item:hover,
+QTreeView#bwVaultList::item:selected,
+QTreeView#bwVaultList::branch:selected,
+QTreeView#bwVaultList::branch:hover {
+  background: transparent;
 }
 
 QLabel#bwVaultFooter {

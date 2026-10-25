@@ -576,20 +576,9 @@ def snapshot(vault, workspace=None, now=None, days: int = 14, show_all: bool = F
                              vault.ref.get("created", "")),
         "health": health(vault, me, now, read_ms, objects),
         "parts": {pn: {"rev": item.latest.code, "state": item.state} for pn, item in vault.items.items()},
-        "structure": _structure(vault),
     }
     out["build_ms"] = round((time.perf_counter() - started) * 1000, 1)
     return out
-
-
-def _structure(vault) -> dict:
-    """The Structure tab's data (vault_trees); a damaged file leaves it empty, not the dashboard."""
-    from bruceworx import vault_trees
-
-    try:
-        return vault_trees.structure(vault)
-    except Exception:  # noqa: BLE001
-        return {"items": {}, "bom": {}, "sources": {}, "drawings": {}}
 
 
 def read(path: str, actor: str = "", **options) -> dict:

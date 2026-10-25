@@ -281,10 +281,7 @@ class GeneratedVaultBudget(unittest.TestCase):
         self.assertEqual(sum(t["total"] for t in snap["tiles"]), 500)
         self.assertEqual((snap["projects"]["total"], snap["projects"]["hidden"]), (3, False))
         self.assertTrue(all(len(q["rows"]) <= vd.QUEUE_ROWS for q in snap["my_work"]["queues"]))
-        # the part list and the Structure tab's snapshot grow with the vault; the rest stays small
-        self.assertEqual(len(snap["structure"]["items"]), 500)
-        self.assertLess(len(json.dumps({k: v for k, v in snap.items() if k not in ("parts", "structure")})),
-                        32000)  # about 20 kB, 50 feed lines
+        self.assertLess(len(json.dumps({k: v for k, v in snap.items() if k != "parts"})), 32000)  # about 20 kB, 50 feed lines
 
 
 if __name__ == "__main__":

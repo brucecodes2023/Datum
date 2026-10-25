@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""The Structure tab's trees (bruceworx/vault_trees.py): drawings, product, where used."""
+"""The Files tab's tree (bruceworx/vault_trees.py): assemblies, their parts, every item's drawings."""
 
 import os
 import shutil
@@ -50,43 +50,62 @@ class TestStructure(unittest.TestCase):
         self.assertEqual(s["bom"]["LE-02-01002-001"], [["LE-01-01003-001", 1]])
 
 
-class TestTrees(unittest.TestCase):
-    def setUp(self):
-        _v, self.s = gearbox(links={"LE-02-01002-001": {"LE-01-01003-001": 1, "LE-01-01009-001": 1,
-                                                        "LE-01-01008-001": 3}})
-
-    def test_product_tree(self):
-        tree = vt.product_tree(self.s)
-        self.assertEqual([t["pn"] for t in tree], ["LE-02-01002-001"])
-        kids = {c["pn"]: c["qty"] for c in tree[0]["children"]}
-        self.assertEqual(kids, {"LE-01-01003-001": 1, "LE-01-01008-001": 3, "LE-01-01009-001": 1})
-        housing = next(c for c in tree[0]["children"] if c["pn"] == "LE-01-01003-001")
-        self.assertEqual(housing["drawings"], ["LE-03-01003-001"])
-
-    def test_flattened_multiplies_down_the_levels(self):
-        s = dict(self.s)
-        s["bom"] = {"TOP": [["SUB", 2]], "SUB": [["P", 3], ["Q", 1]]}
-        self.assertEqual(vt.flattened(s, "TOP"), {"SUB": 2, "P": 6, "Q": 2})
-
-    def test_drawing_tree(self):
-        t = vt.drawing_tree(self.s)
-        self.assertEqual([n["pn"] for n in t["documented"]], ["LE-01-01003-001"])
-        self.assertEqual([c["pn"] for c in t["documented"][0]["children"]], ["LE-03-01003-001"])
-        self.assertEqual({n["pn"] for n in t["undrawn"]}, {"LE-01-01008-001", "LE-01-01009-001", "LE-02-01002-001"})
-        self.assertEqual(t["orphans"], [])
-
-    def test_where_used(self):
-        up = vt.where_used(self.s, "LE-01-01008-001")
-        self.assertEqual([(n["pn"], n["qty"]) for n in up], [("LE-02-01002-001", 3)])
-        self.assertEqual(vt.where_used(self.s, "LE-02-01002-001"), [])
-
-    def test_a_cycle_is_cut(self):
-        s = dict(self.s)
-        s["bom"] = {"A": [["B", 1]], "B": [["A", 1]]}
-        s["items"] = {"A": {"display": "A", "description": "", "type": "assembly", "state": "WIP", "revision": ""},
-                      "B": {"display": "B", "description": "", "type": "assembly", "state": "WIP", "revision": ""}}
+class TestTops(unittest.TestCase):
+    def test_a_cycle_has_no_top(self):
+        _v, s = gearbox()
+        s = dict(s)
+        s["bom"] = {"LE-02-01002-001": [["LE-01-01003-001", 1]], "LE-01-01003-001": [["LE-02-01002-001", 1]]}
         self.assertEqual(vt.tops(s), [])  # each uses the other: neither is a top
-        self.assertTrue(vt.where_used(s, "A")[0]["children"][0].get("cycle"))
+
+    def test_tops_are_the_unused_assemblies(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01008-001": 3}})
+        self.assertEqual(vt.tops(s), ["LE-02-01002-001"])
+
+
+class TestFileTree(unittest.TestCase):
+    def test_assembly_parts_and_drawings_then_the_loose_files(self):
+        vault, _s = gearbox()
+        vault.items["LE-01-01020-001"] = item("part", "Bracket")
+        vault.items["LE-03-01020-001"] = item("drawing", "Bracket drawing", drawing_of="LE-01-01020-001")
+        vault.items["LE-03-09999-001"] = item("drawing", "Lost drawing", drawing_of="LE-01-09999-001")
+        s = vt.structure(vault, links=lambda pn: {"LE-01-01003-001": 1, "LE-01-01008-001": 3,
+                                                  "LE-01-01009-001": 1})
+        tree = vt.file_tree(s)
+        top, loose = tree
+        self.assertEqual(top["pn"], "LE-02-01002-001")
+        self.assertEqual([(c["pn"], c["qty"]) for c in top["children"]],
+                         [("LE-01-01003-001", 1), ("LE-01-01008-001", 3), ("LE-01-01009-001", 1)])
+        self.assertEqual([c["pn"] for c in top["children"][0]["children"]], ["LE-03-01003-001"])
+        self.assertEqual(loose["group"], vt.LOOSE)
+        self.assertEqual([c["pn"] for c in loose["children"]], ["LE-01-01020-001", "LE-03-09999-001"])
+        self.assertEqual([c["pn"] for c in loose["children"][0]["children"]], ["LE-03-01020-001"])
+
+        def every(nodes):
+            for n in nodes:
+                if n["pn"]:
+                    yield n["pn"]
+                yield from every(n["children"])
+
+        self.assertEqual(set(every(tree)), set(vault.items))
+
+    def test_no_loose_group_when_everything_is_used(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01003-001": 1, "LE-01-01009-001": 1,
+                                                   "LE-01-01008-001": 3}})
+        self.assertEqual([n["pn"] for n in vt.file_tree(s)], ["LE-02-01002-001"])
+
+    def test_a_cycle_still_lists_every_item(self):
+        _v, s = gearbox()
+        s = dict(s)
+        s["bom"] = {"LE-02-01002-001": [["LE-01-01003-001", 1]], "LE-01-01003-001": [["LE-02-01002-001", 1]]}
+        tree = vt.file_tree(s)  # neither is a top: both land in the loose group, one inside the other
+
+        def every(nodes):
+            for n in nodes:
+                yield n["pn"]
+                yield from every(n["children"])
+
+        self.assertEqual([n.get("group") for n in tree], [vt.LOOSE])
+        self.assertTrue({"LE-02-01002-001", "LE-01-01003-001"} <= set(every(tree)))
 
 
 class TestFileLinks(unittest.TestCase):

@@ -1340,17 +1340,13 @@ def _make_classes():
             d.addWidget(self.no_vault)
             m.addWidget(self.dash_box)
 
-            # Tab 2: the vault's files (the list that floated over the window until 25 Oct), made when first
-            # shown with a vault open.
+            # Tab 2: the vault's files as one tree (the list that floated over the window until 25 Oct;
+            # the Structure tab folded into it), made when first shown with a vault open.
             self.files_box = QtWidgets.QWidget(main)
             self.files_layout = QtWidgets.QVBoxLayout(self.files_box)
             self.files_layout.setContentsMargins(0, 0, 0, 0)
             self.files_panel = None
             m.addWidget(self.files_box)
-
-            # Tab 3: the vault's structure: drawing, product and where-used trees.
-            self.structure = bwdash.classes()["StructureView"](main)
-            m.addWidget(self.structure)
 
             # Tab 2: recent files (before PDM-10 the whole page: My work, then the recent list).
             self.recent_box = QtWidgets.QWidget(main)
@@ -1541,11 +1537,8 @@ def _make_classes():
             self.dash_box.setVisible(tab == "dashboard")
             self.recent_box.setVisible(tab == "recent")
             self.files_box.setVisible(tab == "files")
-            self.structure.setVisible(tab == "structure")
             if tab == "files":
                 self._ensure_files()
-            elif tab == "structure":
-                self.structure.set_structure(((self.vault or {}).get("dashboard") or {}).get("structure"))
             if dashboard:
                 # The Recent files tab: every recent file on this Mac (the user's answer of 24 Oct).
                 self.work_box.setVisible(False)
@@ -1764,7 +1757,7 @@ def show_dashboard() -> None:
 
 
 def show_tab(key: str) -> None:
-    """Bring the Start tab forward on one of its tabs ("dashboard", "files", "structure", "recent")."""
+    """Bring the Start tab forward on one of its tabs ("dashboard", "files", "recent")."""
     import FreeCADGui
     from PySide import QtCore, QtWidgets
 
