@@ -283,7 +283,8 @@ def material_info(obj):
             try:
                 import FreeCAD
 
-                density = FreeCAD.Units.Quantity(str(material.getPhysicalValue("Density"))).getValueAs(
+                # PhysicalProperties: getPhysicalValue touches the body in FreeCAD 1.1 (see partprops)
+                density = FreeCAD.Units.Quantity(str(material.PhysicalProperties["Density"])).getValueAs(
                     "kg/mm^3").Value
             except Exception:
                 density = None

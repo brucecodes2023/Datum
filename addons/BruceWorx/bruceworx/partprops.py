@@ -413,10 +413,16 @@ def _bodies(obj) -> list:
 
 
 def _density_kg_per_mm3(material) -> float | None:
-    try:
-        text = material.getPhysicalValue("Density")
-    except Exception:  # noqa: BLE001 -- no density on this material
-        return None
+    # The card's PhysicalProperties, not getPhysicalValue: in FreeCAD 1.1 that writes the material back to
+    # the body and touches it, so every mass read (the Physical tab, the observer) marked the part changed.
+    props = getattr(material, "PhysicalProperties", None)
+    if isinstance(props, dict):
+        text = props.get("Density")
+    else:
+        try:
+            text = material.getPhysicalValue("Density")
+        except Exception:  # noqa: BLE001 -- no density on this material
+            return None
     if text is None or str(text).strip() in ("", "None"):
         return None  # an appearance-only material (e.g. the Appearance library's "Steel") has no density
     import FreeCAD  # noqa: PLC0415

@@ -393,6 +393,15 @@ class DensityTests(unittest.TestCase):
 
         self.assertIsNone(partprops._density_kg_per_mm3(Appearance()))
 
+    def test_density_is_read_without_getphysicalvalue(self):
+        class Card:  # FreeCAD 1.1: getPhysicalValue writes the material back and touches the body (MOD-11)
+            PhysicalProperties = {"Density": ""}
+
+            def getPhysicalValue(self, name):
+                raise AssertionError("getPhysicalValue touches the body")
+
+        self.assertIsNone(partprops._density_kg_per_mm3(Card()))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Physical tab: inertia sums, principal axes, number text, CSV. No GUI."""
+"""Physical tab: inertia sums, principal axes, number text, CSV; a hand-worked mass fixture (MOD-11). No GUI."""
 
 import csv
 import io
@@ -135,6 +135,86 @@ class TextTests(unittest.TestCase):
         self.assertEqual(bp.file_stem("Mounting plate"), "Mounting plate-physical")
         self.assertEqual(bp.file_stem("a/b:c"), "a_b_c-physical")
         self.assertEqual(bp.file_stem(""), "selection-physical")
+
+
+def _steel():
+    """A steel card from FreeCAD's library and its density in kg/mm^3."""
+    import FreeCAD
+    import Materials
+
+    manager = Materials.MaterialManager()
+    for uuid in manager.Materials:
+        card = manager.getMaterial(uuid)
+        if card.Name == "Steel-1C45":
+            text = card.PhysicalProperties["Density"]
+            return card, FreeCAD.Units.Quantity(str(text)).getValueAs("kg/mm^3").Value
+    raise unittest.SkipTest("no Steel-1C45 card")
+
+
+class FixtureTests(unittest.TestCase):
+    """MOD-11 acceptance: mass, centre and inertia of a steel block with a pin, worked out by hand."""
+
+    def setUp(self):
+        try:
+            import FreeCAD
+            import Part
+        except ImportError:
+            raise unittest.SkipTest("needs FreeCAD")
+        self.doc = FreeCAD.newDocument("BWPhysicalFixture")
+        block = Part.makeBox(40, 20, 10)
+        pin = Part.makeCylinder(5, 20, FreeCAD.Vector(30, 10, 10))
+        self.obj = self.doc.addObject("Part::Feature", "Fixture")
+        self.obj.Shape = block.fuse(pin).removeSplitter()
+        self.card, self.rho = _steel()
+        self.obj.ShapeMaterial = self.card
+        self.doc.recompute()
+
+    def tearDown(self):
+        import FreeCAD
+
+        FreeCAD.closeDocument(self.doc.Name)
+
+    def test_block_and_pin_by_hand(self):
+        rho, r, h = self.rho, 5.0, 20.0
+        v1, c1 = 40.0 * 20.0 * 10.0, (20.0, 10.0, 5.0)
+        v2, c2 = math.pi * r * r * h, (30.0, 10.0, 20.0)
+        m1, m2 = rho * v1, rho * v2
+        mass = m1 + m2
+        centre = tuple((m1 * c1[k] + m2 * c2[k]) / mass for k in range(3))
+        own = (
+            (m1 * (20 ** 2 + 10 ** 2) / 12, m1 * (40 ** 2 + 10 ** 2) / 12, m1 * (40 ** 2 + 20 ** 2) / 12),
+            (m2 * (3 * r * r + h * h) / 12, m2 * (3 * r * r + h * h) / 12, m2 * r * r / 2),
+        )
+        ixx = iyy = izz = ixz = 0.0
+        for m, c, (jxx, jyy, jzz) in ((m1, c1, own[0]), (m2, c2, own[1])):
+            dx, dy, dz = (c[k] - centre[k] for k in range(3))
+            ixx += jxx + m * (dy * dy + dz * dz)
+            iyy += jyy + m * (dx * dx + dz * dz)
+            izz += jzz + m * (dx * dx + dy * dy)
+            ixz += -m * dx * dz
+        result = bp.Result([bp.Owner(self.obj, self.obj.Shape)])
+        self.assertAlmostEqual(result.volume, v1 + v2, delta=1e-6 * (v1 + v2))
+        self.assertAlmostEqual(result.mass, mass, delta=1e-9 * mass)
+        for k in range(3):
+            self.assertAlmostEqual(result.centre[k], centre[k], places=6)
+        t = result.tensor
+        scale = 1e-6 * izz
+        self.assertAlmostEqual(t[0][0], ixx, delta=scale)
+        self.assertAlmostEqual(t[1][1], iyy, delta=scale)
+        self.assertAlmostEqual(t[2][2], izz, delta=scale)
+        self.assertAlmostEqual(t[0][2], ixz, delta=scale)
+        self.assertAlmostEqual(t[0][1], 0.0, delta=scale)
+        self.assertAlmostEqual(t[1][2], 0.0, delta=scale)
+
+    def test_reading_the_mass_leaves_the_part_untouched(self):
+        # FreeCAD 1.1's getPhysicalValue writes the material back and touches the object (regression, MOD-11)
+        from bruceworx import partprops as pp
+
+        self.assertNotIn("Touched", self.obj.State)
+        mass = pp.computed_mass(self.obj)
+        bp.Result([bp.Owner(self.obj, self.obj.Shape)])
+        self.assertNotIn("Touched", self.obj.State)
+        self.assertAlmostEqual(float(mass.split()[0]), self.obj.Shape.Volume * self.rho, places=9)
 
 
 if __name__ == "__main__":

@@ -92,6 +92,8 @@ SET(BruceWorx_SRCS
     BruceWorx_RectangularPattern.svg
     BruceWorx_CircularPattern.svg
     BruceWorx_Section.svg
+    bruceworx_analysis.py
+    TestBruceWorxAnalysis.py
     bruceworx_board.py
     bruceworx_board_gui.py
     BruceWorx_InsertBoard.svg
