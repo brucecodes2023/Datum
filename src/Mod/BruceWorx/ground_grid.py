@@ -91,7 +91,14 @@ def build_grid_node():
         group.addChild(coords)
         group.addChild(lines)
         sep.addChild(group)
-    return sep
+    # Left out of Fit All (the view's bounding box): the grid is 2 m across and the model would
+    # shrink to a speck in the middle of it.
+    skip = coin.SoType.fromName("SoSkipBoundingGroup").createInstance()
+    if skip is None:
+        return sep
+    skip.setName("BruceWorxGroundGrid")
+    skip.addChild(sep)
+    return skip
 
 
 def _active_scene():

@@ -371,6 +371,8 @@ def refresh(doc):
             _show_whole(view, doc, style["uncut"] if style else [])
         except Exception as exc:  # noqa: BLE001
             _app().Console.PrintWarning(f"BruceWorx section: {exc}\n")
+    if _app().GuiUp and doc is _app().ActiveDocument:
+        sync_button(doc)
     return passes
 
 
@@ -577,6 +579,8 @@ def _edit_now(doc_name, name):
     obj = doc.getObject(name) if doc else None
     if obj is None:
         return
+    if _state["editing"] is not None:  # another section's tab: kept, its step closed
+        _state["editing"].accept()
     if Gui.Control.activeDialog():
         Gui.Control.closeDialog()
     panel = SectionPanel(obj)
@@ -749,7 +753,7 @@ class SectionPanel:
             self.obj.Plane = placement_for(facing(axis_normal(mode), view_dir))
         elif mode == "Face":
             sel = Gui.Selection.getSelectionEx("", 0)
-            picked = [(s.Object, [n]) for s in sel for n in s.SubElementNames if "Face" in n or not n]
+            picked = picked_faces(sel) or [(s.Object, [""]) for s in sel if not s.SubElementNames]
             if not picked:
                 _app().Console.PrintMessage("Section: select a planar face or a datum plane, then press Face.\n")
                 self.mode_buttons[self.obj.Mode if self.obj.Mode in self.mode_buttons else "XZ"].setChecked(True)
@@ -1160,32 +1164,98 @@ def _active_view():
 # ----- commands, observer, install -----------------------------------------------------------------
 
 
+def picked_faces(sel):
+    """(root object, [path to the face]) of each face in the selection, from the top of the file:
+    a face of a body's feature, or of a part inside an assembly, is "Body.Pad.Face3" or
+    "Part001.Body.Pad.Face3" under the root (getSelectionEx(\"\", 0))."""
+    return [(s.Object, [n]) for s in sel for n in s.SubElementNames if n.split(".")[-1].startswith("Face")]
+
+
+def any_shown(doc):
+    return doc is not None and any(shown(o) for o in sections(doc))
+
+
+def sections_off(doc):
+    """Every section of ``doc`` off, in one undo step; an open Section tab is closed first, kept."""
+    panel = _state["editing"]
+    if panel is not None:
+        panel.accept()
+    doc.openTransaction("Sections off")
+    for obj in sections(doc):
+        obj.Visibility = False
+    doc.commitTransaction()
+    schedule(doc)
+
+
+def sync_button(doc=None):
+    """The Section command's button (the nav pill's, the View menu's) is down while a section of
+    the active file is on. Its signals are held: setting the state must not run the command."""
+    import FreeCADGui as Gui
+
+    doc = doc if doc is not None else _app().ActiveDocument
+    try:
+        actions = Gui.Command.get("BruceWorx_Section").getAction()
+    except Exception:  # noqa: BLE001 -- not installed yet
+        return
+    on = any_shown(doc)
+    for action in actions:
+        if action.isChecked() != on:
+            held = action.blockSignals(True)
+            action.setChecked(on)
+            action.blockSignals(held)
+
+
 class _NewSection:
+    """Section View, a toggle: press it to cut (on the selected face, else the last section again,
+    else a new XZ section), press it again to turn the sections off."""
+
     def GetResources(self):
-        return {"Pixmap": ICON, "MenuText": "Section View",
-                "ToolTip": "A section view saved in the file: caps every part, hatched, clashes in red. "
-                           "Select a planar face first to cut on it. Up to three planes cut at once."}
+        return {"Pixmap": ICON, "MenuText": "Section View", "Checkable": False,  # a toggle (the key makes it one), up at start
+                "CmdType": "ForEdit",  # pressable while its own Section tab is open (IsActive refuses other tools')
+                "ToolTip": "Section view on or off. Select a face first to cut on it; with nothing "
+                           "selected the last section comes back. Saved in the file: caps every part, "
+                           "hatched, clashes in red; up to three planes cut at once."}
 
     def IsActive(self):
+        import FreeCADGui as Gui
+
+        if Gui.Control.activeDialog() and _state["editing"] is None:
+            return False  # another tool is editing (a sketch, a pad): not in the middle of it
         return _active_view() is not None
 
-    def Activated(self):
+    def Activated(self, checked=None):
         import FreeCADGui as Gui
 
         doc = _app().ActiveDocument
         view = _active_view()
+        if _state["editing"] is not None:  # the Section tab open: keep its changes first
+            _state["editing"].accept()
         sel = Gui.Selection.getSelectionEx("", 0)
-        faces = [(s.Object, [n]) for s in sel for n in s.SubElementNames if n.startswith("Face")]
+        faces = [f for f in picked_faces(sel) if face_placement(f) is not None]
         points = [p for s in sel for p in s.PickedPoints]
-        doc.openTransaction("Make Section")
-        if faces and face_placement(faces[0]) is not None:
-            obj = make(doc, "Face", view, support=faces[0])
-        elif len(points) >= 3:
-            obj = make(doc, "Three points", view, points=points)
-        else:
-            obj = make(doc, "XZ", view)
-        doc.commitTransaction()
-        edit(obj)
+        if checked is None:
+            checked = not any_shown(doc) or bool(faces)
+        if not checked and not faces:
+            sections_off(doc)
+            sync_button(doc)
+            return
+        previous = sorted(sections(doc), key=lambda o: o.ShownAt)
+        if faces or len(points) >= 3 or not previous:
+            doc.openTransaction("Make Section")
+            if faces:
+                obj = make(doc, "Face", view, support=faces[0])
+            elif len(points) >= 3:
+                obj = make(doc, "Three points", view, points=points)
+            else:
+                obj = make(doc, "XZ", view)
+            doc.commitTransaction()
+            edit(obj)
+        else:  # the section shown last, back on; double-click it in the tree to change it
+            obj = previous[-1]
+            doc.openTransaction(f"Turned on {obj.Label}")
+            turn_on(obj, view, own_step=False)
+            doc.commitTransaction()
+        sync_button(doc)
 
 
 class _SectionsOff:
@@ -1197,12 +1267,8 @@ class _SectionsOff:
         return doc is not None and any(shown(o) for o in sections(doc))
 
     def Activated(self):
-        doc = _app().ActiveDocument
-        doc.openTransaction("Sections off")
-        for obj in sections(doc):
-            obj.Visibility = False
-        doc.commitTransaction()
-        schedule(doc)
+        sections_off(_app().ActiveDocument)
+        sync_button()
 
 
 class _Manipulator:
@@ -1223,6 +1289,7 @@ class _Observer:
     def slotActivateDocument(self, doc):
         if sections(doc):
             schedule(doc)
+        sync_button(doc)
 
 
 def install():
