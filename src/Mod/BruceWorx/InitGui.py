@@ -51,7 +51,6 @@ startup workbench (PartDesign) is already used on that first start.
 # their work resumes and passes its checks. Remove a name here to switch it back on.
 _BW_PAUSED = (
     "bruceworx_oncanvas",
-    "bruceworx_bom",
     "bruceworx_sheetmetal",
 )
 
