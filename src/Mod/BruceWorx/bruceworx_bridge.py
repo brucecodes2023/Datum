@@ -53,6 +53,7 @@ LOG_LIMIT = 1 << 20  # bridge.log rolls over to bridge.log.1 at 1 MB
 MAX_LINE = 32 << 20  # a request line longer than this is refused
 CONSENT_TIMEOUT_MS = 120000
 CHIP_NAME = "claudeChip"
+DIALOG_TOOLS = ("dialogs", "answer_dialog")  # may run while another call waits behind a dialog
 DIALOG_NAME = "BruceWorxBridgeConsent"
 MENU_ACTION = "BruceWorxAllowClaude"
 
@@ -182,6 +183,11 @@ SPECS = {
     "object_tree": ("read", {"doc": _DOC}),
     "get_properties": ("read", {"object": ("string", True, None), "doc": _DOC}),
     "selection": ("read", {}),
+    # Dialog boxes (24 Oct 2026, the user's wish): see and answer a dialog FreeCAD shows, also while
+    # another call waits behind it. Never the bridge's own consent prompt.
+    "dialogs": ("read", {}),
+    "answer_dialog": ("ui", {"button": ("string", True, None), "title": ("string", False, None),
+                             "text": ("string", False, None)}),
     "measure": ("read", {"object": ("string", True, None), "doc": _DOC}),
     "screenshot": ("read", {"width": ("integer", False, 800), "height": ("integer", False, 600),
                             "view": ("string", False, "")}),
@@ -319,6 +325,38 @@ def write_state(folder: str, data: dict) -> str:
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
     return path
+
+
+def held_by_other(data, my_pid, alive=None) -> bool:
+    """True when ``data`` (a read bridge.json) belongs to another FreeCAD window that is still running.
+
+    A second FreeCAD (a test run on a copy of the preferences shares the same folder) must not take
+    the bridge from the first: overwriting bridge.json cut Claude Code off from the user's window,
+    and the second one's quit then removed the file (24 Oct 2026).
+    """
+    if not isinstance(data, dict) or data.get("headless"):
+        return False
+    pid = data.get("pid")
+    if not isinstance(pid, int) or pid == my_pid:
+        return False
+    if alive is None:
+        def alive(p):
+            try:
+                os.kill(p, 0)
+            except ProcessLookupError:
+                return False
+            except PermissionError:
+                return True
+            return True
+    return bool(alive(pid))
+
+
+def read_state(folder: str):
+    try:
+        with open(os.path.join(folder, STATE_FILE), encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
 
 
 def remove_state(folder: str, token: str) -> None:
@@ -588,9 +626,14 @@ class _GuiBridge:
                 raise RuntimeError(self.server.errorString())
         self.port = int(self.server.serverPort())
         self.server.newConnection.connect(self._accept)
-        write_state(self.folder, _state_data(self.port, self.token, False))
         import FreeCAD
 
+        other = read_state(self.folder)
+        if held_by_other(other, os.getpid()):
+            # Another FreeCAD window has the bridge: leave its bridge.json alone.
+            FreeCAD.Console.PrintLog(f"Claude bridge: FreeCAD {other.get('pid')} has it; this window is not reachable\n")
+            return
+        write_state(self.folder, _state_data(self.port, self.token, False))
         FreeCAD.Console.PrintLog(f"Claude bridge listening on 127.0.0.1:{self.port}\n")
 
     # --- sockets ---------------------------------------------------------------------
@@ -619,8 +662,23 @@ class _GuiBridge:
         except ValueError as exc:
             self._send(sock, response(None, False, error=str(exc)))
             return
-        self.queue.extend((sock, line) for line in lines)
+        for line in lines:
+            if self.busy and self._dialog_call(sock, line):
+                continue  # answered now: the running call waits behind the dialog it opened
+            self.queue.append((sock, line))
         self._drain()
+
+    def _dialog_call(self, sock, line) -> bool:
+        """A dialogs / answer_dialog call while another call runs (a dialog's own event loop brought it
+        in): run it at once, if this session is already allowed. True when it was handled."""
+        req, _error = parse_request(line, self.token)
+        if req is None or req.get("tool") not in DIALOG_TOOLS:
+            return False
+        if self.consent.decide() != "run":
+            self._send(sock, self.disp.refuse(req, NOT_ALLOWED))
+            return True
+        self._send(sock, self.disp.run(req))
+        return True
 
     def _drain(self):
         # A call that processes events can bring the next readyRead in; it waits in the queue.

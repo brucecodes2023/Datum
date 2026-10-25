@@ -221,6 +221,10 @@ class TestModelling(unittest.TestCase):
         self.assertEqual(out["objects"], ["Box"])
 
     def test_screenshot_needs_window(self):
+        import FreeCAD
+
+        if FreeCAD.GuiUp:
+            self.skipTest("a GUI FreeCAD has the window: the screenshot works")
         with self.assertRaisesRegex(Exception, "needs the FreeCAD window"):
             self.run_tool("screenshot")
 
@@ -261,6 +265,36 @@ class TestHeadlessServer(unittest.TestCase):
         self.assertFalse(os.path.exists(state))
         with open(os.path.join(folder, bb.LOG_FILE), encoding="utf-8") as handle:
             self.assertIn("list_documents", handle.read())
+
+
+class DialogTests(unittest.TestCase):
+    def test_pick_by_title_or_first(self):
+        found = [{"title": "Reload document"}, {"title": "Save changes?"}]
+        self.assertEqual(tools.pick_dialog(found), 0)
+        self.assertEqual(tools.pick_dialog(found, "save"), 1)
+        self.assertIsNone(tools.pick_dialog(found, "export"))
+        self.assertIsNone(tools.pick_dialog([]))
+
+    def test_untitled_mac_box_matches_its_text(self):
+        found = [{"title": "Reload document", "text": ""}, {"title": "", "text": "Save changes to Plate?"}]
+        self.assertEqual(tools.pick_dialog(found, "plate"), 1)
+        self.assertEqual(tools.pick_dialog([{"title": "Plate", "text": ""}] + found, "plate"), 0)
+
+    def test_dialog_tools_are_specified(self):
+        self.assertIn("dialogs", bb.SPECS)
+        self.assertEqual(bb.kind_of("answer_dialog"), "ui")
+        self.assertEqual(set(bb.DIALOG_TOOLS), {"dialogs", "answer_dialog"})
+
+
+class HeldByOtherTests(unittest.TestCase):
+    def test_another_live_window_keeps_it(self):
+        self.assertTrue(bb.held_by_other({"pid": 10, "headless": False}, 20, alive=lambda p: True))
+
+    def test_gone_or_own_or_headless(self):
+        self.assertFalse(bb.held_by_other({"pid": 10, "headless": False}, 20, alive=lambda p: False))
+        self.assertFalse(bb.held_by_other({"pid": 20, "headless": False}, 20, alive=lambda p: True))
+        self.assertFalse(bb.held_by_other({"pid": 10, "headless": True}, 20, alive=lambda p: True))
+        self.assertFalse(bb.held_by_other(None, 20))
 
 
 if __name__ == "__main__":

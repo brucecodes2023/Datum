@@ -117,6 +117,13 @@ TOOLS = [
     _tool("get_properties", "freecad", "All properties of one object with type, group and value "
           "(lengths as text with units, vectors as [x,y,z], links as object names).",
           {"object": _OBJ, "doc": _DOC}, ["object"], read_only=True),
+    _tool("dialogs", "freecad", "Dialog boxes open in the FreeCAD window: title, text, buttons and text fields. "
+          "Works while another call waits behind a dialog.", read_only=True),
+    _tool("answer_dialog", "freecad", "Press a button in a FreeCAD dialog (by its text, e.g. 'Yes', 'Reload'), "
+          "optionally typing into its single text field first; the dialog is chosen by title, else the active "
+          "one. Never answers the 'Allow Claude Code' prompt.",
+          {"button": _p("string", "The button's text."), "title": _p("string", "Part of the dialog's title (or of its text, for untitled macOS message boxes)."),
+           "text": _p("string", "Text to type into the dialog's text field first.")}, ["button"]),
     _tool("selection", "freecad", "What is selected in the FreeCAD window (objects and sub-elements such as "
           "Face3).", read_only=True),
     _tool("measure", "freecad", "Volume, area, bounding box, centre of mass and (when a material is set) mass "

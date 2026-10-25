@@ -270,6 +270,94 @@ def t_get_properties(args):
     return {"name": obj.Name, "label": obj.Label, "type": obj.TypeId, "properties": props}
 
 
+# ----- dialog boxes ---------------------------------------------------------------------------
+
+
+def _dialogs():
+    """Visible dialogs and message boxes, the active modal one first; never the bridge's consent prompt."""
+    from PySide import QtWidgets
+    import bruceworx_bridge as bb
+
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return []
+    found = []
+    modal = app.activeModalWidget()
+    if modal is not None and modal.isVisible():
+        found.append(modal)
+    for w in app.topLevelWidgets():
+        if w not in found and w.isVisible() and isinstance(w, QtWidgets.QDialog):
+            found.append(w)
+    return [w for w in found if w.objectName() != bb.DIALOG_NAME]
+
+
+def dialog_buttons(widget):
+    """The texts of a dialog's visible push buttons, without mnemonics ("&Yes" -> "Yes")."""
+    from PySide import QtWidgets
+
+    return [b.text().replace("&", "") for b in widget.findChildren(QtWidgets.QPushButton) if b.isVisible() and b.text()]
+
+
+def _describe_dialog(widget):
+    from PySide import QtWidgets
+
+    if isinstance(widget, QtWidgets.QMessageBox):
+        text, info = widget.text(), widget.informativeText()
+    else:
+        labels = [lab.text() for lab in widget.findChildren(QtWidgets.QLabel) if lab.isVisible() and lab.text()]
+        text, info = " | ".join(labels[:6]), ""
+    fields = [e.text() for e in widget.findChildren(QtWidgets.QLineEdit) if e.isVisible()]
+    return {"title": widget.windowTitle(), "class": widget.metaObject().className(), "text": text,
+            "info": info, "buttons": dialog_buttons(widget), "fields": fields, "modal": widget.isModal()}
+
+
+def t_dialogs(_args):
+    return {"dialogs": [_describe_dialog(w) for w in _dialogs()]}
+
+
+def pick_dialog(described, title=None):
+    """Index of the dialog to answer: the one whose title contains ``title``, else the first (active) one.
+    macOS message boxes have no title, so their text and informative text are searched too."""
+    if not described:
+        return None
+    if title:
+        wanted = title.lower()
+        for keys in (("title",), ("text", "info")):
+            for i, d in enumerate(described):
+                if any(wanted in (d.get(k) or "").lower() for k in keys):
+                    return i
+        return None
+    return 0
+
+
+def t_answer_dialog(args):
+    from PySide import QtCore, QtWidgets
+
+    dialogs = _dialogs()
+    index = pick_dialog([_describe_dialog(w) for w in dialogs], args.get("title"))
+    if index is None:
+        raise ToolError("no such dialog is open" if args.get("title") else "no dialog is open")
+    dialog = dialogs[index]
+    if args.get("text") is not None:
+        if isinstance(dialog, QtWidgets.QInputDialog):
+            dialog.setTextValue(args["text"])
+        else:
+            edits = [e for e in dialog.findChildren(QtWidgets.QLineEdit) if e.isVisible()]
+            if len(edits) != 1:
+                raise ToolError(f"{dialog.windowTitle()!r} has {len(edits)} text fields; cannot type into it")
+            edits[0].setText(args["text"])
+    wanted = args["button"].replace("&", "").strip().lower()
+    buttons = [b for b in dialog.findChildren(QtWidgets.QPushButton) if b.isVisible()]
+    match = [b for b in buttons if b.text().replace("&", "").strip().lower() == wanted]
+    if not match:
+        raise ToolError(f"{dialog.windowTitle()!r} has no button {args['button']!r}; it has {dialog_buttons(dialog)}")
+    button = match[0]
+    # Queued, so it runs after this answer is sent (the click may end the dialog's loop). invokeMethod on the
+    # click slot, because PySide6 can drop a Python callable given to QTimer.singleShot before it fires.
+    QtCore.QMetaObject.invokeMethod(button, "click", QtCore.Qt.QueuedConnection)
+    return {"dialog": dialog.windowTitle(), "clicked": button.text().replace("&", "")}
+
+
 def t_selection(_args):
     App = _app()
     if not App.GuiUp:
