@@ -346,5 +346,99 @@ class Instances(unittest.TestCase):
         self.assertFalse(joint.Suppressed)
 
 
+class VaultAndBom(unittest.TestCase):
+    """P/N per configuration: configuration items in a scratch folder vault, numbered as dash numbers
+    of the file, and an assembly BOM with one line per configuration."""
+
+    def setUp(self):
+        from bruceworx import vault_setup as vs
+
+        self.tmp = os.environ.get("BW_CONFIGS_DIR") or tempfile.mkdtemp(prefix="bwcfgv")
+        self.vault = vs.create_vault(vs.VaultSetup(name="Configs", folder=os.path.join(self.tmp, "vault")),
+                                     actor="tester@mac")
+
+        def make(path, pn):
+            doc, _part = make_bracket(os.path.dirname(path), name=os.path.splitext(os.path.basename(path))[0], pn=pn)
+            App.closeDocument(doc.Name)
+
+        self.pn = vs.new_item(self.vault, "part", "Bracket", make)
+        self.path = self.vault.fetch(self.pn, self.tmp)
+        self.doc = App.openDocument(self.path)
+
+    def tearDown(self):
+        for name in list(App.listDocuments()):
+            App.closeDocument(name)
+        if not os.environ.get("BW_CONFIGS_DIR"):
+            shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _configure(self):
+        configure_bracket(self.doc)
+        short = bc.next_configuration_number(self.vault, self.pn)
+        standard = bc.next_configuration_number(self.vault, self.pn)
+        bc.set_cell(self.doc, "Short", "PartNumber", short)
+        bc.set_cell(self.doc, "Standard", "PartNumber", standard)
+        bc.activate(self.doc, "Standard")
+        self.doc.save()
+        return short, standard
+
+    def test_numbers_are_dash_numbers_of_the_file(self):
+        short, standard = self._configure()
+        self.assertEqual(bc.file_part_number(self.doc), self.pn)
+        self.assertEqual((short[:-3], standard[:-3]), (self.pn[:-3], self.pn[:-3]))
+        self.assertEqual((int(short[-3:]), int(standard[-3:])), (int(self.pn[-3:]) + 1, int(self.pn[-3:]) + 2))
+
+    def test_items_bom_and_refusals(self):
+        import bruceworx_bom as bb
+        from bruceworx import bom
+
+        short, standard = self._configure()
+        wanted = bc.configuration_items(self.doc, self.pn)
+        self.assertEqual(wanted, [(short, "Short", "Bracket 50"), (standard, "Standard", "Bracket 80")])
+        bc.check_configuration_items(self.vault, self.pn, wanted)
+        self.assertEqual(bc.register_configuration_items(self.vault, self.pn, wanted), [short, standard])
+        self.assertEqual(bc.register_configuration_items(self.vault, self.pn, wanted), [])  # nothing new
+        item = self.vault.items[short]
+        self.assertEqual((item.configuration_of, item.configuration, item.state), (self.pn, "Short", "WIP"))
+        # an assembly with one Short, one Standard and two Long (Long is the file's own item)
+        asm_doc = App.newDocument("Frame")
+        asm = asm_doc.addObject("Assembly::AssemblyObject", "Assembly")
+        asm_doc.saveAs(os.path.join(self.tmp, "Frame.FCStd"))
+        part = self.doc.getObject("Part")
+        for i, name in enumerate(("Short", "Standard", "Long", "Long")):
+            link = asm.newObject("App::Link", f"Bracket{i}")
+            link.LinkedObject = part
+            asm_doc.recompute()
+            bc.set_instance_configuration(link, name)
+        plain_link = asm.newObject("App::Link", "Follows")  # a stock link: the part's active row (Standard)
+        plain_link.LinkedObject = part
+        asm_doc.recompute()
+        lines, missing = bom.lines_from_walk(bb.walk(asm_doc), self.vault.items)
+        self.assertEqual(missing, [])
+        self.assertEqual([(l.child, l.qty) for l in lines], [(short, 1), (standard, 2), (self.pn, 2)])
+        # a suppressed component is not a line
+        bc.setup(asm_doc, ("All", "No short"))
+        alias = bc.add_suppression_column(asm_doc, asm_doc.getObject("Bracket0"))
+        bc.set_cell(asm_doc, "No short", alias, "1")
+        bc.activate(asm_doc, "No short")
+        lines, _missing = bom.lines_from_walk(bb.walk(asm_doc), self.vault.items)
+        self.assertEqual([(l.child, l.qty) for l in lines], [(standard, 2), (self.pn, 2)])
+        # a P/N that names another item is refused before anything is stored
+        self.vault.create_item("XX-01-09999-001", "part", "Other")
+        with self.assertRaises(bc.ConfigError):
+            bc.check_configuration_items(self.vault, self.pn, [("XX-01-09999-001", "Long", "")])
+        bc.set_cell(self.doc, "Long", "PartNumber", short)
+        with self.assertRaises(bc.ConfigError):
+            bc.configuration_items(self.doc, self.pn)  # two rows with one P/N
+
+    def test_vault_writes_the_file_number_into_the_table(self):
+        from bruceworx import freecad_io
+
+        self._configure()
+        freecad_io.set_part_number(self.doc.getObject("Part"), "XX-01-04242-001")
+        bc.activate(self.doc, "Long")
+        self.assertEqual(self.doc.getObject("Part").PartNumber, "XX-01-04242-001")
+        self.assertEqual(bc.file_part_number(self.doc), "XX-01-04242-001")
+
+
 if __name__ == "__main__":
     unittest.main()

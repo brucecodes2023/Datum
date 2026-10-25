@@ -36,6 +36,16 @@ Approved 24 Oct 2026 (PDM-02 A3, A9, A10 and the PDM-06 plan):
   BOM or, for a revision without a recorded BOM, by its released file's links
   (``file_link_users``, set by a store that has files).
 
+MOD-03 (25 Oct 2026, built on the plan's recommendations):
+
+* A configuration of a file with a P/N of its own is a *configuration item*
+  (:meth:`Vault.add_configuration`); ``configuration_of`` names the file's
+  item. It has no file and shares the file item's revisions (one file, one
+  revision, as in SolidWorks PDM; :class:`ConfigurationRevisions`), so it is
+  always in its file's state.
+  Lifecycle steps on it are refused with the file's P/N; retiring the file's
+  item retires its configurations.
+
 ``Vault.strict`` (default on) applies these rules. A store replaying a journal
 written before them turns it off while replaying: history is accepted as it
 was recorded, new operations are checked. A replay also skips the BOM cycle
@@ -181,6 +191,60 @@ class Revision:
         return self.state == WIP
 
 
+class ConfigurationRevision:
+    """A configuration item's view of one revision of its file's item (MOD-03): the same code, state,
+    history and records (changing them changes the file item's), but a node of its own in the BOM
+    graph (which keys revisions by identity) and BOM fields of its own."""
+
+    _SHARED = ("code", "state", "eco", "superseded", "history", "records", "was")
+
+    def __init__(self, rev):
+        object.__setattr__(self, "_rev", rev)
+        self.bom = None
+        self.bom_version = ""
+        self.bom_missing = []
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_rev"), name)
+
+    def __setattr__(self, name, value):
+        if name in self._SHARED:
+            setattr(self._rev, name, value)
+        else:
+            object.__setattr__(self, name, value)
+
+
+class ConfigurationRevisions:
+    """The revisions of a configuration item: views of its file item's list, kept in step with it."""
+
+    def __init__(self, master):
+        self._master = master
+        self._views = {}
+
+    def _view(self, rev):
+        view = self._views.get(id(rev))
+        if view is None or view._rev is not rev:
+            view = self._views[id(rev)] = ConfigurationRevision(rev)
+        return view
+
+    def __iter__(self):
+        return (self._view(r) for r in self._master.revisions)
+
+    def __reversed__(self):
+        return (self._view(r) for r in reversed(self._master.revisions))
+
+    def __len__(self):
+        return len(self._master.revisions)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return [self._view(r) for r in self._master.revisions[index]]
+        return self._view(self._master.revisions[index])
+
+    def append(self, _rev):
+        raise LifecycleError("a configuration item's revisions are its file item's")
+
+
 @dataclass
 class Item:
     part_number: str
@@ -189,6 +253,9 @@ class Item:
     drawing_of: str | None = None  # for drawings: the part they document
     revisions: list = field(default_factory=list)
     obsolete: bool = False
+    # MOD-03: a configuration item names the file's item and its row; its revisions are the file's.
+    configuration_of: str | None = None
+    configuration: str = ""
 
     @property
     def latest(self) -> Revision:
@@ -330,7 +397,7 @@ class Vault:
         Only between "part" and "cots"; refused for an obsolete item and when nothing changes.
         Recorded on the latest revision. The file's ItemType property follows at its next
         check-in; released files are not touched."""
-        item = self.items[part_number]
+        item = self._own(part_number, "change the type of")
         if item_type not in ("part", "cots"):
             raise ValueError(f"an item type changes only between part and cots, not to {item_type!r}")
         if item.item_type not in ("part", "cots"):
@@ -349,9 +416,54 @@ class Vault:
     def drawings_of(self, part_number):
         return [i for i in self.items.values() if i.drawing_of == part_number]
 
+    # ----- configurations (MOD-03) ------------------------------------
+
+    def add_configuration(self, part_number, configuration_of, configuration, description=""):
+        """A configuration of ``configuration_of``'s file with a P/N of its own. It shares that item's
+        revisions and state. Adding it again for the same file updates its row name and description
+        (a renamed row); a P/N that names any other item is refused."""
+        master = self.items.get(configuration_of)
+        if master is None:
+            raise LifecycleError(f"unknown item {configuration_of}")
+        if master.configuration_of:
+            raise LifecycleError(f"{configuration_of} is itself a configuration of {master.configuration_of}")
+        if master.item_type not in ("part", "assembly", "cots"):
+            raise LifecycleError(f"a {master.item_type} has no configurations")
+        if master.obsolete:
+            raise LifecycleError(f"{configuration_of} is obsolete")
+        if not (configuration or "").strip():
+            raise LifecycleError("a configuration item needs the configuration's name")
+        if part_number == configuration_of:
+            raise LifecycleError(f"{part_number} is the file's own number; that configuration needs no item")
+        item = self.items.get(part_number)
+        if item is not None:
+            if item.configuration_of != configuration_of:
+                raise LifecycleError(f"{part_number} already exists")
+            item.configuration, item.description = configuration, description or item.description
+            return item
+        item = Item(part_number, master.item_type, description, configuration_of=configuration_of,
+                    configuration=configuration)
+        item.revisions = ConfigurationRevisions(master)  # one file, one revision
+        self.items[part_number] = item
+        master.latest.history.append(f"configuration {configuration}: {part_number}")
+        return item
+
+    def configurations_of(self, part_number):
+        """The configuration items of a file's item, in the order they were added."""
+        return [i for i in self.items.values() if i.configuration_of == part_number]
+
+    def _own(self, part_number, action):
+        """Lifecycle steps happen on the file's item, not on one of its configurations (MOD-03)."""
+        item = self.items[part_number]
+        if item.configuration_of:
+            raise LifecycleError(f"{part_number} is configuration {item.configuration!r} of "
+                                 f"{item.configuration_of}; {action} {item.configuration_of}, its file")
+        return item
+
     # ----- review and release ----------------------------------------
 
     def submit(self, part_number):
+        self._own(part_number, "submit")
         rev = self._latest(part_number)
         self._require(rev, WIP, "submit")
         rev.state = IN_REVIEW
@@ -359,7 +471,7 @@ class Vault:
         return rev
 
     def reject(self, part_number, reason="", checklist=None, attachments=None):
-        item = self.items[part_number]
+        item = self._own(part_number, "reject")
         rev = item.latest
         self._require(rev, IN_REVIEW, "reject")
         self._text(reason, "a reason for the rejection")
@@ -381,7 +493,7 @@ class Vault:
 
         ``note`` (the release note) and ``checklist`` (the release checklist as
         ticked, see ``release_check.py``) are recorded with the approval."""
-        item = self.items[part_number]
+        item = self._own(part_number, "approve")
         rev = item.latest
         self._require(rev, IN_REVIEW, "approve")
         if rev.eco is not None:
@@ -402,8 +514,9 @@ class Vault:
         """Retire a released item (Obsolete): its released revision becomes Obsolete and
         nothing changes it again. Refused while a current released revision of an assembly
         uses it (by its BOM, or by its released file's links when it has no BOM), or while an
-        ECO has its next revision in work. ``reason`` is required and recorded."""
-        item = self.items[part_number]
+        ECO has its next revision in work. ``reason`` is required and recorded. The item's
+        configuration items (MOD-03) retire with it, and their uses count as its own."""
+        item = self._own(part_number, "retire")
         if item.obsolete:
             raise LifecycleError(f"{part_number} is already obsolete")
         if item.released is None:
@@ -413,7 +526,9 @@ class Vault:
             raise LifecycleError(f"{part_number} rev {latest.code} is in work under {latest.eco}; "
                                  f"release {latest.eco} first")
         self._text(reason, "a reason for retiring it")
-        users = {f"{use.part_number} rev {use.revision}" for use in self.where_used_revisions(part_number)
+        users = {f"{use.part_number} rev {use.revision}"
+                 for pn in [part_number] + [c.part_number for c in self.configurations_of(part_number)]
+                 for use in self.where_used_revisions(pn)
                  if use.exact and use.current and use.state == RELEASED}
         if self.strict and self.file_link_users is not None:
             for pn in self.file_link_users(part_number) or ():
@@ -427,6 +542,8 @@ class Vault:
         rev.records.append(self._entry("retire", reason=reason))
         rev.state = OBSOLETE
         item.obsolete = True
+        for config in self.configurations_of(part_number):
+            config.obsolete = True
         return rev
 
     # ----- change control ----------------------------------------------
@@ -440,6 +557,7 @@ class Vault:
             raise LifecycleError("an ECR needs at least one affected item")
         self._text(problem, "a problem description")
         for pn in items:
+            self._own(pn, "raise the ECR on")
             if self.items[pn].obsolete:
                 raise LifecycleError(f"{pn} is obsolete and no longer changes")
             if self.items[pn].released is None:
@@ -551,6 +669,7 @@ class Vault:
         item = self.items.get(parent)
         if item is None:
             raise LifecycleError(f"unknown item {parent}")
+        self._own(parent, "record the BOM of")
         rev = self._revision(item, revision) if revision else item.latest
         if rev is None:
             raise LifecycleError(f"{parent} has no revision {revision}")

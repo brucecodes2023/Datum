@@ -267,14 +267,21 @@ def _obj_alive(obj):
 
 
 def local_sheet(doc):
-    """The document's own "Parameters" spreadsheet, or None."""
+    """The document's own "Parameters" spreadsheet, or None. A part's sheet copied into an assembly
+    for an instance in a configuration of its own (MOD-03) is not the assembly's."""
     if doc is None:
         return None
+    try:
+        import bruceworx_configs
+
+        copied = bruceworx_configs.copies(doc)
+    except Exception:
+        copied = set()
     obj = doc.getObject(SHEET_NAME)
-    if obj is not None and obj.TypeId == SHEET_TYPE:
+    if obj is not None and obj.TypeId == SHEET_TYPE and obj.Name not in copied:
         return obj
     for obj in doc.getObjectsByLabel(SHEET_NAME):
-        if obj.TypeId == SHEET_TYPE:
+        if obj.TypeId == SHEET_TYPE and obj.Name not in copied:
             return obj
     return None
 

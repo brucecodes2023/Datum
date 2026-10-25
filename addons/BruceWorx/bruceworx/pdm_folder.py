@@ -77,6 +77,7 @@ LIFECYCLE_OPS = {
     "release_eco": ("number", "note", "checklists", "attachments"),
     "set_bom": ("parent", "lines", "revision", "sha256", "missing"),
     "set_item_type": ("part_number", "item_type"),  # MOD-05: part <-> cots
+    "add_configuration": ("part_number", "configuration_of", "configuration", "description"),  # MOD-03
 }
 FILE_OPS = ("checkout", "undo_checkout", "checkin")
 
@@ -344,6 +345,10 @@ class FolderVault:
                     self._freeze(pn)
             return result
         pn = args.get("part_number")
+        item = self.model.items.get(pn)
+        if item is not None and item.configuration_of:  # MOD-03: a configuration has no file of its own
+            raise LifecycleError(f"{pn} is configuration {item.configuration!r} of {item.configuration_of}; "
+                                 f"its file is {item.configuration_of}")
         if event.op == "checkout":
             self._require_wip(pn, "check out")
             holder = self.locks.get(pn)
@@ -466,6 +471,13 @@ class FolderVault:
 
     def set_item_type(self, part_number, item_type):
         return self._record("set_item_type", dict(part_number=part_number, item_type=item_type))
+
+    def add_configuration(self, part_number, configuration_of, configuration, description=""):
+        return self._record("add_configuration", dict(part_number=part_number, configuration_of=configuration_of,
+                                                      configuration=configuration, description=description))
+
+    def configurations_of(self, part_number):
+        return self.model.configurations_of(part_number)
 
     def submit(self, part_number):
         holder = self.locks.get(part_number)
@@ -696,11 +708,18 @@ class FolderVault:
         shutil.copyfile(source, dest)
         return dest
 
+    def file_item(self, part_number) -> str:
+        """The item whose file holds ``part_number``: itself, or a configuration's file item (MOD-03)."""
+        item = self.model.items.get(part_number)
+        return item.configuration_of if item is not None and item.configuration_of else part_number
+
     def latest_version(self, part_number) -> FileVersion | None:
+        part_number = self.file_item(part_number)
         versions = self.versions.get(part_number)
         return versions[-1] if versions else None
 
     def released_version(self, part_number) -> FileVersion | None:
+        part_number = self.file_item(part_number)
         item = self.model.items[part_number]
         if item.released is None:
             return None

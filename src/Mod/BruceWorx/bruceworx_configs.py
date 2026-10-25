@@ -192,14 +192,16 @@ def main_object(doc):
     the file's main object (the assembly, an App::Part, a body; a top-level one first)."""
     if doc is None:
         return None
-    for obj in doc.Objects:
-        if PROP in getattr(obj, "PropertiesList", ()) and _is_switch(obj):
-            return obj
+    copied = copies(doc)
     rank = _main_rank()
+    for obj in doc.Objects:  # an instance's link shows its part's switch too: only parts, assemblies, bodies
+        if (getattr(obj, "TypeId", "") in rank and PROP in getattr(obj, "PropertiesList", ()) and _is_switch(obj)
+                and obj.Name not in copied):
+            return obj
     best = None
     for order, obj in enumerate(doc.Objects):
         r = rank.get(getattr(obj, "TypeId", ""))
-        if r is None:
+        if r is None or obj.Name in copied:
             continue
         nested = any(getattr(p, "TypeId", "") in ("App::Part", "Assembly::AssemblyObject")
                      for p in getattr(obj, "InList", []) or [])
@@ -217,17 +219,45 @@ def _is_switch(obj):
         return False
 
 
+def copies(doc):
+    """Names of the objects that are configuration copies of other files' parts (what instances in
+    their own row show, held in CopyOnChangeGroup link groups): never the document's own."""
+    out = set()
+    for obj in doc.Objects if doc is not None else ():
+        if obj.TypeId == "App::LinkGroup" and obj.Name.startswith("CopyOnChangeGroup"):
+            out.update(o.Name for o in (getattr(obj, "ElementList", None) or []) if o is not None)
+    return out
+
+
+def is_copy(obj):
+    """True for an object in a configuration copy (see copies)."""
+    try:
+        return obj.Name in copies(obj.Document)
+    except Exception:
+        return False
+
+
 def table(doc):
-    """The document's Configurations sheet, or None."""
+    """The document's own Configurations sheet (not a copy of a part's), or None."""
     if doc is None:
         return None
-    obj = doc.getObject(SHEET_NAME)
-    if obj is not None and obj.TypeId == SHEET_TYPE:
-        return obj
-    for obj in doc.getObjectsByLabel(SHEET_NAME):
-        if obj.TypeId == SHEET_TYPE:
-            return obj
+    copied = copies(doc)
+    candidates = [doc.getObject(SHEET_NAME)] + list(doc.getObjectsByLabel(SHEET_NAME)) + list(doc.Objects)
+    for obj in candidates:
+        if obj is None or obj.TypeId != SHEET_TYPE or obj.Name in copied:
+            continue
+        head = _contents(obj, f"A{ACTIVE_ROW}")
+        if obj.Name == SHEET_NAME or obj.Label == SHEET_NAME or (head.startswith("=hiddenref(") and f".{PROP}.String" in head):
+            if _alias(obj, f"B{FILE_ROW}") == FILE_PN or obj.Name == SHEET_NAME:
+                return obj
     return None
+
+
+def _ref(doc):
+    """How expressions name the document's table ("Configurations", or "Configurations001" when a part's
+    copy took the name first)."""
+    sheet = table(doc)
+    return sheet.Name if sheet is not None else SHEET_NAME
 
 
 def has_configurations(doc):
@@ -627,12 +657,12 @@ def add_parameter_column(doc, name):
     if name in RESERVED or name.startswith((SUP, CFG)):
         raise ConfigError(f"a parameter named {name} cannot be configured; rename it first")
     content = params.getContents(address) or ""
-    if content.startswith("=") and SHEET_NAME in content:
+    if content.startswith("=") and f"{_ref(doc)}." in content:
         raise ConfigError(f"{name} is already configured")
     if content.startswith("="):
         content = _quantity_text(params.get(address))  # an expression: every row starts from its value
     _new_column(doc, name, name, lambda _n: content)
-    params.set(address, f"={SHEET_NAME}.{name}")
+    params.set(address, f"={_ref(doc)}.{name}")
     doc.recompute()
     return name
 
@@ -647,7 +677,7 @@ def add_dimension_column(doc, obj, prop):
     alias = alias_for(obj.Name, prop)
     content = _quantity_text(getattr(obj, prop))
     _new_column(doc, alias, f"{obj.Label} {prop}", lambda _n: content)
-    obj.setExpression(prop, f"{SHEET_NAME}.{alias}")
+    obj.setExpression(prop, f"{_ref(doc)}.{alias}")
     doc.recompute()
     return alias
 
@@ -669,7 +699,7 @@ def add_suppression_column(doc, obj):
     now = "1" if obj.Suppressed else "0"
     alias = SUP + alias_for(obj.Name)
     _new_column(doc, alias, header_for(alias, obj.Label), lambda _n: now)
-    obj.setExpression("Suppressed", f"{SHEET_NAME}.{alias}")
+    obj.setExpression("Suppressed", f"{_ref(doc)}.{alias}")
     doc.recompute()
     return alias
 
@@ -685,7 +715,7 @@ def add_instance_column(doc, link):
     now = str(link.Configuration)
     alias = CFG + alias_for(link.Name)
     _new_column(doc, alias, header_for(alias, link.Label), lambda _n: text_cell(now))
-    link.setExpression(PROP, f"{SHEET_NAME}.{alias}")
+    link.setExpression(PROP, f"{_ref(doc)}.{alias}")
     doc.recompute()
     after_switch(doc)
     return alias
@@ -701,11 +731,11 @@ def remove_column(doc, alias, recompute=True):
     if kind == PARAM:
         params = _parameters_sheet(doc)
         address = params.getCellFromAlias(alias) if params is not None else None
-        if address and SHEET_NAME in (params.getContents(address) or ""):
+        if address and f"{sheet.Name}." in (params.getContents(address) or ""):
             params.set(address, literal(_contents(sheet, cell(col, row_of(doc, active(doc))))))
     for obj in doc.Objects:
         for path, expr in list(getattr(obj, "ExpressionEngine", None) or ()):
-            if obj is not sheet and re.search(rf"(?<![\w.]){SHEET_NAME}\.{re.escape(alias)}(?!\w)", expr or ""):
+            if obj is not sheet and re.search(rf"(?<![\w.]){sheet.Name}\.{re.escape(alias)}(?!\w)", expr or ""):
                 obj.setExpression(path, None)
     old = _binding(sheet)
     if old:
@@ -720,7 +750,7 @@ def remove_column(doc, alias, recompute=True):
 def column_target(doc, alias):
     """(object, property) a column drives, or (None, "") for the P/N, Description and parameters."""
     kind = column_kind(alias)
-    ref = re.compile(rf"(?<![\w.]){SHEET_NAME}\.{re.escape(alias)}(?!\w)")
+    ref = re.compile(rf"(?<![\w.]){_ref(doc)}\.{re.escape(alias)}(?!\w)")
     for obj in doc.Objects:
         if obj.TypeId == SHEET_TYPE:
             continue
@@ -934,3 +964,120 @@ def import_csv(doc, text):
                 sheet.set(cell(column_of(doc, alias), row), content)
     doc.recompute()
     return updated, added, unknown
+
+
+# ----- the vault: configuration items (MOD-03) --------------------------------------------
+
+
+def next_configuration_number(vault, file_pn, taken=()):
+    """The next number for a configuration of the file ``file_pn``: the next sub-number under the
+    same parent drawing (LE-01-01001-001 -> LE-01-01001-002), as a family of dash numbers. Reserved in
+    the vault's numbering; numbers already in the vault or in ``taken`` are skipped."""
+    from bruceworx import numbering, pdm, vault_setup
+    from bruceworx.sources import JsonNumberSource
+
+    fields = numbering.parse_part_number(file_pn)
+    source = JsonNumberSource(vault_setup.numbering_path(vault.root))
+    for _attempt in range(1000):
+        pn = pdm.strip_revision(source.allocate(fields["program"], fields["document_type"], parent=fields["parent"]))
+        if pn not in vault.items and pn not in taken and pn != file_pn:
+            return pn
+    raise ConfigError(f"no free configuration number under {file_pn}")
+
+
+def configuration_items(doc, file_pn):
+    """[(P/N, configuration, description)] the vault should hold for a configured file: the rows with
+    a P/N of their own. Refuses a P/N used by two rows."""
+    out, seen = [], {}
+    for name, pn, description, own in part_numbers(doc):
+        if not own or pn == file_pn:
+            continue
+        if pn in seen:
+            raise ConfigError(f"{pn} is the P/N of two configurations ({seen[pn]} and {name})")
+        seen[pn] = name
+        out.append((pn, name, description))
+    return out
+
+
+def check_configuration_items(vault, file_pn, wanted):
+    """Refuse (before a check-in stores anything) P/Ns that already name another item."""
+    for pn, name, _description in wanted:
+        item = vault.items.get(pn)
+        if item is not None and getattr(item, "configuration_of", None) != file_pn:
+            raise ConfigError(f"configuration {name}: {pn} is already another item in the vault")
+
+
+def register_configuration_items(vault, file_pn, wanted):
+    """Add the configuration items that are missing, and rename the ones whose row changed. Returns
+    the P/Ns added or changed."""
+    done = []
+    for pn, name, description in wanted:
+        item = vault.items.get(pn)
+        if item is not None and item.configuration == name and (not description or item.description == description):
+            continue
+        vault.add_configuration(pn, file_pn, name, description)
+        done.append(pn)
+    return done
+
+
+def _open(path):
+    """(document, opened_here) for a file, opened hidden when it is not open."""
+    import os
+
+    import FreeCAD
+
+    doc = next((d for d in FreeCAD.listDocuments().values()
+                if d.FileName and os.path.realpath(d.FileName) == os.path.realpath(path)), None)
+    if doc is not None:
+        return doc, False
+    before = set(FreeCAD.listDocuments())
+    doc = FreeCAD.openDocument(path, True)
+    return doc, [n for n in FreeCAD.listDocuments() if n not in before]
+
+
+def _close(opened):
+    import FreeCAD
+
+    for name in reversed(opened or []):
+        try:
+            FreeCAD.closeDocument(name)
+        except Exception:
+            pass
+
+
+class CheckinConfigurations:
+    """Check-in hook (bruceworx_vaultclient.CHECKIN_HOOKS): a file's configurations with P/Ns of their
+    own become configuration items of its item."""
+
+    def prepare(self, s, pn, notes):
+        item = s.vault.items.get(pn)
+        if item is None or getattr(item, "configuration_of", None):
+            return None
+        doc, opened = _open(s.work.path(pn))
+        try:
+            if not has_configurations(doc):
+                return None
+            wanted = configuration_items(doc, pn)
+            if file_part_number(doc) not in ("", pn):
+                notes.setdefault("configurations_note", []).append(
+                    f"{pn}: its configuration table names {file_part_number(doc)} as the file's P/N")
+        finally:
+            _close(opened)
+        check_configuration_items(s.vault, pn, wanted)
+        return wanted
+
+    def record(self, s, pn, data, notes):
+        if not data:
+            return
+        done = register_configuration_items(s.vault, pn, data)
+        if done:
+            notes.setdefault("configurations", []).append((pn, done))
+
+
+def checkin_text(notes):
+    """The words after a check-in for configuration items ("" when nothing needs saying)."""
+    out = []
+    for pn, done in notes.get("configurations", ()):
+        out.append(f"{pn}: configuration item{'s' if len(done) != 1 else ''} {', '.join(done)} added to the vault.")
+    out.extend(notes.get("configurations_note", ()))
+    return "\n".join(out)

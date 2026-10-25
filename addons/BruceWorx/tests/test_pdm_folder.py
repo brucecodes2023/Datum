@@ -88,6 +88,29 @@ class ReplayTests(_TempDir, unittest.TestCase):
         self.assertEqual(json.loads(open(vault.journal_path).read().splitlines()[-1])["args"],
                          {"item_type": "cots", "part_number": PART})
 
+    def test_configurations_replay(self):
+        """MOD-03: configuration items come back from the journal sharing their file's state; they
+        have no file of their own (check-out goes to the file), and versions resolve to the file."""
+        vault = FolderVault.init(self.tmp, "Pedestal", actor="bruce@mac")
+        vault.create_item(PART, "part", "Bracket")
+        vault.add_configuration(PART + "-S", PART, "Short", "Bracket 50")
+        with self.assertRaises(LifecycleError):
+            vault.checkout(PART + "-S")
+        vault.checkout(PART)
+        path = os.path.join(self.tmp, "b.FCStd")
+        with open(path, "wb") as handle:
+            handle.write(b"bracket")
+        vault.checkin(PART, path, "first")
+        vault.submit(PART)
+        vault.approve(PART, note="released")
+        again = FolderVault(self.tmp, actor="bruce@mac")
+        config = again.items[PART + "-S"]
+        self.assertEqual((config.configuration_of, config.configuration, config.state, config.released.code),
+                         (PART, "Short", RELEASED, "A"))
+        self.assertEqual(again.latest_version(PART + "-S").sha256, again.latest_version(PART).sha256)
+        self.assertEqual(again.file_item(PART + "-S"), PART)
+        self.assertEqual(again.problems, [])
+
     def test_refused_operation_writes_nothing(self):
         vault = FolderVault.init(self.tmp, "Pedestal", actor="bruce@mac")
         vault.create_item(PART)

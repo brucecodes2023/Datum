@@ -83,6 +83,19 @@ def main_object(doc):
     return best[1] if best else None
 
 
+def set_part_number(obj, part_number: str) -> None:
+    """Set the file's P/N on its main object. A file with configurations (MOD-03) has PartNumber read
+    from its Configurations table, where rows without a P/N of their own show the file's number:
+    that number lives in the table's ``FilePartNumber`` cell, so it is written there."""
+    expr = dict(getattr(obj, "ExpressionEngine", None) or ()).get("PartNumber", "")
+    sheet = obj.Document.getObject(expr.split(".", 1)[0]) if expr.endswith(".PartNumber") else None
+    if sheet is not None and sheet.TypeId == "Spreadsheet::Sheet" and sheet.getCellFromAlias("FilePartNumber"):
+        sheet.set(sheet.getCellFromAlias("FilePartNumber"), "'" + part_number)
+        obj.Document.recompute()
+        return
+    obj.PartNumber = part_number
+
+
 def write_part_number(path: str, part_number: str, revision: str | None = None) -> str:
     """Give the file's main object (:func:`main_object`) the schema's part
     properties (``partprops.Schema.apply``) and set ``PartNumber``, and
@@ -108,7 +121,7 @@ def write_part_number(path: str, part_number: str, revision: str | None = None) 
         clash = [text for text in report["conflicts"] if text.split(" ", 1)[0] in ("PartNumber", "Revision")]
         if clash:
             raise ValueError(f"{obj.Name}: {'; '.join(clash)}")
-        obj.PartNumber = part_number
+        set_part_number(obj, part_number)
         obj.Revision = pdm.first_prerelease() if revision is None else revision
         name = obj.Name
         doc.save()

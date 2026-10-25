@@ -58,6 +58,8 @@ TRANSITIONS = (
     ("F4", "undo_checkout", "POST /items/{pn}/undo-checkout", "locked by someone else, force", "unlocked"),
     ("B1", "set_bom", "PUT /items/{pn}/revisions/{rev}/bom", "WIP revision", "its BOM replaced"),
     ("T13", "set_item_type", "PUT /items/{pn}/type", "part or cots, not Obsolete", "cots or part"),
+    ("T14", "add_configuration", "POST /items/{pn}/configurations", "part or assembly, not Obsolete",
+     "configuration item sharing its revisions"),
 )
 # Operations in the OpenAPI file that are not journal transitions (reads, and Ops' side).
 READS = {"status", "allocate_part_number", "bom_of", "where_used", "receive_released_bom"}
@@ -189,6 +191,46 @@ class _Lifecycle:
         self.v.retire(PART, "replaced")
         with self.assertRaises(LifecycleError):
             self.v.set_item_type(PART, "cots")
+
+    def test_T14_configuration(self):
+        self.v.create_item(PART, description="Bracket")
+        short, long_ = PART + "-S", PART + "-L"
+        self.v.add_configuration(short, PART, "Short", "Bracket 50")
+        self.v.add_configuration(long_, PART, "Long", "Bracket 120")
+        item = self.v.items[short]
+        self.assertEqual((item.configuration_of, item.configuration, item.item_type, item.description),
+                         (PART, "Short", "part", "Bracket 50"))
+        self.assertEqual([c.part_number for c in self.v.configurations_of(PART)], [short, long_])
+        self.v.add_configuration(short, PART, "Short 50")  # a renamed row: same item, new name
+        self.assertEqual((self.v.items[short].configuration, self.v.items[short].description), ("Short 50", "Bracket 50"))
+        for refused in (lambda: self.v.add_configuration(PART, PART, "Self"),
+                        lambda: self.v.add_configuration(short, long_, "Nested"),
+                        lambda: self.v.add_configuration(PART + "-X", PART, ""),
+                        lambda: self.v.add_configuration(PART + "-X", "LE-00-00000-000", "Nowhere"),
+                        lambda: self.v.submit(short), lambda: self.v.set_item_type(short, "cots")):
+            with self.assertRaises(LifecycleError):
+                refused()
+        self.v.create_item(ASSY, "assembly")
+        self.v.set_bom(ASSY, [(short, 1), (long_, 2)])
+        self.released()  # the file's release is its configurations' release
+        self.assertEqual((self.v.items[short].state, self.v.items[short].released.code), (RELEASED, "A"))
+        self.assertEqual(self.v.explode(ASSY), {short: 1, long_: 2})
+        self.v.submit(ASSY)
+        self.v.approve(ASSY, note="released")
+        with self.assertRaises(LifecycleError):
+            self.v.retire(PART, "replaced")  # the assembly uses its Long configuration
+        with self.assertRaises(LifecycleError):
+            self.v.raise_ecr(None, "longer", [long_])  # change the file's item
+        self.v.create_item(DWG, "drawing", drawing_of=PART)
+
+    def test_T14_retire_with_configurations(self):
+        self.v.create_item(PART)
+        self.v.add_configuration(PART + "-S", PART, "Short")
+        self.released()
+        self.v.retire(PART, "replaced")
+        self.assertEqual(self.v.items[PART + "-S"].state, OBSOLETE)
+        with self.assertRaises(LifecycleError):
+            self.v.add_configuration(PART + "-L", PART, "Long")  # obsolete
 
     def test_B1_bom(self):
         self.v.create_item(PART)

@@ -97,10 +97,14 @@ def _is_line(obj):
     return (_type(obj, "Assembly::AssemblyObject") or _type(obj, "App::Part") or _type(obj, "Part::Feature"))
 
 
-def _keys(target, imported):
+def _keys(target, imported, shown=None):
     """Candidate part numbers for an object in another file: the file it lives in (work files are
     <P/N>.FCStd; an outside file imported by this check-in maps to its new P/N), then its
-    PartNumber property."""
+    PartNumber property. A part with configurations (MOD-03) offers the P/N of the row shown first
+    (``shown``: the instance's configuration copy, else the part itself), so each configuration with
+    a P/N of its own is a line of its own."""
+    import bruceworx_configs as bc
+
     path = getattr(target.Document, "FileName", "") or ""
     keys = []
     if path and os.path.realpath(path) in imported:
@@ -111,6 +115,10 @@ def _keys(target, imported):
         pn = str(getattr(holder, "PartNumber", "") or "").strip() if holder is not None else ""
         if pn and pn not in keys:
             keys.append(pn)
+    row = shown if shown is not None else (target if bc.configurable(target) else None)
+    pn = str(getattr(row, "PartNumber", "") or "").strip() if row is not None else ""
+    if pn:
+        keys = [pn] + [k for k in keys if k != pn]
     return keys
 
 
@@ -124,13 +132,23 @@ def walk(doc, imported=None) -> list:
     objects = list(top.Group) if top is not None else [o for o in doc.RootObjects]
     rows = []
 
+    import bruceworx_configs as bc
+
     def visit(objs, mult, seen):
         for obj in objs:
-            if obj is None:
+            if obj is None or bc.is_suppressed_component(obj):
                 continue
             target, count = _target(obj)
             if target is None or count <= 0 or not _is_line(target):
                 continue
+            copy = bc.copy_of(obj) if _type(obj, "App::Link") else None
+            if copy is not None:  # an instance in a configuration of its own (MOD-03): its part's file
+                source = bc.source_of(obj)
+                if source is not None and source.Document is not doc:
+                    base = os.path.basename(getattr(source.Document, "FileName", "") or "") or source.Document.Label
+                    name = f"{base} ({getattr(copy, 'Configuration', '')})"
+                    rows.append({"keys": _keys(source, imported, shown=copy), "name": name, "qty": mult * count})
+                    continue
             if target.Document is doc:
                 if _type(target, "Assembly::AssemblyObject") and target is not top:
                     if target.Name not in seen:

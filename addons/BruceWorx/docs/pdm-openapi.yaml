@@ -137,6 +137,21 @@ paths:
         content: {application/json: {schema: {type: object, required: [item_type], properties: {item_type: {enum: [part, cots]}}}}}
       responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /items/{pn}/configurations:
+    post:
+      operationId: add_configuration
+      summary: >
+        MOD-03: a configuration of the item's file with a P/N of its own becomes a configuration
+        item. It has no file and shares the file item's revisions and state; lifecycle steps on
+        it are refused (they go to the file's item), and retiring the file's item retires it.
+        Posting it again for the same file updates its configuration name and description.
+      parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [part_number, configuration],
+          properties: {part_number: {type: string}, configuration: {type: string}, description: {type: string}}}}}
+      responses: {"200": {description: The configuration item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
   /items/{pn}/files:
     get:
       summary: Every file version of the item, oldest first, each with the revision it belongs to
@@ -388,6 +403,8 @@ components:
         item_type: {enum: [part, assembly, drawing, cots]}
         description: {type: string}
         drawing_of: {type: [string, "null"]}
+        configuration_of: {type: [string, "null"], description: "MOD-03: the file's item, for a configuration item"}
+        configuration: {type: string, description: "MOD-03: the configuration's name in its file"}
         obsolete: {type: boolean}
         state: {enum: [WIP, In Review, Released, Obsolete], description: "The latest revision's state; Obsolete once retired"}
         released: {type: [string, "null"], description: "Code of the current released revision (not superseded)"}
