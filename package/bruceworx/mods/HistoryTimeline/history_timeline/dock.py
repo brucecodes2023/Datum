@@ -208,6 +208,7 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self._bar.playbackRequested.connect(self._on_playback)
         self._bar.renameRequested.connect(self._rename)
         self._drag = None
+        self._last_move_error = None
         self.setWidget(self._bar)
         # One row, no dock title: the bar is the only header (roadmap §13.3).
         # The menu item and the preference still show and hide it. A restored
@@ -588,16 +589,57 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         delete_action.triggered.connect(lambda _checked=False, n=name: self._delete(n))
 
         menu.addSeparator()
-        earlier = menu.addAction("Move earlier")
-        earlier.setObjectName("earlier")
-        later = menu.addAction("Move later")
-        later.setObjectName("later")
-        for action in (earlier, later):
-            action.setEnabled(False)
+        for direction, text in (("earlier", "Move earlier"), ("later", "Move later")):
+            action = menu.addAction(text)
+            action.setObjectName(direction)
+            ok, reason = model.can_move(body, feature, direction)
+            action.setEnabled(ok)
             action.setToolTip(
-                "Not in this spike. Assigning Body.Group does not rewrite BaseFeature."
+                reason
+                if not ok
+                else "Swap with the neighbouring feature (its sketch moves with it). "
+                "Undone if a feature breaks."
             )
+            action.triggered.connect(
+                lambda _checked=False, n=name, d=direction: self._move(n, d)
+            )
+        menu.setToolTipsVisible(True)
         return menu
+
+    def _move(self, name, direction):
+        """Move earlier / later, then recompute; if a feature that was fine is now
+        invalid (a dress-up lost its edges) the move is undone and reported."""
+        body, feature = self._feature(name)
+        if feature is None:
+            return
+        ok, reason = model.can_move(body, feature, direction)
+        if not ok:
+            FreeCAD.Console.PrintWarning(f"History timeline: cannot move {feature.Label}: {reason}\n")
+            return
+        doc = body.Document
+        valid_before = {obj.Name for obj in body.Group if obj.isValid()}
+        self._suspend = True
+        doc.openTransaction("Move feature " + direction)
+        try:
+            model.move_feature(body, feature, direction)
+            broken = [obj for obj in body.Group if obj.Name in valid_before and not obj.isValid()]
+            if broken:
+                raise RuntimeError(
+                    ", ".join(f"{obj.Label}: {obj.getStatusString()}" for obj in broken)
+                )
+        except Exception as exc:
+            doc.abortTransaction()
+            doc.recompute()
+            FreeCAD.Console.PrintError(
+                f"History timeline: move of {feature.Label} undone, {exc}\n"
+            )
+            self._last_move_error = str(exc)
+        else:
+            doc.commitTransaction()
+            self._last_move_error = None
+        finally:
+            self._suspend = False
+            self.refresh()
 
     def closeEvent(self, event):
         # Closing the dock is the disable gesture. Preference goes back to false.

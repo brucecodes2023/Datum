@@ -377,3 +377,129 @@ class TestContextMenu(TimelineGuiCase):
         # macOS leaves a QMessageBox's window title empty, so count the boxes.
         self.assertEqual(len(seen), 1, f"one dependency dialog expected, saw {seen!r}")
         self.assertIsNotNone(self.doc.getObject("Cylinder"), "No keeps the feature")
+
+
+def build_pad_hole_fillet(doc):
+    """Pad, a through hole (Pocket) from a circle on XY, a fillet on the pad's vertical edges."""
+    import Part
+
+    V = App.Vector
+    body = doc.addObject("PartDesign::Body", "Body")
+    doc.recompute()
+    xy = body.Origin.OriginFeatures[3]
+    sk = doc.addObject("Sketcher::SketchObject", "PadSketch")
+    sk.AttachmentSupport = [(xy, "")]
+    sk.MapMode = "FlatFace"
+    pts = [V(0, 0, 0), V(30, 0, 0), V(30, 10, 0), V(0, 10, 0)]
+    for i in range(4):
+        sk.addGeometry(Part.LineSegment(pts[i], pts[(i + 1) % 4]))
+    body.addObject(sk)
+    pad = doc.addObject("PartDesign::Pad", "Pad")
+    pad.Profile = sk
+    pad.Length = 10
+    body.addObject(pad)
+    doc.recompute()
+    sk2 = doc.addObject("Sketcher::SketchObject", "HoleSketch")
+    sk2.AttachmentSupport = [(xy, "")]
+    sk2.MapMode = "FlatFace"
+    sk2.addGeometry(Part.Circle(V(22, 5, 0), V(0, 0, 1), 2))
+    body.addObject(sk2)
+    hole = doc.addObject("PartDesign::Pocket", "Hole")
+    hole.Profile = sk2
+    hole.Type = 1
+    hole.Midplane = True
+    body.addObject(hole)
+    doc.recompute()
+    vertical = [
+        f"Edge{i + 1}"
+        for i, edge in enumerate(hole.Shape.Edges)
+        if isinstance(edge.Curve, Part.Line) and abs(abs(edge.tangentAt(edge.FirstParameter).z) - 1) < 1e-6
+    ]
+    fillet = doc.addObject("PartDesign::Fillet", "Fillet")
+    fillet.Base = (hole, vertical)
+    fillet.Radius = 1
+    body.addObject(fillet)
+    doc.recompute()
+    return body
+
+
+class TestReorder(TimelineGuiCase):
+    def make_body(self, doc):
+        return build_pad_hole_fillet(doc)
+
+    def menu(self, name):
+        body, feature = self.dock._feature(name)
+        menu = self.dock.build_menu(name, body, feature)
+        return {a.objectName(): a for a in menu.actions() if a.objectName()}
+
+    def solids(self):
+        from history_timeline import model
+
+        return [o.Name for o in model.solids_in_group(self.body)]
+
+    def test_fillet_moves_before_the_hole_and_back(self):
+        _say("Timeline: Move earlier on the Fillet (past an independent hole), then Move later")
+        self.assertTrue(all(o.isValid() for o in self.body.Group))
+        volume = self.body.Shape.Volume
+        undo_before = self.doc.UndoCount
+        actions = self.menu("Fillet")
+        self.assertTrue(actions["earlier"].isEnabled())
+        self.assertFalse(actions["later"].isEnabled(), "last feature cannot move later")
+        actions["earlier"].trigger()
+        _pump(80)
+        self.assertIsNone(self.dock._last_move_error)
+        self.assertEqual(self.solids(), ["Pad", "Fillet", "Hole"])
+        self.assertTrue(all(o.isValid() for o in self.body.Group),
+                        [(o.Name, o.getStatusString()) for o in self.body.Group])
+        self.assertAlmostEqual(self.body.Shape.Volume, volume, places=3)
+        self.assertEqual(self.doc.UndoCount, undo_before + 1)
+        self.assertEqual(self.body.Tip.Name, "Hole", "tip stays at the end")
+        # The bar follows the new order.
+        order = [n for n in self.bar._order]
+        self.assertLess(order.index("Fillet"), order.index("Hole"))
+        actions = self.menu("Fillet")
+        actions["later"].trigger()
+        _pump(80)
+        self.assertEqual(self.solids(), ["Pad", "Hole", "Fillet"])
+        self.assertAlmostEqual(self.body.Shape.Volume, volume, places=3)
+        self.doc.undo()
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(self.solids(), ["Pad", "Hole", "Fillet"], "two undos give the start order")
+
+    def test_illegal_moves_are_disabled(self):
+        actions = self.menu("Hole")
+        self.assertFalse(actions["earlier"].isEnabled(), "a pocket cannot be the first feature")
+        self.assertIn("material", actions["earlier"].toolTip())
+        self.assertTrue(actions["later"].isEnabled())
+        actions = self.menu("Pad")
+        self.assertFalse(actions["earlier"].isEnabled())
+        self.assertFalse(actions["later"].isEnabled())
+        actions = self.menu("HoleSketch")
+        self.assertFalse(actions["earlier"].isEnabled())
+        self.assertIn("sketch", actions["earlier"].toolTip())
+
+    def test_sketch_on_a_face_blocks_the_move(self):
+        import Part
+
+        fillet = self.doc.getObject("Fillet")
+        top = next(
+            f"Face{i + 1}" for i, face in enumerate(fillet.Shape.Faces)
+            if abs(face.CenterOfMass.z - 10) < 1e-6 and face.Surface.TypeId == "Part::GeomPlane"
+        )
+        sk = self.doc.addObject("Sketcher::SketchObject", "TopSketch")
+        sk.AttachmentSupport = [(fillet, top)]
+        sk.MapMode = "FlatFace"
+        sk.addGeometry(Part.Circle(App.Vector(8, 5, 0), App.Vector(0, 0, 1), 1.5))
+        self.body.addObject(sk)
+        pocket = self.doc.addObject("PartDesign::Pocket", "Pocket2")
+        pocket.Profile = sk
+        pocket.Length = 5
+        self.body.addObject(pocket)
+        self.doc.recompute()
+        self.dock.refresh()
+        _pump(50)
+        actions = self.menu("Pocket2")
+        self.assertFalse(actions["earlier"].isEnabled())
+        self.assertIn("TopSketch", actions["earlier"].toolTip())
+        self.assertIn("Fillet", actions["earlier"].toolTip())
