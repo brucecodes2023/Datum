@@ -6,7 +6,7 @@
 presets (with \textbf{heat-set insert} holes for printed parts), a \textbf{cosmetic thread}, and a
 \textbf{fastener library} whose screws, nuts and washers are vault COTS items. It bundles the open-source
 Fasteners add-on instead of writing a library, and keeps everything else in Python next to the existing
-vault engine. This chapter was written on 25 Oct and building started the same evening, on your
+vault engine. This chapter was written on 25 Oct and built the same evening (section~9), on your
 instruction to build on my recommendations; the decisions I took are marked \emph{Decided} with the reason,
 and the open ones are at the end.
 
@@ -113,7 +113,9 @@ drawing shows it, that does not change the solid.} Concretely a \code{CosmeticTh
 (\code{Part::FeaturePython}) with a face link, designation (\code{M3}, \code{M8x1}), internal/external,
 length (from either end), tolerance class, and a read-only \code{Callout}. It draws the \emph{other}
 diameter, as a drawing would (a tapped hole's major diameter, a bolt's minor diameter $d_3$), as thin dashed
-circles at both ends and four lines between them; the designation is guessed from the face (a hole's
+circles at both ends and four lines between them, drawn without the depth test so they show through the
+solid the way a hidden thread does; the thread starts at the face's open end (a blind hole's entry, a
+stud's free end; \code{FromOtherEnd} flips it); the designation is guessed from the face (a hole's
 diameter against the tap drill and $D_1$, a shaft's against $d$). It sits beside the body in the part, so
 a link to the part in an assembly shows it too.
 
@@ -219,8 +221,10 @@ matches how the Leonardo gearbox already models its screws.
   \item \textbf{New item.} Numbered like any part (document type Part, the vault's program), checked in as
         WIP~01 with the part properties: \code{ItemType = cots}, \code{Description}, \code{Vendor} /
         \code{VendorPartNumber} empty for you to fill, material steel, mass computed. The fastener object
-        keeps the add-on's own parameters, so a file can be re-opened and inspected; changing its size there
-        is refused in favour of inserting the other size (one item, one size).
+        keeps the add-on's own parameters, so a file can be re-opened and inspected; its type, size and length
+        are read-only there (one item, one size: insert the other size instead). A length the standard's table
+        does not list is typed in (ISO~4762 lists M3 only up to 30; the gearbox's M3x40 is DIN~912's) and
+        becomes the add-on's custom length.
   \item \textbf{Placing.} With a circular edge selected the link is placed on it, axis along the hole; with
         nothing selected, at the origin. Joints are \eref{ASM-09} (smart fastener mating) and not this epic.
   \item \textbf{Existing COTS parts.} The gearbox's bearings, pins, screws and motor were made as item type
@@ -297,3 +301,54 @@ the gearbox acceptance in the GUI.
         under Design), or only BruceWorx's \emph{Insert Fastener}? \emph{Recommendation:} only Insert
         Fastener on the ribbon; the add-on's workbench stays under ``More workbenches''.
 \end{enumerate}
+
+%----------------------------------------------------------------------
+\subsubsection*{9. Built and tested (25 Oct)}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Piece & Where, and what the tests showed\\
+\midrule
+Engine & \file{addons/BruceWorx/bruceworx/hardware.py}, \file{config/hole\_presets.json}: 25 unit tests (thread
+  maths, presets, callouts, keys, the gearbox's descriptions, \file{hardware.json}). Vault:
+  \code{set\_item\_type} (T13 of the PDM contract, \code{PUT /items/\{pn\}/type}), new COTS items numbered as
+  parts, a file's \code{ItemType} following the vault on open; the whole engine suite passes (470 tests).\\
+Add-on & \file{package/bruceworx/vendor/fasteners/} (500 files, 4.5\,MB, every blob SHA-1 checked);
+  \code{BUILD\_BW\_FASTENERS}; installed to \file{Mod/fasteners} with its licence (checked with the vendor
+  folder's install script into a scratch prefix); the off switch leaves it unloaded
+  (\emph{``Addon fasteners not loaded: switched off''}).\\
+Commands & \file{src/Mod/BruceWorx/bruceworx\_hardware.py}; \code{TestBruceWorxHardware}: 19 of 19 in the GUI,
+  17 headless (two need the GUI). Every built-in preset makes a valid Hole; the heat-set M3 hole is
+  $\varnothing4\times6.7$ with a flat bottom (volume to $10^{-3}$\,mm$^3$); ISO~4762 M3x40 is 43\,mm long
+  with a 5.5\,mm head.\\
+Gearbox & On copies of Vector and the gearbox: \emph{Mark as COTS} found 7 items (3 screws, 2 bearings,
+  the dowel pin, the motor); \code{cots\_links} then returns 16 links (4 M3x40, 4 M3x6, three 683ZZ, the
+  688ZZ, 3 pins, the motor). Insert Fastener M3x40 reused \textbf{LE-01-01014-001} (link \emph{M3x40 5}, on
+  a hole rim of the end cap, head up); M3x12 made \textbf{LE-01-01017-001} (cots, WIP~01) and the second
+  M3x12 reused it; 19 COTS links after. On the end cap, a heat-set M3x5.7 and a tapped M3 hole are valid
+  and their callouts (figure~\ref{fig:mod05-built}) are on the drawing beside the existing
+  ``4X $\varnothing$3.4 THRU''. The carrier's output shaft takes an M8x1.25 cosmetic thread.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.52\linewidth]{fig/mod05_callouts.png}\hfill
+\begin{minipage}[b]{0.44\linewidth}\centering
+\includegraphics[width=\linewidth]{fig/mod05_insert_fastener.png}\\[6pt]
+\includegraphics[width=0.75\linewidth]{fig/mod05_hole_preset.png}
+\end{minipage}
+\caption{Built 25 Oct. Left: the end cap's drawing with \emph{Hole Callouts}: the tapped M3 and heat-set
+M3x5.7 holes added by the presets, and the part's own four clearance holes, all written from the model.
+Right: \emph{Insert Fastener} with a length the standard does not list (M3x40 finds the vault's
+LE-01-01014-001), and \emph{Hole Preset}.}
+\label{fig:mod05-built}
+\end{figure}
+
+\paragraph{Try by hand.} Open the gearbox, select a hole rim of the end cap, \emph{Insert Fastener}
+(Solid~$\rightarrow$ Assemble); in a printed part, select a sketch of circles and \emph{Hole Preset}
+$\rightarrow$ Heat-set insert; on a drawing view, \emph{Hole Callouts}. Before \emph{Mark as COTS} on
+Vector itself, rebuild Keystone (an older Keystone cannot read the new journal operation).
