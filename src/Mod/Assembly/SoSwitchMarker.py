@@ -42,8 +42,9 @@ class SoSwitchMarker(coin.SoSwitch):
     def __init__(self, vobj):
         super().__init__()  # Initialize the SoSwitch base class
 
-        self.axis_thickness = 3
-        self.scaleFactor = 40
+        # [BW] Lighter joint markers (UAT, 25 Oct): half the size, thin lines, the disc an outline
+        self.axis_thickness = 1.5
+        self.scaleFactor = 22
 
         view_params = App.ParamGet("User parameter:BaseApp/Preferences/View")
         param_x_axis_color = view_params.GetUnsigned("AxisXColor", 0xCC333300)
@@ -109,27 +110,25 @@ class SoSwitchMarker(coin.SoSwitch):
     def plane_sep(self, size, num_vertices):
         coords = coin.SoCoordinate3()
 
-        for i in range(num_vertices):
+        # [BW] the disc as a closed outline, not a grey filled face over the part
+        for i in range(num_vertices + 1):
             angle = float(i) / num_vertices * 2.0 * math.pi
             x = math.cos(angle) * size
             y = math.sin(angle) * size
             coords.point.set1Value(i, x, y, 0)
 
-        face = coin.SoFaceSet()
-        face.numVertices.setValue(num_vertices)
+        face = coin.SoLineSet()
+        face.numVertices.setValue(num_vertices + 1)
 
         transform = coin.SoTransform()
         transform.translation.setValue(0, 0, 0)
 
         draw_style = coin.SoDrawStyle()
-        draw_style.style = coin.SoDrawStyle.FILLED
+        draw_style.style = coin.SoDrawStyle.LINES
+        draw_style.lineWidth = 1.0
 
-        material = coin.SoMaterial()
-        material.diffuseColor.setValue([0.5, 0.5, 0.5])
-        material.ambientColor.setValue([0.5, 0.5, 0.5])
-        material.specularColor.setValue([0.5, 0.5, 0.5])
-        material.emissiveColor.setValue([0.5, 0.5, 0.5])
-        material.transparency.setValue(0.3)
+        material = coin.SoBaseColor()
+        material.rgb.setValue(0.55, 0.55, 0.58)
 
         face_sep = coin.SoAnnotation()
         face_sep.addChild(transform)

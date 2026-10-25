@@ -1595,7 +1595,7 @@ class ViewProviderGroundedJoint:
         if groundedObj is None:
             return
 
-        self.scaleFactor = 3.0
+        self.scaleFactor = 1.5  # [BW] half the size: a small outline lock (UAT, 25 Oct)
 
         lockpadColorInt = Preferences.preferences().GetUnsigned("AssemblyConstraints", 0xCC333300)
         self.lockpadColor = coin.SoBaseColor()
@@ -1620,6 +1620,10 @@ class ViewProviderGroundedJoint:
 
         # Assemble the parts into a scenegraph
         self.lockpadSeparator = coin.SoSeparator()
+        lockpadStyle = coin.SoDrawStyle()  # [BW] outlines
+        lockpadStyle.style = coin.SoDrawStyle.LINES
+        lockpadStyle.lineWidth = 1.5
+        self.lockpadSeparator.addChild(lockpadStyle)
         self.lockpadSeparator.addChild(self.lockpadColor)
         self.lockpadSeparator.addChild(self.square)
         self.lockpadSeparator.addChild(self.arc)
@@ -1646,12 +1650,13 @@ class ViewProviderGroundedJoint:
             (5, -4, 0),
             (5, 4, 0),
             (-5, 4, 0),
+            (-5, -4, 0),  # [BW] closed: drawn as an outline
         ]
         vertices = coin.SoCoordinate3()
-        vertices.point.setValues(0, 4, coords)
+        vertices.point.setValues(0, len(coords), coords)
 
-        squareFace = coin.SoFaceSet()
-        squareFace.numVertices.setValue(4)
+        squareFace = coin.SoLineSet()
+        squareFace.numVertices.setValue(len(coords))
 
         square = coin.SoAnnotation()
         square.addChild(vertices)
@@ -1675,6 +1680,7 @@ class ViewProviderGroundedJoint:
             x = centerX + math.cos(rad) * radius
             y = centerY + math.sin(rad) * radius
             coords.append((x, y, 0))
+        coords.append(coords[0])  # [BW] closed: drawn as an outline
 
         vertices = coin.SoCoordinate3()
         vertices.point.setValues(0, len(coords), coords)
@@ -1682,7 +1688,7 @@ class ViewProviderGroundedJoint:
         shapeHints = coin.SoShapeHints()
         shapeHints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
 
-        line = coin.SoFaceSet()
+        line = coin.SoLineSet()
         line.numVertices.setValue(len(coords))
 
         arc = coin.SoAnnotation()
