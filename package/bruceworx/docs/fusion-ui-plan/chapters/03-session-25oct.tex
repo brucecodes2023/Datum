@@ -1,0 +1,182 @@
+%======================================================================
+\section{Session record --- Sunday 25 October 2026}\label{sec:session-25oct}
+%======================================================================
+
+\textbf{What this is.} The whole working session of 25 October in one place: what you decided, what was built,
+how the work was run, and every question still waiting for you. The UAT round itself is in \S\ref{sec:uat}; each
+epic's own chapter has the detail. All work is on \code{bw/fnd06-mod01-patterns}, about 70 \code{[BW]} commits
+(\code{c6ea4d0} to \code{82614d2} and after), \emph{none pushed}. Keystone.app in \file{/Applications} was
+rebuilt from the working tree through the day; the last one installed is \code{1.1.4-bw.1+82614d2}.
+
+\subsection{How the day went}
+\begin{enumerate}
+  \item \textbf{Morning (before your flight).} You asked for Part Modeling, Assembly and UI ``completely done and
+        tested'', with the not-started epics built on my recommendations, committed as I go, no push. Built: the
+        vault dashboard on the Start page (\eref{PDM-10}), persistent section views (\eref{MOD-16}, all 13 plan
+        recommendations approved), Keystone.app (\eref{FND-02}: fully renamed, its own settings folders, built
+        from the working tree), the Claude bridge's dialog tools (\eref{AUT-03}).
+  \item \textbf{Crashes found and fixed.} Coin~4.0.3 crashed tearing down any dragged dragger; Coin~4.0.10 now. The
+        section handles' callbacks ran Python without the GIL (three Keystone crash reports); they go through the
+        view now. Keystone's check run had written to your real Keystone profile; it uses a throwaway one since.
+  \item \textbf{Your UAT list} (Apple Note ``FreeCAD UAT'', eight screenshots): all ten items fixed by the evening
+        (\S\ref{sec:uat}), with more requests during the day: the vault list only on the Start page, the file
+        list as an indented tree with pictures on hover and where used, iso pictures, the section view on a face
+        and off again, lighter joint markers, the drag direction.
+  \item \textbf{Afternoon: agents.} You asked for an agent on the in-progress epics, then more agents for features
+        (up to four at once). They finished 10 in-progress epics and built trackpad navigation, studio shading,
+        the three UI bugs, \eref{MOD-05}, \eref{ASM-06}, \eref{MOD-03} and (still running at the time of writing)
+        \eref{MOD-11}.
+\end{enumerate}
+
+\subsection{Your decisions}
+\begin{center}
+\small
+\begin{longtable}{@{}p{3.8cm}p{12.2cm}@{}}
+\toprule
+Topic & Decision\\
+\midrule\endhead
+\bottomrule\endfoot
+Session scope & Part Modeling, Assembly and UI done and tested; not-started epics built on my recommendations
+  (the plan-first rule waived for this session, every decision recorded in the plan); very large epics
+  (\eref{MOD-08}, \eref{MOD-09}, \eref{MOD-10}, \eref{ASM-08}) plans only\\
+Commits & Commit as I go, one per finished tested piece; never push\\
+Keystone.app & Fully renamed; separate settings folders; built from the working tree; installed in
+  \file{/Applications}. You quit it yourself; a new build is staged and swaps in when you do\\
+Section views & All 13 plan recommendations approved. Selecting a face and pressing Section cuts on that face; the
+  button turns sections off again\\
+Vault list & Browsed on the Start page only (the floating card retired)\\
+Files tab & One indented tree: assembly $\rightarrow$ parts $\rightarrow$ drawings, one line per file with columns,
+  matches shown with their parents while searching; pictures as tooltips over the file name; the Structure
+  tab folded into it; where used highlights the assemblies above a selected file\\
+Iso pictures & An iso view, fitted and centred; written into the file only at check-in; files checked in before get
+  theirs from Refresh Pictures into a cache on this Mac, never into the vault\\
+Joint markers & Much smaller, wireframe\\
+Trackpad & Two fingers pan; Shift + two fingers zoom; Cmd + two fingers orbit; mouse and pinch unchanged\\
+Rendering & Fusion-like studio: soft studio lighting, reflections, each part coloured from its material; plain
+  FreeCAD shading one switch away\\
+Agents & Up to four at once (FreeCAD test windows still at most three)\\
+Next epics & In order: \eref{MOD-05}, \eref{ASM-06}, \eref{MOD-03}, \eref{MOD-11}\\
+Fasteners & The Fasteners add-on, bundled; heat-set inserts Ruthex / CNC Kitchen M2--M5\\
+\end{longtable}
+\end{center}
+
+\subsection{What was built}
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.0cm}p{10.6cm}p{3.2cm}@{}}
+\toprule
+Epic & What & Commits\\
+\midrule\endhead
+\bottomrule\endfoot
+\eref{PDM-10} & Vault dashboard on the Start page; then Files tab (one tree, where used, iso tooltips); acceptance on a
+  60-item vault & \code{c6ea4d0}, \code{1c3389e}, \code{0087827}, \code{3891db4}\\
+--- & Iso pictures at check-in and Refresh Pictures (\file{bruceworx\_preview.py}) & \code{225d2fb}\\
+\eref{MOD-16} & Section views; Coin~4.0.10 and safe handles; a toggle, faces in bodies and assemblies; drag in the
+  dragged direction; fits from the Interference check & \code{fe65410}, \code{d519d29}, \code{b50e8b5},
+  \code{6076149}, \code{2c29001}\\
+\eref{FND-02} & Keystone.app & \code{70a8177}\\
+\eref{UIX-01} & Fresh profiles keep the theme; the ground grid out of Fit All & \code{a5bedb6}, \code{b50e8b5}\\
+\eref{UIX-12} & Physical and Parameters tabs; acceptance as a GUI test & \code{290c8f8}, \code{587bd03}\\
+\eref{ASM-03} & Smaller outline joint markers; plan and questions for the rest & \code{4d1d982}, \code{d4f80b2}\\
+\eref{UIX-13} & Trackpad navigation (new epic) & \code{4eed4ca}\\
+\eref{UIX-05}\newline\eref{UIX-06}\newline\eref{UIX-03} & Ribbon groups keep their buttons; narrow windows share the tools row;
+  the Browser halo always contrasts & \code{c4a644a}, \code{b59bf0a}, \code{f3b6c7e}\\
+\eref{UIX-08} & Studio shading (\file{bruceworx\_studio.py}), renamed from matcap & \code{5cbf03e}\\
+\eref{FND-06} \eref{MOD-01} \eref{DRW-01} \eref{PDM-02} \eref{ECD-01} & Acceptance run and recorded; MOD-01: redo
+  kept suppressed instances hidden & \code{95efd6a}, \code{180bb23}, \code{0642782}, \code{ce61a76}\\
+\eref{FND-08} & New vaults number without a revision; New Part in Vault; Create Assembly with a spreadsheet in
+  front & \code{fba9166}, \code{1f46252}, \code{d42d312}\\
+\eref{PDM-06} & On: BOM per assembly revision, Where Used, Bill of Materials (gearbox 12 lines, 24 parts) &
+  \code{dd03b76}\\
+\eref{MOD-14} & On: on-canvas editing from a double-click (pad, fillet, hole) & \code{e79f38a}\\
+\eref{MOD-06} & On: SheetMetal bundled with networkx; flat pattern within 0.01\,mm & \code{3b77543}\\
+\eref{MOD-05} & Hole presets (heat-set inserts), cosmetic threads, hole callouts, Insert Fastener, Mark as COTS;
+  Fasteners add-on 0.5.67 bundled & \code{03b539c}--\code{d76760b}\\
+\eref{ASM-06} & Inspect $\rightarrow$ Interference: clashes, fits, contacts, clearance; gearbox in about 6\,s &
+  \code{c49ffb9}--\code{70d88a0}\\
+\eref{MOD-03} & Configurations on FreeCAD's own configuration table; configuration items and dash numbers in the
+  vault; one BOM line per configuration; opens in stock FreeCAD 1.1.4 & \code{d6b569d}--\code{8728f84}\\
+\eref{MOD-11} & Inspect maps (overhang, draft, wall thickness, curvature, zebra) and mass properties; still being
+  finished & \code{f848538}, \code{051f6a9}, \code{82614d2}\\
+\end{longtable}
+\end{center}
+
+\subsection{How the work was run}
+\begin{itemize}
+  \item \textbf{Test instances only.} Every test ran in a throwaway FreeCAD profile (\code{FREECAD\_USER\_HOME}, a
+        copy of the settings), at most three FreeCADs at once through \file{agents/fcslot.sh} (your open Keystone
+        counts as one), each run narrated in \file{agents/testlog.txt}. The vault Vector was only read; every
+        write went to a copy.
+  \item \textbf{Agents in one checkout.} A separate worktree would have meant a full rebuild (ccache has no
+        base\_dir), so all agents shared the repository. Builds and C++ edits go through a lock
+        (\file{agents/lock.sh}: \code{build}, \code{take}, \code{drop}) so no build sees half-written C++.
+  \item \textbf{Commits by path.} Two agents staging at the same moment once put one agent's files in the other's
+        commit (\code{670cda6} carries the ASM-06 GUI files under a MOD-05 message; history was not rewritten,
+        \code{6dd13ff} records it). Since then every commit names its files (\code{git commit -- <paths>}), and
+        shared files such as \file{Init.py} are committed from a temporary index holding only the agent's lines.
+  \item \textbf{Screens.} One early test grabbed a screen area and caught another window; an Assembly appeared in
+        that test's document. Since then screenshots are rendered off screen only and no test raises a window.
+  \item \textbf{Keystone.} Each new build is staged in the scratchpad under the build lock, and a watcher swaps it
+        into \file{/Applications} and reopens it when you quit Keystone; the previous copy is kept in the
+        scratchpad.
+  \item \textbf{Installs.} networkx~3.5 was added to \file{pixi.toml} and the project's pixi environment for
+        SheetMetal (\eref{MOD-06}); it is bundled in Keystone.
+\end{itemize}
+
+\subsection{Questions waiting for you}
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.2cm}p{13.8cm}@{}}
+\toprule
+Where & Question\\
+\midrule\endhead
+\bottomrule\endfoot
+\eref{FND-04} & The Fasteners add-on is GPL-2.0-or-later: a Keystone build that bundles it is GPL as a whole. Keep it
+  bundled, or offer it as an optional download before any release?\\
+Vault & Mark as COTS (\code{set\_item\_type}) and configuration numbers (\code{add\_configuration}) are new journal
+  operations: a Keystone older than today cannot read Vector once one is used. Update every copy first.\\
+\eref{UIX-08} & Plastic colours (PETG charcoal, ABS ivory, PLA white, nylon natural, POM white): your real ones, or
+  colours on the shop material cards (\eref{PDM-11})? Studio lit with the camera (now) or fixed to the world?
+  Section caps in the studio colour? A ground shadow? A matcap as a second look? Aluminium greyer?\\
+Part properties & Computing mass touches the body each time (FreeCAD 1.1 writes the material back). Read the
+  physical properties instead? (Recommended.)\\
+\eref{UIX-13} & Should choosing another navigation style turn the trackpad mapping off? Should the model always follow
+  the fingers, even with natural scrolling off?\\
+\eref{UIX-03} & The Browser's soft text halo: keep it, none, or a crisp 1\,px outline?\\
+\eref{PDM-10} & Bring back ``parts without a drawing'' (from the retired Structure tab) as a filter chip?\\
+\eref{ASM-06} & Fits per part pair (built) or per occurrence? Should the release check also fail on clearance below
+  the gap? Leave hidden parts out (built)? 0.2\,mm default gap, kept in preferences or with the assembly?\\
+\eref{MOD-05} & Which heat-set inserts you stock (M2.5: 4.0\,mm or 3.6\,mm hole; the numbers are marked
+  ``not checked'')? Vendor part numbers by hand or from a supplier table? One vault file per fastener size
+  (built) or sizes as configurations? A thread texture on cosmetic threads? Only Insert Fastener on the
+  ribbon (recommended)?\\
+\eref{MOD-03} & Releasing the file releases all its configurations; one feature copy per configured instance; the
+  BOM of the saved configuration only; drawing views show the active configuration. Recommendations: keep,
+  keep, a BOM per configuration next, views pick their own configuration with the next drawings pass.\\
+\eref{FND-08} & A sketch on a face: origin at the body origin projected (now, as Fusion and SolidWorks) or the face
+  centre? Which file showed the counterbore preview pointing out of the plate?\\
+\eref{MOD-01} & Ship pattern Compute ``Identical'' only and add ``Adjust'' later?\\
+\eref{ASM-03}\newline\eref{ASM-04} & Questions A1--A5: the joint inference table (plane + plane: Planar or Fixed?); a
+  Quick Joint command or inference in the normal joint commands; in-view limit handles now or later; Radial
+  and Along-an-axis enough for exploded views; the flattened BOM in the assembly's BOM object?\\
+Your runs & The LE-02001 iCloud round trip (\eref{PDM-04}); LE-01001 through change control (\eref{PDM-05}, with
+  the \eref{PDM-07} pilot); weighing a board (\eref{ECD-06}); trying the trackpad gestures and the new
+  joint markers by hand.\\
+Outside & When Ops serves \code{POST /part-numbers} (\eref{PDM-03}); CI and signing accounts (\eref{FND-01},
+  \eref{FND-02}, \eref{AUT-03}); your approval of the new UI design (\eref{UIX-09}).\\
+Next & \eref{PDM-09} (New Project, units, structure) and \eref{UIX-04} (timeline) have approved plans and are
+  multi-day: start them next?\\
+\end{longtable}
+\end{center}
+
+\subsection{Known gaps}
+\begin{itemize}
+  \item Iso pictures: an assembly whose work copies are older than the vault is drawn from the stored file, where its
+        parts may not be found.
+  \item Configurations: the Browser does not show an instance's configuration; a configured parameter shows as
+        \code{Configurations.length} text in the Parameters tab.
+  \item Interference: no cache yet (a re-check measures every pair); not yet wired into the release check.
+  \item Ribbon: in a sketch edit at half-screen width the View toolbar collapses to ``$\gg$''; the squeezed
+        workspace tab bar of UAT screenshot 2 did not reproduce.
+  \item Trackpad: tested with synthetic swipes only; a real swipe takes one more path through Qt.
+\end{itemize}
