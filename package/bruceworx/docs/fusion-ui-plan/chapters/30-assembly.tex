@@ -66,7 +66,7 @@ rigid one moves as one body. A fix-up macro converts between them.
 \emph{Acceptance:} a flexible sub-assembly articulates inside \code{LE-02001}; a rigid one does not.
 \end{epic}
 
-\begin{epic}{ASM-06}{Interference \& clearance}{M1}{\stTodo}{FCB-P2A-08}
+\begin{epic}{ASM-06}{Interference \& clearance}{M1}{\stProg}{FCB-P2A-08}
 List every \textbf{clash} (positive common volume), \textbf{contact} (touching faces, zero volume) and
 \textbf{clearance violation} (minimum distance below a threshold) between occurrences. Results are
 highlighted in the view, with an ignore list for intended press fits and threads. The ECAD enclosure fit
@@ -89,7 +89,10 @@ reporting only pairs whose intervals overlap on all three axes. That takes $O(n\
 The \emph{narrow phase} runs the exact Boolean common (clash volume) or \code{distToShape} (clearance)
 only on candidates. Contacts are separated from clashes by a volume tolerance $\varepsilon_V$ and a
 distance tolerance $\varepsilon_d$. Pairs on the ignore list (threads, press fits) are filtered by occurrence
-path, so they stay ignored after the assembly is rebuilt.
+path, so they stay ignored after the assembly is rebuilt. (Changed on 25 Oct: by part pair, as the section view
+keeps them; \S\ref{sec:asm06-plan}.)
+
+\input{chapters/37-asm06-plan}
 
 \begin{epic}{ASM-07}{In-context editing}{M5}{\stTodo}{(new)}
 Edit a part while it is shown inside the assembly, referencing other parts' geometry (Fusion's in-place edit,
