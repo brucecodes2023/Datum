@@ -25,6 +25,8 @@ These are decisions the roadmap cannot make for you. None of them blocks M0. Eac
         and add \emph{Adjust} later?
   \item \textbf{Joints on patterned components} (\eref{MOD-01}). Leave instances free, like Fusion, or
         copy the seed's joints?
+        \emph{Answered 22 Oct} (\S\ref{sec:joints}): instances stay free; a joint on an instance wins over the
+        pattern, and the conflict is reported.
   \item \textbf{Upstreaming} (\eref{FND-03}). With upstream main tracked continuously, should generic fixes
         (like \code{Spacings2}) and small core patches go upstream by default to shrink the conflict budget?
   \item \textbf{Fastener library} (\eref{MOD-05}). Adopt the FreeCAD Fasteners add-on if its licence fits, or

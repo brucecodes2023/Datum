@@ -82,9 +82,9 @@ EPICS = [
       "No New part in vault command (new items enter only through Import Files into Vault until PDM-09's New Project); new vaults still write -REV in the part-number format (the import proposed LE-01-01001-001-A) although PDM-03 moved revisions out; Create Assembly fails silently when a spreadsheet tab is in front (it needs a 3D view); a face sketch's centre lands off-centre; a counterbored Hole's preview points out of the plate. Found in the 25 Oct UAT and fixed: Fit All fitted the 2 m ground grid (the model a speck), FreeCAD 1.1's first-start page overwrote the theme.",
       "New part in vault makes a numbered WIP 01 part without an import; a new vault's format has no REV; Create Assembly works (or says why) with a spreadsheet in front; a face sketch's centre and a counterbored hole land where they should; each covered by a GUI test."),
     # Modeling ------------------------------------------------------------
-    E("MOD-01", "Rectangular & circular patterns", "M1", "In progress", ["FND-06"],
+    E("MOD-01", "Rectangular & circular patterns", "M1", "Done", ["FND-06"],
       "(new, UI plan)",
-      "Bodies/components built (link arrays, symmetric, suppress, linked/independent, dialog); features use PartDesign until the upstream rebase brings suppression.",
+      "Bodies/components built (link arrays, symmetric, suppress, linked/independent, dialog); features use PartDesign until the upstream rebase brings suppression. Done 25 Oct: the acceptance is a GUI test (TestBruceWorxPattern.GuiAcceptanceTests, through the commands and their dialog): 4x3 feature holes, 3x2 bodies with a suppressed instance, symmetric n=5, 8 bolts the Assembly counts; undo/redo; save/reload. It found and fixed a bug: a redo brought suppressed instances back (link visibility lost), now re-hidden after undo/redo. Compute Adjust stays deferred (question Q6).",
       "Fig. examples reproduced in GUI; undo/redo; save/reload; Assembly sees component instances."),
     E("MOD-02", "Parameters & top-down design", "M1", "To do", [],
       "(new)",

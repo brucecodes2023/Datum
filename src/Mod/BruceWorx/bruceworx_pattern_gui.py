@@ -656,6 +656,12 @@ class _SeedObserver:
         except Exception:
             pass
 
+    def slotUndoDocument(self, doc):
+        _schedule_visibility(doc)
+
+    def slotRedoDocument(self, doc):
+        _schedule_visibility(doc)
+
     def slotDeletedObject(self, obj):
         # A joint removed: its instance is free to follow the pattern again.
         try:
@@ -682,6 +688,28 @@ def _schedule_document(doc):
     for obj in doc.Objects:
         if bp.is_pattern(obj):
             _schedule(obj)
+
+
+def _schedule_visibility(doc):
+    """After an undo or redo: suppressed instances hidden again (bp.sync_visibility)."""
+    QtCore, _QtGui, _QtWidgets = _qt()
+    name = doc.Name
+
+    def run():
+        doc = App.getDocument(name) if name in App.listDocuments() else None
+        if doc is None:
+            return
+        changed = False
+        for obj in doc.Objects:
+            if bp.is_pattern(obj):
+                try:
+                    changed = bp.sync_visibility(obj) or changed
+                except Exception as exc:
+                    _warn(f"{obj.Label}: {exc}")
+        if changed:
+            doc.recompute()
+
+    QtCore.QTimer.singleShot(0, run)
 
 
 def _schedule(array, check_only=False):

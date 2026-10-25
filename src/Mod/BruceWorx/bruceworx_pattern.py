@@ -342,6 +342,21 @@ def apply(array, check=True):
     return placed
 
 
+def sync_visibility(array):
+    """Hide exactly the suppressed instances again; True when anything changed.
+
+    An undo or redo that brings a link array back restores its elements before
+    their count, and the element visibility is lost (every instance shows)."""
+    suppressed = set(array.Suppressed)
+    changed = False
+    for index, key in enumerate(list(array.InstanceKeys)[: array.ElementCount]):
+        visible = key not in suppressed
+        if bool(array.isElementVisible(str(index))) != visible:
+            array.setElementVisible(str(index), visible)
+            changed = True
+    return changed
+
+
 # ---------------------------------------------------------------------------
 # Instances held by assembly joints.
 

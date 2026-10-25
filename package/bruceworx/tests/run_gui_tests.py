@@ -5,6 +5,7 @@
 
 Environment: BW_TEST_OUT (the JSON file, default ./bw-gui-tests.json), BW_TEST_ONLY (comma-separated
 module names), BW_TEST_EXTRA (more modules, e.g. upstream TestAssemblyWorkbench). FreeCAD quits when done.
+The JSON also lists the Report view's errors and warnings under "report_problems".
 """
 
 import glob
@@ -40,6 +41,18 @@ def say(text):
         pass
 
 
+def report_problems():
+    """Errors and warnings in the Report view during the run (the last 30)."""
+    from PySide import QtWidgets
+
+    text = ""
+    for widget in Gui.getMainWindow().findChildren(QtWidgets.QTextEdit):
+        if widget.metaObject().className() == "Gui::DockWnd::ReportOutput":
+            text = widget.toPlainText()
+    words = ("rror", "arning", "Traceback", "failed")
+    return [line for line in text.splitlines() if any(w in line for w in words) and "3Dconnexion" not in line][-30:]
+
+
 def run():
     results = {}
     for name in modules():
@@ -63,6 +76,9 @@ def run():
                 pass
         with open(OUT, "w") as f:
             json.dump(results, f, indent=1)
+    results["report_problems"] = report_problems()
+    with open(OUT, "w") as f:
+        json.dump(results, f, indent=1)
     say("GUI test run: done")
     os._exit(0)
 

@@ -32,12 +32,20 @@ Inspect & Measure incl.\ \code{MeasureCOM}; \code{Part\_CheckGeometry} & No over
 \subsection{BW-MOD-01 --- Rectangular and circular patterns}\label{sec:patterns}
 %----------------------------------------------------------------------
 
-\begin{epic}{MOD-01}{Rectangular \& circular patterns}{M1}{\stProg}{(new, from the UI plan)}
+\begin{epic}{MOD-01}{Rectangular \& circular patterns}{M1}{\stDone}{(new, from the UI plan)}
 Two commands under \textsc{Create}: Rectangular Pattern and Circular Pattern. Each works on features,
 bodies and assembly components, with Fusion's options: symmetric direction, suppress instances, and linked
 vs.\ independent copies (linked by default). Depends on \eref{FND-06} (the direction-2 fix).
 \emph{Acceptance:} Figures~\ref{fig:examples} and \ref{fig:new} reproduced in the GUI; undo/redo;
 save/reload; the Assembly workbench sees every component instance.
+\textbf{Done 25 Oct.} The acceptance is a GUI test, \code{TestBruceWorxPattern.GuiAcceptanceTests}, which works
+through the two commands and their dialog: the command on a feature opens PartDesign's pattern ($4\times3$ holes cut
+12 times, Figure~\ref{fig:examples}a); $3\times2$ bodies with one instance unchecked in the list (5 links, 4 solids);
+a symmetric direction with $n=5$ ($-20,-10,10,20$\,mm); 8 bolts around an assembly axis, all 8 counted by the
+Assembly workbench; undo and redo; save and reload. The test found a bug, now fixed: a redo of the pattern brought its
+suppressed instances back (the link array's element visibility is restored before its count and lost); after every
+undo and redo the suppressed instances are hidden again (\code{bruceworx\_pattern.sync\_visibility}).
+\emph{Compute: Adjust} stays deferred (question~\ref{q:compute}).
 \end{epic}
 
 \begin{center}

@@ -128,6 +128,22 @@ class DocumentTests(unittest.TestCase):
         self.assertEqual(len(array.Shape.Solids), 3)
         self.assertEqual(list(array.InstanceKeys), keys)
 
+    def test_sync_visibility_after_redo(self):
+        # A redo of the array's creation brings every instance back visible.
+        seed = self._box()
+        self.doc.UndoMode = 1
+        self.doc.openTransaction("Pattern")
+        array = bp.create_linked(seed, self._params(count1=3, count2=2, suppressed=[(1, 0)]))
+        self.doc.commitTransaction()
+        name = array.Name
+        self.doc.undo()
+        self.doc.redo()
+        array = self.doc.getObject(name)
+        self.assertTrue(bp.sync_visibility(array))
+        self.doc.recompute()
+        self.assertEqual(len(array.Shape.Solids), 4)
+        self.assertFalse(bp.sync_visibility(array))
+
     def test_symmetric_spreads_both_sides(self):
         seed = self._box()
         array = bp.create_linked(seed, self._params(count1=3, distance1=10, symmetric1=True))
@@ -394,6 +410,184 @@ class DocumentTests(unittest.TestCase):
         self.assertEqual(bp.classify_selection([pad]), "features")
         self.assertEqual(bp.classify_selection([body, box]), "objects")
         self.assertEqual(bp.classify_selection([pad, box]), "mixed")
+
+
+@unittest.skipUnless(App is not None and App.GuiUp, "needs a GUI FreeCAD")
+class GuiAcceptanceTests(unittest.TestCase):
+    """MOD-01 acceptance in the GUI: the figures' patterns made with the two commands and their dialog,
+    undo/redo, save/reload, and the Assembly workbench seeing every component instance."""
+
+    def setUp(self):
+        import FreeCADGui as Gui
+        import bruceworx_pattern_gui as bpg
+
+        self.Gui, self.bpg = Gui, bpg
+        self.doc = App.newDocument("BWPatternGui")
+        self.doc.UndoMode = 1
+        self.panels = []
+        test = self
+        self._panel_class = bpg.PatternTaskPanel
+
+        class Recorded(self._panel_class):
+            def __init__(self, *args, **kw):
+                super().__init__(*args, **kw)
+                test.panels.append(self)
+
+        bpg.PatternTaskPanel = Recorded
+
+    def tearDown(self):
+        self.bpg.PatternTaskPanel = self._panel_class
+        if self.Gui.Control.activeDialog():
+            self.Gui.Control.closeDialog()
+        self.Gui.Selection.clearSelection()
+        for name in list(App.listDocuments()):
+            if name.startswith("BWPatternGui") or name.startswith("bw_pattern_gui"):
+                App.closeDocument(name)
+
+    def _pump(self, n=4):
+        for _ in range(n):
+            self.Gui.updateGui()
+
+    def _run(self, kind, *objects):
+        """Select ``objects`` and run the BruceWorx command; the panel it opened (None for features)."""
+        self.Gui.Selection.clearSelection()
+        for obj in objects:
+            self.Gui.Selection.addSelection(obj)
+        before = len(self.panels)
+        self.Gui.runCommand(self.bpg.COMMANDS[kind])
+        self._pump()
+        self.assertTrue(self.Gui.Control.activeDialog(), f"{kind} Pattern opened no task panel")
+        return self.panels[-1] if len(self.panels) > before else None
+
+    def _ok(self, panel):
+        panel.accept()
+        self._pump()
+        self.assertFalse(self.Gui.Control.activeDialog())
+        return panel.arrays[0]
+
+    def _body(self, name="Bracket", w=8.0, h=6.0):
+        import Part
+        import Sketcher
+
+        V = App.Vector
+        body = self.doc.addObject("PartDesign::Body", name)
+        sk = body.newObject("Sketcher::SketchObject", name + "Sketch")
+        sk.AttachmentSupport = [(body.Origin.OriginFeatures[3], "")]
+        sk.MapMode = "FlatFace"
+        pts = [V(0, 0, 0), V(w, 0, 0), V(w, h, 0), V(0, h, 0)]
+        for i in range(4):
+            sk.addGeometry(Part.LineSegment(pts[i], pts[(i + 1) % 4]))
+        pad = body.newObject("PartDesign::Pad", name + "Pad")
+        pad.Profile = sk
+        pad.Length = 3
+        self.doc.recompute()
+        return body, pad
+
+    def test_feature_patterns_use_partdesign(self):
+        """Figures (a) and (b): the commands on a feature open PartDesign's own patterns."""
+        import Part
+
+        body, _pad = self._body("Plate", 60, 40)
+        V = App.Vector
+        sk = body.newObject("Sketcher::SketchObject", "HoleSketch")
+        sk.AttachmentSupport = [(body.Origin.OriginFeatures[3], "")]
+        sk.MapMode = "FlatFace"
+        sk.addGeometry(Part.Circle(V(6, 6, 0), V(0, 0, 1), 2))
+        hole = body.newObject("PartDesign::Pocket", "Hole")
+        hole.Profile = sk
+        hole.Type = "ThroughAll"
+        hole.SideType = "Symmetric"  # through the plate whichever way the sketch faces
+        self.doc.recompute()
+        v0 = body.Shape.Volume
+        self.assertIsNone(self._run(self.bpg.bp.RECTANGULAR, hole))
+        linear = [o for o in self.doc.Objects if o.TypeId == "PartDesign::LinearPattern"]
+        self.assertEqual(len(linear), 1)
+        pattern = linear[0]
+        pattern.Direction = (body.Origin.OriginFeatures[0], [""])
+        pattern.Direction2 = (body.Origin.OriginFeatures[1], [""])
+        pattern.Mode = pattern.Mode2 = "Spacing"
+        pattern.Occurrences, pattern.Occurrences2 = 4, 3
+        pattern.Offset, pattern.Offset2 = 15, 12
+        self.Gui.Control.closeDialog()
+        self.Gui.ActiveDocument.resetEdit()
+        self._pump()
+        self.doc.recompute()
+        full = 60 * 40 * 3
+        self.assertAlmostEqual((full - pattern.Shape.Volume) / (full - v0), 12, places=3)  # 4 x 3 holes
+
+    def test_bodies_rectangular_with_suppression_undo_redo_and_reload(self):
+        """Figure (c): 3 x 2 brackets as a link array; then suppression, undo/redo and save/reload."""
+        body, _pad = self._body()
+        panel = self._run(self.bpg.bp.RECTANGULAR, body)
+        panel.dir1["count"].setValue(3)
+        panel.dir1["distance"].setValue(12)
+        panel.dir2["box"].setChecked(True)
+        panel.dir2["count"].setValue(2)
+        panel.dir2["distance"].setValue(10)
+        self._pump()
+        # uncheck one instance in the list: suppressed (figure 'new', left)
+        item = panel.instances.item(1)
+        item.setCheckState(self.bpg._qt()[0].Qt.Unchecked)
+        self._pump()
+        array = self._ok(panel)
+        name = array.Name
+        self.assertEqual(array.ElementCount, 5)
+        self.assertEqual(len(array.Shape.Solids), 4)
+        self.assertEqual(len(bp.read_params(array)["suppressed"]), 1)
+        self.assertIn("Rectangular Pattern", self.doc.UndoNames[0])
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertIsNone(self.doc.getObject(name))
+        self.doc.redo()
+        self._pump()  # the observer hides the suppressed instance again
+        self.doc.recompute()
+        array = self.doc.getObject(name)
+        self.assertIsNotNone(array)
+        self.assertEqual(len(array.Shape.Solids), 4)
+        path = os.path.join(App.getTempPath(), "bw_pattern_gui.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        self.doc.recompute()
+        array = self.doc.getObject(name)
+        self.assertTrue(bp.is_pattern(array))
+        self.assertEqual(len(array.Shape.Solids), 4)
+        self.assertEqual(len(bp.read_params(array)["suppressed"]), 1)
+
+    def test_symmetric_direction(self):
+        """Figure 'new', right: n = 5 symmetric gives -2..2 spacings."""
+        body, _pad = self._body()
+        panel = self._run(self.bpg.bp.RECTANGULAR, body)
+        panel.dir1["count"].setValue(5)
+        panel.dir1["distance"].setValue(10)
+        panel.dir1["symmetric"].setChecked(True)
+        self._pump()
+        array = self._ok(panel)
+        xs = sorted(round(e.Placement.Base.x) for e in array.ElementList)
+        self.assertEqual(xs, [-20, -10, 10, 20])
+
+    def test_components_circular_seen_by_assembly(self):
+        """Figure (d): 8 bolts around the flange axis; the Assembly workbench counts every instance."""
+        import UtilsAssembly
+
+        bolt = self.doc.addObject("Part::Cylinder", "BoltShape")
+        bolt.Radius, bolt.Height = 2.5, 20
+        assembly = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        component = self.doc.addObject("App::Link", "Bolt")
+        component.LinkedObject = bolt
+        component.Placement = App.Placement(App.Vector(30, 0, 0), App.Rotation())
+        assembly.addObject(component)
+        self.doc.recompute()
+        panel = self._run(self.bpg.bp.CIRCULAR, component)
+        self.assertEqual(panel.kind.currentText(), bp.CIRCULAR)
+        panel.circ_count.setValue(8)
+        self._pump()
+        array = self._ok(panel)
+        self.assertIn(array, assembly.Group)
+        self.assertEqual(UtilsAssembly.number_of_components_in(assembly), 8)
+        angles = sorted(round(e.Placement.Rotation.Angle * 180 / 3.141592653589793) for e in array.ElementList)
+        self.assertEqual(len(angles), 7)
+        self.assertEqual(angles[0], 45)
 
 
 if __name__ == "__main__":
