@@ -299,11 +299,16 @@ def needs_picture(s, pn) -> bool:
 
 def source_for(s, pn):
     """The file to render the latest version of ``pn`` from: the work copy when it is that version
-    (its links find the work copies beside it), else the vault's stored file."""
+    (its links find the work copies beside it), else the vault's stored file. An assembly is drawn
+    from its work copy whenever there is one, even an older version: the stored file's links look
+    for parts beside it that are not there (empty pictures, 25 Oct), the work copy's find the work
+    copies."""
     latest = s.vault.latest_version(pn)
     work = s.work.path(pn)
-    if os.path.exists(work) and s.work.local_hash(work) == latest.sha256:
-        return work
+    if os.path.exists(work):
+        item = s.vault.items.get(pn)
+        if s.work.local_hash(work) == latest.sha256 or (item is not None and item.item_type == "assembly"):
+            return work
     return os.path.join(s.vault.root, latest.object_name)
 
 

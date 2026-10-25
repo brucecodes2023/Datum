@@ -68,6 +68,39 @@ class TestThumbnailInTheFile(unittest.TestCase):
         self.assertFalse(pv.is_iso(pv.png_bytes(plain)))
 
 
+class TestSourceForPictures(unittest.TestCase):
+    """Refresh Pictures renders a part from its work copy only when that is the latest version, an
+    assembly from its work copy whenever there is one (its links then find the work copies)."""
+
+    def session(self, kind, work_exists=True, same=False):
+        tmp = tempfile.mkdtemp(prefix="bw-src-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        work = os.path.join(tmp, "work", "P.FCStd")
+        if work_exists:
+            os.makedirs(os.path.dirname(work))
+            fcstd(work)
+        latest = SimpleNamespace(sha256="latest", object_name="objects/latest.FCStd")
+        vault = SimpleNamespace(root=os.path.join(tmp, "vault"), items={"P": SimpleNamespace(item_type=kind)},
+                                latest_version=lambda pn: latest)
+        ws = SimpleNamespace(path=lambda pn: work, local_hash=lambda p: "latest" if same else "older")
+        return SimpleNamespace(vault=vault, work=ws), work, os.path.join(vault.root, latest.object_name)
+
+    def test_a_current_work_copy_is_used(self):
+        for kind in ("part", "assembly"):
+            s, work, _stored = self.session(kind, same=True)
+            self.assertEqual(pv.source_for(s, "P"), work, kind)
+
+    def test_an_older_part_copy_is_not_but_an_older_assembly_copy_is(self):
+        s, _work, stored = self.session("part")
+        self.assertEqual(pv.source_for(s, "P"), stored)
+        s, work, _stored = self.session("assembly")
+        self.assertEqual(pv.source_for(s, "P"), work)
+
+    def test_no_work_copy_means_the_stored_file(self):
+        s, _work, stored = self.session("assembly", work_exists=False)
+        self.assertEqual(pv.source_for(s, "P"), stored)
+
+
 class TestStampAtCheckIn(unittest.TestCase):
     """stamp_work_file renders only a part or assembly that is about to become a new version."""
 
