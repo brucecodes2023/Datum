@@ -1,7 +1,13 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Pure-logic tests for the workspaces (bruceworx_workspaces) and the toolbar rows."""
+"""Tests for the workspaces (bruceworx_workspaces) and the toolbar rows.
 
+The pure-logic tests run headless; TestRibbonInWindow needs a GUI FreeCAD.
+"""
+
+import time
 import unittest
+
+import FreeCAD as App
 
 import bruceworx_toolbars as toolbars
 import bruceworx_workspaces as ws
@@ -161,6 +167,84 @@ class TestToolbarRows(unittest.TestCase):
             toolbars.plan_rows(names),
             [["BruceWorxTitleRow"], ["BruceWorxWorkspaces", "File", "View"], ["Solid \u00b7 Create"]],
         )
+
+
+def _settle(seconds=0.6):
+    import FreeCADGui as Gui
+
+    end = time.time() + seconds
+    while time.time() < end:
+        Gui.updateGui()
+        time.sleep(0.02)
+
+
+@unittest.skipUnless(App.GuiUp, "needs a GUI FreeCAD")
+class TestRibbonInWindow(unittest.TestCase):
+    """UAT 25 Oct: #10 (groups without buttons after a tab switch)."""
+
+    def setUp(self):
+        import FreeCADGui as Gui
+
+        self.bar = ws.bar()
+        if self.bar is None:
+            self.skipTest("the workspace bar is off")
+        self.mw = Gui.getMainWindow()
+        self.geometry = self.mw.geometry()
+        self.maximized = self.mw.isMaximized() or self.mw.isFullScreen()
+        self.workbench = Gui.activeWorkbench().name()
+        self.saved = ws._saved_tab("Design")
+        ws.activate_workspace("Design")
+        _settle()
+
+    def tearDown(self):
+        import FreeCADGui as Gui
+
+        if self.saved:
+            self.bar.select_tab(self.saved)
+        if self.maximized:
+            self.mw.showMaximized()
+        else:
+            self.mw.setGeometry(self.geometry)
+        Gui.activateWorkbench(self.workbench)
+        _settle()
+
+    def shown_groups(self):
+        from PySide import QtWidgets
+
+        names = set(ws.tab_toolbars(self.bar.workspace, self.bar.current_tab()))
+        return [tb for tb in self.mw.findChildren(QtWidgets.QToolBar) if tb.objectName() in names and tb.isVisible()]
+
+    @staticmethod
+    def buttons(tb):
+        from PySide import QtWidgets
+
+        skip = ("BruceWorxGroupCaption", "qt_toolbar_ext_button")
+        return [b for b in tb.findChildren(QtWidgets.QToolButton) if b.parent() is tb and b.objectName() not in skip]
+
+    def test_toolbars_ignore_the_title_strip_safe_area(self):
+        import bruceworx_titlebar
+        from PySide import QtCore, QtWidgets
+
+        if bruceworx_titlebar.row() is None:
+            self.skipTest("no macOS title row")
+        for tb in self.mw.findChildren(QtWidgets.QToolBar):
+            if tb.parent() is self.mw:
+                self.assertFalse(tb.testAttribute(QtCore.Qt.WA_ContentsMarginsRespectsSafeArea), tb.objectName())
+
+    def test_every_tab_shows_its_buttons(self):
+        names = [t["name"] for t in self.bar.workspace["tabs"]]
+        for name in names + names[:1]:
+            self.bar.select_tab(name)
+            _settle()
+            groups = self.shown_groups()
+            self.assertTrue(groups, name)
+            for tb in groups:
+                label = f"{name}: {tb.objectName()}"
+                self.assertEqual(tb.layout().geometry(), tb.contentsRect(), label)
+                shown = [b for b in self.buttons(tb) if b.isVisible()]
+                self.assertTrue(shown, label)
+                for b in shown:
+                    self.assertGreater(b.height(), 16, label)
 
 
 if __name__ == "__main__":

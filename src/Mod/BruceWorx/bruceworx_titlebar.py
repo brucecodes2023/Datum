@@ -21,6 +21,11 @@ the right. There is no separate title strip any more.
 * Full screen hides the traffic lights, so the left inset shrinks.
 * Docks ignore the title strip's safe area and are laid out again when they
   show; otherwise the floating Browser kept its tree outside its card.
+* Toolbars ignore it too. A toolbar that is still hidden sits at the top left,
+  inside the old strip, so Qt gave it a 40 px top margin; shown and moved to
+  its row it lost the margin, but its layout kept the squashed rect, and the
+  tool groups of a tab showed no buttons until the window was resized (UAT
+  25 Oct, #10).
 
 With MainWindow/DocumentTabPos at the bottom (the pack's default since 24 Oct),
 the row keeps the traffic lights, quick commands and search but shows no tabs:
@@ -451,8 +456,14 @@ def _make_classes():
 
     class WindowFilter(QtCore.QObject):
         def eventFilter(self, obj, event):
-            if event.type() == QtCore.QEvent.WindowStateChange and _alive(_row):
+            kind = event.type()
+            if kind == QtCore.QEvent.WindowStateChange and _alive(_row):
                 _row.set_fullscreen(obj.isFullScreen())
+            elif kind == QtCore.QEvent.ChildPolished and _toolbars_watched:
+                # Polished just before it first shows, so before its layout runs.
+                child = event.child()
+                if isinstance(child, QtWidgets.QToolBar):
+                    _no_safe_area(child, True)
             return False
 
     class DockFilter(QtCore.QObject):
@@ -481,6 +492,31 @@ def _relayout_dock(dock):
     if _alive(dock) and dock.isVisible() and dock.layout() is not None:
         dock.layout().invalidate()
         dock.layout().activate()
+
+
+_toolbars_watched = False
+
+
+def _no_safe_area(widget, on):
+    """Keep (on) or give back the title strip's safe area for a widget and its children."""
+    from PySide import QtCore, QtWidgets
+
+    for w in [widget] + widget.findChildren(QtWidgets.QWidget):
+        w.setAttribute(QtCore.Qt.WA_ContentsMarginsRespectsSafeArea, not on)
+
+
+def _watch_toolbars(mw, on):
+    """Toolbars ignore the safe area while the row is on, those made later too (WindowFilter)."""
+    global _toolbars_watched
+    from PySide import QtWidgets
+
+    _toolbars_watched = on
+    for bar in mw.findChildren(QtWidgets.QToolBar):
+        if bar.parent() is not mw:
+            continue
+        _no_safe_area(bar, on)
+        if on and bar.isVisible() and bar.layout() is not None:
+            bar.layout().invalidate()
 
 
 def _watch_docks(mw, on):
@@ -549,6 +585,7 @@ def _turn_on():
         mw.installEventFilter(_window_filter)
         _dock_filter = dock_filter_class()
     _watch_docks(mw, True)
+    _watch_toolbars(mw, True)
     _row.set_fullscreen(mw.isFullScreen())
     _row.show()
     _row.take_search()
@@ -566,6 +603,7 @@ def _turn_off():
     mw = FreeCADGui.getMainWindow()
     if _dock_filter is not None:
         _watch_docks(mw, False)
+    _watch_toolbars(mw, False)
     if _alive(_row):
         _row.timer.stop()
         _row.give_back_search()
