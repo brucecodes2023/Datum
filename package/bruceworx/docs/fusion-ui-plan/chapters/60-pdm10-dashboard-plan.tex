@@ -449,3 +449,9 @@ left column is unchanged). Compare figures~\ref{fig:pdm10-light} and~\ref{fig:pd
 \caption{As built: a new, empty vault made with the Create Vault engine (compare figure~\ref{fig:pdm10-empty}).}
 \label{fig:pdm10-built-empty}
 \end{figure}
+
+\paragraph{Acceptance (done 25 Oct).} Checked in the GUI on a 60-item fixture vault: each of the four tiles and eight
+state entries opens the Files tab with exactly its count (for example \emph{Parts} 42 and \emph{WIP parts} 30 give
+``42 items of 60'' and ``30 items of 60''); a check-in written to the journal by another Mac (\code{other@mac2}) shows
+in the tiles and the activity feed after 0.8\,s, inside the 5\,s budget; the 500-item read stays under 0.1\,s
+(\file{test\_vault\_dashboard.py}). The tiles' tool tips now name the Files tab and keep WIP and COTS in capitals.
