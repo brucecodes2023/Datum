@@ -298,7 +298,7 @@ $r_2>r_1$. The recognised hole is replaced by a real \code{Hole} feature, which 
 \subsection{BW-MOD-05 --- Threads, holes and hardware}
 %----------------------------------------------------------------------
 
-\begin{epic}{MOD-05}{Threads, holes \& hardware library}{M1}{\stTodo}{FCB-P2-09/10, (new)}
+\begin{epic}{MOD-05}{Threads, holes \& hardware library}{M1}{\stProg}{FCB-P2-09/10, (new)}
 \begin{itemize}
   \item \textbf{Cosmetic thread} object attached to a cylindrical face, storing standard, size, pitch,
         class, length, and handedness. It is shown in 3D as a texture/helix decoration, exported in STEP
@@ -318,6 +318,8 @@ $D_1=d-2\cdot\tfrac{5}{8}H = d-1.0825\,P$, and the external minor diameter is $d
 $\approx d-P$ (M3$\times$0.5 $\rightarrow$ 2.5\,mm). A cosmetic thread stores $(d,P,\text{class},L)$ and draws
 the minor/major diameter circle in views. Modelled threads (\code{ModelThread}) are kept for 3D printing,
 where the printed geometry is the thread.
+
+\input{chapters/27-mod05-plan}
 
 %----------------------------------------------------------------------
 \subsection{BW-MOD-06 --- Sheet metal}
