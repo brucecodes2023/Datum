@@ -1,0 +1,69 @@
+%----------------------------------------------------------------------
+\subsection{ASM-03 and ASM-04: what is left, and the questions (25 Oct)}\label{sec:asm0304-plan}
+%----------------------------------------------------------------------
+
+Both epics are half done. What they still need is new behaviour with no plan yet, so this section is the plan;
+nothing below is built. FreeCAD~1.1 already has most of the parts: the joint task panel with every joint type,
+the solver's drag backstop at limits (\S\ref{sec:joints}), exploded views with steps (\code{Assembly\_CreateView},
+step types \emph{Normal} and \emph{Radial}) and a BOM spreadsheet (\code{BomObject}, with \emph{Detail
+sub-assemblies}, \emph{Detail parts} and \emph{Only parts}). The vault's \emph{Bill of Materials\ldots} dialog
+(\eref{PDM-06}, on since 25 Oct) already shows a checked-in revision indented or flattened, with CSV.
+
+\paragraph{ASM-03, left.}
+\begin{enumerate}[nosep]
+  \item \textbf{Quick joint.} Select two elements on two parts in the 3D view and press \emph{Quick Joint}
+        (\code{J}): the joint type is inferred and the joint made at once, in one undo step; the usual task panel
+        opens only on a double-click of the joint. Proposed inference, first match wins:
+        \begin{center}\small
+        \begin{tabular}{@{}ll@{}}
+        \toprule
+        Picks & Joint\\
+        \midrule
+        cylinder or circular edge + cylinder or circular edge & Revolute\\
+        plane + plane & Planar\\
+        straight edge + straight edge & Slider\\
+        vertex + vertex, or sphere + anything & Ball\\
+        anything else & Fixed\\
+        \bottomrule
+        \end{tabular}
+        \end{center}
+  \item \textbf{Limit handles in the view}: drag the ends of an arc (revolute) or a bar (slider) on the joint marker
+        to set \emph{Min}/\emph{Max}, measured from the datums as today.
+  \item \textbf{Datums on the assembly origin or a third part}, and \textbf{angles past $\pm180^\circ$} (a turn count
+        kept beside the angle).
+  \item \textbf{Acceptance}: the two-axis arm (base, shoulder, arm) assembled with two quick joints, and its limits
+        stop the drag; a GUI test, as for \eref{MOD-01}.
+\end{enumerate}
+Effort: quick joint 1.5\,d, limit handles 2\,d, datums and turns 1\,d, arm and tests 0.5\,d.
+
+\paragraph{ASM-04, left.}
+\begin{enumerate}[nosep]
+  \item \textbf{Exploded presets}: \emph{Explode} on the assembly makes an upstream exploded view in one click, as
+        \emph{Radial} (every part out from the assembly's centre) or \emph{Along an axis} (in assembly order), with
+        a spacing; the steps stay editable, and TechDraw can show the view.
+  \item \textbf{BOM forms for an open assembly}: \emph{Indented}, \emph{Top level} and \emph{Flattened (parts
+        only)}, with P/N, Rev, Description, Material, Mass and Qty from the part-property schema. Indented and top level
+        are the BOM object's \emph{Detail sub-assemblies} on and off; flattened sums quantities over every path
+        (the explosion formula of \S\ref{sec:asm}) and is new.
+  \item \textbf{Export CSV} from the BOM's right-click menu.
+  \item \textbf{Acceptance} on the gearbox \code{LE-02-01002} now (12 lines, 24 parts, which the vault's BOM already
+        matches), and on \code{LE-02001} in the \eref{PDM-07} pilot.
+\end{enumerate}
+Effort: presets 1\,d, flattened form and columns 1\,d, CSV and tests 0.5\,d.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=A\arabic*.]
+  \item \textbf{The inference table.} Is the table above right? In particular \emph{plane + plane}: Planar (slides and
+        turns on the face, what Fusion's planar does), or Fixed (what most face-to-face mates end up as)?\\
+        \emph{Recommendation:} Planar, as the epic says; one click in the panel makes it Fixed.
+  \item \textbf{Quick joint or the default.} A separate \emph{Quick Joint} command, or should every joint command
+        infer its type when two elements are already selected?\\
+        \emph{Recommendation:} a separate command (\code{J}); the joint commands stay as they are.
+  \item \textbf{Limit handles.} Worth 2\,days now, or keep setting limits in the panel until the arm is in use?\\
+        \emph{Recommendation:} later; the panel's \emph{Pick datums} and \emph{Now at} cover the arm.
+  \item \textbf{Exploded presets.} Radial and Along an axis enough? A default spacing (25\,\% of the assembly's size)?\\
+        \emph{Recommendation:} yes to both.
+  \item \textbf{Where the flattened BOM lives.} In the assembly's BOM object (a fourth option, so a drawing's BOM
+        table can use it), or only in BruceWorx's BOM dialog?\\
+        \emph{Recommendation:} in the BOM object, marked \code{[BW]}, so \eref{DRW-02} gets it too.
+\end{enumerate}
