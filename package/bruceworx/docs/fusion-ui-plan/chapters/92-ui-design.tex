@@ -401,10 +401,12 @@ BruceWorx, all on. Tests: 18 new.
   \item \textbf{Task watchers off.} The workbench command lists FreeCAD shows in the task panel (Insert,
         Constraints, \ldots) repeat the toolbar; the pack turns them off (\code{General/ShowTaskWatcher}), with a
         checkbox on Preferences $\rightarrow$ BruceWorx.
-  \item \textbf{Trackpad gestures.} A plain two-finger swipe zooms as before; Shift + swipe pans in any direction,
-        Cmd + swipe orbits about the point under the pointer. The view follows the fingers (natural scrolling
-        honoured); a mouse wheel is not affected. \code{NavigationStyle::processTrackpadScroll}, called from the
-        viewer's wheel filter; switch \code{BruceWorx/TrackpadGestures}, on.
+  \item \textbf{Trackpad gestures.} A plain two-finger swipe pans in any direction, Shift + swipe zooms at the
+        pointer (as a wheel turn), Cmd + swipe orbits about the point under the pointer (swapped at your request in
+        the 25 Oct UAT, \eref{UIX-13}). The view follows the fingers (natural scrolling honoured); the trackpad is
+        told from a mouse wheel by its scroll phase, so a mouse wheel is not affected.
+        \code{NavigationStyle::processTrackpadScroll}, called from the viewer's wheel filter; switch
+        \code{BruceWorx/TrackpadGestures}, on (off: a swipe zooms, as stock FreeCAD).
   \item \textbf{2\,px lines.} \code{DefaultShapeLineWidth} is 2 again: Coin line widths are device pixels, so
         1\,px is a half-point hairline on Retina. Body edges and sketches outside edit mode.
   \item \textbf{Grid when a sketch opens.} FreeCAD stores ``show grid'' in each sketch when it is created, so

@@ -429,6 +429,10 @@ EPICS = [
       "(new, from the Nxt add-on review, 23 Oct)",
       "A grouped inspector for a feature, face, body, part or several objects; FreeCAD's editor one click away. Card in the Browser built 24 Oct (bruceworx_inspector.py); redesigned at your request as a tabbed right panel (Properties, Vault, Parameters, Physical): Properties tab built 24 Oct; Physical and Parameters tabs finished and on 25 Oct (local/linked sheet, dependents, ml shown as cm3). Also 24 Oct evening: Create Vault opens as a full-window tab; document tabs at the bottom or top (Preferences > BruceWorx > Document tabs, default bottom) with the Start page pinned as the first tab. Done 25 Oct: the acceptance is a GUI test (TestBruceWorxInspector.EditInPlaceTests: Pad Distance, Pocket Depth and Fillet Radius typed on the Properties tab, one named undo step each), passed 3 runs of 3 with no crash; Physical, Parameters and Document tabs suites pass in the GUI.",
       "Pad, Pocket and Fillet edited from the inspector without the Data tab."),
+    E("UIX-13", "Trackpad navigation", "UI", "Done", [],
+      "(new, from the 25 Oct UAT, #9)",
+      "Two-finger swipe on a Mac trackpad: plain swipe pans (the model follows the fingers), Shift + swipe zooms at the pointer (as a wheel turn: zoom step, Invert zoom, Zoom at cursor), Cmd + swipe orbits about the point a mouse orbit would pick. The trackpad is told apart from a mouse wheel by its scroll phase; a mouse wheel and pinch are unchanged, in every navigation style. NavigationStyle::processTrackpadScroll; switch BruceWorx/TrackpadGestures, on (off: a swipe zooms, as stock FreeCAD). Built 25 Oct (4eed4ca); TestBruceWorxTrackpad (synthetic swipes on the 3D view) passes in the GUI.",
+      "Pan, zoom and orbit by swipe on the real trackpad feel right; a mouse wheel still zooms. Try-out pending."),
     # Kernel --------------------------------------------------------------
     E("KRN-01", "OCCT coupling survey", "BG", "To do", [],
       "FCB-P3-01..06",
