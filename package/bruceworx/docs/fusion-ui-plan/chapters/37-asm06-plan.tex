@@ -1,5 +1,5 @@
 %======================================================================
-\subsection{BW-ASM-06 --- Interference \& clearance (planned 25 Oct 2026)}\label{sec:asm06-plan}
+\subsection{BW-ASM-06 --- Interference \& clearance (planned and built 25 Oct 2026)}\label{sec:asm06-plan}
 %======================================================================
 
 You chose this epic on 25 Oct and asked for it to be built on my recommendations. This section records them: what
@@ -147,6 +147,54 @@ Booleans on 150--300-face gears.
     view found on its plane.
   \item Picking a row selects both parts and draws the overlap; Close leaves the file unchanged except for fits.
 \end{enumerate}
+
+%----------------------------------------------------------------------
+\subsubsection*{Built (25 Oct)}
+
+\file{bruceworx\_interference.py} (the check, headless) and \file{bruceworx\_interference\_gui.py} (the command and
+its tab), with \file{TestBruceWorxInterference.py}: 15 tests headless, 17 in the GUI (the bolt, a thread at the
+tap-drill size, contact, clearance and a gap of exactly the value, a part buried in another, hidden parts, links as
+occurrences of one part, fits shared with a section, \code{check\_file}, the tab: list, pick, overlay, mark and
+unmark, Close). \emph{Interference} is in Design $\rightarrow$ Inspect and in the Assembly menu after \emph{Bill of
+Materials}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{fig/asm06_built.png}
+\caption{Built, on a copy of the gearbox with the old sun hub (rev.~1) put back, with a section through the axis on.
+Left: the tab after the check. Middle: \emph{Sun / Carrier} picked: both parts selected, the 257.6\,mm$^3$ overlap
+drawn red over the model. Right: after \emph{Mark as fit} on the two thread fits, \emph{Adapter plate / M3x40 1}
+picked: its thin overlap at the foot of the screw. The section's own red, at the sun hub, is the clash that is
+left.}
+\label{fig:asm06-built}
+\end{figure}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\hsize=0.7\hsize}X>{\hsize=1.3\hsize}X@{}}
+\toprule
+Acceptance step & Result (25 Oct)\\
+\midrule
+1. The bolt & One clash, 78.5\,mm$^3$, 4.0\,mm deep (unit test, headless and in the GUI tab).\\
+2. The gearbox & 24 parts, 276 pairs, 65 candidates (69 with the 0.2\,mm gap, 75 with 0.5\,mm). 8 clashes, all thread
+  fits (adapter plate / M3x40 $\times4$ 8.6\,mm$^3$, motor / M3x6 $\times4$ 9.3\,mm$^3$, each 0.3\,mm deep); 29
+  contacts; none closer than 0.2\,mm; 8 closer than 0.5\,mm (the screws in their 0.2\,mm clearance holes). Headless
+  5.4--5.7\,s. After \emph{Mark as fit} twice: 0 clashes, 8 fits, both keys on the assembly and in the section's
+  \code{Fits}, which the section view passes to the viewer as fits.\\
+3. The old sun hub & One more clash, sun / carrier, 257.6\,mm$^3$, 2.1\,mm deep: the volume measured for this clash in
+  \S\ref{sec:mod16-plan}. In the GUI: 6.2\,s for the whole check, the view redrawn at least every 0.9\,s (the longest
+  step is one gear pair's Boolean).\\
+4. Pick and Close & A row selects both occurrences and draws the overlap or the nearest points on top; Close removes
+  the drawing and the selection; the undo list holds only the two \emph{Mark as fit} steps.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Left for later.} (1) A section made \emph{after} a fit is marked does not see it until
+\file{bruceworx\_section.py}'s \code{style\_of()} also reads \code{bruceworx\_interference.fits(doc)}; a one-line
+change for the session that owns that file. (2) The release check of \eref{PDM-07} can call \code{check\_file()};
+wiring it in is that epic's. (3) A cache, so a check after moving one part only measures the pairs it is in. (4)
+\eref{ECD-04}'s board-in-housing fit is this check on the enclosure assembly.
 
 %----------------------------------------------------------------------
 \subsubsection*{Questions for you}

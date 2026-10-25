@@ -66,12 +66,14 @@ rigid one moves as one body. A fix-up macro converts between them.
 \emph{Acceptance:} a flexible sub-assembly articulates inside \code{LE-02001}; a rigid one does not.
 \end{epic}
 
-\begin{epic}{ASM-06}{Interference \& clearance}{M1}{\stProg}{FCB-P2A-08}
+\begin{epic}{ASM-06}{Interference \& clearance}{M1}{\stDone}{FCB-P2A-08}
 List every \textbf{clash} (positive common volume), \textbf{contact} (touching faces, zero volume) and
 \textbf{clearance violation} (minimum distance below a threshold) between occurrences. Results are
 highlighted in the view, with an ignore list for intended press fits and threads. The ECAD enclosure fit
 (\eref{ECD-04}) reuses it.
 \emph{Acceptance:} the bolt example in Figure~\ref{fig:clash} reports one clash, 4.0\,mm deep and 78.5\,mm$^3$.
+\textbf{Built 25 Oct (\S\ref{sec:asm06-plan}):} \emph{Inspect $\rightarrow$ Interference}; the bolt reports exactly
+that; the gearbox 8 thread fits, 29 contacts and, with the old sun hub, the 257.6\,mm$^3$ sun / carrier clash.
 \end{epic}
 
 \begin{figure}[ht]
