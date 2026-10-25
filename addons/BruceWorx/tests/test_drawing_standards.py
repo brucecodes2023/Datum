@@ -35,6 +35,47 @@ class DefaultsAndValues(unittest.TestCase):
         self.assertEqual((s.tol_1_place, s.tol_2_place, s.tol_3_place, s.tol_angle), (0.5, 0.25, 0.1, 1.0))
         self.assertEqual(ds.validate(s), [])
 
+    def test_inch_profile_defaults_and_view(self):
+        s = ds.DrawingStandards()
+        self.assertEqual((s.in_default_sheet, s.in_tol_1_place, s.in_tol_2_place, s.in_tol_3_place, s.in_tol_angle),
+                         ("ANSI_B_Landscape", 0.1, 0.01, 0.005, 1.0))
+        mm = ds.profile(s, "mm")
+        self.assertEqual((mm.units, mm.default_sheet, mm.tol_1_place), ("mm", "ANSI_B_Landscape", 0.5))
+        s.default_sheet, s.standard, s.tolerance_mode = "ISO_A3_Landscape", "ISO GPS", "iso2768"
+        s.in_default_sheet, s.in_tol_3_place = "ANSI_C_Landscape", 0.002
+        inch = ds.profile(s, "in")
+        self.assertEqual((inch.units, inch.default_sheet, inch.standard, inch.tolerance_mode),
+                         ("in", "ANSI_C_Landscape", "ASME Y14.5-2018", "decimal"))
+        self.assertEqual((inch.tol_1_place, inch.tol_2_place, inch.tol_3_place), (0.1, 0.01, 0.002))
+        self.assertEqual(ds.tolerance_lines(inch)[:2],
+                         ["X.X ±.1  ·  X.XX ±.01", "X.XXX ±.002  ·  Angles ±1°"])
+        self.assertEqual(ds.tolerance_lines(ds.profile(s, "mm"))[0], "ISO 2768-m")
+        self.assertEqual(ds.title_block_fields(inch)["units"], "inch")
+        self.assertEqual(ds.profile(s).units, s.units)  # the vault's default
+        self.assertEqual((ds.dimension_format("in"), ds.dimension_format("mm")), ("%.3f", "%.2w"))
+        self.assertEqual((ds.dimension_format("in", True), ds.dimension_format("mm", True)), ("%+.3f", "%+.2w"))
+        self.assertEqual((ds.tolerance_text(0.005, "in"), ds.tolerance_text(0.5, "mm"), ds.tolerance_text(1, "in")),
+                         (".005", "0.5", "1"))
+
+    def test_version_1_inch_vault_moves_its_tolerances_to_the_inch_profile(self):
+        old = {"format": ds.FORMAT, "version": 1, "settings": {
+            "units": "in", "default_sheet": "ANSI_C_Landscape", "tol_1_place": 0.03, "tol_2_place": 0.01,
+            "tol_3_place": 0.005, "tol_angle": 0.5}}
+        s, issues = ds.from_dict(old)
+        self.assertEqual(issues, [])
+        self.assertEqual((s.in_default_sheet, s.in_tol_1_place, s.in_tol_2_place, s.in_tol_3_place, s.in_tol_angle),
+                         ("ANSI_C_Landscape", 0.03, 0.01, 0.005, 0.5))
+        self.assertEqual((s.default_sheet, s.tol_1_place, s.tol_angle), ("ANSI_B_Landscape", 0.5, 1.0))
+        # an old inch vault that kept the defaults keeps the inch defaults (0.5 in was never meant)
+        s2, _i = ds.from_dict({"version": 1, "settings": {"units": "in"}})
+        self.assertEqual(s2, ds.DrawingStandards(units="in"))
+        # a mm vault, and a version-2 file, are left as they are
+        s3, _i = ds.from_dict({"version": 1, "settings": {"units": "mm", "tol_1_place": 0.3}})
+        self.assertEqual((s3.tol_1_place, s3.in_tol_1_place), (0.3, 0.1))
+        s4, _i = ds.from_dict({"version": 2, "settings": {"units": "in", "tol_1_place": 0.3}})
+        self.assertEqual((s4.tol_1_place, s4.in_tol_1_place), (0.3, 0.1))
+        self.assertEqual(ds.to_dict(s4)["version"], 2)
+
     def test_loose_text_for_choices(self):
         s = ds.DrawingStandards()
         for key, text, value in [
@@ -43,6 +84,7 @@ class DefaultsAndValues(unittest.TestCase):
             ("default_sheet", "ANSI C landscape (22 × 17 in)", "ANSI_C_Landscape"),
             ("default_sheet", "a3", "ISO_A3_Landscape"), ("default_sheet", "A4 portrait", "ISO_A4_Portrait"),
             ("default_sheet", "B", "ANSI_B_Landscape"), ("units", "inches", "in"),
+            ("in_default_sheet", "ANSI D", "ANSI_D_Landscape"), ("in_tol_3_place", "±.002", 0.002),
             ("iso2768_class", "c (coarse)", "c"), ("standard", "iso gps", "ISO GPS"),
             ("tol_2_place", "±0,3", 0.3), ("tol_angle", "0.5°", 0.5),
         ]:
@@ -144,8 +186,10 @@ class CsvTests(Tmp):
         settings = vs.example_settings()
         settings.standards["projection"] = "first"
         settings.standards["company"] = "Lumen, Inc."
+        settings.standards["in_tol_3_place"] = "0.002"
         text = vs.csv_template(settings)
         self.assertIn("standard,projection,first,", text)
+        self.assertIn("standard,in_tol_3_place,0.002,", text)
         self.assertIn('standard,company,"Lumen, Inc."', text)
         parsed, issues = vs.parse_csv(text)
         self.assertEqual(issues, [])

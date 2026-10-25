@@ -109,6 +109,97 @@ class TestPage(unittest.TestCase):
         self.assertEqual(report["kept"], ["finish"])
         self.assertEqual(list(page.BWHandTyped), ["finish"])
 
+    def _part(self, doc, name="Plate", pn="BW-01-01001-001"):
+        part = doc.addObject("App::Part", name)
+        box = doc.addObject("Part::Box", "Box")
+        part.addObject(box)
+        part.addProperty("App::PropertyString", "PartNumber", "BruceWorx")
+        part.addProperty("App::PropertyString", "Description", "BruceWorx")
+        part.PartNumber, part.Description = pn, "Base plate"
+        doc.recompute()
+        return part, box
+
+    def test_inch_model_gets_the_inch_profile(self):
+        import bruceworx_units
+
+        part, _box = self._part(self.doc)
+        bruceworx_units.apply_units(self.doc, "in")
+        page = drawing.new_drawing(part, root="")
+        self.assertEqual(ds.sheet_of_template(page.Template.Template), "ANSI_B_Landscape")
+        texts = page.Template.EditableTexts
+        self.assertEqual(texts["units"], "inch")
+        self.assertEqual(texts["tol1"], "X.X ±.1  ·  X.XX ±.01")
+        self.assertEqual(texts["tol2"], "X.XXX ±.005  ·  Angles ±1°")
+        self.assertEqual(texts["standard_note"], "Interpret per ASME Y14.5-2018")
+        dim = self.doc.addObject("TechDraw::DrawViewDimension", "Dim")
+        dim.Type = "Distance"
+        dim.References2D = [(page.Views[0].Views[0], "Edge0")] if page.Views[0].Views else []
+        page.addView(dim)
+        drawing.fill_page(page, root="")
+        self.assertEqual((dim.FormatSpec, dim.FormatSpecOverTolerance), ("%.3f", "%+.3f"))
+        # the model switches to mm: the block, the units and the dimension format follow
+        bruceworx_units.apply_units(self.doc, "mm")
+        dim.FormatSpec = "%.4f"  # a format the user typed stays
+        drawing.fill_page(page, root="")
+        texts = page.Template.EditableTexts
+        self.assertEqual((texts["units"], texts["tol1"]), ("mm", "X.X ±0.5  ·  X.XX ±0.25"))
+        self.assertEqual((dim.FormatSpec, dim.FormatSpecOverTolerance), ("%.4f", "%+.2w"))
+
+    def test_drawing_in_its_own_file_gets_the_models_number(self):
+        import bruceworx_units
+
+        import shutil
+        import tempfile
+
+        part, _box = self._part(self.doc)
+        bruceworx_units.apply_units(self.doc, "in")
+        tmp = tempfile.mkdtemp(prefix="bw-drw-link-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        self.doc.saveAs(os.path.join(tmp, "model.FCStd"))  # a link needs the model's file (the vault's case)
+        other = FreeCAD.newDocument("TestBruceWorxDrawingSheet")
+        self.addCleanup(FreeCAD.closeDocument, other.Name)
+        with self.assertRaises(ValueError):  # both files must exist before they can link
+            drawing.new_drawing(part, root="", doc=other)
+        other.saveAs(os.path.join(tmp, "drawing.FCStd"))
+        page = drawing.new_drawing(part, root="", doc=other)
+        self.assertIs(page.Document, other)
+        link = page.Views[0].Source[0]
+        self.assertEqual(link.TypeId, "App::Link")
+        self.assertIs(drawing.part_of(link), part)
+        texts = page.Template.EditableTexts
+        self.assertEqual((texts["part_number"], texts["title"], texts["units"]),
+                         ("BW-01-01001-001", "Base plate", "inch"))  # the model's units, not the sheet's
+
+    def test_sheet_change_keeps_filled_and_typed_fields(self):
+        part, _box = self._part(self.doc)
+        part.addProperty("App::PropertyString", "Finish", "BruceWorx")
+        part.Finish = "Raw"
+        page = drawing.new_drawing(part, "ANSI_B_Landscape", root="")
+        typed = dict(page.Template.EditableTexts)
+        typed["finish"] = "Bead blast"
+        page.Template.EditableTexts = typed
+        drawing.fill_page(page, root="")
+        report = drawing.set_sheet(page, "ISO_A3_Landscape", root="")
+        self.assertEqual(ds.sheet_of_template(page.Template.Template), "ISO_A3_Landscape")
+        texts = page.Template.EditableTexts
+        self.assertEqual((texts["part_number"], texts["finish"], texts["title"]),
+                         ("BW-01-01001-001", "Bead blast", "Base plate"))
+        self.assertEqual(report["kept"], ["finish"])
+        self.assertIsNone(drawing.set_sheet(page, "nonsense", root=""))
+
+    def test_units_change_refills_the_drawings(self):
+        """The observer's slotChangedDocument: a UnitSystem change refills (headless: at once)."""
+        part, _box = self._part(self.doc)
+        page = drawing.new_drawing(part, root="")
+        self.assertEqual(page.Template.EditableTexts["units"], "mm")
+        observer = drawing._Observer()
+        self.doc.UnitSystem = 3  # Imperial decimal, as the status bar's unit button would
+        observer.slotChangedDocument(self.doc, "Label")
+        self.assertEqual(page.Template.EditableTexts["units"], "mm")  # not a units change: untouched
+        observer.slotChangedDocument(self.doc, "UnitSystem")
+        texts = page.Template.EditableTexts
+        self.assertEqual((texts["units"], texts["tol1"]), ("inch", "X.X ±.1  ·  X.XX ±.01"))
+
     def test_other_templates_are_left_alone(self):
         page = self.doc.addObject("TechDraw::DrawPage", "Page")
         template = self.doc.addObject("TechDraw::DrawSVGTemplate", "Template")

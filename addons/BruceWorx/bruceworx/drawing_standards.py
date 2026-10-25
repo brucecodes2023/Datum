@@ -12,13 +12,22 @@ Settings and defaults (plan section "DRW-01 plan")::
     logo             a file copied into the vault (SVG or PNG), "" for none
     standard         ASME Y14.5-2018 | ASME Y14.5-2009 | ISO GPS
     projection       third | first
-    units            mm | in
-    default_sheet    ANSI_B_Landscape (one of SHEETS)
+    units            mm | in: the vault's default units (new documents, PDM-09)
+    default_sheet    ANSI_B_Landscape (one of SHEETS): the sheet of a mm drawing
     tolerance_mode   decimal | iso2768 | per_drawing
-    tol_1_place ...  X.X 0.5, X.XX 0.25, X.XXX 0.1 (units), angles 1 degree
+    tol_1_place ...  X.X 0.5, X.XX 0.25, X.XXX 0.1 (mm), angles 1 degree
     iso2768_class    f | m | c | v
+    in_default_sheet ANSI_B_Landscape: the sheet of an inch drawing
+    in_tol_1_place.. X.X .1, X.XX .01, X.XXX .005 (in), angles 1 degree
     surface_finish   default Ra, "" for no note
     break_edges      "break sharp edges" size, "" for no note
+
+Two profiles (PDM-09 A): the base fields are the millimetre profile, the
+``in_`` fields the inch one; :func:`profile` picks the view for a drawing by
+its model's units. Inch drawings are ASME (ANSI sheets, decimal tolerances
+written .005, dimensions %.3f); mm drawings keep DRW-01's choices. A version-1
+file whose units were "in" had typed its tolerances in inches: they move to the
+inch profile when it is read.
 
 Also here, because the filler needs them and they are pure: the
 general-tolerance block text, the sheet table, and who drew, checked and
@@ -38,7 +47,7 @@ from dataclasses import dataclass, field
 
 STANDARDS_FILE = "drawing_standards.json"
 FORMAT = "bruceworx.drawing-standards"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2  # 2: the inch profile (in_* keys), PDM-09
 LOGO_BASENAME = "drawing_logo"  # the copied logo: <vault>/drawing_logo.<ext>
 LOGO_EXTENSIONS = (".svg", ".png", ".jpg", ".jpeg")
 
@@ -71,6 +80,7 @@ _LABELS = {
                        "per_drawing": "Per drawing"},
     "iso2768_class": {"f": "f (fine)", "m": "m (medium)", "c": "c (coarse)", "v": "v (very coarse)"},
     "default_sheet": {k: v[0] for k, v in SHEETS.items()},
+    "in_default_sheet": {k: v[0] for k, v in SHEETS.items()},
 }
 _CHOICES = {
     "standard": STANDARDS,
@@ -79,8 +89,15 @@ _CHOICES = {
     "tolerance_mode": TOLERANCE_MODES,
     "iso2768_class": ISO2768_CLASSES,
     "default_sheet": tuple(SHEETS),
+    "in_default_sheet": tuple(SHEETS),
 }
-_NUMBERS = ("tol_1_place", "tol_2_place", "tol_3_place", "tol_angle")
+MM_NUMBERS = ("tol_1_place", "tol_2_place", "tol_3_place", "tol_angle")
+IN_NUMBERS = ("in_tol_1_place", "in_tol_2_place", "in_tol_3_place", "in_tol_angle")
+_NUMBERS = MM_NUMBERS + IN_NUMBERS
+# The inch profile's keys and the base (mm) key each stands in for.
+IN_KEYS = {"in_default_sheet": "default_sheet", "in_tol_1_place": "tol_1_place", "in_tol_2_place": "tol_2_place",
+           "in_tol_3_place": "tol_3_place", "in_tol_angle": "tol_angle"}
+ASME_DEFAULT = "ASME Y14.5-2018"
 
 
 @dataclass
@@ -105,6 +122,11 @@ class DrawingStandards:
     tol_3_place: float = 0.1
     tol_angle: float = 1.0
     iso2768_class: str = "m"
+    in_default_sheet: str = DEFAULT_SHEET  # the inch profile (PDM-09): ANSI B, ASME decimal tolerances
+    in_tol_1_place: float = 0.1
+    in_tol_2_place: float = 0.01
+    in_tol_3_place: float = 0.005
+    in_tol_angle: float = 1.0
     surface_finish: str = ""
     break_edges: str = ""
     extra: dict = field(default_factory=dict, compare=False)  # keys a newer version wrote; kept on save
@@ -116,14 +138,19 @@ DESCRIPTIONS = {
     "logo": "Logo file in the vault folder (SVG or PNG); blank for none",
     "standard": "Dimensioning and tolerancing standard: " + " | ".join(STANDARDS),
     "projection": "Projection: third (ASME) | first (ISO)",
-    "units": "Drawing units: mm | in",
-    "default_sheet": "Sheet of a new drawing: " + " | ".join(SHEETS),
+    "units": "Default units of the vault's new documents and drawings: mm | in",
+    "default_sheet": "Sheet of a new mm drawing: " + " | ".join(SHEETS),
     "tolerance_mode": "General tolerances: decimal | iso2768 | per_drawing",
-    "tol_1_place": "Tolerance of X.X dimensions (± units)",
-    "tol_2_place": "Tolerance of X.XX dimensions (± units)",
-    "tol_3_place": "Tolerance of X.XXX dimensions (± units)",
-    "tol_angle": "Tolerance of angles (± degrees)",
+    "tol_1_place": "Tolerance of X.X dimensions on mm drawings (± mm)",
+    "tol_2_place": "Tolerance of X.XX dimensions on mm drawings (± mm)",
+    "tol_3_place": "Tolerance of X.XXX dimensions on mm drawings (± mm)",
+    "tol_angle": "Tolerance of angles on mm drawings (± degrees)",
     "iso2768_class": "ISO 2768 tolerance class: f | m | c | v",
+    "in_default_sheet": "Sheet of a new inch drawing (ASME): " + " | ".join(SHEETS),
+    "in_tol_1_place": "Tolerance of X.X dimensions on inch drawings (± in)",
+    "in_tol_2_place": "Tolerance of X.XX dimensions on inch drawings (± in)",
+    "in_tol_3_place": "Tolerance of X.XXX dimensions on inch drawings (± in)",
+    "in_tol_angle": "Tolerance of angles on inch drawings (± degrees)",
     "surface_finish": "Default surface finish Ra (blank: no note)",
     "break_edges": "Break sharp edges, e.g. 0.2-0.5 (blank: no note)",
 }
@@ -158,7 +185,7 @@ def _choice(key: str, text):
             return value
     if key == "iso2768_class" and len(want) == 1 and want in ISO2768_CLASSES:
         return want
-    if key == "default_sheet":  # "B", "A3", "ANSI B", "A4 portrait"
+    if key in ("default_sheet", "in_default_sheet"):  # "B", "A3", "ANSI B", "A4 portrait"
         found = [k for k in SHEETS if _norm(k).replace("ansi", "").replace("iso", "").startswith(
             want.replace("ansi", "").replace("iso", ""))]
         if found:
@@ -222,6 +249,11 @@ def validate(standards: DrawingStandards, vault_root: str | None = None) -> list
             issues.append(Issue("error", f"{key} {value!r} must be a number more than 0."))
     if not (standards.tol_3_place <= standards.tol_2_place <= standards.tol_1_place) and not issues:
         issues.append(Issue("warning", "Tolerances usually get tighter with more decimal places."))
+    if not (standards.in_tol_3_place <= standards.in_tol_2_place <= standards.in_tol_1_place) and not issues:
+        issues.append(Issue("warning", "Inch tolerances usually get tighter with more decimal places."))
+    if standards.in_tol_1_place > 0.25 and not issues:
+        issues.append(Issue("warning", f"X.X ±{format_number(standards.in_tol_1_place)} in is wide for an inch "
+                                       "drawing; .1 in is usual."))
     if len(standards.company) > 60:
         issues.append(Issue("warning", "The company name is long; the title block may cut it."))
     if standards.logo:
@@ -277,7 +309,27 @@ def from_dict(data: dict) -> tuple:
         found = set_text(standards, key, value)
         if found is not None:
             issues.append(Issue("warning", found.text + " The default is used."))
+    version = data.get("version", 1) if isinstance(data, dict) else 1
+    if (version is None or int(version) < 2) and not any(k in settings for k in IN_KEYS):
+        migrate_inch_profile(standards)
     return standards, issues
+
+
+def migrate_inch_profile(standards: DrawingStandards) -> bool:
+    """A version-1 inch vault typed its sheet and tolerances in inches into the base fields: they
+    become the inch profile where they differ from the mm defaults, and the mm profile gets its
+    defaults back. Returns True when anything moved."""
+    if standards.units != "in":
+        return False
+    defaults = DrawingStandards()
+    moved = False
+    for in_key, key in IN_KEYS.items():
+        value = getattr(standards, key)
+        if value != getattr(defaults, key):
+            setattr(standards, in_key, value)
+            setattr(standards, key, getattr(defaults, key))
+            moved = True
+    return moved
 
 
 def to_dict(standards: DrawingStandards) -> dict:
@@ -399,6 +451,48 @@ def units_text(standards: DrawingStandards) -> str:
     return {"mm": "mm", "in": "inch"}.get(standards.units, standards.units)
 
 
+def profile(standards: DrawingStandards, units: str | None = None) -> DrawingStandards:
+    """The standards as a drawing in ``units`` ("mm" | "in"; default the vault's) sees them: the
+    inch profile puts its sheet and tolerances in the base fields, is ASME (question 4: inch
+    drawings on ANSI sheets under ASME; an ISO GPS vault's inch drawings cite ASME Y14.5-2018)
+    and tolerances by decimal places (ISO 2768 is metric). The mm profile is the standards as
+    they are. ``extra`` is shared."""
+    units = normalize_units(units if units else standards.units)
+    out = dataclasses.replace(standards, units=units)
+    out.extra = standards.extra
+    if units == "in":
+        for in_key, key in IN_KEYS.items():
+            setattr(out, key, getattr(standards, in_key))
+        if not out.standard.startswith("ASME"):
+            out.standard = ASME_DEFAULT
+        if out.tolerance_mode == "iso2768":
+            out.tolerance_mode = "decimal"
+    return out
+
+
+def normalize_units(units) -> str:
+    return _choice("units", units) or "mm"
+
+
+def dimension_format(units: str, tolerance: bool = False) -> str:
+    """TechDraw's FormatSpec for a dimension on a drawing in ``units``: "%.2w" for mm (trailing
+    zeros dropped, TechDraw's default) and "%.3f" for inch (ASME: as many places as the
+    tolerance). ``tolerance``: the over/under tolerance spec ("%+.2w" / "%+.3f")."""
+    spec = "%.3f" if normalize_units(units) == "in" else "%.2w"
+    return spec.replace("%", "%+", 1) if tolerance else spec
+
+
+DIMENSION_FORMATS = ("%.2w", "%.3f", "%+.2w", "%+.3f")  # what the filler may replace (ours or TechDraw's default)
+
+
+def tolerance_text(value, units: str) -> str:
+    """A tolerance as the block writes it: "0.5" for mm, ".005" for inch (ASME drops the zero)."""
+    text = format_number(value)
+    if normalize_units(units) == "in" and text.startswith("0."):
+        return text[1:]
+    return text
+
+
 def projection_text(standards: DrawingStandards) -> str:
     return "Third angle" if standards.projection == "third" else "First angle"
 
@@ -411,8 +505,9 @@ def tolerance_lines(standards: DrawingStandards, lines: int = 4) -> list:
     unit = standards.units
     out = []
     if standards.tolerance_mode == "decimal":
-        out.append(f"X.X ±{format_number(standards.tol_1_place)}{GAP}X.XX ±{format_number(standards.tol_2_place)}")
-        out.append(f"X.XXX ±{format_number(standards.tol_3_place)}{GAP}Angles ±{format_number(standards.tol_angle)}°")
+        tol = [tolerance_text(getattr(standards, k), unit) for k in MM_NUMBERS[:3]]
+        out.append(f"X.X ±{tol[0]}{GAP}X.XX ±{tol[1]}")
+        out.append(f"X.XXX ±{tol[2]}{GAP}Angles ±{format_number(standards.tol_angle)}°")
     elif standards.tolerance_mode == "iso2768":
         out.append(f"ISO 2768-{standards.iso2768_class}")
         out.append(f"Linear and angular: class {standards.iso2768_class}")

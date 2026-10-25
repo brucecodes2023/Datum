@@ -5,13 +5,22 @@ A TechDraw page whose template is one of ours (Templates/, made by
 make_templates.py) gets its title-block fields from:
 
 * the part: the first view's source, raised to its root App::Part or body
-  (the nearest object carrying a PartNumber wins): title (Description, else
-  the label), part number, revision, material, finish, mass;
+  (the nearest object carrying a PartNumber wins; an App::Link is followed
+  into the model's own file, so a drawing kept in its own file gets its
+  P/N): title (Description, else the label), part number, revision,
+  material, finish, mass;
 * the open vault (Preferences/BruceWorx/VaultPath): company, logo, standard
   note, general tolerances, units and projection
   (bruceworx.drawing_standards), the revision as the vault has it, and who
   drew, checked and approved the item, with dates, from its journal;
 * the page: scale and sheet "n of m".
+
+Units (PDM-09): a drawing follows its MODEL's document units. An inch model
+gets the vault's inch profile (ANSI B, ASME, X.X ±.1 / X.XX ±.01 /
+X.XXX ±.005, dimensions "%.3f"), a mm model the mm profile ("%.2w"). The
+filler sets the FormatSpec of dimensions still on a default format, and a
+units change of the model's document refills its drawings. A sheet change
+(:func:`set_sheet`) keeps every filled and typed field.
 
 Hand-typed values are kept. The page remembers what it wrote last
 (``BWFilled``, a hidden map field -> text); a field showing anything else
@@ -232,9 +241,28 @@ def _chain(obj):
         current = parent
 
 
+def _follow_link(obj):
+    """The object a link (or chain of links) stands for, in its own document; obj itself otherwise."""
+    seen = set()
+    while obj is not None and obj.Name + "@" + obj.Document.Name not in seen:
+        seen.add(obj.Name + "@" + obj.Document.Name)
+        linked = None
+        try:
+            if "LinkedObject" in obj.PropertiesList or obj.isDerivedFrom("App::Link"):
+                linked = obj.getLinkedObject(True)
+        except Exception:  # noqa: BLE001
+            linked = None
+        if linked is None or linked is obj:
+            return obj
+        obj = linked
+    return obj
+
+
 def part_of(obj):
     """The object that stands for the part: the nearest one with a PartNumber, else the
-    root App::Part, else a PartDesign body, else obj."""
+    root App::Part, else a PartDesign body, else obj. A link (a drawing in its own file,
+    PDM-09) is followed into the model's document first."""
+    obj = _follow_link(obj)
     chain = _chain(obj)
     for candidate in chain:
         if "PartNumber" in candidate.PropertiesList:
@@ -289,6 +317,14 @@ def part_values(obj, root=""):
     return values
 
 
+def model_units(page, part=None):
+    """"mm" or "in": the units of the page's model (its document), else of the page's document."""
+    import bruceworx_units
+
+    part = part_of_page(page) if part is None else part
+    return bruceworx_units.document_units(part.Document if part is not None else page.Document)
+
+
 def page_values(page):
     """scale and sheet "n of m" of a page."""
     ds = _standards_module()
@@ -311,33 +347,89 @@ def _map_prop(page, name, doc, kind="App::PropertyMap"):
     return getattr(page, name)
 
 
+def page_standards(page, root=None, part=None):
+    """The vault's standards as this page's model sees them (its units' profile, PDM-09)."""
+    ds = _standards_module()
+    root = vault_root() if root is None else root
+    return ds.profile(standards(root), model_units(page, part))
+
+
 def wanted_fields(page, root=None):
     """field -> text the vault, part and page give for a page (no writing)."""
     ds = _standards_module()
     root = vault_root() if root is None else root
-    settings = standards(root)
     part = part_of_page(page)
+    settings = page_standards(page, root, part)
     values = part_values(part, root) if part is not None else {}
     return ds.title_block_fields(settings, root or None, values, values.get("sign"), page_values(page))
 
 
-def _ensure_variant(page, template, settings, root):
-    """Point the template at the copy with this vault's logo and projection; keeps the texts."""
+def _switch_template(template, path):
+    """Point a template at another file of ours and keep every text the sheet had (a bare
+    ``Template`` change drops them all, PDM-09 spike)."""
+    texts = dict(template.EditableTexts)
+    template.Template = path
+    merged = dict(template.EditableTexts)
+    merged.update({k: v for k, v in texts.items() if k in merged})
+    template.EditableTexts = merged
+
+
+def _ensure_variant(page, template, settings, root, sheet=None):
+    """Point the template at the copy with this vault's logo and projection (and ``sheet`` when
+    given); keeps the texts."""
     ds = _standards_module()
-    sheet = ds.sheet_of_template(template.Template)
+    sheet = sheet or ds.sheet_of_template(template.Template)
     href = logo_href(ds.logo_path(root, settings)) if root and settings.logo else None
     first = settings.projection == "first"
     variant = variant_of(sheet, href, first)
     wanted = f"{sheet}-{variant}.svg" if variant else ds.template_name(sheet)
     if os.path.basename(template.Template or "") == wanted:
         return False
-    path = variant_path(sheet, href, first)
-    texts = dict(template.EditableTexts)
-    template.Template = path
-    merged = dict(template.EditableTexts)
-    merged.update({k: v for k, v in texts.items() if k in merged})
-    template.EditableTexts = merged
+    _switch_template(template, variant_path(sheet, href, first))
     return True
+
+
+def set_sheet(page, sheet, root=None):
+    """Put the page on another of our sheets (ANSI B -> ISO A3): filled and hand-typed fields
+    survive, the title block is filled again. Returns the fill report."""
+    ds = _standards_module()
+    template = getattr(page, "Template", None)
+    if template is None or not is_ours(template) or sheet not in ds.SHEETS:
+        return None
+    root = vault_root() if root is None else root
+    _ensure_variant(page, template, page_standards(page, root), root, sheet)
+    return fill_page(page, root)
+
+
+def _dimensions(page):
+    return [v for v in _views(page) if v.isDerivedFrom("TechDraw::DrawViewDimension")]
+
+
+def apply_dimension_formats(page, units):
+    """Dimensions on a default format take the profile's: "%.3f" (and "%+.3f" tolerances) on an
+    inch drawing, "%.2w" on a mm one. A format the user typed is left alone. Returns the changed."""
+    ds = _standards_module()
+    changed = []
+    defaults = set(ds.DIMENSION_FORMATS) | {_techdraw_default_format(), _techdraw_default_format(True)}
+    for dim in _dimensions(page):
+        for prop, tolerance in (("FormatSpec", False), ("FormatSpecOverTolerance", True),
+                                ("FormatSpecUnderTolerance", True)):
+            if prop not in dim.PropertiesList:
+                continue
+            wanted = ds.dimension_format(units, tolerance)
+            have = str(getattr(dim, prop) or "")
+            if have != wanted and have in defaults:
+                setattr(dim, prop, wanted)
+                changed.append(dim.Name)
+    return sorted(set(changed))
+
+
+def _techdraw_default_format(tolerance=False):
+    import FreeCAD
+
+    spec = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/TechDraw/Dimensions").GetString(
+        "formatSpec", "%.2w")
+    return spec.replace("%", "%+", 1) if tolerance else spec
 
 
 def fill_page(page, root=None):
@@ -348,8 +440,9 @@ def fill_page(page, root=None):
     if template is None or not template.isDerivedFrom("TechDraw::DrawSVGTemplate") or not is_ours(template):
         return None
     root = vault_root() if root is None else root
-    settings = standards(root)
+    settings = page_standards(page, root)
     _ensure_variant(page, template, settings, root)
+    apply_dimension_formats(page, settings.units)
     wanted = wanted_fields(page, root)
     current = dict(template.EditableTexts)
     filled = dict(_map_prop(page, FILLED_PROP, "Title-block fields filled automatically (field -> text written)"))
@@ -394,6 +487,12 @@ def refresh_all():
             out += refresh_document(doc)
         except Exception as exc:  # noqa: BLE001
             FreeCAD.Console.PrintWarning(f"BruceWorx drawing: {doc.Label}: {exc}\n")
+    try:
+        import bruceworx_units
+
+        bruceworx_units.refresh()  # the status bar's " · mm" / " · inch" (PDM-09)
+    except Exception:  # noqa: BLE001
+        pass
     return out
 
 
@@ -438,6 +537,23 @@ class _Observer:
     def slotActivateDocument(self, doc):
         if not doc.Restoring and enabled():
             self._mark(doc)
+
+    def slotChangedDocument(self, doc, prop):
+        """The model's units changed: its drawings (in this or another open file) refill."""
+        if prop != "UnitSystem" or self.busy or _state.get("flushing"):
+            return
+        try:
+            import FreeCAD
+
+            if doc.Restoring or not enabled():
+                return
+            for other in FreeCAD.listDocuments().values():
+                if any(True for _p in our_pages(other)):
+                    self._mark(other)
+        except Exception as exc:  # noqa: BLE001
+            import FreeCAD
+
+            FreeCAD.Console.PrintLog(f"BruceWorx drawing: {exc}\n")
 
 
 def _schedule():
@@ -511,16 +627,28 @@ def choose_sheet(settings, sheet=None):
     return ds.DEFAULT_SHEET
 
 
-def new_drawing(part, sheet=None, root=None):
+def new_drawing(part, sheet=None, root=None, doc=None):
     """A page with our template and front, top and right views of ``part`` (third angle unless
-    the vault says first). Returns the page."""
+    the vault says first), on the profile of the part's units: an inch part gets the vault's
+    inch sheet, ASME tolerances and "%.3f" dimensions (PDM-09). ``doc``: the drawing's own
+    document (default the part's); a part in another file is shown through an App::Link there.
+    Returns the page."""
     import FreeCAD
 
     ds = _standards_module()
-    doc = part.Document
+    doc = part.Document if doc is None else doc
     root = vault_root() if root is None else root
-    settings = standards(root)
+    import bruceworx_units
+
+    settings = ds.profile(standards(root), bruceworx_units.document_units(part.Document))
     sheet = choose_sheet(settings, sheet)
+    source = part
+    if doc is not part.Document:
+        if not doc.FileName or not part.Document.FileName:
+            raise ValueError("A drawing in its own file links the model's file: save both documents first.")
+        source = doc.addObject("App::Link", "Model")
+        source.LinkedObject = part
+        source.Label = part.Label
     page = doc.addObject("TechDraw::DrawPage", "Drawing")
     template = doc.addObject("TechDraw::DrawSVGTemplate", "Template")
     template.Template = template_path(sheet)
@@ -529,7 +657,7 @@ def new_drawing(part, sheet=None, root=None):
     group = doc.addObject("TechDraw::DrawProjGroup", "ProjGroup")
     page.addView(group)
     group.ProjectionType = "First angle" if settings.projection == "first" else "Third angle"
-    group.Source = [part]
+    group.Source = [source]
     group.addProjection("Front")
     anchor = group.Anchor
     anchor.Direction = FreeCAD.Vector(0, -1, 0)
@@ -708,16 +836,18 @@ class StandardsEditor:
         form.addRow("Projection", self.projection)
         self.units = combo("units", "Units the title block states.")
         form.addRow("Units", self.units)
-        self.sheet = combo("default_sheet", "The sheet New Drawing uses.")
-        form.addRow("Default sheet", self.sheet)
-        self.mode = combo("tolerance_mode", "General tolerances: by decimal places, an ISO 2768 class, "
-                                            "or per drawing.")
+        self.units.setToolTip("The vault's default: new documents and drawings are made in these units "
+                              "(each document can be switched from the status bar).")
+        self.sheet = combo("default_sheet", "The sheet New Drawing uses for a millimetre model.")
+        form.addRow("Sheet (mm)", self.sheet)
+        self.mode = combo("tolerance_mode", "General tolerances of mm drawings: by decimal places, an ISO 2768 "
+                                            "class, or per drawing. Inch drawings use decimal places (ASME).")
         form.addRow("General tolerances", self.mode)
 
         self.form = form
         self.tols = {}
-        for key, caption in (("tol_1_place", "X.X  ±"), ("tol_2_place", "X.XX  ±"),
-                             ("tol_3_place", "X.XXX  ±"), ("tol_angle", "Angles  ±")):
+        for key, caption in (("tol_1_place", "X.X  ± mm"), ("tol_2_place", "X.XX  ± mm"),
+                             ("tol_3_place", "X.XXX  ± mm"), ("tol_angle", "Angles  ±")):
             edit = QtWidgets.QLineEdit()
             edit.setMaximumWidth(80)
             edit.textEdited.connect(self._edited)
@@ -726,6 +856,16 @@ class StandardsEditor:
             form.addRow(caption, edit)
         self.iso_class = combo("iso2768_class", "ISO 2768 tolerance class.")
         form.addRow("ISO 2768 class", self.iso_class)
+        self.in_sheet = combo("in_default_sheet", "The sheet New Drawing uses for an inch model (ASME).")
+        form.addRow("Sheet (inch)", self.in_sheet)
+        for key, caption in (("in_tol_1_place", "X.X  ± in"), ("in_tol_2_place", "X.XX  ± in"),
+                             ("in_tol_3_place", "X.XXX  ± in"), ("in_tol_angle", "Angles  ± (inch)")):
+            edit = QtWidgets.QLineEdit()
+            edit.setMaximumWidth(80)
+            edit.textEdited.connect(self._edited)
+            edit.setToolTip(ds.DESCRIPTIONS[key])
+            self.tols[key] = edit
+            form.addRow(caption, edit)
         self.finish = QtWidgets.QLineEdit()
         self.finish.setPlaceholderText("No note")
         self.finish.setToolTip(ds.DESCRIPTIONS["surface_finish"])
@@ -777,7 +917,7 @@ class StandardsEditor:
                 self.logo_name, self.logo_source = merged.logo, None
             for key, box in (("standard", self.standard), ("projection", self.projection), ("units", self.units),
                              ("default_sheet", self.sheet), ("tolerance_mode", self.mode),
-                             ("iso2768_class", self.iso_class)):
+                             ("iso2768_class", self.iso_class), ("in_default_sheet", self.in_sheet)):
                 self._set_combo(box, getattr(merged, key))
             for key, edit in self.tols.items():
                 edit.setText(ds.to_text(merged, key))
@@ -796,6 +936,7 @@ class StandardsEditor:
             "projection": self.projection.currentData(),
             "units": self.units.currentData(),
             "default_sheet": self.sheet.currentData(),
+            "in_default_sheet": self.in_sheet.currentData(),
             "tolerance_mode": self.mode.currentData(),
             "iso2768_class": self.iso_class.currentData(),
             "surface_finish": self.finish.text().strip(),
@@ -844,17 +985,19 @@ class StandardsEditor:
     def _refresh(self):
         ds = self.ds
         mode = self.mode.currentData()
-        for edit in self.tols.values():
-            self._row_visible(edit, mode == "decimal")
+        for key, edit in self.tols.items():
+            self._row_visible(edit, mode == "decimal" or key.startswith("in_"))
         self._row_visible(self.iso_class, mode == "iso2768")
         if self.logo_source:
             self.logo_label.setText(os.path.basename(self.logo_source) + " (copied on Save)")
         else:
             self.logo_label.setText(self.logo_name or "None")
         settings, _issues = ds.from_texts(self.texts())
-        lines = [line for line in ds.tolerance_lines(settings) if line]
+        lines = [line for line in ds.tolerance_lines(ds.profile(settings, "mm")) if line]
+        inch = [line for line in ds.tolerance_lines(ds.profile(settings, "in"))[:2] if line]
         self.preview.setText("\n".join(["Title block notes:", ds.standard_note(settings),
-                                          ds.projection_text(settings) + " projection"] + lines))
+                                          ds.projection_text(settings) + " projection", "mm drawings:"] + lines
+                                         + ["inch drawings (ASME):"] + inch))
         problems = [i for i in self.problems() if i.level in ("error", "warning")]
         self.issues.setProperty("level", "error" if any(i.level == "error" for i in problems) else "warning")
         self.issues.setText("\n".join(i.text for i in problems))
