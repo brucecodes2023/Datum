@@ -514,11 +514,18 @@ Nothing changes without a click. Seen in the Nxt add-on (\S\ref{sec:uix-nxt}).
 \emph{Acceptance:} a sketch with a 0.05\,mm gap pads after one click.
 \end{epic}
 
-\begin{epic}{MOD-14}{On-canvas editing}{M5}{\stProg}{(new, from the Nxt add-on review, 23 Oct)}
+\begin{epic}{MOD-14}{On-canvas editing}{M5}{\stDone}{(new, from the Nxt add-on review, 23 Oct)}
 Double-click a face or a feature to edit it in the 3D view: value fields and drag arrows, as Fusion's press-pull.
 Builds on FreeCAD~1.1's interactive draggers (Fillet, Chamfer). \textbf{Plan approved 24 Oct}
-(\S\ref{sec:mod14-plan}); \textbf{paused 24 Oct, half-built}.
+(\S\ref{sec:mod14-plan}); built 24 Oct and paused.
 \emph{Acceptance:} pad length, fillet radius and hole depth edited in the view without the task panel.
+\textbf{Done 25 Oct, switched on.} Two bugs fixed on the way: a double-click on a face did nothing (the view filter
+held a Python wrapper of the view that PySide had already dropped, so the view was never found; it is now found
+again from the viewport), and the arrow's callbacks were never removed (they were unhooked under the wrong kind
+name). The acceptance is the GUI test \code{TestBruceWorxOnCanvas.TestInTheView} on the plan's plate: a real
+double-click on the boss's cap, a drag of the arrow (14 to 19\,mm) and a typed 18\,mm; the fillet radius typed (3\,mm)
+and dragged (4\,mm); the hole depth typed (12\,mm); no task panel opens, each change is one named undo step, and the
+arrow's callbacks are gone when the edit closes.
 \end{epic}
 
 \input{chapters/28-mod14-plan}
