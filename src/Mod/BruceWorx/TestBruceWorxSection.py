@@ -115,6 +115,32 @@ class TestFits(unittest.TestCase):
         self.assertEqual(fits, [("A#Part", "B#Part"), ("C#Part", "D#Part")])
 
 
+class TestHeadless(unittest.TestCase):
+    @unittest.skipIf(App.GuiUp, "headless only")
+    def test_no_view_refresh_is_queued_in_freecadcmd(self):
+        """A QTimer.singleShot queued in FreeCADCmd never runs and crashes the exit (SIGSEGV in
+        PyGILState_Ensure from Shiboken, 25 Oct): making a section headless must queue nothing."""
+        from PySide import QtCore
+
+        calls = []
+        original = QtCore.QTimer.singleShot
+        QtCore.QTimer.singleShot = staticmethod(lambda *a, **k: calls.append(a))
+        doc = App.newDocument("SectionHeadless")
+        try:
+            import Part
+
+            box = doc.addObject("Part::Feature", "Box")
+            box.Shape = Part.makeBox(10, 10, 10)
+            doc.recompute()
+            section = sec.make(doc, "XZ")
+            section.Offset = 2.0
+            doc.recompute()
+            self.assertEqual(calls, [])
+        finally:
+            QtCore.QTimer.singleShot = original
+            App.closeDocument(doc.Name)
+
+
 class TestPasses(unittest.TestCase):
     def setUp(self):
         self.p1 = (V(0, 1, 0), 0.0)

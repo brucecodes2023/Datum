@@ -363,7 +363,9 @@ def views_of(doc):
 
 def schedule(doc):
     """Refresh the views of ``doc`` once the current change is done."""
-    if doc is None:
+    if doc is None or not _app().GuiUp:
+        # FreeCADCmd has no views to refresh, and a QTimer.singleShot queued there is never run: its
+        # Python callable is released after Python has finalised (SIGSEGV at exit, 25 Oct).
         return
     pending = _state["pending"]
     if doc.Name in pending:
