@@ -7,7 +7,7 @@ with and without its encoder. Fusion calls them configurations (a table of rows 
 suppression and properties); SolidWorks has configurations and design tables, and each configuration can
 carry its own part number. This chapter was written on 25 Oct and building started the same evening, on
 your instruction to build on my recommendations; decisions are marked \emph{Decided} with the reason, and
-the open ones are in section~8.
+the open ones are in section~9.
 
 %----------------------------------------------------------------------
 \subsubsection*{1. What FreeCAD 1.1 already has}
@@ -86,7 +86,7 @@ is the row $c_j=(\mathbf p_j,\mathbf s_j,\pi_j)$ and the model is $M(\mathbf p_j
 makes the active row a function $r(e)$ of the enumeration index $e$, $r(e)=e+4$, so a switch is one property
 write and one recompute; nothing is copied inside the part file. A link with its own configuration holds a
 copy $M(\mathbf p_k,\mathbf s_k)$ in the assembly file, so an assembly that uses $m$ distinct configurations
-of a part holds at most $m$ copies when links of the same row share one (section~8, question~2); today each
+of a part holds at most $m$ copies when links of the same row share one (section~9, question~2); today each
 configured link has its own, and a link array shares one for all its elements.
 
 \paragraph{Parameters.} \textbf{Decided:} configuring a user parameter keeps its row in the Parameters sheet
@@ -174,7 +174,81 @@ right P/Ns and quantities 1, 1, 2; \emph{Check All} is clean; both files open in
 the same shapes.
 
 %----------------------------------------------------------------------
-\subsubsection*{8. Build order and questions}
+\subsubsection*{8. As built (25 Oct)}
+
+Built as planned in four commits, then one fix the acceptance run found. Code (in
+\file{src/Mod/BruceWorx/}): \file{bruceworx\_configs.py} (engine, no GUI),
+\file{bruceworx\_configs\_gui.py} (table window, Parameters bar, drop-downs, vault hook),
+small hooks in \file{bruceworx\_parameters.py}, \file{bruceworx\_inspector.py},
+\file{bruceworx\_bom.py} and \file{bruceworx\_vaultclient.py}; in the vault engine
+\code{Vault.add\_configuration} (journal op, contract row T14, OpenAPI path) and
+\code{freecad\_io.set\_part\_number}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.49\linewidth]{fig/mod03_frame.png}\hfill
+\includegraphics[width=0.49\linewidth]{fig/mod03_table.png}\\[4pt]
+\includegraphics[width=0.40\linewidth]{fig/mod03_inspector.png}
+\caption{The acceptance run on a copy of the Vector vault. Left: the frame \code{LE-02-01003-001} with one
+Short (boss suppressed), one Standard and two Long instances of the one bracket file
+\code{LE-01-01017-001}. Right: its Configuration Table (Long has no number of its own, so it shows the
+file's P/N in grey italic). Below: the Properties tab of an instance, with its Configuration drop-down.}
+\label{fig:mod03-built}
+\end{figure}
+
+\paragraph{Decided while building.}
+\begin{itemize}
+  \item \textbf{Configuration numbers are dash numbers.} \emph{Assign Number} takes the next sub-number under
+        the file's parent drawing (\code{LE-01-01017-001} $\rightarrow$ \code{-002}, \code{-003}), reserved in
+        the vault's numbering. \emph{Reason:} the family reads as one in the vault and on drawings, the way
+        SolidWorks tabulated drawings use \code{-001}, \code{-002}.
+  \item \textbf{Configuration items have their own revision views.} They show the file item's revisions
+        (same code, state and history) through a view per revision, because the BOM graph keys revisions by
+        identity and two items sharing one object merged their quantities. A configuration item cannot be
+        checked out or in; its versions are the file's.
+  \item \textbf{Copies are never the assembly's own.} An instance's copy brings the part's
+        \code{Configurations} and \code{Parameters} sheets into the assembly; the table, the main object,
+        the Parameters tab and the model parameter list skip anything in a \code{CopyOnChangeGroup}, and
+        expressions name the assembly's own sheet by its object name (\code{Configurations001} when a copy
+        took the name first).
+  \item \textbf{An empty text cell is \code{=<<>>}.} A lone quote leaves the cell without a value, and an
+        alias on it fails (an assembly without a P/N had a broken table until this).
+  \item \textbf{Settle the copies.} When the part changes, FreeCAD (stock 1.1.4 too) copies a
+        \emph{Tracking} instance again and shows the part's active row until the next recompute;
+        \code{settle\_copies} recomputes while a copy is left touched (after a switch, after picking a row,
+        after every recompute, before the BOM walk). In stock FreeCAD a second recompute does the same.
+\end{itemize}
+
+\paragraph{Tests and results.}
+\begin{itemize}
+  \item \code{TestBruceWorxConfigs} (FreeCADCmd, 18 tests): table layout and the native binding, switching
+        (heights 50 / 86 / 126\,mm, P/Ns per row, boss suppressed in Short), parameter, dimension,
+        suppression and instance columns coming and going, rows added, renamed and removed, Check All
+        finding a pad of length 0 in one row, CSV round trip, save and reopen, four instances keeping
+        their rows across a part change and a reopen, an assembly table driving an instance, component
+        suppression (hidden, joint off, not a BOM line), dash numbers and configuration items in a scratch
+        vault, the BOM walk (one line per configuration).
+  \item Vault engine: 470 tests pass, with T14 run against the model and the folder vault and a replay test.
+  \item GUI: the Parameters bar lists and switches the rows (one undo step each), the table edits a length
+        and a suppression, Check All reports ``All 3 configurations build'', and the instance drop-down sets
+        rows.
+  \item \textbf{Acceptance} (GUI, vault copy): New Part in Vault, three rows, \emph{Assign Number} twice,
+        check-in added configuration items \code{-002} (Short) and \code{-003} (Standard); the frame's
+        check-in recorded the BOM \code{-002}\,$\times$1, \code{-003}\,$\times$1, \code{-001}\,$\times$2 with no
+        missing lines; Check All clean; \emph{Open from Vault} on \code{-002} opened the bracket in Short.
+        Volumes 10\,000 / 16\,216 / 24\,216\,mm$^3$.
+  \item \textbf{Stock FreeCAD 1.1.4} (\file{/Applications/FreeCAD.app}): both files open with no invalid
+        objects; the four instances show Short, Standard, Long, Long with their P/Ns; the part's
+        \code{Configuration} property switches it with the same volumes and P/Ns.
+\end{itemize}
+
+\paragraph{Not built yet.} The Browser does not show an instance's row after its name (the Properties tab
+does); the Properties tab names an instance's part by its copy's label (\emph{Bracket001}); a configured
+parameter in the Parameters tab shows its expression \code{Configurations.length} rather than a
+``per configuration'' mark (its value edits go to the active row).
+
+%----------------------------------------------------------------------
+\subsubsection*{9. Build order and questions}
 
 Pieces, each tested and committed: (1) this plan; (2) the engine \file{bruceworx\_configs.py} (table,
 rows, columns, apply, Check All, instances), tested headless; (3) BOM keys and configuration items in the
