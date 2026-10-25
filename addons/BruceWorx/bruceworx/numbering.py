@@ -24,9 +24,9 @@ import re
 PN_FORMAT = "{PROG}-{DT}-{PPPPP}-{SSS}"
 LEGACY_FORMAT = "{PROG}-{DT}-{PPPPP}-{SSS}-{REV}"
 FORMATS = (PN_FORMAT, LEGACY_FORMAT)
-# The form numbering files declared before BW-PDM-03, and the one vault_setup
-# still writes; files in it issue P/N-REV until migrated.
-PART_NUMBER_FORMAT = LEGACY_FORMAT
+# The form new vaults write (vault_setup, since 25 Oct 2026, FND-08): the P/N without revision.
+# Files declaring LEGACY_FORMAT issue P/N-REV until migrated.
+PART_NUMBER_FORMAT = PN_FORMAT
 PARENT_WIDTH = 5
 SUB_WIDTH = 3
 DEFAULT_NEXT_PARENT = 1001

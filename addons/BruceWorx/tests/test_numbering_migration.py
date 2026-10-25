@@ -236,11 +236,11 @@ class VaultTests(unittest.TestCase):
         vs.create_vault(setup, actor="a")
         self.path = vs.numbering_path(self.root)
 
-    def test_wizard_vault_migrates_and_vault_settings_still_save(self):
+    def test_wizard_vault_is_born_migrated_and_vault_settings_still_save(self):
+        # FND-08: the wizard writes the P/N form, so there is nothing to migrate.
         source = JsonNumberSource(self.path)
-        legacy = source.allocate("LE", "01")
-        self.assertEqual(legacy, "LE-01-01001-001-A")
-        migrate_numbering_file(self.path)
+        self.assertEqual(source.allocate("LE", "01"), "LE-01-01001-001")
+        self.assertFalse(migrate_numbering_file(self.path)["changed"])
         source = JsonNumberSource(self.path)
         self.assertEqual(source.allocate("LE", "01"), "LE-01-01002-001")
         settings = vs.load_settings(self.root)

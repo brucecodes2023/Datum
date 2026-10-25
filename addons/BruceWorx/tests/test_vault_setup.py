@@ -165,8 +165,8 @@ class NumberingTests(unittest.TestCase):
     def test_defaults_are_valid(self):
         setup = vs.NumberingSetup()
         self.assertEqual(vs.validate_numbering(setup), [])
-        self.assertEqual(vs.example_number(setup), "BW-01-01001-001-A")
-        self.assertEqual(vs.example_number(setup, "le", "03"), "LE-03-01001-001-A")
+        self.assertEqual(vs.example_number(setup), "BW-01-01001-001")
+        self.assertEqual(vs.example_number(setup, "le", "03"), "LE-03-01001-001")
 
     def test_errors(self):
         def errors(**kwargs):
@@ -186,11 +186,9 @@ class NumberingTests(unittest.TestCase):
         errors(first_parent=100000)
         errors(first_parent=True)
         errors(first_parent="1001")
-        errors(first_revision="1")
-        errors(first_revision="ABCD")
         self.assertEqual(errors(programs=[], document_types={}), 2)
         with self.assertRaises(ValueError):
-            vs.example_number(vs.NumberingSetup(first_revision="1"))
+            vs.example_number(vs.NumberingSetup(first_parent=100000))
 
 
 class PropertyTests(unittest.TestCase):
@@ -227,7 +225,6 @@ class CreateTests(_Tmp):
                 programs=[vs.ProgramSetup("bw", "BruceWorx"), vs.ProgramSetup("LE")],
                 document_types={"01": "Part", "02": "Assembly"},
                 first_parent=2001,
-                first_revision="b",
             ),
             properties=vs.suggested_properties(),
         )
@@ -240,13 +237,17 @@ class CreateTests(_Tmp):
         self.assertEqual(data["document_types_file"], "document_types.json")
         self.assertEqual(data["programs"]["BW"]["description"], "BruceWorx")
         self.assertEqual(data["programs"]["LE"]["counters"]["02"], {"next_parent": 2001, "parents": {}})
+        # FND-08: a new vault numbers without revision (01, 02, ... then A belong to the item).
+        self.assertEqual(data["format"], "{PROG}-{DT}-{PPPPP}-{SSS}")
+        self.assertNotIn("revision", data["programs"]["LE"])
+        self.assertNotIn("first_revision", data)
         with open(self.path("vault", "document_types.json"), encoding="utf-8") as handle:
             self.assertEqual(json.load(handle), {"types": {"01": {"name": "Part"}, "02": {"name": "Assembly"}}})
         source = JsonNumberSource(vs.numbering_path(vault.root))
         self.assertEqual(source.programs(), ["BW", "LE"])
         self.assertEqual(source.document_types(), ["01", "02"])
-        self.assertEqual(source.allocate("BW", "02"), "BW-02-02001-001-B")
-        self.assertEqual(source.allocate("BW", "02"), "BW-02-02002-001-B")
+        self.assertEqual(source.allocate("BW", "02"), "BW-02-02001-001")
+        self.assertEqual(source.allocate("BW", "02"), "BW-02-02002-001")
         # The vault's properties are the schema's vault layer.
         self.assertEqual(partprops.vault_layers(vault.root), [self.path("vault", "part_properties.json")])
         schema = partprops.load_schema(extra_layers=partprops.vault_layers(vault.ref_path), user_layer=False)
@@ -392,11 +393,11 @@ class ImportTests(_Tmp):
         vs.plan_numbers(candidates, self.vault.root, "bw")
         found = self.by_name(candidates)
         # New parents come after the kept number's parent (01003).
-        self.assertEqual(found["bracket.FCStd"].proposed_part_number, "BW-01-01004-001-A")
-        self.assertEqual(found["odd.FCStd"].proposed_part_number, "BW-01-01005-001-A")
+        self.assertEqual(found["bracket.FCStd"].proposed_part_number, "BW-01-01004-001")
+        self.assertEqual(found["odd.FCStd"].proposed_part_number, "BW-01-01005-001")
         self.assertEqual(found["plate.FCStd"].proposed_part_number, "BW-01-01003-002")
-        self.assertEqual(found["frame.FCStd"].proposed_part_number, "BW-02-01001-001-A")
-        self.assertEqual(found["bracket-dwg.FCStd"].proposed_part_number, "BW-03-01001-001-A")
+        self.assertEqual(found["frame.FCStd"].proposed_part_number, "BW-02-01001-001")
+        self.assertEqual(found["bracket-dwg.FCStd"].proposed_part_number, "BW-03-01001-001")
         self.assertEqual(found["orphan-dwg.FCStd"].proposed_part_number, "")
         self.assertIn("skipped", found["orphan-dwg.FCStd"].issues[0].text)
         self.assertEqual(digest(numbering_file), before)
@@ -509,16 +510,16 @@ class CliTests(_Tmp):
         code, result = self.run_cli(
             "vault", "init", "--vault", self.path("v"), "--name", "Shop", "--actor", "a",
             "--program", "LE,BW", "--document-types", "01=Part,02=Assembly", "--first-parent", "500",
-            "--first-revision", "C", "--properties-file", props)
+            "--properties-file", props)
         self.assertEqual(code, 0)
-        self.assertEqual(result["example"], "LE-01-00500-001-C")
+        self.assertEqual(result["example"], "LE-01-00500-001")
         self.assertTrue(os.path.isfile(self.path("v", "part_properties.json")))
         make_fcstd(self.path("old", "a.FCStd"), PART_OBJECTS)
         before = digest(self.path("v", "numbering.json"))
         code, result = self.run_cli("vault", "import", "--vault", self.path("v"), "--from", self.path("old"),
                                     "--program", "LE", "--dry-run", "--actor", "a")
         self.assertEqual(code, 0)
-        self.assertEqual(result["candidates"][0]["proposed_part_number"], "LE-01-00500-001-C")
+        self.assertEqual(result["candidates"][0]["proposed_part_number"], "LE-01-00500-001")
         self.assertEqual(digest(self.path("v", "numbering.json")), before)
         code, result = self.run_cli("vault", "import", "--vault", self.path("v"), "--from", self.path("old"),
                                     "--program", "LE", "--actor", "a")

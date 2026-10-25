@@ -131,7 +131,7 @@ class CsvTests(unittest.TestCase):
 
     def test_wizard_setup_round_trip(self):
         numbering = vs.NumberingSetup(programs=[vs.ProgramSetup("bw", "B")], document_types={"1": "Part"},
-                                      first_parent=500, first_revision="C")
+                                      first_parent=500)
         settings = vs.settings_from_setup(numbering, vs.suggested_properties())
         self.assertEqual(settings.document_types, {"01": "Part"})
         parsed, issues = vs.parse_csv(vs.csv_template(settings))
@@ -140,7 +140,6 @@ class CsvTests(unittest.TestCase):
         parsed.programs.append(vs.ProgramSetup("LE"))
         setup, props = vs.apply_to_setup(parsed, numbering)
         self.assertEqual(setup.first_parent, 500)
-        self.assertEqual(setup.first_revision, "C")
         self.assertEqual([p.code for p in setup.programs], ["BW"])  # retired rows are left out
         self.assertEqual(vs.validate_numbering(setup), [])
         self.assertEqual([p["name"] for p in props], [p["name"] for p in vs.suggested_properties()])
@@ -204,12 +203,12 @@ class SettingsTests(_Vault):
         self.assertEqual(data["programs"]["BW"]["counters"]["01"]["next_parent"], 2002)
         self.assertEqual(data["programs"]["BW"]["description"], "BruceWorx Inc")
         self.assertEqual(data["programs"]["BW"]["counters"]["03"], {"next_parent": 2001, "parents": {}})
-        self.assertEqual(data["programs"]["NX"]["revision"], "A")
+        self.assertNotIn("revision", data["programs"]["NX"])  # P/N form: no revision in the number
         self.assertEqual(sorted(data["programs"]["NX"]["counters"]), ["01", "02", "03"])
         self.assertEqual(self.source.programs(), ["BW", "LE", "NX"])
         self.assertEqual(self.source.document_types(), ["01", "02", "03"])
-        self.assertEqual(self.source.allocate("BW", "01"), "BW-01-02002-001-A")
-        self.assertEqual(self.source.allocate("NX", "03"), "NX-03-02001-001-A")
+        self.assertEqual(self.source.allocate("BW", "01"), "BW-01-02002-001")
+        self.assertEqual(self.source.allocate("NX", "03"), "NX-03-02001-001")
         schema = partprops.load_schema(extra_layers=partprops.vault_layers(self.root), user_layer=False)
         self.assertIn("Coats", schema.properties)
         self.assertEqual(vs.load_settings(self.root), settings)
@@ -250,7 +249,7 @@ class SettingsTests(_Vault):
 
     def test_retire_hides_but_existing_numbers_still_allocate(self):
         first = self.source.allocate("LE", "02")
-        self.assertEqual(first, "LE-02-02001-001-A")
+        self.assertEqual(first, "LE-02-02001-001")
         settings = vs.load_settings(self.root)
         settings.retired["program"].add("LE")
         settings.retired["document_type"].add("02")
@@ -269,8 +268,8 @@ class SettingsTests(_Vault):
         self.assertEqual(macro.sole_document_type(self.source), "01")
         self.assertEqual(vs._vault_document_types(self.source, self.source._load()), {"01": "Part"})
         # Numbers under existing parents (and explicit codes) still allocate.
-        self.assertEqual(self.source.allocate("LE", "02", parent="02001"), "LE-02-02001-002-A")
-        self.assertEqual(self.source.allocate("LE", "02"), "LE-02-02002-001-A")
+        self.assertEqual(self.source.allocate("LE", "02", parent="02001"), "LE-02-02001-002")
+        self.assertEqual(self.source.allocate("LE", "02"), "LE-02-02002-001")
         # A retired property leaves the schema (new parts do not get it) but stays in the file.
         layer = self.layer()
         self.assertEqual([e["name"] for e in layer["retired_properties"]], ["HeatTreatment"])
@@ -321,7 +320,7 @@ class SettingsTests(_Vault):
         vs.save_settings(self.root, settings)
         self.assertNotIn("NX", vs.used_codes(self.root)["program"])
         number = JsonNumberSource(vs.numbering_path(self.root)).allocate("NX", "04")
-        self.assertEqual(number, "NX-04-02001-001-A")
+        self.assertEqual(number, "NX-04-02001-001")
         used = vs.used_codes(self.root)
         self.assertIn("NX", used["program"])
         self.assertIn("04", used["document_type"])
@@ -333,7 +332,7 @@ class SettingsTests(_Vault):
         settings, _issues = vs.parse_csv(vs.csv_template())
         vs.save_settings(bare.root, settings)
         source = JsonNumberSource(vs.numbering_path(bare.root))
-        self.assertEqual(source.allocate("BW", "03"), "BW-03-01001-001-A")
+        self.assertEqual(source.allocate("BW", "03"), "BW-03-01001-001")
         self.assertEqual(vs.load_settings(bare.root), settings)
         self.assertTrue(partprops.vault_layers(bare.root))
 

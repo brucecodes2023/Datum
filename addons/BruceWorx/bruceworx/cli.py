@@ -131,7 +131,6 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--program", default="", help="init: program codes, e.g. BW,LE; import: the program")
     vault.add_argument("--document-types", default="", help='init: e.g. "01=Part,02=Assembly,03=Drawing"')
     vault.add_argument("--first-parent", type=int, default=None, help="init: first PPPPP (default 1001)")
-    vault.add_argument("--first-revision", default="", help="init: revision in new numbers (default A)")
     vault.add_argument("--properties-file", default="", help="init: company part properties (JSON list or layer)")
     vault.add_argument("--from", dest="source_folder", default="", help="import: folder of .FCStd files")
     vault.add_argument("--dry-run", action="store_true",
@@ -459,8 +458,7 @@ def _vault_review(vault, args, payload):
 
 
 def _has_setup_options(args) -> bool:
-    return bool(args.program or args.document_types or args.first_parent is not None
-                or args.first_revision or args.properties_file)
+    return bool(args.program or args.document_types or args.first_parent is not None or args.properties_file)
 
 
 def _vault_setup(args, name: str):
@@ -481,8 +479,6 @@ def _vault_setup(args, name: str):
         numbering.document_types = types
     if args.first_parent is not None:
         numbering.first_parent = args.first_parent
-    if args.first_revision:
-        numbering.first_revision = args.first_revision
     properties = []
     if args.properties_file:
         with open(args.properties_file, encoding="utf-8") as handle:

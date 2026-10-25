@@ -10,7 +10,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bruceworx.numbering import (  # noqa: E402
+    LEGACY_FORMAT,
     PART_NUMBER_FORMAT,
+    PN_FORMAT,
     assign_part_numbers,
     format_part_number,
     parse_part_number,
@@ -28,7 +30,7 @@ def _write(directory, next_parent=1001):
         json.dump(
             {
                 "source": "json",
-                "format": PART_NUMBER_FORMAT,
+                "format": LEGACY_FORMAT,
                 "document_types": {
                     "01": {"placeholder": True, "name": "PLACEHOLDER"},
                     "02": {"placeholder": True, "name": "PLACEHOLDER"},
@@ -90,7 +92,10 @@ class FormatTests(unittest.TestCase):
             parse_part_number("LE-01001-A")
 
     def test_format_constant(self):
-        self.assertEqual(PART_NUMBER_FORMAT, "{PROG}-{DT}-{PPPPP}-{SSS}-{REV}")
+        # New vaults write the P/N without revision (FND-08); older files declare the legacy form.
+        self.assertEqual(PART_NUMBER_FORMAT, PN_FORMAT)
+        self.assertEqual(PN_FORMAT, "{PROG}-{DT}-{PPPPP}-{SSS}")
+        self.assertEqual(LEGACY_FORMAT, "{PROG}-{DT}-{PPPPP}-{SSS}-{REV}")
 
 
 class AssignTests(unittest.TestCase):

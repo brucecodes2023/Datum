@@ -10,7 +10,7 @@ What a new vault holds besides pdm_folder's ref file, objects/ and journal/::
 
     <folder>/
       numbering.json         the vault's part-number counters (sources.JsonNumberSource
-                             format: PROG-DT-PPPPP-SSS-REV, fixed form)
+                             format: PROG-DT-PPPPP-SSS, fixed form, no revision)
       document_types.json    the document-type codes and names chosen in the wizard
       part_properties.json   the company layer of the part-property schema
                              (partprops.load_schema reads it as the vault layer)
@@ -35,11 +35,13 @@ Steps, in wizard order:
    :func:`check_settings_change` and :func:`save_settings` (rows are added,
    renamed or retired, never deleted, and codes never change).
 
-Part numbers and revisions: the numbering file issues the full fixed form
-``PROG-DT-PPPPP-SSS-REV`` (what :func:`example_number` and
-``ImportCandidate.proposed_part_number`` show). The vault keys items by the
-number without its revision (``pdm.strip_revision``; pdm.py: "the part number
-never contains the revision") and starts each item at pre-release ``01``.
+Part numbers and revisions: a new vault's numbering file issues the P/N
+``PROG-DT-PPPPP-SSS`` without revision (what :func:`example_number` and
+``ImportCandidate.proposed_part_number`` show; BW-PDM-03, FND-08). The revision
+is the item's: pre-release ``01``, ``02``, ... then ``A`` at the first release.
+An older vault whose numbering file still declares ``-REV`` issues ``P/N-REV``
+until migrated (``sources.migrate_numbering_file``); the vault keys items by the
+number without it (``pdm.strip_revision``).
 ``ImportReport.imported`` and the ``PartNumber`` property hold that vault
 number.
 """
@@ -66,7 +68,8 @@ from bruceworx import numbering, pdm
 DEFAULT_DOCUMENT_TYPES = {"01": "Part", "02": "Assembly", "03": "Drawing"}
 DEFAULT_PROGRAM = "BW"
 DEFAULT_FIRST_PARENT = 1001
-DEFAULT_FIRST_REVISION = "A"
+# The revision an older numbering file (P/N-REV form) gives a program Vault Settings adds.
+LEGACY_FIRST_REVISION = "A"
 VAULT_PARENT_NAME = "BruceWorx Vaults"
 NUMBERING_FILE = "numbering.json"
 DOCUMENT_TYPES_FILE = "document_types.json"
@@ -111,7 +114,6 @@ class NumberingSetup:
     programs: list = field(default_factory=lambda: [ProgramSetup(DEFAULT_PROGRAM)])
     document_types: dict = field(default_factory=lambda: dict(DEFAULT_DOCUMENT_TYPES))
     first_parent: int = DEFAULT_FIRST_PARENT
-    first_revision: str = DEFAULT_FIRST_REVISION
 
 
 @dataclass
@@ -130,7 +132,7 @@ class ImportCandidate:
     kind: str  # "part", "assembly" or "drawing"
     label: str = ""
     existing_part_number: str = ""  # PartNumber found in the file, as written (may be invalid)
-    proposed_part_number: str = ""  # PROG-DT-PPPPP-SSS-REV, or the kept existing number
+    proposed_part_number: str = ""  # PROG-DT-PPPPP-SSS, or the kept existing number
     document_type: str = ""
     include: bool = True
     issues: list = field(default_factory=list)  # [Issue]
@@ -318,15 +320,11 @@ def validate_numbering(setup: NumberingSetup) -> list:
     first = setup.first_parent
     if isinstance(first, bool) or not isinstance(first, int) or not 1 <= first <= 99999:
         issues.append(Issue("error", f"First parent number {first!r} must be 1..99999 (PPPPP)."))
-    try:
-        numbering.normalize_revision(setup.first_revision)
-    except ValueError as exc:
-        issues.append(Issue("error", f"First revision: {exc}."))
     return issues
 
 
 def example_number(setup: NumberingSetup, program: str | None = None, document_type: str | None = None) -> str:
-    """The first part number the vault would give, e.g. "BW-01-01001-001-A".
+    """The first part number the vault would give, e.g. "BW-01-01001-001" (no revision).
 
     Defaults: the first program and the first document type. Raises
     ValueError when the setup is invalid.
@@ -340,19 +338,17 @@ def example_number(setup: NumberingSetup, program: str | None = None, document_t
         if not codes:
             raise ValueError("no document type")
         document_type = codes[0]
-    return numbering.format_part_number(program, document_type, setup.first_parent, 1, setup.first_revision)
+    return numbering.format_part_number(program, document_type, setup.first_parent, 1)
 
 
 def numbering_data(setup: NumberingSetup) -> dict:
-    """numbering.json content: every program x document type starts at first_parent."""
-    revision = numbering.normalize_revision(setup.first_revision)
+    """numbering.json content: every program x document type starts at first_parent; P/Ns carry no revision."""
     codes = sorted(numbering.normalize_document_type(code) for code in setup.document_types)
     programs = {}
     for program in setup.programs:
         code = numbering.normalize_program(getattr(program, "code", program))
         programs[code] = {
             "description": getattr(program, "description", "") or "",
-            "revision": revision,
             "counters": {dt: {"next_parent": int(setup.first_parent), "parents": {}} for dt in codes},
         }
     return {
@@ -361,7 +357,6 @@ def numbering_data(setup: NumberingSetup) -> dict:
         "document_types_file": DOCUMENT_TYPES_FILE,
         # Where counters added later by Vault Settings start (sources.py ignores these).
         "first_parent": int(setup.first_parent),
-        "first_revision": revision,
         "programs": programs,
     }
 
@@ -1364,7 +1359,7 @@ def _normal(table: str, code) -> str:
 
 
 def apply_to_setup(settings: VaultSettings, numbering: NumberingSetup) -> tuple:
-    """(NumberingSetup, properties) with settings' tables put into the wizard's setup (first_parent/revision kept).
+    """(NumberingSetup, properties) with settings' tables put into the wizard's setup (first_parent kept).
 
     A new vault has nothing to retire: retired rows are left out.
     """
@@ -1375,8 +1370,7 @@ def apply_to_setup(settings: VaultSettings, numbering: NumberingSetup) -> tuple:
              if code not in _retired_of(settings, "document_type")}
     properties = [dict(entry) for entry in settings.properties
                   if entry.get("name") not in _retired_of(settings, "property")]
-    setup = NumberingSetup(programs=programs, document_types=types,
-                           first_parent=numbering.first_parent, first_revision=numbering.first_revision)
+    setup = NumberingSetup(programs=programs, document_types=types, first_parent=numbering.first_parent)
     return setup, properties
 
 
@@ -1696,8 +1690,9 @@ def save_settings(vault_root: str, new: VaultSettings) -> None:
 
     Raises ValueError (nothing written) when :func:`check_settings_change`
     finds an error. New counters start at the vault's first parent (recorded
-    as ``first_parent`` in numbering.json); a new program takes the vault's
-    first revision. A vault without numbering gets its numbering files.
+    as ``first_parent`` in numbering.json). In an older numbering file (P/N-REV
+    form) a new program takes the revision the others have. A vault without
+    numbering gets its numbering files, in the P/N form.
     """
     root = root_of(vault_root)
     problems = _errors(settings_change_issues(root, new))
@@ -1711,12 +1706,15 @@ def save_settings(vault_root: str, new: VaultSettings) -> None:
     data = _numbering_raw(root)
     if data is None:
         data = {"source": "json", "format": numbering.PART_NUMBER_FORMAT, "document_types_file": DOCUMENT_TYPES_FILE,
-                "first_parent": DEFAULT_FIRST_PARENT, "first_revision": DEFAULT_FIRST_REVISION, "programs": {}}
+                "first_parent": DEFAULT_FIRST_PARENT, "programs": {}}
     data.setdefault("first_parent", first_parent_of(data))
     programs = data.setdefault("programs", {})
-    revisions = [e.get("revision") for e in programs.values() if isinstance(e, dict) and e.get("revision")]
-    data.setdefault("first_revision", revisions[0] if revisions else DEFAULT_FIRST_REVISION)
-    first, revision = int(data["first_parent"]), numbering.normalize_revision(data["first_revision"])
+    first = int(data["first_parent"])
+    revision = None  # only an older P/N-REV file gives its programs a revision
+    if data.get("format", numbering.LEGACY_FORMAT) == numbering.LEGACY_FORMAT:
+        revisions = [e.get("revision") for e in programs.values() if isinstance(e, dict) and e.get("revision")]
+        revision = numbering.normalize_revision(data.get("first_revision") or (revisions[0] if revisions
+                                                                                else LEGACY_FIRST_REVISION))
 
     # Programs, and a counter for every program x document type that has none.
     retired = {t: {_normal(t, c) for c in _retired_of(new, t)} for t in CSV_TABLES}
@@ -1726,7 +1724,9 @@ def save_settings(vault_root: str, new: VaultSettings) -> None:
         key = next((k for k in programs if str(k).upper() == code), None)
         if key is None:
             key = code
-            programs[key] = {"description": "", "revision": revision, "counters": {}}
+            programs[key] = {"description": "", "counters": {}}
+            if revision is not None:
+                programs[key]["revision"] = revision
         entry = programs[key]
         entry["description"] = program.description or ""
         _mark(entry, code in retired["program"])

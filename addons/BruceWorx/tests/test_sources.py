@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bruceworx.config_path import example_config_path, resolve_config_path  # noqa: E402
-from bruceworx.numbering import PART_NUMBER_FORMAT  # noqa: E402
+from bruceworx.numbering import LEGACY_FORMAT  # noqa: E402
 from bruceworx.sources import (  # noqa: E402
     JsonNumberSource,
     NumberSource,
@@ -41,7 +41,7 @@ def _programs():
 def _write(path, programs=None, **extra):
     payload = {
         "source": "json",
-        "format": PART_NUMBER_FORMAT,
+        "format": LEGACY_FORMAT,  # these test the P/N-REV issuing of older files
         "document_types": _types(),
         "programs": programs or _programs(),
     }
