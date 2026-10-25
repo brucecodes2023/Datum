@@ -75,3 +75,12 @@ environment, not into KiCad or the system Python. Until then the KiCad tools are
 \file{.mcp.json}; 3 modelling tools; 4 vault tools (on \file{pdm\_workspace.py}); 5 KiCad file tools; 6 KiCad
 live tools (after your OK). Tests: the protocol and every tool against a headless FreeCAD, plus one live session
 on a config copy. \emph{Acceptance} (as the epic): an agent creates, queries and exports a part headless.
+
+\paragraph{Built, and a fix (24 Oct).} Steps 1--6 are built: the bridge with the session prompt, chip and log, the
+MCP server with its headless fallback, \file{.mcp.json}, and the modelling, vault and KiCad tools (the live KiCad
+tools say so while KiCad's API is off). \emph{Fix, 24 Oct:} a test FreeCAD sharing your app-data folder overwrote your window's
+\file{bridge.json} and then deleted it when it quit, which cut Claude Code off from your window. Now a FreeCAD never
+takes the bridge of another window that is still running (\code{held\_by\_other} checks the recorded process; the
+second window logs that it is not reachable), and agent test runs get their own state folder through
+\code{BW\_BRIDGE\_DIR}. The bridge is in daily use: the Leonardo actuator (\S\ref{sec:pdm07-plan}) is being modelled
+through it in your own window.

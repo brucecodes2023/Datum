@@ -195,6 +195,10 @@ components; \emph{Compute} only for features.}
   \item \textbf{Derive}: bring selected bodies, sketches or parameters from another file in as a linked,
         read-only reference, like SolidWorks' Insert Part or Fusion's Derive.
 \end{itemize}
+\textbf{Decided 24 Oct:} one spreadsheet \emph{Parameters} at the root of the top-assembly file holds every
+dimension and spec, with a \emph{Used in} column naming the part or drawing each value drives; every part's
+dimensions are expressions on it, so changing the sheet updates the model. The design worksheet (\eref{MOD-15})
+reads and writes the same sheet.
 \emph{Acceptance:} changing a skeleton dimension updates three linked part files in one recompute.
 \end{epic}
 
@@ -315,7 +319,8 @@ where the printed geometry is the thread.
 Bundle the SheetMetal add-on (decided; LGPL-2.1-or-later since v0.4.00) and add per-material, per-thickness
 \textbf{rules} (bend radius, K-factor, relief) as a library, like Fusion's sheet-metal rules. Flats and
 DXF are covered in \eref{MFG-03}, and the drawing in \eref{DRW-07}.
-\textbf{Plan approved 24 Oct, building} (\S\ref{sec:mod06-plan}).
+\textbf{Plan approved 24 Oct} (\S\ref{sec:mod06-plan}); \textbf{paused 24 Oct, half-built} (the add-on is vendored;
+\code{BUILD\_BW\_SHEETMETAL=OFF}).
 \emph{Acceptance:} the bracket in Figure~\ref{fig:sheet} unfolds to the length given by the bend-allowance
 formula within 0.01\,mm.
 \end{epic}
@@ -346,7 +351,7 @@ why the rules table matters more than the unfold algorithm.
 \subsection{BW-MOD-07 --- Frames and weldments}
 %----------------------------------------------------------------------
 
-\begin{epic}{MOD-07}{Frames \& weldments}{M3}{\stProg}{(new)}
+\begin{epic}{MOD-07}{Frames \& weldments}{M3}{\stTodo}{(new)}
 Structural members swept along 3D-sketch edges from a \textbf{profile library}: 2020/2040 aluminium
 extrusion, square and round tube, angle, flat bar. Each joint gets an \textbf{end treatment} (mitre, butt
 one or the other, cope), and \textbf{trim/extend} works against other members. The \textbf{cut list} groups
@@ -354,7 +359,7 @@ identical members and gives stock length, angles and quantity. Each member is a 
 a separate part file. Wood framing belongs here too: dimensional lumber profiles ($2\times4$, $2\times6$, \ldots)
 with a cut list by board foot. Reference (23 Oct): LumberCAD, a beta tool for dimensional-lumber builds with a
 catalogue of over 100 components, aimed at people who do not use CAD.
-\textbf{Plan approved 24 Oct, building} (FrameForge plus a BruceWorx layer, \S\ref{sec:mod07-plan}).
+\textbf{Plan approved 24 Oct} (FrameForge plus a BruceWorx layer, \S\ref{sec:mod07-plan}); not started.
 \emph{Acceptance:} the frame in Figure~\ref{fig:frame} produces the cut list below.
 \end{epic}
 
@@ -462,7 +467,7 @@ the search repeats. Deviation is reported as the RMS and maximum point-to-surfac
 
 \begin{epic}{MOD-11}{Inspect tools}{M1}{\stTodo}{FCB-P2R-07, (new)}
 Measure (exists), \textbf{mass, centre of gravity and inertia} (extends \code{MeasureCOM}), \textbf{section
-analysis} that stays in the model, \textbf{curvature/zebra} (shared with \eref{MOD-08}), \textbf{draft
+analysis} that stays in the model (now its own epic, \eref{MOD-16}), \textbf{curvature/zebra} (shared with \eref{MOD-08}), \textbf{draft
 analysis}, a \textbf{3D-print overhang map} against a build direction, and a \textbf{wall-thickness} map.
 \emph{Acceptance:} mass and CG match a hand-calculated fixture; the overhang map flags the expected faces on a
 printed part.
@@ -501,9 +506,13 @@ Nothing changes without a click. Seen in the Nxt add-on (\S\ref{sec:uix-nxt}).
 
 \begin{epic}{MOD-14}{On-canvas editing}{M5}{\stProg}{(new, from the Nxt add-on review, 23 Oct)}
 Double-click a face or a feature to edit it in the 3D view: value fields and drag arrows, as Fusion's press-pull.
-Builds on FreeCAD~1.1's interactive draggers (Fillet, Chamfer). \textbf{Plan approved 24 Oct, building}
-(\S\ref{sec:mod14-plan}).
+Builds on FreeCAD~1.1's interactive draggers (Fillet, Chamfer). \textbf{Plan approved 24 Oct}
+(\S\ref{sec:mod14-plan}); \textbf{paused 24 Oct, half-built}.
 \emph{Acceptance:} pad length, fillet radius and hole depth edited in the view without the task panel.
 \end{epic}
 
 \input{chapters/28-mod14-plan}
+
+\input{chapters/29-mod15-plan}
+
+\input{chapters/25-mod16-section-plan}

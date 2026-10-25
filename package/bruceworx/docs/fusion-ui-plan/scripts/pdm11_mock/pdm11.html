@@ -1,0 +1,217 @@
+<!doctype html>
+<!-- PDM-11 mock (24 Oct): the vault material library. ?fig=picker (the right panel's Material field opened as a
+     picker, and the notice for a part opened without its library) or ?fig=settings (Vault Settings, Materials
+     section). Same tokens as pdm09_mock/pdm09.html; rendered by render.sh. Light mode. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#e9ecf1; --card:#ffffff; --border:#d8dce3; --text:#1d1f23; --sec:#6b717c; --dim:#9aa0aa;
+          --accent:#007aff; --soft:#e3eefc; --hover:#f3f5f8; --field:#ffffff; --warn:#b26a00; --warnbg:#fdf1de;
+          --ok:#1e8a3c; --okbg:#e2f4e6; --err:#c62828; --errbg:#fbe4e4; --rev:#1e5fbf; --revbg:#e3eefc; }
+  html, body { margin:0; }
+  body { background:var(--bg); font:12.5px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color:var(--text);
+         display:flex; gap:22px; padding:22px; box-sizing:border-box; align-items:flex-start; }
+  .col { display:flex; flex-direction:column; gap:8px; }
+  .label { font-weight:600; color:var(--sec); font-size:11.5px; letter-spacing:.3px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column;
+          box-shadow:0 2px 14px rgba(0,0,0,.08); overflow:hidden; }
+  .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 6px; }
+  .tab { padding:9px 7px 7px; color:var(--sec); font-size:11.5px; font-weight:600; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .tab.cmd { margin-left:auto; color:var(--accent); }
+  .tab.cmd.on { color:var(--text); }
+  .body { padding:8px 12px; }
+  .sec { font-weight:700; font-size:11px; color:var(--sec); text-transform:uppercase; letter-spacing:.4px; margin:6px 0 4px;
+         display:flex; align-items:center; gap:6px; }
+  .sec .t { color:var(--text); text-transform:none; letter-spacing:0; font-size:12.5px; }
+  .row { display:flex; align-items:center; gap:8px; min-height:26px; }
+  .row .k { width:92px; color:var(--sec); flex:none; }
+  .row .v { flex:1; }
+  .f { background:var(--field); border:1px solid var(--border); border-radius:5px; height:22px; display:flex; align-items:center;
+       padding:0 7px; box-sizing:border-box; font-variant-numeric:tabular-nums; }
+  .f.dd::after { content:"▾"; margin-left:auto; color:var(--dim); font-size:10px; }
+  .f.open { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,122,255,.15); }
+  .f .u { margin-left:auto; color:var(--dim); }
+  .pill { display:inline-block; font-size:10px; font-weight:700; padding:0 5px; border-radius:4px; line-height:16px; letter-spacing:.2px; }
+  .wip { color:var(--warn); background:var(--warnbg); }
+  .rel { color:var(--ok); background:var(--okbg); }
+  .rvw { color:var(--rev); background:var(--revbg); }
+  .obs { color:var(--sec); background:var(--hover); }
+  .ro { color:var(--sec); }
+  .num { font-variant-numeric:tabular-nums; }
+  .pn { font-family:"SF Mono", Menlo, monospace; font-size:11px; }
+  .note { color:var(--sec); font-size:11px; line-height:1.4; }
+  .pop { background:var(--card); border:1px solid var(--border); border-radius:9px; box-shadow:0 8px 28px rgba(0,0,0,.18);
+         margin:4px 0 6px 100px; width:340px; overflow:hidden; }
+  .pop .search { margin:8px; }
+  .chips { display:flex; gap:6px; padding:0 8px 6px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--border); border-radius:11px; padding:1px 9px; color:var(--sec); font-size:11px; }
+  .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .grp { padding:4px 10px 2px; font-size:10.5px; font-weight:700; color:var(--sec); text-transform:uppercase; letter-spacing:.35px;
+         border-top:1px solid var(--hover); display:flex; }
+  .grp span:last-child { margin-left:auto; font-weight:500; text-transform:none; letter-spacing:0; }
+  .it { display:flex; align-items:center; gap:8px; padding:4px 10px; }
+  .it.sel { background:var(--accent); color:#fff; }
+  .it.sel .s, .it.sel .d { color:#dfe9ff; }
+  .it .sw { width:13px; height:13px; border-radius:3px; flex:none; border:1px solid rgba(0,0,0,.12); }
+  .it .n { flex:1; }
+  .it .s { display:block; color:var(--sec); font-size:10.5px; margin-top:1px; }
+  .it .d { color:var(--sec); font-size:11px; text-align:right; white-space:nowrap; }
+  .it.dimmed { color:var(--dim); }
+  .it.dimmed .d { color:var(--dim); }
+  .more { padding:6px 10px; border-top:1px solid var(--border); color:var(--accent); font-weight:600; font-size:11.5px; display:flex; }
+  .more span:last-child { margin-left:auto; color:var(--sec); font-weight:400; }
+  .banner { border:1px solid #efd3a6; background:var(--warnbg); border-radius:8px; padding:8px 10px; line-height:1.45; }
+  .banner b { color:var(--warn); }
+  .banner .acts { margin-top:6px; display:flex; gap:12px; color:var(--accent); font-weight:600; font-size:11.5px; }
+  .why { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:9px 12px; line-height:1.5; font-size:11.5px; }
+  .why .t { font-weight:700; margin-bottom:2px; }
+  .box { border:1px solid var(--border); border-radius:8px; margin:0 0 10px; overflow:hidden; }
+  .box .bt { background:var(--hover); padding:6px 10px; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .box .bc { padding:6px 8px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th { text-align:left; color:var(--sec); font-weight:600; font-size:10.5px; padding:4px 4px; border-bottom:1px solid var(--border);
+       text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
+  td { padding:0 4px; height:25px; border-bottom:1px solid var(--hover); vertical-align:middle; white-space:nowrap; }
+  td.r, th.r { text-align:right; }
+  tr.sel td { background:var(--soft); }
+  tr.fam td { height:20px; color:var(--sec); font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; background:#fafbfc; }
+  .btnrow { display:flex; gap:6px; margin:6px 0 2px; flex-wrap:wrap; }
+  .b { border:1px solid var(--border); border-radius:6px; padding:3px 9px; background:var(--card); font-size:11.5px; }
+  .b.p { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .b.dis { color:var(--dim); }
+  .split { display:flex; gap:10px; }
+  .kv { display:grid; grid-template-columns:118px 1fr; row-gap:3px; column-gap:6px; font-size:11.5px; align-items:center; }
+  .kv .k { color:var(--sec); }
+  .src { display:flex; align-items:center; gap:6px; }
+  .pdf { display:inline-block; font-size:9px; font-weight:800; color:#fff; background:#d0453b; border-radius:3px; padding:1px 3px; }
+  .iss { font-size:11px; line-height:1.5; margin-top:4px; }
+  .iss div::before { content:"●"; margin-right:5px; font-size:9px; vertical-align:1px; }
+  .iss .w { color:var(--warn); } .iss .i { color:var(--sec); }
+  .btns { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); }
+  .btn { flex:1; text-align:center; border:1px solid var(--border); border-radius:6px; padding:5px; }
+  .btn.p { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .hash { color:var(--dim); }
+</style>
+</head>
+<body>
+<script>
+const q = new URLSearchParams(location.search);
+const fig = q.get("fig") || "picker";
+</script>
+
+<!-- ======================= FIGURE 1: the Material field as a picker ======================= -->
+<template id="picker">
+<div class="col" style="width:470px"><div class="label">1 · RIGHT PANEL — PROPERTIES — CLICK “MATERIAL”</div>
+<div class="card">
+  <div class="tabs"><div class="tab on">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div></div>
+  <div class="body">
+    <div class="sec"><span class="t">Part</span><span style="margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500">Bracket plate</span></div>
+    <div class="row"><span class="k">Part number</span><span class="v pn">VX-01-01004-001 &nbsp;<span class="pill wip">WIP</span> 02</span></div>
+    <div class="row"><span class="k">Description</span><span class="v"><div class="f">Bracket plate</div></span></div>
+    <div class="row"><span class="k">Material</span><span class="v"><div class="f dd open">6061-T6 plate</div></span></div>
+    <div class="pop">
+      <div class="search"><div class="f" style="color:var(--dim)">⌕&nbsp; Search materials, codes, stock…</div></div>
+      <div class="chips"><span class="chip on">Vector library</span><span class="chip">FreeCAD Standard</span><span class="chip">BruceWorx</span><span class="chip">Show WIP</span></div>
+      <div class="grp"><span>Aluminium</span><span>density · stock</span></div>
+      <div class="it sel"><span class="sw" style="background:#c9ccd1"></span><span class="n">6061-T6 plate <span class="pill rel" style="margin-left:4px">A</span><span class="s">MAT-0001 · ASTM B209 · 3 plate sizes</span></span><span class="d">2.71 g/cm³<br>$7.80/kg</span></div>
+      <div class="it"><span class="sw" style="background:#d6d8dc"></span><span class="n">6082-T6 bar <span class="pill rel" style="margin-left:4px">A</span><span class="s">MAT-0005 · EN 755 · Ø12–40 mm</span></span><span class="d">2.70 g/cm³<br>$6.95/kg</span></div>
+      <div class="grp"><span>Steel</span><span></span></div>
+      <div class="it"><span class="sw" style="background:#8d9096"></span><span class="n">1045 / C45 bar <span class="pill rel" style="margin-left:4px">B</span><span class="s">MAT-0002 · EN 10083-2 · Ø10–50 mm</span></span><span class="d">7.85 g/cm³<br>$2.40/kg</span></div>
+      <div class="grp"><span>Plastic</span><span></span></div>
+      <div class="it"><span class="sw" style="background:#5aa0d8"></span><span class="n">PETG (Prusament) <span class="pill rel" style="margin-left:4px">A</span><span class="s">MAT-0003 · filament 1.75 mm · printed solid</span></span><span class="d">1.27 g/cm³<br>$25.00/kg</span></div>
+      <div class="it"><span class="sw" style="background:#f2f2ee"></span><span class="n">POM-C rod <span class="pill rel" style="margin-left:4px">A</span><span class="s">MAT-0004 · acetal copolymer · Ø10–60 mm</span></span><span class="d">1.41 g/cm³<br>$9.10/kg</span></div>
+      <div class="more"><span>More materials… (FreeCAD dialog)</span><span>appearance-only cards are not listed</span></div>
+    </div>
+    <div class="row"><span class="k">Appearance</span><span class="v"><div class="f dd">From material</div></span></div>
+    <div class="row"><span class="k">Mass</span><span class="v ro num">0.1355 kg &nbsp;<span class="note">100 × 50 × 10 mm · 2.71 g/cm³</span></span></div>
+  </div>
+</div></div>
+<div class="col" style="width:350px"><div class="label">2 · THE SAME PART OPENED WITHOUT THE VAULT</div>
+  <div class="banner"><b>Material library not available.</b> Vault “Vector” is not open on this Mac, so FreeCAD
+    could not find <b>6061-T6 plate</b> (MAT-0001, rev A). The part keeps it from the file: mass
+    0.1355 kg, and saving keeps it too.
+    <div class="acts"><span>Open vault Vector</span><span>Details…</span></div></div>
+  <div class="why" style="margin-top:4px">
+    <div class="t">What the part file carries</div>
+    FreeCAD saves only the material's UUID. BruceWorx adds a copy of what the part was given on each body:
+    <div class="kv" style="margin-top:5px">
+      <span class="k">Material</span><span>6061-T6 plate · MAT-0001</span>
+      <span class="k">Revision</span><span><span class="pill rel">A</span> released 24 Oct</span>
+      <span class="k">Density</span><span class="num">2710 kg/m³</span>
+      <span class="k">Values hash</span><span class="pn hash">3f9c2e…71a0</span>
+    </div>
+    <div class="note" style="margin-top:6px">Without the copy, FreeCAD would show “Default” and a mass of 0 kg, and saving
+      would lose the material for good (spike, 24 Oct).</div>
+  </div>
+  <div class="why">
+    <div class="t">When the library changes</div>
+    Rev B of 6061-T6 plate (density 2700) released: WIP parts take it at the next open
+    <span class="note">(“mass 0.1355 → 0.1350 kg”)</span>; released parts keep rev A until an ECO.
+  </div>
+</div>
+</template>
+
+<!-- ======================= FIGURE 2: Vault Settings, Materials ======================= -->
+<template id="settings">
+<div class="col" style="width:880px"><div class="label">VAULT SETTINGS — MATERIALS (A NEW SECTION AFTER DRAWING STANDARDS)</div>
+<div class="card">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab">Physical</div><div class="tab cmd on">Vault Settings</div></div>
+  <div class="body">
+    <div class="box"><div class="bt">Materials <span class="note" style="font-weight:400;margin-left:auto">vault Vector · 6 materials · shown in mm</span></div><div class="bc">
+    <div class="split">
+      <div style="flex:1.25">
+        <div class="btnrow" style="margin-top:0"><span class="b">＋ Add</span><span class="b">Add from FreeCAD library…</span><span class="b">Import supplier CSV…</span><span class="b">Export CSV…</span></div>
+        <table>
+          <tr><th>Code</th><th>Material</th><th class="r">Density</th><th class="r">Yield</th><th>Rev</th><th>Stock</th></tr>
+          <tr class="fam"><td colspan="6">Aluminium</td></tr>
+          <tr class="sel"><td class="pn">MAT-0001</td><td>6061-T6 plate</td><td class="r">2.71 g/cm³</td><td class="r">276 MPa</td><td><span class="pill rel">A</span> <span class="pill wip">B</span></td><td>3 plates</td></tr>
+          <tr><td class="pn">MAT-0005</td><td>6082-T6 bar</td><td class="r">2.70 g/cm³</td><td class="r">260 MPa</td><td><span class="pill rel">A</span></td><td>5 bars</td></tr>
+          <tr class="fam"><td colspan="6">Steel</td></tr>
+          <tr><td class="pn">MAT-0002</td><td>1045 / C45 bar</td><td class="r">7.85 g/cm³</td><td class="r">310 MPa</td><td><span class="pill rel">B</span></td><td>6 bars</td></tr>
+          <tr class="fam"><td colspan="6">Plastic</td></tr>
+          <tr><td class="pn">MAT-0003</td><td>PETG (Prusament)</td><td class="r">1.27 g/cm³</td><td class="r">50 MPa</td><td><span class="pill rel">A</span></td><td>1 spool</td></tr>
+          <tr><td class="pn">MAT-0004</td><td>POM-C rod</td><td class="r">1.41 g/cm³</td><td class="r">—</td><td><span class="pill rel">A</span></td><td>4 rods</td></tr>
+          <tr><td class="pn">MAT-0006</td><td>PA12 (MJF)</td><td class="r">1.01 g/cm³</td><td class="r">48 MPa</td><td><span class="pill wip">01</span></td><td>—</td></tr>
+        </table>
+        <div class="iss">
+          <div class="w">MAT-0006 PA12 (MJF) is WIP: parts may use it, a release asks for its approval first.</div>
+          <div class="w">MAT-0001 rev B waits for approval (density 2710 → 2700 kg/m³, new supplier sheet).</div>
+          <div class="i">4 parts use a FreeCAD Standard material (Check Vault → Adopt into the vault library).</div>
+        </div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:10px">
+        <div class="sec" style="margin-top:0"><span class="t">6061-T6 plate</span><span class="pn" style="margin-left:auto;text-transform:none;letter-spacing:0">MAT-0001</span></div>
+        <div class="note" style="margin:-1px 0 5px">Aluminium · inherits FreeCAD “Aluminum-6061-T6” (thermal values)</div>
+        <div class="sec">Engineering values <span style="margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500">rev <span class="pill wip">B</span> WIP · <span class="pill rel">A</span> released</span></div>
+        <div class="kv">
+          <span class="k">Density</span><span class="f num" style="height:20px">2700 <span class="u">kg/m³</span></span>
+          <span class="k">Yield (min)</span><span class="f num" style="height:20px">241 <span class="u">MPa</span></span>
+          <span class="k">Tensile (min)</span><span class="f num" style="height:20px">290 <span class="u">MPa</span></span>
+          <span class="k">Young's modulus</span><span class="f num" style="height:20px">68.9 <span class="u">GPa</span></span>
+          <span class="k">Basis</span><span class="f dd" style="height:20px">minimum (certificate)</span>
+          <span class="k">Source</span><span class="src"><span class="pdf">PDF</span> Mill cert 24-10871.pdf</span>
+        </div>
+        <div class="note" style="margin-top:3px">Changed from rev A: density 2710 → 2700 kg/m³; yield 276 → 241 MPa (typical → certificate minimum). 7 parts use rev A; the 3 released keep it.</div>
+        <div class="btnrow"><span class="b p">Approve rev B…</span><span class="b">Discard rev B</span><span class="b">Where used…</span><span class="b">Retire…</span></div>
+        <div class="sec">Stock and price <span style="margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500">not revisioned</span></div>
+        <table>
+          <tr><th>Form</th><th class="r">Size</th><th class="r">Price</th><th>Supplier</th></tr>
+          <tr><td>Plate</td><td class="r">6.35 mm</td><td class="r">$8.40/kg</td><td>Example Metals · AL61-0250</td></tr>
+          <tr><td>Plate</td><td class="r">12.7 mm</td><td class="r">$7.80/kg</td><td>Example Metals · AL61-0500</td></tr>
+          <tr><td>Plate</td><td class="r">25.4 mm</td><td class="r">$7.40/kg</td><td>Example Metals · AL61-1000</td></tr>
+        </table>
+        <div class="note" style="margin-top:3px">Prices updated 24 Oct by bruce (history in the journal).</div>
+      </div>
+    </div>
+    </div></div>
+  </div>
+  <div class="btns"><div class="btn">Cancel</div><div class="btn">Download CSV</div><div class="btn p">Save</div></div>
+</div></div>
+</template>
+<script>
+document.body.appendChild(document.getElementById(fig).content.cloneNode(true));
+</script>
+</body>
+</html>

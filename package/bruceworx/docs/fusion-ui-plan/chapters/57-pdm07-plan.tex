@@ -278,6 +278,24 @@ that they miss. 8: a \textbf{dry run now} on a copy of the vault; the real relea
 and \eref{MFG-04} are built. 9: screws, inserts and bearings numbered as COTS items (\code{09xxx}). 10: \code{LE-01003}
 and \code{LE-01008} released as parts now, split later through an ECO. 11: \emph{Release tree\ldots} is added.
 
+\paragraph{Progress (24 Oct, evening): the Leonardo actuator in your vault.} Ahead of the pedestal, the Leonardo
+actuator --- a NEMA~17 motor with a planetary gearbox --- is being designed in your real vault \emph{Vector}, program
+LE, by the lead agent driving your FreeCAD through the Claude Code bridge (\S\ref{sec:aut03-plan}): the vault's first
+real use. All items are WIP~01: a \emph{Gearbox} file holding the \emph{Parameters} sheet (\S\ref{sec:mod15-plan}) and
+the top assembly \code{LE-02-01001-001}; the motor adapter plate \code{LE-01-01001-001}, end cap \code{-01002},
+housing with the internal ring (48 teeth) \code{-01003}, planet carrier \code{-01004}, planet (18 teeth)
+\code{-01005} and sun (12 teeth) \code{-01006}. Two design decisions were taken with you:
+\begin{itemize}[nosep]
+  \item \textbf{Pressure angle $25^\circ$}, not $20^\circ$. A rack-cut gear with fewer than
+        $z_{\min} = 2/\sin^2\alpha$ teeth is undercut: $z_{\min} = 17.1$ at $\alpha = 20^\circ$, so the 12-tooth sun
+        would be undercut, but $z_{\min} = 11.2$ at $25^\circ$, so 12 teeth need no profile shift.
+  \item \textbf{Housing, plate and end cap $\varnothing 66$} with through-bolts on a $\varnothing 58$ circle. The smaller
+        option, $\varnothing 60$ with bolts on $\varnothing 52$, would put the bolt holes into the ring's teeth (root
+        circle $\varnothing 50.3$).
+\end{itemize}
+The numbers are in the vault's present form (\code{LE-01-01001-001}), not the per-program \code{LE-01001} form of
+answer~2, which is not built yet. Gaps met on the way are listed under \eref{FND-08}.
+
 \subsubsection*{Questions before PDM-07 starts}
 
 \begin{enumerate}

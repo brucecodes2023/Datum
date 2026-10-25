@@ -26,6 +26,7 @@ one writer at a time for now. The folder layout is designed so a sync service ha
 \input{chapters/58-pdm08-plan}
 \input{chapters/59-pdm09-plan}
 \input{chapters/60-pdm10-dashboard-plan}
+\input{chapters/61-pdm11-materials-plan}
 
 \subsection{Data model}
 
@@ -120,7 +121,8 @@ The local-JSON numbering source and macro are merged (\#5). The format is
 revision metadata, and label and file names drop it. Then the Ops API reader (stubbed as
 \code{OpsApiNumberSource}) allocates numbers centrally, with a bearer token from \code{BW\_OPS\_TOKEN}.
 \textbf{Built 24 Oct (\S\ref{sec:pdm03}):} numbers without \code{-REV}, the migration of numbering files and labels,
-and the Ops reader, tested against a local stub; Ops itself does not serve the endpoint yet.
+and the Ops reader, tested against a local stub; Ops itself does not serve the endpoint yet. New vaults still
+write \code{-REV} in their format (found 24 Oct, \eref{FND-08}).
 \emph{Acceptance:} P/Ns come from Ops; existing LE numbers migrate with only the revision suffix removed.
 \end{epic}
 
@@ -132,6 +134,7 @@ checked out offers to check it out first. Assembly links resolve through the vau
 opens identically on every machine.
 Works over the folder vault (\S\ref{sec:pdm-decision}); the command-line \code{vault} commands already
 drive it.
+Missing (found 24 Oct, \eref{FND-08}): a \emph{New part in vault} command; new items enter only through the import.
 \emph{Acceptance:} a check-out/check-in round trip of \code{LE-02001} from an iCloud Drive vault inside FreeCAD;
 the status icons are always correct. Locking between several users is a later step.
 \end{epic}
@@ -148,7 +151,8 @@ and its drawing.
 On check-in of an assembly, push its BOM (\eref{ASM-04}) to Ops as BOM lines. Where-used is the reverse
 traversal from \S\ref{sec:asm}. Released assemblies resolve children to the latest \emph{released}
 revision. A WIP assembly may also use WIP children, and is flagged when it does.
-\textbf{Plan approved 24 Oct, building} (\S\ref{sec:pdm06-plan}): children pinned at release, released BOMs only.
+\textbf{Plan approved 24 Oct} (\S\ref{sec:pdm06-plan}): children pinned at release, released BOMs only;
+\textbf{paused 24 Oct, half-built}.
 \emph{Acceptance:} where-used of a bolt lists every assembly revision that uses it.
 \end{epic}
 
@@ -158,7 +162,9 @@ $\rightarrow$ \code{LE-01009} $\rightarrow$ \code{LE-01011} $\rightarrow$ \code{
 register in the BruceWorx app, run the design-freeze checklist and validation macro, and release rev A with
 drawings and package.
 \textbf{Plan approved 24 Oct} (\S\ref{sec:pdm07-plan}): the pilot starts fresh, modelled in FreeCAD with no imported
-files; it waits on your design data and on \eref{DRW-05}, \eref{DRW-08} and \eref{MFG-04}.
+files; it waits on your design data and on \eref{DRW-05}, \eref{DRW-08} and \eref{MFG-04}. Since 24 Oct the
+Leonardo actuator is being modelled in your vault \emph{Vector}, the vault's first real use (progress note in
+\S\ref{sec:pdm07-plan}).
 \emph{Acceptance:} \code{LE-02001} rev A released entirely from FreeCAD.
 \end{epic}
 

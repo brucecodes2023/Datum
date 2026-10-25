@@ -1,0 +1,296 @@
+<!doctype html>
+<!-- MOD-15 mock (24 Oct): the design worksheet tab for the Leonardo NEMA 17 planetary gearbox 5:1, and the
+     worksheet out of date after the gearbox changed. Same tokens as pdm09_mock/pdm09.html. Formulas are SVGs
+     from matplotlib mathtext (make_math.py). ?fig=sheet or ?fig=stale; rendered by render.sh. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#e9ecf1; --card:#ffffff; --border:#d8dce3; --text:#1d1f23; --sec:#6b717c; --dim:#9aa0aa;
+          --accent:#007aff; --soft:#e3eefc; --hover:#f3f5f8; --field:#ffffff; --warn:#b26a00; --warnbg:#fdf1de;
+          --ok:#1e8a3c; --okbg:#e2f4e6; --err:#c62828; --errbg:#fbe4e4; --rev:#1e5fbf; --revbg:#e3eefc;
+          --page:#ffffff; --link:#6a3fc8; --linkbg:#efe8fc; }
+  html, body { margin:0; }
+  body { background:var(--bg); font:12.5px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color:var(--text); }
+  .pn { font-family:"SF Mono", Menlo, monospace; font-size:11.3px; }
+  .pill { display:inline-block; font-size:10px; font-weight:700; padding:0 5px; border-radius:4px; line-height:16px; letter-spacing:.2px; }
+  .wip { color:var(--warn); background:var(--warnbg); }
+  .rel { color:var(--ok); background:var(--okbg); }
+  .mk { display:inline-flex; flex:none; margin:0 4px; width:18px; height:18px; border-radius:50%; background:#d2463c; color:#fff; font-weight:700;
+        font-size:11px; align-items:center; justify-content:center; box-shadow:0 0 0 2px #fff; vertical-align:middle; }
+  /* window */
+  .win { position:relative; margin:18px; background:#f6f7f9; border:1px solid var(--border); border-radius:12px; overflow:hidden;
+         box-shadow:0 4px 24px rgba(0,0,0,.10); }
+  .titlebar { height:34px; display:flex; align-items:center; gap:8px; padding:0 12px; background:#eef0f3; border-bottom:1px solid var(--border); }
+  .dots span { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; }
+  .doctabs { display:flex; gap:2px; margin-left:16px; height:34px; align-items:flex-end; }
+  .dt { padding:6px 12px 7px; border-radius:7px 7px 0 0; color:var(--sec); font-size:11.8px; display:flex; gap:6px; align-items:center; }
+  .dt.on { background:#f6f7f9; color:var(--text); font-weight:600; border:1px solid var(--border); border-bottom:none; }
+  .dt .x { color:var(--dim); margin-left:4px; }
+  .ico { display:inline-block; width:14px; height:14px; border-radius:3px; }
+  .ico.asm { background:linear-gradient(135deg,#5b8def 0 50%,#2f6ad8 50%); }
+  .ico.ws { background:#6a3fc8; color:#fff; font:700 10px/14px "Times New Roman", serif; text-align:center; }
+  .toolbar { display:flex; align-items:center; gap:6px; padding:7px 14px; background:var(--card); border-bottom:1px solid var(--border); }
+  .tb { border:1px solid var(--border); border-radius:6px; padding:3px 9px; color:var(--text); background:var(--card); font-size:11.8px; }
+  .tb b { font-family:"Times New Roman", serif; font-style:italic; }
+  .sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
+  .seg { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; font-size:11.5px; }
+  .seg div { padding:3px 10px; color:var(--sec); border-left:1px solid var(--border); }
+  .seg div:first-child { border-left:none; }
+  .seg div.on { background:var(--soft); color:var(--text); font-weight:600; }
+  .live { color:var(--ok); font-size:11.5px; }
+  .linkchip { margin-left:auto; display:flex; align-items:center; gap:7px; border:1px solid var(--border); border-radius:14px;
+              padding:3px 10px 3px 6px; font-size:11.5px; color:var(--sec); }
+  .linkchip .ok { color:var(--ok); font-weight:600; }
+  .main { display:flex; height:1040px; }
+  .canvas { flex:1; overflow:hidden; padding:18px 20px 0; position:relative; }
+  .page { width:880px; margin:0 auto; background:var(--page); border:1px solid var(--border); border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,.06);
+          padding:26px 36px 20px; box-sizing:border-box; position:relative; }
+  .ptitle { font-size:19px; font-weight:700; margin:0 0 4px; }
+  .pmeta { color:var(--sec); font-size:11.5px; display:flex; gap:10px; align-items:center; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h2 { font-size:13.5px; margin:16px 0 6px; display:flex; align-items:center; gap:8px; }
+  h2 .n { color:var(--sec); font-weight:600; }
+  p { margin:4px 0 6px; line-height:1.55; }
+  img.m { vertical-align:middle; }
+  img.mi { vertical-align:-4px; }
+  .calc { border-left:3px solid var(--soft); padding:2px 0 2px 12px; margin:4px 0 4px; position:relative; }
+  .row { display:flex; align-items:center; min-height:34px; gap:10px; }
+  .row .f { flex:none; }
+  .row .eq { color:var(--text); font:15px "Times New Roman", serif; }
+  .res { font:600 13px "SF Mono", Menlo, monospace; background:var(--soft); color:#123a7a; border-radius:4px; padding:1px 7px; }
+  .res.w { background:var(--warnbg); color:var(--warn); }
+  .chk { font-size:11.5px; font-weight:600; border-radius:10px; padding:1px 8px; margin-left:4px; white-space:nowrap; }
+  .chk.ok { color:var(--ok); background:var(--okbg); }
+  .chk.warn { color:var(--warn); background:var(--warnbg); }
+  .note { color:var(--sec); font-size:11.3px; }
+  .spacer { flex:1; }
+  .exp { font-size:11px; color:var(--link); background:var(--linkbg); border-radius:4px; padding:1px 6px; font-weight:600; white-space:nowrap; }
+  .inputs { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px; }
+  .in { border:1px solid var(--border); border-radius:5px; padding:1px 7px; font:13px "Times New Roman", serif; display:flex; gap:5px; align-items:center; }
+  .in i { font-style:italic; }
+  .in sub { font-size:10px; }
+  .in .src { font:10.5px -apple-system, sans-serif; color:var(--link); }
+  .edit { border:1px solid var(--accent); border-radius:6px; box-shadow:0 0 0 3px rgba(0,122,255,.15); margin:4px 0; overflow:hidden; }
+  .edit .src { font:11.2px/1.6 "SF Mono", Menlo, monospace; padding:7px 10px; background:#fbfcfe; white-space:pre; border-bottom:1px solid var(--border); }
+  .edit .src .c { color:#1e5fbf; } .edit .src .k { color:#a3306f; } .edit .src .cur { border-left:1.5px solid var(--text); }
+  .edit .pv { padding:6px 10px; }
+  .edit .bar { display:flex; gap:12px; font-size:11px; color:var(--sec); padding:3px 10px; background:var(--hover); border-top:1px solid var(--border); }
+  .edit .bar b { color:var(--accent); font-weight:600; }
+  .disp { text-align:center; margin:6px 0; }
+  /* right panel */
+  .rp { width:330px; background:var(--card); border-left:1px solid var(--border); display:flex; flex-direction:column; position:relative; }
+  .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 6px; }
+  .tab { padding:9px 7px 7px; color:var(--sec); font-size:11.5px; font-weight:600; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .rbody { padding:8px 12px; }
+  .grp { font-weight:700; margin:10px 0 4px; display:flex; align-items:center; gap:6px; }
+  .grp .c { color:var(--sec); font-weight:500; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  td { padding:0 3px; height:24px; border-bottom:1px solid var(--hover); }
+  td.nm { font:13px "Times New Roman", serif; font-style:italic; width:56px; }
+  td.v { text-align:right; font:11.5px "SF Mono", Menlo, monospace; }
+  td.s { color:var(--sec); font-size:10.8px; padding-left:8px; }
+  .kv { display:flex; height:22px; align-items:center; }
+  .kv .k { width:92px; color:var(--sec); flex:none; }
+  .foot { margin-top:auto; padding:7px 12px; border-top:1px solid var(--border); display:flex; color:var(--accent); font-weight:600; font-size:11.5px; gap:14px; }
+  .foot span:last-child { margin-left:auto; }
+  /* stale figure */
+  .stale { display:flex; gap:20px; padding:20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; box-shadow:0 2px 14px rgba(0,0,0,.08); overflow:hidden; }
+  .banner { background:var(--warnbg); color:#6b4000; padding:9px 14px; border-bottom:1px solid #f0d9b0; line-height:1.5; }
+  .banner b { color:var(--warn); }
+  .banner .acts { margin-top:6px; display:flex; gap:8px; }
+  .banner .acts span { border:1px solid #e7c58d; background:#fff; border-radius:6px; padding:2px 9px; color:var(--text); font-size:11.5px; }
+  .banner .acts span.p { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .diff th { text-align:left; color:var(--sec); font-weight:600; font-size:10.5px; padding:6px 6px; border-bottom:1px solid var(--border);
+             text-transform:uppercase; letter-spacing:.3px; }
+  .diff td { height:30px; padding:0 6px; }
+  .old { color:var(--sec); text-decoration:line-through; font:11.5px "SF Mono", Menlo, monospace; }
+  .new { font:600 11.5px "SF Mono", Menlo, monospace; }
+  .lbl { font-weight:600; color:var(--sec); font-size:11.5px; letter-spacing:.3px; margin-bottom:6px; }
+  .vrow td { height:38px; }
+  .ic { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-3px; margin-right:5px; }
+  .ic.asm { background:linear-gradient(135deg,#5b8def 0 50%,#2f6ad8 50%); }
+  .ic.ws { background:#6a3fc8; }
+  .sp { white-space:nowrap; font-size:11.5px; }
+  .sp.old2 { color:var(--warn); font-weight:600; }
+</style>
+</head>
+<body>
+<script>
+const q = new URLSearchParams(location.search);
+const fig = q.get("fig") || "sheet";
+const M = (k, cls) => `<img class="${cls || 'm'}" src="math/${k}.svg">`;
+</script>
+
+<template id="sheet">
+<div class="win">
+  <div class="titlebar">
+    <div class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></div>
+    <div class="doctabs">
+      <div class="dt">Start</div>
+      <div class="dt"><span class="ico asm"></span>LE-02-01001 NEMA 17 planetary gearbox 5:1</div>
+      <div class="dt on"><span class="ico ws">Σ</span>LE-04-01001 Gearbox design worksheet<span class="x">×</span><span class="mk">1</span></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <span class="tb">¶ Text</span><span class="tb"><b>x²</b> Math</span><span class="tb">= Calc</span><span class="tb">✓ Check</span><span class="tb">▦ Table</span><span class="mk">2</span>
+    <div class="sep"></div>
+    <div class="seg"><div class="on">Read</div><div>Edit all</div></div>
+    <span class="live">● Live</span>
+    <div class="sep"></div>
+    <span class="tb">Export PDF ▾</span><span style="flex:1"></span>
+    <span class="mk">3</span><div class="linkchip" style="margin-left:0"><span class="ico asm"></span><span class="pn">LE-02-01001-000</span>
+      <span>Parameters · 8 used · 1 written</span><span class="ok">✓ current</span></div>
+  </div>
+  <div class="main">
+    <div class="canvas">
+      <div class="page">
+        <div class="ptitle">NEMA 17 planetary gearbox 5:1 — design worksheet</div>
+        <div class="pmeta"><span class="pn">LE-04-01001-000</span><span class="pill wip">WIP 01</span>
+          <span>describes <span class="pn">LE-02-01001-000</span></span><span>·</span><span>B. Tokar</span><span>·</span><span>24 Oct 2026</span></div>
+
+        <h2><span class="n">1</span> Requirements</h2>
+        <p>Single stage, ring fixed, carrier is the output. Input: a NEMA 17 × 40 mm stepper with holding torque
+        <img class="mi" src="math/Tin.svg"> = 0.40 N·m, up to 600 rpm. Target ratio
+        <img class="mi" src="math/i5.svg">; output torque at least 1.8 N·m; gears printed in PETG.</p>
+
+        <h2><span class="n">2</span> Gear train</h2>
+        <div class="inputs" style="position:relative">
+          <span class="in"><span><i>Z</i><sub>s</sub></span> = 12 <span class="src">⟵ model</span></span>
+          <span class="in"><span><i>Z</i><sub>p</sub></span> = 18 <span class="src">⟵ model</span></span>
+          <span class="in"><span><i>Z</i><sub>r</sub></span> = 48 <span class="src">⟵ model</span></span>
+          <span class="in"><span><i>m</i><sub>n</sub></span> = 1 mm <span class="src">⟵ model</span></span>
+          <span class="in"><i>N</i> = 3 <span class="src">⟵ model</span></span>
+          <span class="in"><span><i>n</i><sub>in</sub></span> = 600 rpm</span><span class="mk">4</span>
+        </div>
+        <div class="calc">
+          <div class="row"><span class="f"><img class="m" src="math/i.svg"></span><span class="eq">=</span><span class="res">5</span>
+            <span class="chk ok">✓ target 5</span><span class="mk">5</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/nout.svg"></span><span class="eq">=</span><span class="res">120 rpm</span></div>
+        </div>
+
+        <h2><span class="n">3</span> Geometry</h2>
+        <div class="calc">
+          <div class="row"><span class="f"><img class="m" src="math/a.svg"></span><span class="eq">=</span><span class="res">15 mm</span>
+            <span class="spacer"></span><span class="exp">→ Parameters.a · used by Carrier pin holes</span><span class="mk">6</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/ar.svg"></span><span class="eq">=</span><span class="res">15 mm</span>
+            <span class="spacer"></span><span class="chk ok">✓ coaxial: a = a<sub>r</sub></span></div>
+        </div>
+
+        <h2><span class="n">4</span> Tooth checks</h2>
+        <div class="calc">
+          <div class="row"><span class="f"><img class="m" src="math/asm.svg"></span><span class="eq">=</span><span class="res">20</span>
+            <span class="spacer"></span><span class="chk ok">✓ equal spacing: whole number</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/nb.svg"></span><span class="note">25.98 mm &gt; 20 mm</span>
+            <span class="spacer"></span><span class="chk ok">✓ planets clear</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/uc.svg"></span><span class="eq">=</span><span class="res w">17.1</span>
+            <span class="note">&gt; <i>Z</i><sub>s</sub> = 12</span><span class="spacer"></span><span class="chk warn">⚠ sun undercut</span><span class="mk">7</span></div>
+          <div class="note" style="margin:0 0 4px 2px">Sun undercut at α = 20°: shift the sun profile by
+            <img class="mi" src="math/x030.svg">, or accept for a printed gear.</div>
+        </div>
+
+        <h2><span class="n">5</span> Torque estimate</h2>
+        <div class="calc">
+          <div class="row"><span class="f"><img class="m" src="math/tout.svg"></span><span class="eq">=</span><span class="res">1.94 N·m</span>
+            <span class="note">η = 0.97</span><span class="spacer"></span><span class="chk ok">✓ ≥ 1.8 N·m</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/ft.svg"></span><span class="eq">=</span><span class="res">22.2 N</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/sig.svg"></span><span class="eq">=</span><span class="res">11.3 MPa</span>
+            <span class="note">b = 8 mm, Y = 0.245 (Lewis, 12 teeth)</span></div>
+          <div class="row"><span class="f"><img class="m" src="math/sf.svg"></span><span class="eq">=</span><span class="res">1.32</span>
+            <span class="note">PETG, σ<sub>allow</sub> = 15 MPa (assumed)</span><span class="spacer"></span><span class="chk ok">✓ ≥ 1.25</span></div>
+        </div>
+
+        <h2><span class="n">6</span> Notes — carrier speed<span class="mk">8</span></h2>
+        <div class="edit">
+          <div class="src"><span class="k">With the ring fixed</span>, the Willis equation for the carrier <span class="c">$c$</span> gives
+<span class="c">\[ \frac{n_s - n_c}{n_r - n_c} = -\frac{Z_r}{Z_s} \]</span>
+and with <span class="c">$n_r = 0$</span>, <span class="c">\[ n_c = \frac{n_s}{1 + Z_r/Z_s} = \frac{n_s}{i} \]</span><span class="cur"></span></div>
+          <div class="pv">With the ring fixed, the Willis equation for the carrier gives
+            <div class="disp"><img class="m" src="math/willis.svg"></div>
+            <div class="disp"><img class="m" src="math/willis2.svg"></div></div>
+          <div class="bar"><span>LaTeX · Markdown</span><span>Esc renders</span><span>$…$ inline · \[…\] display</span><span style="margin-left:auto"><b>{=i}</b> inserts a live value</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="rp">
+      <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab on">Parameters</div><div class="tab">Physical</div></div>
+      <div class="rbody">
+        <div class="grp">From the gearbox <span class="c">8 · read</span><span class="mk">9</span></div>
+        <table>
+          <tr><td class="nm">Z<sub>s</sub></td><td class="v">12</td><td class="s">Parameters.Zs</td></tr>
+          <tr><td class="nm">Z<sub>p</sub></td><td class="v">18</td><td class="s">Parameters.Zp</td></tr>
+          <tr><td class="nm">Z<sub>r</sub></td><td class="v">48</td><td class="s">Parameters.Zr</td></tr>
+          <tr><td class="nm">m<sub>n</sub></td><td class="v">1 mm</td><td class="s">Parameters.m_n</td></tr>
+          <tr><td class="nm">N</td><td class="v">3</td><td class="s">Parameters.N</td></tr>
+          <tr><td class="nm">α</td><td class="v">20°</td><td class="s">Sun gear · PressureAngle</td></tr>
+          <tr><td class="nm">b</td><td class="v">8 mm</td><td class="s">Parameters.b</td></tr>
+          <tr><td class="nm">T<sub>in</sub></td><td class="v">0.40 N·m</td><td class="s">Motor · Holding torque</td></tr>
+        </table>
+        <div class="grp">Written to the gearbox <span class="c">1</span></div>
+        <table>
+          <tr><td class="nm">a</td><td class="v">15 mm</td><td class="s" style="color:var(--link)">→ Parameters.a</td></tr>
+        </table>
+        <div class="grp">Worksheet results <span class="c">11 · 6 checks</span></div>
+        <table>
+          <tr><td class="nm">i</td><td class="v">5</td><td class="s">✓ target</td></tr>
+          <tr><td class="nm">n<sub>out</sub></td><td class="v">120 rpm</td><td class="s"></td></tr>
+          <tr><td class="nm">a<sub>r</sub></td><td class="v">15 mm</td><td class="s">✓ coaxial</td></tr>
+          <tr><td class="nm">T<sub>out</sub></td><td class="v">1.94 N·m</td><td class="s">✓ ≥ 1.8 N·m</td></tr>
+          <tr><td class="nm">σ<sub>F</sub></td><td class="v">11.3 MPa</td><td class="s"></td></tr>
+          <tr><td class="nm">S</td><td class="v">1.32</td><td class="s">✓ ≥ 1.25</td></tr>
+          <tr><td class="nm">z<sub>min</sub></td><td class="v">17.1</td><td class="s" style="color:var(--warn)">⚠ undercut</td></tr>
+        </table>
+        <div class="grp">Vault</div>
+        <div class="kv"><span class="k">Item</span><span class="pn">LE-04-01001-000</span>&nbsp;<span class="pill wip">WIP 01</span></div>
+        <div class="kv"><span class="k">Type</span>04 Design spec</div>
+        <div class="kv"><span class="k">Describes</span><span class="pn">LE-02-01001-000</span>&nbsp;rev 01</div>
+        <div class="kv"><span class="k">Checked out</span>to you</div>
+      </div>
+      <div class="foot"><span>Insert value</span><span>Open gearbox ›</span></div>
+    </div>
+  </div>
+</div>
+</template>
+
+<template id="stale">
+<div class="stale">
+  <div style="width:700px">
+    <div class="lbl">1 · THE WORKSHEET AFTER THE GEARBOX CHANGED (Zr 48 → 60)</div>
+    <div class="card">
+      <div class="banner"><b>The gearbox changed since this worksheet was checked in</b> (rev 01, made from
+        <span class="pn">LE-02-01001-000</span> rev 01). Inputs changed: <span class="pn">Parameters.Zr</span> 48 → 60.
+        4 results changed, 2 checks fail.
+        <div class="acts"><span>Show the change</span><span>Open gearbox</span><span class="p">Check in worksheet…</span></div></div>
+      <table class="diff">
+        <tr><th>Result</th><th>Rev 01</th><th>Now</th><th>Check</th></tr>
+        <tr><td><img class="m" src="math/i_s.svg"></td><td class="old">5</td><td class="new">6</td><td><span class="chk warn" style="color:var(--err);background:var(--errbg)">✗ target 5</span></td></tr>
+        <tr><td style="font:italic 14px 'Times New Roman',serif">a<sub>r</sub></td><td class="old">15 mm</td><td class="new">21 mm</td><td><span class="chk warn" style="color:var(--err);background:var(--errbg)">✗ coaxial: a = 15 mm</span></td></tr>
+        <tr><td style="font:italic 14px 'Times New Roman',serif">(Z<sub>s</sub>+Z<sub>r</sub>)/N</td><td class="old">20</td><td class="new">24</td><td><span class="chk ok">✓ whole number</span></td></tr>
+        <tr><td style="font:italic 14px 'Times New Roman',serif">T<sub>out</sub></td><td class="old">1.94 N·m</td><td class="new">2.33 N·m</td><td><span class="chk ok">✓ ≥ 1.8 N·m</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div style="width:400px">
+    <div class="lbl">2 · VAULT TAB — STRUCTURE</div>
+    <div class="card" style="padding:6px 10px">
+      <table>
+        <tr class="vrow"><td><span class="ic asm"></span><span class="pn">LE-02-01001-000<span style="color:var(--sec)">-02</span></span><br>
+          <span style="color:var(--sec);margin-left:20px;font-size:11.5px">NEMA 17 planetary gearbox 5:1</span></td><td><span class="pill wip">WIP</span></td></tr>
+        <tr class="vrow"><td style="padding-left:20px"><span class="ic ws"></span><span class="pn">LE-04-01001-000<span style="color:var(--sec)">-01</span></span><br>
+          <span style="color:var(--sec);margin-left:20px;font-size:11.5px">Gearbox design worksheet</span></td>
+          <td class="sp old2">Spec out of date</td></tr>
+      </table>
+      <div class="note" style="padding:6px 2px 4px;line-height:1.45">Out of date by <b>value</b>: the worksheet read
+        <span class="pn">Zr</span> = 48 at check-in; the gearbox's latest check-in recorded 60. A gearbox change that
+        moves no value the worksheet reads leaves it current.</div>
+    </div>
+  </div>
+</div>
+</template>
+
+<script>
+document.body.appendChild(document.getElementById(fig).content.cloneNode(true));
+</script>
+</body>
+</html>

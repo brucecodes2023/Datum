@@ -20,8 +20,18 @@ The version string already reads \code{1.1.4-bw.1}, and the unsigned arm64 \code
 notarisation before anyone outside the team installs it.
 \textbf{The KEYSTONE splash ships} (your decision, 24 Oct): only the splash screen is branded
 (\file{package/bruceworx/branding/}: \file{branding.xml}, \file{splash.html}, \file{render\_splash.sh} drawing the
-version into the image); the application and executable names stay FreeCAD's, so preferences, add-ons and paths are
-unchanged.
+version into the image); the development build's application and executable names stay FreeCAD's, so its
+preferences, add-ons and paths are unchanged.
+\textbf{Keystone.app} (your answers, 25 Oct: fully renamed, its own settings, built from the working tree):
+\file{package/bruceworx/make-keystone.sh} builds \file{build/release} and installs it into a bundle. A
+\file{branding.xml} of its own renames the window, menu bar, Dock and About box (\code{Application},
+\code{WindowTitle}, \code{ExeName = Keystone}). \code{ExeName} also moves its settings to
+\file{\textasciitilde/Library/Preferences/Keystone} and \file{Application Support/Keystone}, so it runs beside the
+development build. The bundle is self-contained: \file{keystone\_relocate.py} copies the 534 libraries it needs from the
+pixi environment and rewrites and re-signs 1\,453 files so that nothing points into \file{.pixi} or the build tree.
+The result is 1.7\,GB in \file{/Applications}, version \code{1.1.4-bw.1+<commit>[-dirty]}, with an icon drawn from the
+splash's arch. Checked by launching it from \file{/Applications}: it reports itself as Keystone, uses its own settings
+folders, its own Python and the native Qt platform, and loads all 20 workbenches and BruceWorx.
 \emph{Acceptance:} the tagged release installs on a clean Mac and opens a Fusion STEP export
 (\code{LE-01001}, 200$\times$200$\times$8 envelope).
 \end{epic}
@@ -74,4 +84,46 @@ headless FreeCAD (\file{scripts/}), and the harness generalises that.
 \begin{epic}{FND-07}{On by default, each with an off switch}{M0}{\stDone}{FCB-P1-01, P1-10}
 Merged in \#9. It remains a rule for every epic below: a feature ships enabled and can be switched off on
 Preferences~$\rightarrow$~BruceWorx, and switching it off restores stock behaviour.
+\end{epic}
+
+\begin{epic}{FND-08}{Gaps found in real use}{M1}{\stTodo}{(new, 24 Oct)}
+Found on 24 Oct while the Leonardo actuator was modelled in your vault \emph{Vector} through the bridge
+(\S\ref{sec:pdm07-plan}) and by the morning's GUI test agents. Each is fixed in the epic that owns it:
+\begin{enumerate}[nosep]
+  \item \textbf{No ``New part in vault'' command.} New items enter the vault only through \emph{Import Files into
+        Vault}, until \eref{PDM-09}'s New Project wizard; a single numbered part should be one command
+        (\eref{PDM-04}).
+  \item \textbf{New vaults still write \code{-REV}} in the part-number format (the import proposed
+        \code{LE-01-01001-001-A}), although \eref{PDM-03} moved revisions out of the P/N: the Create Vault engine
+        still writes the old format.
+  \item \textbf{Create Assembly fails silently} when a spreadsheet tab is in front: it needs a 3D view. It should
+        switch to the document's 3D view or say why (\eref{ASM-01}).
+  \item \textbf{A face sketch's ``centre'' lands off-centre} (\eref{MOD-12}).
+  \item \textbf{A counterbored Hole's preview points out of the plate} (\eref{MOD-05}).
+  \item \textbf{Parts reading the Parameters sheet of another file do not rebuild} when the sheet changes; each has
+        to be touched and recomputed by hand. An \emph{Update from Parameters} command, and a stale-part marker,
+        belong to \eref{MOD-02}.
+  \item \textbf{An assembly in the file that holds the sheet its parts read} makes a document cycle (``The graph
+        must be a DAG''). The gearbox now keeps the sheet in a root file (LE-02-01001) and the assembly in its own
+        (LE-02-01002); Create Assembly should warn before it builds the cycle (\eref{ASM-01}).
+  \item \textbf{A vault item's description cannot be changed} after it is created: the root file still reads
+        ``NEMA 17 planetary gearbox 5:1'' (\eref{PDM-04}).
+  \item \textbf{A failed import burns part numbers}: the steel parts' failure left LE-01-01004 to 01006 unused
+        (\eref{PDM-04}).
+  \item \textbf{An unused WIP item cannot be cancelled}: only released items retire, so the M3\texttimes8 screw
+        (LE-01-01015), replaced by the M3\texttimes6 (LE-01-01016) before any release, stays a live WIP item. A
+        \emph{Cancel item} for never-released items, journaled like a retire, belongs to \eref{PDM-04}.
+  \item \textbf{No joint driver.} Gear and belt joints couple only inside a drag (the solver takes their zero
+        when a solve starts), and a drag step follows the pull only part way: turning the sun one full turn took
+        4\,320 steps and still ended at 353\textdegree{} (the ratio came out 5.0000, the planets' spin matched
+        theory). A revolute or gear joint driven to an angle, from Python and in a motion study, belongs to
+        \eref{ASM-10}; an interference check over the parts (24 here, 276 pairs, by hand today) to \eref{ASM-06}.
+  \item \textbf{Opening parts to link them offered ten check-outs}: the assembly command's transaction reached each
+        part as the vault wrote its state. Fixed on 24 Oct: only the active document offers one.
+  \item \textbf{Fixed on 24 Oct:} an import now rewrites links to earlier imports and to work copies, and a
+        material without a density no longer stops it.
+\end{enumerate}
+\emph{Acceptance:} \emph{New part in vault} makes a numbered WIP~01 part without an import; a new vault's format has
+no \code{REV}; Create Assembly works, or says why, with a spreadsheet in front; a face sketch's centre and a
+counterbored hole land where they should; each is covered by a GUI test.
 \end{epic}

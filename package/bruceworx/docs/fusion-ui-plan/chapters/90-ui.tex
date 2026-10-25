@@ -45,7 +45,7 @@ in \file{scripts/}.
 
 You asked what the Nxt add-on (\file{github.com/obelisk79/FreeCAD-Nxt}, a QtQuick replacement for the model tree
 and property editor, experimental) does that BruceWorx does not. Already covered: a floating tree (the Browser),
-creation order and rollback (the timeline moves \code{Body.Tip}), badges, and the section view. Taken into the
+creation order and rollback (the timeline moves \code{Body.Tip}), badges. (The section view was listed here too; it was not covered, see \eref{MOD-16}, 25 Oct.) Taken into the
 roadmap, smallest first: \eref{MOD-13} sketch profile repair, \eref{UIX-10} undo toasts, \eref{UIX-11} pick to
 feature and error chips (with dependency lines in the Browser), \eref{UIX-12} a property inspector, and
 \eref{MOD-14} on-canvas editing. Not taken: Nxt's own fillet and chamfer, which bypass OCCT and leave files that
@@ -63,9 +63,10 @@ A failing feature gets a red chip in the Browser that opens it. Thin dependency 
 in the Browser on hover.
 \emph{Acceptance:} every face of \code{LE-02001} traces to its feature; a broken sketch shows a chip that opens it.
 \end{epic}
-\begin{epic}{UIX-12}{Property inspector}{UI}{\stTodo}{(new, Nxt review)}
+\begin{epic}{UIX-12}{Property inspector}{UI}{\stProg}{(new, Nxt review)}
 A simpler inspector for the selection, grouped by meaning (size, position, appearance, part data), next to
-FreeCAD's property editor, which stays for everything else.
+FreeCAD's property editor, which stays for everything else. Built 24 Oct in the Browser, then redesigned as a tabbed
+right panel: Properties built, Physical and Parameters paused half-built (\S\ref{sec:uix12-plan}).
 \emph{Acceptance:} Pad, Pocket and Fillet edited from the inspector without the Data tab.
 \end{epic}
 

@@ -1,5 +1,5 @@
 %======================================================================
-\subsection{BW-UIX-12 --- Plan: the property inspector in the Browser (23 Oct 2026; built 24 Oct; redesign building)}\label{sec:uix12-plan}
+\subsection{BW-UIX-12 --- Plan: the property inspector in the Browser (23 Oct 2026; built 24 Oct; redesign part-built 24 Oct)}\label{sec:uix12-plan}
 %======================================================================
 
 \eref{UIX-12} replaces the \emph{View} and \emph{Data} tabs at the bottom of the Browser with an \emph{inspector}:
@@ -334,6 +334,20 @@ grouping rules and editors, made compact; the Vault card moves into its tab.
 \textbf{brings Properties forward, unless a feature is being edited} (a command's tab stays in front). 4: the panel
 is shown, its width remembered, Cmd-I hides and shows it. 5: the floating Vault card is retired. 6: inertia about
 the centre of mass, with a switch for the origin. Building started 24 Oct.
+Answer~1 made precise the same evening: \textbf{one} spreadsheet \emph{Parameters} at the root of the top-assembly
+file holds every dimension and spec, with a \emph{Used in} column naming the part or drawing each value drives;
+every part's dimensions are tied to it by expressions, so changing the sheet updates the model, and the design
+worksheet (\eref{MOD-15}, \S\ref{sec:mod15-plan}) reads and writes that sheet.
+
+\paragraph{Built (24 Oct, evening).} The right panel (\file{bruceworx\_rightpanel.py}) carries its tabs, and the
+\textbf{Properties} tab is built. The \textbf{Physical} and \textbf{Parameters} tabs are \textbf{paused half-built}:
+\file{bruceworx\_physical.py} and \file{bruceworx\_parameters.py} are in the tree but not installed
+(\code{InitGui.\_BW\_PAUSED}); when it resumes, the Parameters tab follows the one-sheet decision above (today it
+makes a \emph{Parameters} sheet in each document). At your request \emph{Create Vault} now opens as a
+\textbf{full-window tab} of its own (numbered sections, Cancel / Create at the bottom; a switch on Preferences
+$\rightarrow$ BruceWorx gives the right-panel version back). The document tabs sit at the \textbf{bottom or top}
+(Preferences $\rightarrow$ BruceWorx $\rightarrow$ \emph{Document tabs}, default bottom), and the Start page is
+\textbf{pinned as the first tab}, without a close button (\file{bruceworx\_doctabs.py}, switch \code{PinStartTab}).
 
 \paragraph{Questions before the redesign is built.}
 \begin{enumerate}
