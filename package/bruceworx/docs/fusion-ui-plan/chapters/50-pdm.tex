@@ -54,7 +54,7 @@ so a released assembly picks up the child's latest released revision unless it i
 \label{fig:pdm-model}
 \end{figure}
 
-\begin{epic}{PDM-02}{Data model \& lifecycle spec}{M2}{\stProg}{(new)}
+\begin{epic}{PDM-02}{Data model \& lifecycle spec}{M2}{\stDone}{(new)}
 Specify Figure~\ref{fig:pdm-model} and the lifecycle in Figure~\ref{fig:lifecycle-sm} as an API contract
 (OpenAPI) that any storage option implements. A drawing is its own \emph{Item}, numbered like its part, whose
 revision moves \emph{with} the part's: one ECO releases both.
@@ -64,7 +64,9 @@ lifecycle, ECR/ECO, drawing coupling, BOM explosion, where-used, cycle rejection
 including check-in/out and locks).
 \textbf{Brought up to date 24 Oct (\S\ref{sec:pdm02-spec}):} the YAML (0.2.0-draft, 21 operations) now says what the
 folder vault, review and release do; table~\ref{tab:pdm-transitions} lists every transition and
-\file{tests/test\_pdm\_contract.py} tests each one and its refusals. Eleven items wait for your approval.
+\file{tests/test\_pdm\_contract.py} tests each one and its refusals. \textbf{Approved 24 Oct} (A1--A11) and
+\textbf{done 25 Oct}: the approved changes are in \file{pdm.py} (YAML 0.3.0-draft), and every row of the table has
+its endpoint and a test (62 contract tests, run on the model and on the folder vault).
 \emph{Acceptance:} spec approved; every transition in Figure~\ref{fig:lifecycle-sm} has an endpoint and a test.
 \end{epic}
 

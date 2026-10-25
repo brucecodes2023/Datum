@@ -127,6 +127,12 @@ add-on is strongest (question~1).
 Steps 1--3 do not need the vault and can start at once; steps 4--5 follow PDM-04.
 
 %----------------------------------------------------------------------
+\paragraph{Decision (your answers, 23 Oct; closes \eref{ECD-01}).} All five as recommended: \textbf{our own bridge} on
+\code{kicad-cli} for import and the vault, with KiCad StepUp evaluated only for the outline round trip (\eref{ECD-03});
+\textbf{one PCBA line} in the BOM, the component BOM staying in KiCad; component materials \textbf{guessed by footprint
+library}, with a part-number mass table for heavy parts; \textbf{KiCad's render} as the thumbnail; and \textbf{you}
+are the only one who edits boards for now.
+
 \subsubsection*{Questions before ECD starts}
 
 \begin{enumerate}

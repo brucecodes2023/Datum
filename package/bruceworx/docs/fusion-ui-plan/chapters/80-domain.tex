@@ -65,12 +65,12 @@ the acceptance check.
 \section{Track ECD --- ECAD bridge (KiCad)}\label{sec:ecd}
 %======================================================================
 
-\begin{epic}{ECD-01}{ECAD intake \& adopt-vs-build}{M1}{\stProg}{FCB-P2E-01..04}
+\begin{epic}{ECD-01}{ECAD intake \& adopt-vs-build}{M1}{\stDone}{FCB-P2E-01..04}
 Requirements intake from the ECAD owner (KiCad version, outline and keep-outs, direction of placement sync,
 STEP needs, sample board). Evaluate the KiCad StepUp add-on on current FreeCAD with a KiCad 9 board,
 including its AGPL licence and maintenance. Then a decision memo: adopt StepUp unmodified, or build a bridge on
-\code{kicad-cli} and the KiCad 9 IPC API. The Ops sample data shows this gate as done, but the result isn't
-recorded (open question).
+\code{kicad-cli} and the KiCad 9 IPC API. \textbf{Decided 23 Oct} (\S\ref{sec:ecd-plan}): our own bridge on
+\code{kicad-cli}; StepUp is evaluated only for the outline round trip.
 \end{epic}
 
 \begin{epic}{ECD-02}{Board STEP into assembly}{M3}{\stProg}{FCB-P2E-05}
