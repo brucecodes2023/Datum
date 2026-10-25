@@ -1440,11 +1440,16 @@ def t_vault_import(args):
         return {"dry_run": True, "vault": v.name, "files": [_candidate(c) for c in candidates]}
     writer = None
     try:
-        from bruceworx import freecad_io
+        import bruceworx_vaultwizard
 
-        writer = getattr(freecad_io, "write_part_number", None)
+        writer = bruceworx_vaultwizard._writer(v.root)  # imported files take the vault's units (PDM-09)
     except Exception:
-        pass
+        try:
+            from bruceworx import freecad_io
+
+            writer = getattr(freecad_io, "write_part_number", None)
+        except Exception:
+            pass
     report = vault_setup.run_import(v.vault, candidates, args["program"], writer=writer)
     return {"dry_run": False, "vault": v.name,
             "imported": [{"path": p, "part_number": n} for p, n in report.imported],

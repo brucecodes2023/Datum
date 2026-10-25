@@ -98,6 +98,7 @@ def _alive(obj):
 
 
 _hosts = {}  # dock name -> TabHost
+BADGES = {}  # dock name -> callable() -> short text after the tab's title ("" for none), e.g. "in"
 _factories = {}  # dock name -> factory(parent) -> QWidget
 _docks = {}  # dock name -> QDockWidget
 
@@ -240,13 +241,17 @@ def command_word(title):
     return text
 
 
-def strip_items(titles, current, command_open, command_title):
-    """[(index, text, kind, is_current)] for the strip: our tabs, then the command's tab while one is open."""
+def strip_items(titles, current, command_open, command_title, badges=None):
+    """[(index, text, kind, is_current)] for the strip: our tabs, then the command's tab while one is open.
+
+    ``badges``: tab title -> short text shown after it ("Vault · in" when the active document's
+    units differ from the vault's, PDM-09)."""
     ours = [t for _n, t in TABS]
     out = []
     for i, title in enumerate(titles):
         if title in ours:
-            out.append((i, title, "tab", i == current))
+            badge = (badges or {}).get(title, "")
+            out.append((i, f"{title} · {badge}" if badge else title, "tab", i == current))
         elif command_open:
             out.append((i, command_word(command_title) or title, "command", i == current))
     return out
@@ -337,7 +342,7 @@ def _strip_class():
             # The command's name: bruceworx_taskcard titles the Tasks dock after the open dialog.
             task_dock = self.tabs.window().findChild(QtWidgets.QDockWidget, TASK_DOCK)
             command_title = task_dock.windowTitle() if task_dock is not None else ""
-            items = strip_items(titles, self.tabs.currentIndex(), _dialog_open(), command_title)
+            items = strip_items(titles, self.tabs.currentIndex(), _dialog_open(), command_title, _badges())
             if [(i, t, k) for i, t, k, _c in items] != [(b.index, b.text(), b.property("kind")) for b in self.buttons]:
                 self.rebuild(items)
             for b, (_i, _t, _k, current) in zip(self.buttons, items):
@@ -376,6 +381,20 @@ def _strip_class():
 
 
 _strip = None
+
+
+def _badges():
+    """tab title -> badge text, from BADGES (a failing badge is blank)."""
+    out = {}
+    titles = dict(TABS)
+    for key, fn in list(BADGES.items()):
+        try:
+            text = str(fn() or "")
+        except Exception:
+            text = ""
+        if text and key in titles:
+            out[titles[key]] = text
+    return out
 
 
 def _install_strip():

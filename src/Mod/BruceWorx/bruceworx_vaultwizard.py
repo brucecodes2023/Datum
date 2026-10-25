@@ -380,14 +380,27 @@ def _engine():
     return vault_setup
 
 
-def _writer():
-    """freecad_io.write_part_number, or None if the add-on has none yet."""
+def _writer(root=""):
+    """freecad_io.write_part_number (imported files take the vault's units, PDM-09), or None if the
+    add-on has none yet."""
     try:
         from bruceworx import freecad_io
 
-        return getattr(freecad_io, "write_part_number", None)
+        write = getattr(freecad_io, "write_part_number", None)
     except Exception:
         return None
+    if write is None:
+        return None
+    units = ""
+    try:
+        import bruceworx_units
+
+        units = bruceworx_units.vault_units(root) if root else ""
+    except Exception:
+        units = ""
+    if not units:
+        return write
+    return lambda path, part_number, revision=None: write(path, part_number, revision, units=units)
 
 
 def open_vault_root():
@@ -1873,7 +1886,7 @@ def _make_classes():
             if not chosen or self.job is not None:
                 return False
             try:
-                self.job = ImportJob(self.vs, self.root, self.candidates, self.program(), _writer())
+                self.job = ImportJob(self.vs, self.root, self.candidates, self.program(), _writer(self.root))
             except Exception as exc:
                 self.file_issues.set([("error", f"The import could not start: {exc}")])
                 self.job = None

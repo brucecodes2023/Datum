@@ -1295,6 +1295,19 @@ void Application::slotActiveDocument(const App::Document& Doc)
         if (!hGrp->GetBool("IgnoreProjectSchema")) {
             int userSchema = Doc.UnitSystem.getValue();
             Base::UnitsApi::setSchema(userSchema);
+            // [BW] PDM-09: decimals follow the schema's length unit. Inch parts want three
+            // (.125, not 0.13), millimetre parts two, and stock FreeCAD has one setting for
+            // every schema. Units/DecimalsMetric and Units/DecimalsInch, when set (the
+            // BruceWorx pack writes 2 and 3), apply on every document switch; without them
+            // the stock behaviour is unchanged.
+            {
+                const std::string lengthUnit = Base::UnitsApi::getBasicLengthUnit();
+                const bool inch = lengthUnit == "in" || lengthUnit == "ft";
+                const int decimals = hGrp->GetInt(inch ? "DecimalsInch" : "DecimalsMetric", -1);
+                if (decimals >= 0) {
+                    Base::UnitsApi::setDecimals(decimals);
+                }
+            }
             getMainWindow()->setUserSchema(userSchema);
             Application::Instance->onUpdate();
         }

@@ -61,6 +61,7 @@ public:
 
 private:
     QString formatValueToSpec(double value, QString formatSpecifier) const;
+    QString dropLeadingZero(QString formattedValue) const;  // [BW] PDM-09: ".250" on inch drawings
     bool isNumericFormat(const QString& formatSpecifier) const;
 
     DrawViewDimension* m_dimension {nullptr};

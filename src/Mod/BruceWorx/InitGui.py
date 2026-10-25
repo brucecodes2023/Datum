@@ -93,6 +93,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx right panel tabs were not installed: {exc}")
 
 try:
+    import bruceworx_units
+
+    bruceworx_units.install()  # PDM-09: new documents take the vault's units; readouts
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx units were not installed: {exc}")
+
+try:
     import bruceworx_menu
 
     bruceworx_menu.get_menu()

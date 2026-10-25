@@ -291,7 +291,7 @@ QString DimensionFormatter::formatValueToSpec(const double value, QString format
         if (isNumericFormat(formatSpecifier)) {
             formattedValue = format(formatSpecifier, value);
         }
-        return formattedValue;
+        return dropLeadingZero(formattedValue);
     }
 
     QString spec = wrMatch.captured(QStringLiteral("spec")).toLower();
@@ -331,7 +331,26 @@ QString DimensionFormatter::formatValueToSpec(const double value, QString format
         formattedValue = format(formatSpecifier, roundValue);
     }
 
-    return formattedValue;
+    return dropLeadingZero(formattedValue);
+}
+
+// [BW] PDM-09: ASME Y14.5 inch drawings write .250 and ±.005, not 0.250. A length (never an
+// angle) shown while an inch schema is active loses its leading zero when
+// Mod/TechDraw/Dimensions/DropLeadingZeroInch is on. Off in stock FreeCAD; the BruceWorx pack
+// turns it on (a BruceWorx vault's inch drawings are ASME, plan PDM-09 question 3).
+QString DimensionFormatter::dropLeadingZero(QString formattedValue) const
+{
+    if (formattedValue.isEmpty() || !m_dimension
+        || m_dimension->Type.isValue("Angle") || m_dimension->Type.isValue("Angle3Pt")) {
+        return formattedValue;
+    }
+    const std::string lengthUnit = Base::UnitsApi::getBasicLengthUnit();
+    if ((lengthUnit != "in" && lengthUnit != "ft")
+        || !Preferences::getPreferenceGroup("Dimensions")->GetBool("DropLeadingZeroInch", false)) {
+        return formattedValue;
+    }
+    static const QRegularExpression leadingZero(QStringLiteral("^([+-]?)0(?=\\.)"));
+    return formattedValue.replace(leadingZero, QStringLiteral("\\1"));
 }
 
 bool DimensionFormatter::isNumericFormat(const QString& formatSpecifier) const

@@ -1033,6 +1033,12 @@ def make_new_file(path, pn, kind, description, vault_root):
     doc = FreeCAD.newDocument(pn.replace("-", "_"), hidden=True)
     try:
         doc.Label = pn
+        try:
+            import bruceworx_units
+
+            bruceworx_units.apply_units(doc, bruceworx_units.default_units(vault_root, doc))  # PDM-09
+        except Exception as exc:  # noqa: BLE001 -- a part without the vault's units is still a part
+            FreeCAD.Console.PrintWarning(f"New Part in Vault: units not applied: {exc}\n")
         if kind == "assembly":
             main = doc.addObject("Assembly::AssemblyObject", "Assembly")
             main.newObject("Assembly::JointGroup", "Joints")

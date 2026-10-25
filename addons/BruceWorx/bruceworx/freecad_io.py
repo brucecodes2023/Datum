@@ -96,10 +96,22 @@ def set_part_number(obj, part_number: str) -> None:
     obj.PartNumber = part_number
 
 
-def write_part_number(path: str, part_number: str, revision: str | None = None) -> str:
+UNIT_SCHEMAS = {"mm": 0, "in": 3}  # Document.UnitSystem: Standard (mm, kg, s, °), Imperial decimal (in, lb)
+
+
+def set_units(doc, units: str) -> None:
+    """The document's UnitSystem for the vault's units ("mm" | "in"; PDM-09). Lengths are stored in
+    millimetres whatever is shown, so nothing is converted."""
+    index = UNIT_SCHEMAS.get(str(units or "").strip().lower()[:2])
+    if index is not None and "UnitSystem" in doc.PropertiesList:
+        doc.UnitSystem = index
+
+
+def write_part_number(path: str, part_number: str, revision: str | None = None, units: str | None = None) -> str:
     """Give the file's main object (:func:`main_object`) the schema's part
     properties (``partprops.Schema.apply``) and set ``PartNumber``, and
-    ``Revision`` (default the first pre-release, ``01``); save and close.
+    ``Revision`` (default the first pre-release, ``01``); with ``units`` the
+    vault's unit system too (PDM-09); save and close.
     Returns the object's name. The vault import passes this as its writer."""
     require_freecad()
     import FreeCAD  # noqa: PLC0415
@@ -123,6 +135,8 @@ def write_part_number(path: str, part_number: str, revision: str | None = None) 
             raise ValueError(f"{obj.Name}: {'; '.join(clash)}")
         set_part_number(obj, part_number)
         obj.Revision = pdm.first_prerelease() if revision is None else revision
+        if units:
+            set_units(doc, units)
         name = obj.Name
         doc.save()
     finally:

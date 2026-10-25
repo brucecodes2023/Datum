@@ -97,6 +97,25 @@ def on_switch_changed(store, snapshot_path: str, value: bool) -> str:
     return bruceworx_pack.disable(store, snapshot_path)
 
 
+# --- units (PDM-09) -----------------------------------------------------------
+
+
+def apply_units(doc, units=None) -> str:
+    """Give a document the vault's unit profile, or ``units`` ("mm" | "in"): its UnitSystem (and
+    the GUI's schema and decimals when it is active). Returns the units applied. The work is in
+    bruceworx_units; this name is the one other modules (New Project) call."""
+    import bruceworx_units
+
+    return bruceworx_units.apply_units(doc, units)
+
+
+def default_units(root=None, doc=None) -> str:
+    """"mm" or "in" a new document gets: the project's, else the vault's, else FreeCAD's."""
+    import bruceworx_units
+
+    return bruceworx_units.default_units(root, doc)
+
+
 # --- FreeCAD glue -------------------------------------------------------------
 
 _live = {"last": None, "observer": None, "group": None, "busy": False}
