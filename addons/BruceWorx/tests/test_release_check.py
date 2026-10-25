@@ -17,6 +17,7 @@ from bruceworx.pdm_folder import FolderVault  # noqa: E402
 PART = "BW-01-01001-001"
 BOLT = "BW-01-01002-001"
 DWG = "BW-03-01001-001"
+ASM = "BW-02-01001-001"
 ASSY = "BW-02-01001-001"
 ME = "bruce@mac"
 
@@ -203,6 +204,69 @@ class DrawingCurrentTests(Base):
         line = self.lines(PART)[rc.DRAWING_CURRENT]
         self.assertTrue(line.ok)
         self.assertIn("time comparison", line.detail)
+
+
+class InterferenceTests(Base):
+    """Line 7 (ASM-06): the interference check's clashes, a warning that never blocks; only in Keystone."""
+
+    def fake_check(self, summary):
+        import types
+
+        module = types.ModuleType("bruceworx_interference")
+        module.calls = []
+
+        def check_file(path, gap=0.0):
+            module.calls.append(path)
+            return summary
+
+        module.check_file = check_file
+        sys.modules["bruceworx_interference"] = module
+        self.addCleanup(sys.modules.pop, "bruceworx_interference", None)
+        return module
+
+    def test_skipped_for_parts_and_outside_keystone(self):
+        self.add(PART)
+        self.assertEqual((self.lines(PART)[rc.INTERFERENCE].skipped, self.lines(PART)[rc.INTERFERENCE].kind),
+                         (True, rc.WARN))
+        self.add(ASM, "assembly")
+        sys.modules.pop("bruceworx_interference", None)
+        line = self.lines(ASM)[rc.INTERFERENCE]
+        self.assertTrue(line.skipped)
+        self.assertIn("Keystone", line.detail)
+
+    def test_clashes_warn_and_never_block(self):
+        self.add(ASM, "assembly")
+        module = self.fake_check({"counts": {"clash": 2, "fit": 1, "contact": 3, "clearance": 0}, "errors": [],
+                                  "results": [{"kind": "clash", "pair": "Gear / Shaft", "volume": 12.3456}]})
+        lines = self.lines(ASM)
+        line = lines[rc.INTERFERENCE]
+        self.assertEqual((line.ok, line.passed, line.warning), (False, True, True))
+        self.assertIn("2 clashes", line.detail)
+        self.assertIn("1 marked fit", line.detail)
+        self.assertIn("Gear / Shaft 12.35 mm³", line.detail)
+        self.assertEqual(module.calls, [rc._vault_file(self.vault, ASM)])  # no work copy: the stored file
+        os.makedirs(os.path.dirname(self.ws.path(ASM)), exist_ok=True)
+        shutil.copy(rc._vault_file(self.vault, ASM), self.ws.path(ASM))
+        self.lines(ASM)
+        self.assertEqual(module.calls[-1], self.ws.path(ASM))  # the work copy, whose links find the work copies
+        rc.apply(list(lines.values()), reviewed=True, waiver="")
+        blockers = rc.blockers(list(lines.values()), note="go")
+        self.assertNotIn("interference", " ".join(blockers).lower())
+        self.assertEqual(rc.record(list(lines.values()))[rc.INTERFERENCE]["warning"], True)
+
+    def test_clean_assembly_passes(self):
+        self.add(ASM, "assembly")
+        self.fake_check({"counts": {"clash": 0, "fit": 0, "contact": 2, "clearance": 0}, "errors": [], "results": []})
+        line = self.lines(ASM)[rc.INTERFERENCE]
+        self.assertEqual((line.ok, line.detail), (True, "no overlap"))
+
+    def test_a_check_that_fails_to_run_is_a_warning(self):
+        self.add(ASM, "assembly")
+        module = self.fake_check(None)
+        module.check_file = lambda path, gap=0.0: (_ for _ in ()).throw(RuntimeError("no assembly"))
+        line = self.lines(ASM)[rc.INTERFERENCE]
+        self.assertEqual((line.ok, line.passed), (False, True))
+        self.assertIn("did not run", line.detail)
 
 
 class ComponentTests(Base):

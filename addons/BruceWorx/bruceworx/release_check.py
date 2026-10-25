@@ -38,6 +38,7 @@ DRAWING = "drawing"
 COMPONENTS = "components"
 REVIEWED = "drawing_reviewed"
 DRAWING_CURRENT = "drawing_current"  # PDM-09
+INTERFERENCE = "interference"  # ASM-06
 NOTE = "note"
 
 AUTO = "auto"
@@ -50,6 +51,7 @@ TEXTS = {
     COMPONENTS: "Every component released",
     REVIEWED: "Drawing reviewed against the model",
     DRAWING_CURRENT: "Drawing current (made from this model)",
+    INTERFERENCE: "No clashes between the parts (interference check)",
 }
 
 # Title-block fields that hold the part number, compared without case, "_" or " ".
@@ -375,6 +377,47 @@ def _drawing_current(ws, pn, drawing_line):
     return line
 
 
+def _interference(ws, pn):
+    """Line 7 (ASM-06): the assembly's parts do not overlap, by bruceworx_interference.check_file on
+    the work copy (the vault's stored file when there is none). Marked fits are not clashes. Only
+    inside Keystone (the check needs its geometry kernel); the CLI skips it. Never blocks (WARN):
+    the plan left blocking to a later answer."""
+    item = ws.vault.items[pn]
+    line = Line(INTERFERENCE, TEXTS[INTERFERENCE], kind=WARN)
+    if item.item_type != "assembly":
+        line.skipped, line.detail = True, "not an assembly"
+        return line
+    try:
+        import bruceworx_interference as itf  # noqa: PLC0415 -- Keystone's module, FreeCAD only
+    except ImportError:
+        line.skipped, line.detail = True, "checked in Keystone, not here"
+        return line
+    path = ws.path(pn)
+    if not os.path.exists(path):
+        path = _vault_file(ws.vault, pn)
+    if path is None:
+        line.skipped, line.detail = True, "no file to check"
+        return line
+    try:
+        summary = itf.check_file(path)
+    except Exception as exc:  # noqa: BLE001 -- a file that does not open: say so, never block
+        line.detail = f"the check did not run: {exc}"
+        return line
+    counts = summary.get("counts", {})
+    clashes = counts.get("clash", 0)
+    line.ok = clashes == 0 and not summary.get("errors")
+    parts = [f"{clashes} clash{'es' if clashes != 1 else ''}"] if clashes else []
+    if counts.get("fit"):
+        parts.append(f"{counts['fit']} marked fit{'s' if counts['fit'] != 1 else ''}")
+    if summary.get("errors"):
+        parts.append("; ".join(str(e) for e in summary["errors"]))
+    worst = [r for r in summary.get("results", []) if r.get("kind") == "clash"][:3]
+    if worst:
+        parts.append("worst: " + ", ".join(f"{r.get('pair', '')} {r.get('volume', 0):.2f} mm³".strip() for r in worst))
+    line.detail = ", ".join(parts) if parts else "no overlap"
+    return line
+
+
 def _reviewed(drawing_line):
     line = Line(REVIEWED, TEXTS[REVIEWED], kind=MANUAL)
     if drawing_line.skipped:
@@ -383,11 +426,11 @@ def _reviewed(drawing_line):
 
 
 def check_item(ws, pn, batch=(), no_drawing=False) -> list:
-    """Lines 1-4 and the PDM-09 warning line for ``pn`` (the review tick unticked). ``batch``: the part numbers releasing
+    """Lines 1-4, the PDM-09 drawing-current and ASM-06 interference warning lines for ``pn`` (the review tick unticked). ``batch``: the part numbers releasing
     together (an ECO's items). ``ws`` is a ``pdm_workspace.Workspace``."""
     drawing = _drawing(ws, pn, no_drawing)
     return [_checked_in(ws, pn), drawing, _drawing_current(ws, pn, drawing), _components(ws, pn, batch),
-            _reviewed(drawing)]
+            _interference(ws, pn), _reviewed(drawing)]
 
 
 def apply(lines, reviewed=False, waiver="") -> list:
