@@ -206,6 +206,7 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self._bar.tipDragFinished.connect(self._on_drag_finished)
         self._bar.tipDragCancelled.connect(self._on_drag_cancelled)
         self._bar.playbackRequested.connect(self._on_playback)
+        self._bar.renameRequested.connect(self._rename)
         self._drag = None
         self.setWidget(self._bar)
         # One row, no dock title: the bar is the only header (roadmap §13.3).
@@ -489,6 +490,46 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         except Exception as exc:
             FreeCAD.Console.PrintError(f"History timeline: cannot edit {name}: {exc}\n")
 
+    def _begin_rename(self, name):
+        _body, feature = self._feature(name)
+        if feature is None:
+            return
+        self._bar.begin_rename(name, feature.Label)
+
+    def _rename(self, name, label):
+        _body, feature = self._feature(name)
+        if feature is None or not label or label == feature.Label:
+            return
+
+        def apply(_doc, _body):
+            feature.Label = label
+
+        self._transaction("Rename feature", apply)
+
+    def _delete(self, name):
+        """Delete through Std_Delete: FreeCAD asks when other objects depend on the
+        feature ("Object dependencies") and PartDesign's view providers relink the
+        chain and show the base again. Headless: model.delete_feature."""
+        body, feature = self._feature(name)
+        if feature is None:
+            return
+        if FreeCAD.GuiUp:
+            import FreeCADGui
+
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(feature)
+                FreeCADGui.runCommand("Std_Delete")
+            except Exception as exc:
+                FreeCAD.Console.PrintError(f"History timeline: cannot delete {name}: {exc}\n")
+            self.schedule_refresh()
+            return
+
+        def apply(doc, _body):
+            model.delete_feature(body, feature)
+
+        self._transaction("Delete feature", apply)
+
     def _set_suppressed(self, feature, value):
         def apply(_doc, _body):
             model.set_suppressed(feature, value)
@@ -500,16 +541,24 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         body, feature = self._feature(name)
         if feature is None:
             return
+        menu = self.build_menu(name, body, feature)
+        if hasattr(menu, "exec"):
+            menu.exec(global_pos)
+        else:
+            menu.exec_(global_pos)
+
+    def build_menu(self, name, body, feature):
+        """Fusion's chip menu: Edit, Rename, Suppress, Roll to here, Delete, Move earlier/later.
+        Returned unshown so tests can read the actions (``menu.actions()``)."""
         menu = QtWidgets.QMenu(self)
+        menu.setObjectName("HistoryTimelineMenu")
         edit_action = menu.addAction("Edit feature")
+        edit_action.setObjectName("edit")
         edit_action.triggered.connect(lambda _checked=False, n=name: self._edit(n))
 
-        roll_action = menu.addAction("Roll history to here")
-        ok, reason = model.can_be_tip(body, feature)
-        roll_action.setEnabled(ok)
-        if not ok:
-            roll_action.setToolTip(reason)
-        roll_action.triggered.connect(lambda _checked=False, n=name: self._roll_to(n))
+        rename_action = menu.addAction("Rename")
+        rename_action.setObjectName("rename")
+        rename_action.triggered.connect(lambda _checked=False, n=name: self._begin_rename(n))
 
         if hasattr(feature, "Suppressed"):
             suppressed = model.is_suppressed(feature)
@@ -521,22 +570,34 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
                 )
             )
         else:
-            missing = menu.addAction("Suppress feature")
-            missing.setEnabled(False)
-            missing.setToolTip("This object has no Suppressed property.")
+            suppress_action = menu.addAction("Suppress feature")
+            suppress_action.setEnabled(False)
+            suppress_action.setToolTip("This object has no Suppressed property.")
+        suppress_action.setObjectName("suppress")
+
+        roll_action = menu.addAction("Roll history to here")
+        roll_action.setObjectName("roll")
+        ok, reason = model.can_be_tip(body, feature)
+        roll_action.setEnabled(ok)
+        if not ok:
+            roll_action.setToolTip(reason)
+        roll_action.triggered.connect(lambda _checked=False, n=name: self._roll_to(n))
+
+        delete_action = menu.addAction("Delete")
+        delete_action.setObjectName("delete")
+        delete_action.triggered.connect(lambda _checked=False, n=name: self._delete(n))
 
         menu.addSeparator()
         earlier = menu.addAction("Move earlier")
+        earlier.setObjectName("earlier")
         later = menu.addAction("Move later")
+        later.setObjectName("later")
         for action in (earlier, later):
             action.setEnabled(False)
             action.setToolTip(
                 "Not in this spike. Assigning Body.Group does not rewrite BaseFeature."
             )
-        if hasattr(menu, "exec"):
-            menu.exec(global_pos)
-        else:
-            menu.exec_(global_pos)
+        return menu
 
     def closeEvent(self, event):
         # Closing the dock is the disable gesture. Preference goes back to false.

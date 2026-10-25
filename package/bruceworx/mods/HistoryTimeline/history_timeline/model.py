@@ -314,6 +314,14 @@ def rewire_solid_chain(body, ordered_objects):
     body.Group = list(ordered_objects)
 
 
+def delete_feature(body, feature):
+    """Take ``feature`` out of the body (relinks the chain, moves Tip off it) and
+    out of the document. Used headless; the dock prefers Std_Delete in the GUI,
+    which asks about dependants first."""
+    body.removeObject(feature)
+    feature.Document.removeObject(feature.Name)
+
+
 def remove_feature(body, feature):
     """``Body.removeObject``. Virtual dispatch should run ``Body::removeObject``.
 

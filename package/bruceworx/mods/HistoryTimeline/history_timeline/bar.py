@@ -451,6 +451,7 @@ class TimelineBar(QtWidgets.QWidget):
     tipDragFinished = QtCore.Signal(object)
     tipDragCancelled = QtCore.Signal()
     playbackRequested = QtCore.Signal(str)
+    renameRequested = QtCore.Signal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -511,6 +512,8 @@ class TimelineBar(QtWidgets.QWidget):
         self._marker = None
         self._preview_tip = None
         self._has_marker = False
+        self._rename_edit = None
+        self._rename_name = None
 
     # ----- building the row -----------------------------------------------------------------
 
@@ -519,6 +522,7 @@ class TimelineBar(QtWidgets.QWidget):
         (assemblies have no tip); ``note`` is shown at the right end."""
         self._click_timer.stop()
         self._pending_name = None
+        self.cancel_rename()
         self._buttons = {}
         self._order = []
         self._entries = {}
@@ -607,6 +611,74 @@ class TimelineBar(QtWidgets.QWidget):
         button = self._buttons.get(name) if name else None
         if button is not None:
             self._scroll.ensureWidgetVisible(button, 24, 0)
+
+    # ----- inline rename --------------------------------------------------------------------
+
+    def begin_rename(self, name, current_label):
+        """Open a line edit over chip ``name``; Enter emits ``renameRequested``."""
+        button = self._buttons.get(name)
+        if button is None:
+            return None
+        self.cancel_rename()
+        edit = QtWidgets.QLineEdit(self._row_host)
+        edit.setObjectName("HistoryTimelineRename")
+        edit.setText(current_label)
+        edit.selectAll()
+        width = max(120, min(260, edit.fontMetrics().horizontalAdvance(current_label) + 40))
+        x = min(button.x(), max(0, self._row_host.width() - width))
+        edit.setGeometry(x, 2, width, self._row_host.height() - 4)
+        edit.editingFinished.connect(self._finish_rename)
+        edit.installEventFilter(self)
+        edit.show()
+        edit.setFocus()
+        self._scroll.ensureWidgetVisible(button, 24, 0)
+        self._rename_edit = edit
+        self._rename_name = name
+        return edit
+
+    def rename_editor(self):
+        return self._rename_edit
+
+    def eventFilter(self, obj, event):
+        if obj is self._rename_edit and event.type() == qt_enum(
+            QtCore.QEvent, ("Type", "KeyPress"), ("KeyPress",)
+        ):
+            escape = qt_enum(QtCore.Qt, ("Key", "Key_Escape"), ("Key_Escape",))
+            if event.key() == escape:
+                self.cancel_rename()
+                return True
+        return super().eventFilter(obj, event)
+
+    def cancel_rename(self):
+        edit = self._rename_edit
+        self._rename_edit = None
+        self._rename_name = None
+        if edit is not None:
+            try:
+                edit.editingFinished.disconnect(self._finish_rename)
+            except (RuntimeError, TypeError):
+                pass
+            edit.hide()
+            edit.deleteLater()
+
+    def _finish_rename(self):
+        edit = self._rename_edit
+        name = self._rename_name
+        if edit is None or name is None:
+            return
+        text = edit.text().strip()
+        entry = self._entries.get(name)
+        self.cancel_rename()
+        if text and entry is not None and text != entry.label:
+            self.renameRequested.emit(name, text)
+
+    def keyPressEvent(self, event):
+        escape = qt_enum(QtCore.Qt, ("Key", "Key_Escape"), ("Key_Escape",))
+        if event.key() == escape and self._rename_edit is not None:
+            self.cancel_rename()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     # ----- marker position ------------------------------------------------------------------
 

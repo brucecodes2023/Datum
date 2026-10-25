@@ -338,6 +338,27 @@ def test_playback_targets():
         App.closeDocument(doc.Name)
 
 
+def test_delete_feature():
+    doc = App.newDocument("TimelineDelete")
+    try:
+        built = build_body(doc)
+        body = built["body"]
+        box, cylinder, sphere = built["box"], built["cylinder"], built["sphere"]
+        model.delete_feature(body, cylinder)
+        doc.recompute()
+        check(doc.getObject("Cylinder") is None, "delete_feature removes the object from the document")
+        check(sphere.BaseFeature == box, "delete_feature relinks the next solid onto the previous one")
+        check(body.Tip == sphere, "deleting a middle solid leaves the tip")
+        check(body.isValid() and abs(volume(body) - (1000 + volume(sphere) - 1000)) < 1e-3, "body recomputes after the delete")
+        model.delete_feature(body, sphere)
+        doc.recompute()
+        check(body.Tip == box, "deleting the tip moves the tip to the previous solid")
+        check(names(body.Group) == [built["sketch"].Name, built["datum"].Name, box.Name]
+              + ([built["varset"].Name] if built["varset"] is not None else []), f"group after deletes {names(body.Group)}")
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def test_reorder_is_not_free():
     doc = App.newDocument("TimelineReorder")
     try:
@@ -449,6 +470,7 @@ def main():
         test_read_order_tip_and_chain()
         test_set_tip_and_suppress()
         test_playback_targets()
+        test_delete_feature()
         test_reorder_is_not_free()
     except Exception:
         traceback.print_exc()

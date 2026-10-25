@@ -264,3 +264,116 @@ class TestPlayback(TimelineGuiCase):
         finally:
             App.closeDocument(asm_doc.Name)
             _pump()
+
+
+def _answer_message_boxes(button, log):
+    """Click ``button`` (a QMessageBox.StandardButton) on any message box that opens
+    within the next second or so; records the titles seen."""
+
+    def tick():
+        for widget in QtWidgets.QApplication.topLevelWidgets():
+            if isinstance(widget, QtWidgets.QMessageBox) and widget.isVisible():
+                log.append(widget.windowTitle())
+                found = widget.button(button)
+                if found is not None:
+                    found.click()
+                else:
+                    widget.reject()
+
+    timer = QtCore.QTimer()
+    timer.setInterval(40)
+    timer.timeout.connect(tick)
+    timer.start()
+    return timer
+
+
+class TestContextMenu(TimelineGuiCase):
+    def menu(self, name):
+        body, feature = self.dock._feature(name)
+        menu = self.dock.build_menu(name, body, feature)
+        return menu, {a.objectName(): a for a in menu.actions() if a.objectName()}
+
+    def test_menu_has_fusion_entries(self):
+        menu, actions = self.menu("Cylinder")
+        self.assertEqual(
+            [a.objectName() for a in menu.actions() if a.objectName()],
+            ["edit", "rename", "suppress", "roll", "delete", "earlier", "later"],
+        )
+        self.assertTrue(actions["roll"].isEnabled())
+        self.assertEqual(actions["suppress"].text(), "Suppress feature")
+
+    def test_roll_to_here_and_suppress(self):
+        _say("Timeline menu: Roll history to here on Box, then Suppress Cylinder")
+        _menu, actions = self.menu("Box")
+        actions["roll"].trigger()
+        _pump(50)
+        self.assertEqual(self.body.Tip.Name, "Box")
+        _menu, actions = self.menu("Cylinder")
+        actions["suppress"].trigger()
+        _pump(50)
+        self.assertTrue(self.doc.getObject("Cylinder").Suppressed)
+        _menu, actions = self.menu("Cylinder")
+        self.assertEqual(actions["suppress"].text(), "Unsuppress feature")
+        actions["suppress"].trigger()
+        _pump(50)
+        self.assertFalse(self.doc.getObject("Cylinder").Suppressed)
+
+    def test_rename_inline(self):
+        _say("Timeline menu: Rename Cylinder to Boss through the inline editor")
+        _menu, actions = self.menu("Cylinder")
+        actions["rename"].trigger()
+        _pump(50)
+        edit = self.bar.rename_editor()
+        self.assertIsNotNone(edit, "no inline editor")
+        self.assertEqual(edit.text(), "Cylinder")
+        undo_before = self.doc.UndoCount
+        edit.setText("Boss")
+        key = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_Return, QtCore.Qt.NoModifier)
+        QtWidgets.QApplication.sendEvent(edit, key)
+        _pump(80)
+        self.assertEqual(self.doc.getObject("Cylinder").Label, "Boss")
+        self.assertEqual(self.doc.UndoCount, undo_before + 1)
+        self.assertIsNone(self.bar.rename_editor())
+        self.assertIn("Boss", self.bar.button_widget("Cylinder").toolTip())
+
+    def test_rename_escape_cancels(self):
+        _menu, actions = self.menu("Box")
+        actions["rename"].trigger()
+        _pump(50)
+        edit = self.bar.rename_editor()
+        edit.setText("Nope")
+        key = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_Escape, QtCore.Qt.NoModifier)
+        QtWidgets.QApplication.sendEvent(edit, key)
+        _pump(50)
+        self.assertEqual(self.doc.getObject("Box").Label, "Box")
+        self.assertIsNone(self.bar.rename_editor())
+
+    def test_delete_last_feature_needs_no_confirm(self):
+        _say("Timeline menu: Delete the Sphere (nothing depends on it: no dialog)")
+        seen = []
+        timer = _answer_message_boxes(QtWidgets.QMessageBox.No, seen)
+        try:
+            _menu, actions = self.menu("Sphere")
+            actions["delete"].trigger()
+            _pump(300)
+        finally:
+            timer.stop()
+        self.assertEqual(seen, [], "no dependency dialog for the last feature")
+        self.assertIsNone(self.doc.getObject("Sphere"))
+        self.assertEqual(self.body.Tip.Name, "Cylinder")
+        self.assertEqual([o.Name for o in self.body.Group], ["Box", "Cylinder"])
+        self.assertIsNone(self.bar.button_widget("Sphere"))
+
+    def test_delete_middle_feature_asks_first(self):
+        _say("Timeline menu: Delete the Cylinder; FreeCAD asks (Sphere depends on it); answer No")
+        seen = []
+        timer = _answer_message_boxes(QtWidgets.QMessageBox.No, seen)
+        try:
+            _menu, actions = self.menu("Cylinder")
+            actions["delete"].trigger()
+            _pump(300)
+        finally:
+            timer.stop()
+        # macOS leaves a QMessageBox's window title empty, so count the boxes.
+        self.assertEqual(len(seen), 1, f"one dependency dialog expected, saw {seen!r}")
+        self.assertIsNotNone(self.doc.getObject("Cylinder"), "No keeps the feature")
