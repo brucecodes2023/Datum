@@ -20,6 +20,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxVaultWizard.py
     TestBruceWorxPreview.py
     TestBruceWorxVaultClient.py
+    TestBruceWorxGaps.py
     TestBruceWorxBridge.py
     preferences-bruceworx.ui
     preferences-bruceworx.svg

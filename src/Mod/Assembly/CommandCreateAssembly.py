@@ -39,6 +39,25 @@ __author__ = "Ondsel"
 __url__ = "https://www.freecad.org"
 
 
+def _bw_front_3d_view():
+    """[BW] FND-08: bring the active document's 3D view to the front before an assembly is set to edit.
+
+    ViewProviderAssembly::setEdit marks the assembly active in ``ActiveView``; with a spreadsheet tab
+    in front that is the sheet's view, so the 3D view never had an active assembly and every assembly
+    command stayed greyed, without a word. A document without a 3D view gets one."""
+    gdoc = Gui.ActiveDocument
+    if gdoc is None:
+        return
+    view = gdoc.ActiveView
+    if view is not None and hasattr(view, "getSceneGraph"):
+        return
+    views = gdoc.mdiViewsOfType("Gui::View3DInventor")
+    if views:
+        Gui.getMainWindow().setActiveWindow(views[0])
+    else:
+        Gui.runCommand("Std_ViewCreate")
+
+
 class CommandCreateAssembly:
     def __init__(self):
         pass
@@ -87,6 +106,7 @@ class CommandCreateAssembly:
 
         Gui.doCommand(commands)
         if not activeAssembly:
+            _bw_front_3d_view()  # [BW] a spreadsheet tab in front (FND-08)
             Gui.doCommandGui("Gui.ActiveDocument.setEdit(assembly)")
 
         App.closeActiveTransaction()
@@ -158,6 +178,7 @@ class CommandActivateAssembly:
         doc = App.ActiveDocument
         assemblies = [o for o in doc.Objects if o.isDerivedFrom("Assembly::AssemblyObject")]
 
+        _bw_front_3d_view()  # [BW] a spreadsheet tab in front (FND-08)
         if len(assemblies) == 1:
             # If there's only one, activate it directly without showing a dialog
             Gui.doCommand(f"Gui.ActiveDocument.setEdit('{assemblies[0].Name}')")
