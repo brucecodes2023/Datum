@@ -256,17 +256,39 @@ class FeatureButton(QtWidgets.QWidget):
 
 
 class MarkerWidget(QtWidgets.QWidget):
-    """Rollback marker. It sits after the tip feature (or at the front if the tip is unset)."""
+    """Rollback marker. It sits after the tip feature (or at the front if the tip is unset).
+
+    Dragging it rolls the history: ``dragStarted`` once on press, ``dragMoved(x)``
+    with the pointer's x in the row's coordinates as it moves, ``dragFinished``
+    on release and ``dragCancelled`` on Escape. The bar turns x into a tip.
+    """
+
+    dragStarted = QtCore.Signal()
+    dragMoved = QtCore.Signal(int)
+    dragFinished = QtCore.Signal()
+    dragCancelled = QtCore.Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("HistoryTimelineMarker")
         self.setProperty("historyChip", True)
-        self.setFixedWidth(8)
-        self.setToolTip(
-            "History marker. Sits after Body.Tip. "
-            "Features to the right stay in the model and still recompute."
+        self.setFixedWidth(10)
+        self.setCursor(
+            qt_enum(QtCore.Qt, ("CursorShape", "SizeHorCursor"), ("SizeHorCursor",))
         )
+        self.setFocusPolicy(qt_enum(QtCore.Qt, ("FocusPolicy", "StrongFocus"), ("StrongFocus",)))
+        self.setToolTip(
+            "History marker. Drag it to roll the body back or forward (Body.Tip). "
+            "Features to the right are rolled back; they stay in the model."
+        )
+        self._dragging = False
+        self._row = None  # widget whose x coordinates dragMoved reports
+
+    def set_row(self, row):
+        self._row = row
+
+    def is_dragging(self):
+        return self._dragging
 
     def paintEvent(self, _event):
         painter = QtGui.QPainter(self)
@@ -274,9 +296,61 @@ class MarkerWidget(QtWidgets.QWidget):
         accent = _palette_colors(self)["accent"]
         painter.setPen(_no_pen())
         painter.setBrush(accent)
-        x = self.width() // 2
-        painter.drawRoundedRect(QtCore.QRectF(x - 1.5, 5, 3, self.height() - 10), 1.5, 1.5)
+        x = self.width() / 2.0
+        w = 4 if self._dragging else 3
+        painter.drawRoundedRect(QtCore.QRectF(x - w / 2.0, 4, w, self.height() - 8), 1.5, 1.5)
+        # Fusion's marker has a small head; ours is a grip at the top.
+        painter.drawRoundedRect(QtCore.QRectF(x - 3.5, 2, 7, 5), 2, 2)
         painter.end()
+
+    def _row_x(self, event):
+        pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+        row = self._row or self.parentWidget()
+        if row is None:
+            return pos.x()
+        return row.mapFromGlobal(pos).x()
+
+    def mousePressEvent(self, event):
+        left = qt_enum(QtCore.Qt, ("MouseButton", "LeftButton"), ("LeftButton",))
+        if event.button() == left:
+            self._dragging = True
+            self.grabKeyboard()
+            self.update()
+            self.dragStarted.emit()
+            self.dragMoved.emit(self._row_x(event))
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._dragging:
+            self.dragMoved.emit(self._row_x(event))
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        left = qt_enum(QtCore.Qt, ("MouseButton", "LeftButton"), ("LeftButton",))
+        if self._dragging and event.button() == left:
+            self._end_drag()
+            self.dragFinished.emit()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
+        escape = qt_enum(QtCore.Qt, ("Key", "Key_Escape"), ("Key_Escape",))
+        if self._dragging and event.key() == escape:
+            self._end_drag()
+            self.dragCancelled.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _end_drag(self):
+        self._dragging = False
+        self.releaseKeyboard()
+        self.update()
 
 
 class TimelineBar(QtWidgets.QWidget):
@@ -284,11 +358,20 @@ class TimelineBar(QtWidgets.QWidget):
 
     ``tipRequested`` / ``editRequested`` carry the feature's internal name.
     A single click waits briefly so a double-click does not also roll the tip.
+
+    Marker drag: ``tipDragStarted()``, then ``tipPreviewRequested(name)`` each time
+    the marker crosses a chip (``name`` is the tip the marker now sits after, or
+    None at the front), then ``tipDragFinished(name)`` or ``tipDragCancelled()``.
+    The bar moves the marker and dims the chips itself; the dock sets ``Body.Tip``.
     """
 
     tipRequested = QtCore.Signal(str)
     editRequested = QtCore.Signal(str)
     contextMenuRequested = QtCore.Signal(str, object)
+    tipDragStarted = QtCore.Signal()
+    tipPreviewRequested = QtCore.Signal(object)
+    tipDragFinished = QtCore.Signal(object)
+    tipDragCancelled = QtCore.Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -311,6 +394,7 @@ class TimelineBar(QtWidgets.QWidget):
         row_host = QtWidgets.QWidget()
         row_host.setObjectName("HistoryTimelineRow")
         row_host.setLayout(self._row)
+        self._row_host = row_host
 
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -339,6 +423,13 @@ class TimelineBar(QtWidgets.QWidget):
         self._click_timer.setInterval(220)
         self._click_timer.timeout.connect(self._emit_single_click)
         self._buttons = {}
+        self._order = []  # chip names in row order (top level)
+        self._entries = {}
+        self._marker = None
+        self._preview_tip = None
+        self._has_marker = False
+
+    # ----- building the row -----------------------------------------------------------------
 
     def set_timeline(self, body_label, entries, empty_message=None, marker=True, note=None):
         """Rebuild the row. ``marker=False`` drops the rollback marker
@@ -346,6 +437,11 @@ class TimelineBar(QtWidgets.QWidget):
         self._click_timer.stop()
         self._pending_name = None
         self._buttons = {}
+        self._order = []
+        self._entries = {}
+        self._marker = None
+        self._preview_tip = None
+        self._has_marker = bool(marker) and bool(entries)
         while self._row.count():
             item = self._row.takeAt(0)
             widget = item.widget()
@@ -364,12 +460,6 @@ class TimelineBar(QtWidgets.QWidget):
             self._row.addStretch(1)
             return
 
-        marker_placed = not marker
-        # Tip cleared, or tip is the external base feature: marker before the row.
-        if not marker_placed and all(entry.after_tip for entry in entries):
-            self._row.addWidget(MarkerWidget())
-            marker_placed = True
-
         for entry in entries:
             button = FeatureButton(entry)
             button.clicked.connect(lambda name=entry.name: self._schedule_click(name))
@@ -378,20 +468,38 @@ class TimelineBar(QtWidgets.QWidget):
                 lambda pos, name=entry.name: self.contextMenuRequested.emit(name, pos)
             )
             self._buttons[entry.name] = button
+            self._entries[entry.name] = entry
+            self._order.append(entry.name)
             self._row.addWidget(button)
-            if marker and entry.is_tip:
-                self._row.addWidget(MarkerWidget())
-                marker_placed = True
 
-        if not marker_placed:
-            # Tip object is missing from the row. Keep a marker at the end so
-            # the bar does not look like history has no playhead.
-            self._row.addWidget(MarkerWidget())
+        if self._has_marker:
+            self._marker = MarkerWidget()
+            self._marker.set_row(self._row_host)
+            self._marker.dragStarted.connect(self._on_drag_started)
+            self._marker.dragMoved.connect(self._on_drag_moved)
+            self._marker.dragFinished.connect(self._on_drag_finished)
+            self._marker.dragCancelled.connect(self._on_drag_cancelled)
+            tip_name = None
+            for entry in entries:
+                if entry.is_tip:
+                    tip_name = entry.name
+            if tip_name is None and not all(entry.after_tip for entry in entries):
+                # Tip object is missing from the row (not expected). Keep a marker at
+                # the end so the bar does not look like history has no playhead.
+                tip_name = self._order[-1]
+            self._preview_tip = tip_name
+            self._row.insertWidget(self._marker_index_for(tip_name), self._marker)
         self._row.addStretch(1)
         self.set_traced(self._traced)
 
     def button_widget(self, name):
         return self._buttons.get(name)
+
+    def marker_widget(self):
+        return self._marker
+
+    def row_widget(self):
+        return self._row_host
 
     def set_traced(self, name):
         """Ring the chip of feature ``name`` (None clears) and scroll it into view."""
@@ -404,6 +512,82 @@ class TimelineBar(QtWidgets.QWidget):
         button = self._buttons.get(name) if name else None
         if button is not None:
             self._scroll.ensureWidgetVisible(button, 24, 0)
+
+    # ----- marker position ------------------------------------------------------------------
+
+    def _marker_index_for(self, tip_name):
+        """Layout index for the marker: right after chip ``tip_name``, or 0 for None."""
+        if tip_name is None or tip_name not in self._buttons:
+            return 0
+        return self._row.indexOf(self._buttons[tip_name]) + 1
+
+    def tip_for_x(self, x):
+        """Tip the marker stands after when it is at ``x`` (row coordinates).
+
+        Chips are visited in row order; the marker falls into the gap before the
+        first chip whose centre lies right of ``x``. The tip is the last solid
+        chip before that gap, or None when there is none.
+        """
+        tip = None
+        for name in self._order:
+            button = self._buttons[name]
+            centre = button.x() + button.width() / 2.0
+            if x < centre:
+                break
+            entry = self._entries[name]
+            if getattr(entry, "is_solid", False):
+                tip = name
+        return tip
+
+    def preview_tip(self, tip_name):
+        """Move the marker after ``tip_name`` (None: front) and dim the chips after it."""
+        if not self._has_marker or self._marker is None:
+            return
+        self._preview_tip = tip_name
+        index = self._marker_index_for(tip_name)
+        current = self._row.indexOf(self._marker)
+        if current != index:
+            self._row.removeWidget(self._marker)
+            # Removing a widget before the target shifts the target left by one.
+            if current != -1 and current < index:
+                index -= 1
+            self._row.insertWidget(index, self._marker)
+        after = tip_name is None
+        for name in self._order:
+            entry = self._entries[name]
+            button = self._buttons[name]
+            is_tip = name == tip_name
+            changed = entry.after_tip != after or entry.is_tip != is_tip
+            entry.after_tip = after
+            entry.is_tip = is_tip
+            if is_tip:
+                after = True
+            if changed:
+                button.update()
+
+    def preview_tip_name(self):
+        return self._preview_tip
+
+    # ----- marker drag ----------------------------------------------------------------------
+
+    def _on_drag_started(self):
+        self._click_timer.stop()
+        self._pending_name = None
+        self.tipDragStarted.emit()
+
+    def _on_drag_moved(self, x):
+        tip = self.tip_for_x(x)
+        if tip != self._preview_tip:
+            self.preview_tip(tip)
+            self.tipPreviewRequested.emit(tip)
+
+    def _on_drag_finished(self):
+        self.tipDragFinished.emit(self._preview_tip)
+
+    def _on_drag_cancelled(self):
+        self.tipDragCancelled.emit()
+
+    # ----- clicks ---------------------------------------------------------------------------
 
     def _schedule_click(self, name):
         self._pending_name = name

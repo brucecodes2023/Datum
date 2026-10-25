@@ -48,6 +48,10 @@ HIDE_WHEN_EMPTY_DEFAULT = True
 # How often the dock checks the active body / assembly / object in edit.
 # None of those changes reaches a document observer.
 POLL_MS = 400
+# Marker drag: Body.Tip follows the marker live (set + recompute on every chip it
+# crosses) while the body has at most this many Group entries. Above it the
+# marker and the dimming still move live and the tip is set once, at the drop.
+LIVE_PREVIEW_MAX = 40
 
 
 def is_enabled() -> bool:
@@ -74,6 +78,20 @@ def _view_icon(obj):
         return None
     icon = getattr(view, "Icon", None)
     return icon
+
+
+def _show_only(body, feature):
+    """Show ``feature`` and hide the body's other PartDesign features (what Set tip
+    leaves on screen). ``feature`` None hides them all."""
+    for obj in body.Group:
+        try:
+            if not obj.isDerivedFrom("PartDesign::Feature"):
+                continue
+            want = obj == feature
+            if bool(obj.Visibility) != want:
+                obj.Visibility = want
+        except (AttributeError, RuntimeError):
+            continue
 
 
 def _active_object(key):
@@ -183,6 +201,11 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self._bar.tipRequested.connect(self._on_click)
         self._bar.editRequested.connect(self._on_double)
         self._bar.contextMenuRequested.connect(self._on_context)
+        self._bar.tipDragStarted.connect(self._on_drag_started)
+        self._bar.tipPreviewRequested.connect(self._on_drag_preview)
+        self._bar.tipDragFinished.connect(self._on_drag_finished)
+        self._bar.tipDragCancelled.connect(self._on_drag_cancelled)
+        self._drag = None
         self.setWidget(self._bar)
         # One row, no dock title: the bar is the only header (roadmap §13.3).
         # The menu item and the preference still show and hide it. A restored
@@ -354,12 +377,87 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
 
         def apply(doc, _body):
             model.set_tip(body, feature)
-            # Match PartDesign_MoveTip: show the feature. The view provider
-            # hides the other solids when the GUI is up.
+            # Match PartDesign_MoveTip: show the tip feature and nothing else.
             if FreeCAD.GuiUp:
-                feature.Visibility = True
+                _show_only(body, feature)
 
         self._transaction("Roll history tip", apply)
+
+    # ----- marker drag --------------------------------------------------------------------
+
+    def _on_drag_started(self):
+        body, _source = active_body()
+        if body is None or self._drag is not None:
+            return
+        doc = body.Document
+        self._drag = {
+            "body": body,
+            "doc": doc,
+            "tip": body.Tip,
+            "live": len(body.Group) <= LIVE_PREVIEW_MAX,
+        }
+        self._suspend = True
+        doc.openTransaction("Roll history tip")
+
+    def drag_is_live(self):
+        """True while a marker drag rolls Body.Tip as it moves (small bodies)."""
+        return bool(self._drag and self._drag["live"])
+
+    def _apply_tip(self, name):
+        """Set the body's tip to feature ``name`` (None clears), show it, recompute."""
+        body = self._drag["body"]
+        doc = self._drag["doc"]
+        feature = None if name is None else doc.getObject(name)
+        if feature is not None:
+            ok, reason = model.can_be_tip(body, feature)
+            if not ok:
+                FreeCAD.Console.PrintWarning(reason + "\n")
+                return
+        if body.Tip == feature:
+            return
+        model.set_tip(body, feature)
+        if FreeCAD.GuiUp:
+            _show_only(body, feature)
+        doc.recompute()
+
+    def _on_drag_preview(self, name):
+        if self._drag is None or not self._drag["live"]:
+            return
+        try:
+            self._apply_tip(name)
+        except Exception as exc:
+            FreeCAD.Console.PrintError(f"History timeline: preview failed: {exc}\n")
+
+    def _end_drag(self, keep):
+        drag = self._drag
+        self._drag = None
+        self._suspend = False
+        if drag is None:
+            return
+        doc = drag["doc"]
+        body = drag["body"]
+        if keep and body.Tip != drag["tip"]:
+            doc.commitTransaction()
+        else:
+            # Nothing changed, or the drag was cancelled: no undo step. Aborting
+            # puts the tip and the visibilities back.
+            doc.abortTransaction()
+            doc.recompute()
+        self.refresh()
+
+    def _on_drag_finished(self, name):
+        if self._drag is None:
+            return
+        try:
+            self._apply_tip(name)
+        except Exception as exc:
+            FreeCAD.Console.PrintError(f"History timeline: rollback failed: {exc}\n")
+            self._end_drag(keep=False)
+            return
+        self._end_drag(keep=True)
+
+    def _on_drag_cancelled(self):
+        self._end_drag(keep=False)
 
     def _edit(self, name):
         _body, feature = self._feature(name)
