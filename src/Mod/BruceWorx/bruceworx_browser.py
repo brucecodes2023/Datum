@@ -225,6 +225,19 @@ def linked_part(obj):
     return target if target is not None and target is not obj else None
 
 
+def instance_configuration(obj):
+    """The configuration an App::Link shows of its part ("Short"), or "" (MOD-03)."""
+    if type_name(obj) != "Link":
+        return ""
+    try:
+        import bruceworx_configs as bc
+
+        name, _follows = bc.instance_configuration(obj)
+    except Exception:
+        return ""
+    return name or ""
+
+
 def held_badges(obj):
     """[("N held", "warn")] for a pattern with instances its joints keep in place."""
     held = _prop(obj, "HeldInstances")
@@ -254,8 +267,12 @@ def _row_info(obj, badges, summary):
     if badges:
         target = linked_part(obj)
         values = part_values(target) if target is not None else None
-        if values and (values[0] or values[1]):
-            return component_meta(values[0], values[1]), []
+        meta = component_meta(values[0], values[1]) if values and (values[0] or values[1]) else ""
+        configuration = instance_configuration(obj)
+        if configuration:
+            meta = " · ".join(part for part in (meta, configuration) if part)
+        if meta:
+            return meta, []
     if summary:
         return feature_summary(obj), []
     return "", []

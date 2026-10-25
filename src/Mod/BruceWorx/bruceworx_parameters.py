@@ -38,6 +38,7 @@ SHEET_HEADERS = (("A1", "Name"), ("B1", "Value"), ("C1", "Comment"))
 COLUMNS = ("Name", "Expression", "Value")
 NAME, EXPRESSION, VALUE = 0, 1, 2
 USER, PROP, CONSTRAINT = "user", "prop", "constraint"
+PER_CONFIGURATION = "per configuration"  # the Expression column of a parameter the Configuration Table drives
 FOLD_LIMIT = 25  # more feature groups than this: folded until opened
 UNITS = ("mm", "cm", "m", "in", "ft", "deg", "kg", "g", "")
 EMPTY_HINT = "Open a document to see its parameters here."
@@ -419,11 +420,28 @@ def text_of(value):
     return bi.value_text(value)
 
 
+def configured_alias(sheet, content):
+    """The Configuration Table's column a user parameter cell reads ("=Configurations.length"), or ""."""
+    if not content.startswith("="):
+        return ""
+    try:
+        import bruceworx_configs as bc
+
+        table = bc.table(sheet.Document)
+        if table is None or not content.startswith(f"={table.Name}."):
+            return ""
+        alias = content[len(table.Name) + 2:].strip()
+        return alias if alias in bc.aliases(table) else ""
+    except Exception:
+        return ""
+
+
 def collect_user(sheet):
     params = []
     for cell, alias in sheet_aliases(sheet):
         content = sheet.getContents(cell) or ""
         expression = content[1:] if content.startswith("=") else content
+        configured = configured_alias(sheet, content)
         try:
             value = text_of(sheet.get(alias))
         except Exception as exc:
@@ -432,6 +450,15 @@ def collect_user(sheet):
             tip = str(exc)
         else:
             tip = ""
+        if configured and value != "error":
+            # the row value shows; the mark says the Configuration Table sets it (MOD-03)
+            import bruceworx_configs as bc
+
+            expression = PER_CONFIGURATION
+            try:
+                tip = f"{alias}: from the Configuration Table, row {bc.active(sheet.Document)}; a value typed here goes to that row"
+            except Exception:
+                tip = f"{alias}: from the Configuration Table"
         comment = ""
         row = cell_rc(cell)[0]
         try:
@@ -1084,7 +1111,7 @@ class Controller:
         if column == NAME:
             return p.kind == USER
         if column == VALUE:
-            return not p.expression or (p.kind == USER and is_literal(p.expression))
+            return not p.expression or (p.kind == USER and (is_literal(p.expression) or p.expression == PER_CONFIGURATION))
         return True
 
     def item_changed(self, item, column):

@@ -302,6 +302,26 @@ class Instances(unittest.TestCase):
         bc.follow_part(self.links[3])
         self.assertEqual(bc.instance_configuration(self.links[3]), ("Long", True))
 
+    def test_browser_and_parameters_show_the_configuration(self):
+        """Known gap of 25 Oct: the Browser row of an instance names its configuration, and a configured
+        parameter shows "per configuration" (its row value) rather than "Configurations.length"."""
+        import bruceworx_browser as bb
+        import bruceworx_parameters as bp
+
+        bc.set_instance_configuration(self.links[0], "Short")
+        self.assertEqual(bb.instance_configuration(self.links[0]), "Short")
+        self.assertEqual(bb.row_info(self.links[0]), ("BW-1001-S · Short", []))
+        self.assertEqual(bb.instance_configuration(self.links[1]), "Standard")  # follows the part's row
+        self.assertEqual(bb.instance_configuration(self.part), "")
+        sheet = self.doc.getObject("Parameters")
+        rows = {p.key: p for p in bp.collect_user(sheet)}
+        self.assertEqual(rows["length"].expression, bp.PER_CONFIGURATION)
+        self.assertEqual(rows["length"].value, "80.00 mm")
+        self.assertIn("row Standard", rows["length"].tip)
+        self.assertEqual(bp.configured_alias(sheet, "=Configurations.length"), "length")
+        self.assertEqual(bp.configured_alias(sheet, "=Configurations.nothing"), "")
+        self.assertEqual(bp.configured_alias(sheet, "80 mm"), "")
+
     def test_reopen_keeps_rows(self):
         for link, name in zip(self.links, ("Short", "Standard", "Long", "Long")):
             bc.set_instance_configuration(link, name)
