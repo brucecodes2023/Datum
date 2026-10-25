@@ -1479,6 +1479,12 @@ QWidget#thumbnailWidget[state="pressed"] {
   background-color: @HoverColor;
 }
 
+#BruceWorxStart QPushButton#bwDashButton:checked {
+  border-color: @AccentColor;
+  color: @AccentColor;
+  font-weight: 600;
+}
+
 #BruceWorxStart QPushButton#bwDashPrimary {
   border-color: @AccentColor;
   background-color: @AccentColor;

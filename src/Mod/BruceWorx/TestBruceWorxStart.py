@@ -339,6 +339,9 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dash.default_tab(False), "recent")
         self.assertEqual(dash.default_tab(True, "recent"), "recent")
         self.assertEqual(dash.default_tab(False, "dashboard"), "dashboard")
+        self.assertEqual(dash.default_tab(True, "files"), "files")
+        self.assertEqual(dash.default_tab(True, "structure"), "structure")
+        self.assertEqual(dash.default_tab(False, "files"), "recent")  # no vault: no file list
 
     def test_tile_query(self):
         import bruceworx_dashboard as dash

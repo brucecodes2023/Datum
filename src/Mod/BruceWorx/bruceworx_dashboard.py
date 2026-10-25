@@ -27,7 +27,10 @@ import os
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF_NAME = "VaultDashboard"
-TABS = (("dashboard", "Vault dashboard"), ("recent", "Recent files"))
+# The Start page's tabs: the vault is browsed here only (the user's choice, 25 Oct): its dashboard, its files,
+# its structure (drawing, product and where-used trees), and the recent files on this Mac.
+TABS = (("dashboard", "Vault dashboard"), ("files", "Files"), ("structure", "Structure"), ("recent", "Recent files"))
+VAULT_TABS = ("dashboard", "files", "structure")
 RANGES = (7, 14, 30)
 FEED_FIRST, FEED_PAGE = 8, 50  # feed lines at first, and how many Show older adds (vault_dashboard)
 STATE_KEYS = (("WIP", "wip", "WIP"), ("In Review", "rev", "Review"), ("Released", "rel", "Released"),
@@ -50,7 +53,7 @@ def enabled() -> bool:
 
 def default_tab(vault_open: bool, chosen: str = "") -> str:
     """The tab to show: the one picked by hand, else the dashboard while a vault is open."""
-    if chosen in ("dashboard", "recent"):
+    if chosen in dict(TABS) and (vault_open or chosen not in VAULT_TABS[1:]):
         return chosen
     return "dashboard" if vault_open else "recent"
 
@@ -517,7 +520,7 @@ def classes():
             names.addWidget(self.sync)
             head.addLayout(names, 1)
             self.import_button = self._button("Import Files…", "bwDashButton", self._import)
-            self.panel_button = self._button("Vault panel", "bwDashButton", open_panel)
+            self.panel_button = self._button("Files", "bwDashButton", open_panel)
             self.project_button = self._button("New Project…", "bwDashPrimary", new_project)
             for b in (self.import_button, self.panel_button, self.project_button):
                 head.addWidget(b, 0, QtCore.Qt.AlignTop)
@@ -542,7 +545,7 @@ def classes():
             self.start_card = Section("Get started", self)
             self.projects_card = Section("Projects", self)
             self.work_card = Section("My work", self)
-            self.work_card.set_link("Open in the Vault panel ›", open_panel)
+            self.work_card.set_link("Open in Files ›", open_panel)
             self.changes_card = Section("Changes", self)
             self.changes_card.set_link("All changes ›", lambda: open_filtered("changes"))
             self.activity_card = Section("Activity", self)
@@ -1000,8 +1003,160 @@ def classes():
             FreeCADGui.Control.closeDialog()
             return True
 
+    class StructureView(QtWidgets.QWidget):
+        """The Structure tab (UAT, 25 Oct): the vault as trees. Drawings (every drawing under what it
+        documents, then what has none), Product (top assemblies down to every part, with quantities)
+        and Where used (a part up to every top assembly). Double-click opens a file."""
+
+        MODES = (("drawings", "Drawings"), ("product", "Product"), ("whereused", "Where used"))
+        COLUMNS = ("Part number", "Description", "Qty", "State", "Drawings")
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setObjectName("bwStructure")
+            self.structure = None
+            self.mode = "product"
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(10)
+            bar = QtWidgets.QHBoxLayout()
+            bar.setSpacing(6)
+            self.mode_group = QtWidgets.QButtonGroup(self)
+            self.mode_buttons = {}
+            for key, text in self.MODES:
+                b = QtWidgets.QPushButton(text, self)
+                b.setObjectName("bwDashButton")
+                b.setCheckable(True)
+                b.clicked.connect(lambda _c=False, k=key: self.set_mode(k))
+                self.mode_group.addButton(b)
+                self.mode_buttons[key] = b
+                bar.addWidget(b)
+            self.part = QtWidgets.QComboBox(self)
+            self.part.setObjectName("bwStructurePart")
+            self.part.setMinimumWidth(320)
+            self.part.currentIndexChanged.connect(lambda _i: self.render())
+            bar.addWidget(self.part)
+            bar.addStretch(1)
+            self.note = label("", "bwStartMuted", self)
+            bar.addWidget(self.note)
+            lay.addLayout(bar)
+            self.tree = QtWidgets.QTreeWidget(self)
+            self.tree.setObjectName("bwStructureTree")
+            self.tree.setColumnCount(len(self.COLUMNS))
+            self.tree.setHeaderLabels(self.COLUMNS)
+            self.tree.setAlternatingRowColors(True)
+            self.tree.setUniformRowHeights(True)
+            self.tree.setMinimumHeight(420)
+            self.tree.itemDoubleClicked.connect(self._open)
+            header = self.tree.header()
+            header.setStretchLastSection(False)
+            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+            for col in (0, 2, 3, 4):
+                header.setSectionResizeMode(col, QtWidgets.QHeaderView.ResizeToContents)
+            lay.addWidget(self.tree, 1)
+            self.set_mode(self.mode)
+
+        def set_structure(self, structure):
+            if structure == self.structure:
+                return
+            self.structure = structure or {"items": {}, "bom": {}, "sources": {}, "drawings": {}}
+            current = self.part.currentData()
+            self.part.blockSignals(True)
+            self.part.clear()
+            items = self.structure["items"]
+            for pn in sorted(items, key=lambda p: (items[p]["type"] == "assembly", p)):
+                info = items[pn]
+                if info["type"] != "drawing":
+                    self.part.addItem(f"{info['display']}  {info['description']}", pn)
+            index = self.part.findData(current)
+            self.part.setCurrentIndex(index if index >= 0 else 0)
+            self.part.blockSignals(False)
+            self.render()
+
+        def set_mode(self, mode):
+            self.mode = mode
+            for key, b in self.mode_buttons.items():
+                b.setChecked(key == mode)
+            self.part.setVisible(mode == "whereused")
+            self.render()
+
+        def _row(self, parent, node, top=False):
+            qty = "" if node.get("qty") is None else str(node["qty"])
+            dwgs = ", ".join(self.structure["items"].get(d, {}).get("display", d) for d in node.get("drawings", ()))
+            texts = (node["display"], node["description"], qty, node["state"], dwgs)
+            item = QtWidgets.QTreeWidgetItem(parent, list(texts))
+            item.setData(0, QtCore.Qt.UserRole, node["pn"])
+            item.setTextAlignment(2, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            tips = []
+            if node.get("source") == "links":
+                tips.append("Lines from the file's links: no BOM recorded at check-in yet")
+            if node.get("cycle"):
+                tips.append("Uses itself: the walk stops here")
+            if tips:
+                for col in range(len(texts)):
+                    item.setToolTip(col, "; ".join(tips))
+            if top:
+                font = item.font(0)
+                font.setBold(True)
+                item.setFont(0, font)
+            for child in node.get("children", ()):
+                self._row(item, child)
+            return item
+
+        def _group(self, title, nodes):
+            head = QtWidgets.QTreeWidgetItem(self.tree, [f"{title} · {len(nodes)}"])
+            head.setFlags(QtCore.Qt.ItemIsEnabled)
+            font = head.font(0)
+            font.setBold(True)
+            head.setFont(0, font)
+            for node in nodes:
+                self._row(head, node)
+            return head
+
+        def render(self):
+            from bruceworx import vault_trees as vt
+
+            self.tree.clear()
+            s = self.structure
+            if not s or not s["items"]:
+                self.note.setText("The vault is empty.")
+                return
+            if self.mode == "product":
+                tops = vt.product_tree(s)
+                for node in tops:
+                    self._row(self.tree, node, top=True)
+                links = sum(1 for v in s["sources"].values() if v == "links")
+                self.note.setText(f"{len(tops)} top assembl{'y' if len(tops) == 1 else 'ies'}"
+                                  + (f" · {links} read from file links (no BOM recorded yet)" if links else ""))
+                self.tree.expandAll()
+            elif self.mode == "drawings":
+                t = vt.drawing_tree(s)
+                self._group("Documented", t["documented"]).setExpanded(True)
+                self._group("No drawing yet", t["undrawn"]).setExpanded(not t["documented"])
+                if t["orphans"]:
+                    self._group("Drawing of a missing part", t["orphans"]).setExpanded(True)
+                self.note.setText(f"{sum(len(n['children']) for n in t['documented'])} drawings · "
+                                  f"{len(t['undrawn'])} parts and assemblies without one")
+            else:
+                pn = self.part.currentData()
+                if not pn:
+                    self.note.setText("")
+                    return
+                users = vt.where_used(s, pn)
+                for node in users:
+                    self._row(self.tree, node)
+                self.tree.expandAll()
+                self.note.setText(f"Used in {len(users)} assembl{'y' if len(users) == 1 else 'ies'}"
+                                  if users else "Not used in any assembly")
+
+        def _open(self, item, _column):
+            pn = item.data(0, QtCore.Qt.UserRole)
+            vc = _vc()
+            if pn and vc is not None:
+                QtCore.QTimer.singleShot(0, lambda: vc.run_for("BruceWorx_VaultOpen", pn))
+
     _classes = {"Dashboard": Dashboard, "StateBar": StateBar, "Bars": Bars, "Section": Section,
-                "CheckPanel": CheckPanel, "Click": Click}
+                "CheckPanel": CheckPanel, "Click": Click, "StructureView": StructureView}
     return _classes
 
 

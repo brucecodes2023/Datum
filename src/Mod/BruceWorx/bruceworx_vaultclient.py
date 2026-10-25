@@ -18,10 +18,11 @@ The engine is the hooks add-on's bruceworx/pdm_workspace.py (status, check out, 
   save fail with its own message. FreeCAD's backup files are turned off for each save
   of a file inside the vault (every check-in is a version; the user's answer, 23 Oct).
   The first edit of such a document offers a check-out; its tab shows a lock.
-* The Vault panel: a card on the right (the Tasks overlay panel), with thumbnails,
-  P/N-REV, state chip and status icon, search and filters.
+* The vault's file list (thumbnails, P/N-REV, state chip and status icon, search and
+  filters) on the Start page's Files tab: the vault is browsed on the dashboard only
+  (the user's choice, 25 Oct; the floating card over the window was see-through).
 * Browser badges (bruceworx_browser.ROW_EXTRAS) and the status-bar readout
-  ("Vault <name> · 2 checked out · 1 newer"; a click opens the panel).
+  ("Vault <name> · 2 checked out · 1 newer"; a click opens the Files tab).
 * Move Vault and Break Lock, started from Vault Settings (bruceworx_vaultwizard).
 
 The pure helpers at the top are tested in TestBruceWorxVaultClient.py.
@@ -36,7 +37,6 @@ import zipfile
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 ACTORS_PATH = PREFS_PATH + "/VaultActors"
 DOCUMENT_PATH = "User parameter:BaseApp/Preferences/Document"
-DOCK_NAME = "Vault"
 SUFFIX = ".FCStd"
 LOCK = "\U0001F512"
 
@@ -1534,17 +1534,14 @@ class _Command:
 
 class _PanelCommand:
     def GetResources(self):
-        return {"Pixmap": _icon_name("panel", "secondary"), "MenuText": "Vault Panel",
-                "ToolTip": "Show or hide the Vault panel: the vault's files with their status.", "Checkable": False}
+        return {"Pixmap": _icon_name("panel", "secondary"), "MenuText": "Vault Files",
+                "ToolTip": "The vault's files with their status, on the Start page's Files tab.", "Checkable": False}
 
     def IsActive(self):
         return session() is not None
 
     def Activated(self, checked=None):
-        visible = bool(_state.get("card_wanted"))
-        want = (not visible) if checked is None else bool(checked)
-        if want != visible:
-            show_panel(want)
+        show_panel(True, focus_search=True)
 
 
 def available(name, pn=None):
@@ -2496,190 +2493,81 @@ def build_item_menu(parent, pn, in_panel=False):
     return menu
 
 
-CARD_WIDTH = 400
-CARD_INSET = 8
+
+def register_panel(panel):
+    """The Start page's Files tab holds the vault's list (the user's choice, 25 Oct: the vault is browsed
+    on the dashboard only; the floating card over the window is gone)."""
+    _state["panel"] = panel
 
 
-def _dock(create=True):
-    """The Vault card (object name "Vault"): a floating card over the right of the view area.
-
-    Not an overlay dock: FreeCAD's right overlay panel holds the task view, and a second dock
-    there shares one panel with it (and folds to nothing while no command is open).
-    """
-    from PySide import QtCore, QtGui, QtWidgets
-
-    mw = _window()
-    card = mw.findChild(QtWidgets.QFrame, DOCK_NAME)
-    if card is None and create:
-        card = QtWidgets.QFrame(mw)
-        card.setObjectName(DOCK_NAME)
-        card.setAttribute(QtCore.Qt.WA_StyledBackground, True)
-        lay = QtWidgets.QVBoxLayout(card)
-        lay.setContentsMargins(1, 1, 1, 1)
-        lay.setSpacing(0)
-        panel = _classes()["VaultPanel"](card)
-        head = QtWidgets.QHBoxLayout()
-        head.setContentsMargins(12, 8, 8, 0)
-        head.setSpacing(2)
-        caption = QtWidgets.QLabel("VAULT")
-        caption.setObjectName("bwVaultCaption")
-        font = QtGui.QFont(caption.font())
-        font.setLetterSpacing(QtGui.QFont.PercentageSpacing, 107)
-        caption.setFont(font)
-        close = QtWidgets.QToolButton()
-        close.setObjectName("bwVaultTool")
-        close.setText("\u2715")
-        close.setToolTip("Hide the Vault panel")
-        close.clicked.connect(lambda: show_panel(False))
-        head.addWidget(caption, 1)
-        head.addWidget(panel.refresh_button)
-        head.addWidget(panel.more)
-        head.addWidget(close)
-        lay.addLayout(head)
-        lay.addWidget(panel, 1)
-        card.widget = lambda: panel
-        shadow = QtWidgets.QGraphicsDropShadowEffect(card)
-        shadow.setBlurRadius(18)
-        shadow.setOffset(0, 2)
-        shadow.setColor(QtGui.QColor(0, 0, 0, 45))
-        card.setGraphicsEffect(shadow)
-        card.hide()
-
-        class _Follow(QtCore.QObject):
-            def eventFilter(self, obj, event):
-                if event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Move, QtCore.QEvent.Show):
-                    QtCore.QTimer.singleShot(0, _place_card)
-                return False
-
-        mdi = mw.findChild(QtWidgets.QMdiArea)
-        if mdi is not None:
-            _qt["follow"] = _Follow()
-            mdi.installEventFilter(_qt["follow"])
-        watch = QtCore.QTimer(card)
-        watch.setInterval(300)
-        watch.timeout.connect(_card_visibility)
-        watch.start()
-    return card
+def embedded_panel():
+    panel = _state.get("panel")
+    return panel if panel is not None and _alive(panel) else None
 
 
-def _card_top_room():
-    """Room the navigation cube needs above the card, as the overlay panels leave it."""
-    import FreeCAD
+def _with_panel(fn, tries=20):
+    """Run fn(panel) once the Files tab has made its list (the Start page builds it when first shown)."""
+    from PySide import QtCore
 
-    try:
-        view = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
-        cube = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/NaviCube")
-        if not view.GetBool("ShowNaviCube", True) or cube.GetInt("CornerNaviCube", 1) != 1:
-            return 0
-        import FreeCADGui
-
-        doc = FreeCADGui.activeDocument()
-        if doc is None or doc.activeView() is None or not hasattr(doc.activeView(), "getCameraNode"):
-            return 0  # the Start page: no cube
-        return cube.GetInt("CubeSize", 132) + 10
-    except Exception:
-        return 0
-
-
-def _place_card():
-    from PySide import QtCore, QtWidgets
-
-    card = _dock(create=False)
-    if card is None or not _alive(card):
-        return
-    mw = _window()
-    mdi = mw.findChild(QtWidgets.QMdiArea)
-    if mdi is None:
-        return
-    origin = mdi.mapTo(mw, QtCore.QPoint(0, 0))
-    area = QtCore.QRect(origin, mdi.size())
-    top = CARD_INSET + _card_top_room()
-    width = min(CARD_WIDTH, max(260, area.width() // 3))
-    card.setGeometry(area.right() - width - CARD_INSET + 1, area.top() + top, width,
-                     max(200, area.height() - top - CARD_INSET))
-    card.raise_()
-
-
-def _card_visibility():
-    """Shown while wanted; out of the way while a command's task panel is open (it floats there)."""
-    import FreeCADGui
-
-    card = _dock(create=False)
-    if card is None or not _alive(card):
-        return
-    want = bool(_state.get("card_wanted")) and session() is not None
-    try:
-        if FreeCADGui.Control.activeDialog():
-            want = False
-    except Exception:
-        pass
-    if want != card.isVisible():
-        card.setVisible(want)
-        if want:
-            _place_card()
-    elif want:
-        _place_card()
+    panel = embedded_panel()
+    if panel is not None:
+        fn(panel)
+    elif tries:
+        QtCore.QTimer.singleShot(100, lambda: _with_panel(fn, tries - 1))
 
 
 def show_panel(on=True, focus_search=False):
-    from PySide import QtCore
-
-    if on and session() is None:
+    """Bring the Start page forward on its Files tab: the vault's files with their status."""
+    if not on:
+        return True
+    if session() is None:
         _message("Vault", "Open a vault first (Start page \u2192 Open vault\u2026).")
         return False
-    card = _dock()
-    _state["card_wanted"] = bool(on)
-    _prefs().SetBool("VaultPanelVisible", bool(on))
-    _card_visibility()
-    if on and focus_search:
-        QtCore.QTimer.singleShot(100, lambda: card.widget().search.setFocus())
-    QtCore.QTimer.singleShot(0, _sync_panel_action)
+    try:
+        import bruceworx_start
+
+        bruceworx_start.show_tab("files")
+    except Exception as exc:  # noqa: BLE001
+        _console(f"BruceWorx vault: the Files tab did not open: {exc}", "warn")
+        return False
+    if focus_search:
+        _with_panel(lambda panel: panel.search.setFocus())
     return True
 
 
 def show_in_panel(pn=None):
-    from PySide import QtCore
-
     pn = pn or current_target()
     if not pn or not show_panel(True):
         return False
-    QtCore.QTimer.singleShot(250, lambda: _dock().widget().select(pn))
+    _with_panel(lambda panel: panel.select(pn))
     return True
 
 
 def show_filtered(kind="all", query="", select=None):
-    """Bring the Vault panel forward on a filter chip and search words (``type:part state:wip``), and
-    select ``select`` (a P/N or change number) in it. The Start page dashboard's tiles and rows use it."""
+    """The Files tab on a filter chip and search words (``type:part state:wip``), selecting ``select``
+    (a P/N or change number). The dashboard's tiles and rows use it."""
     from PySide import QtCore
 
     if not show_panel(True):
         return False
-    panel = _dock().widget()
-    kind = kind if kind in panel.chips else "all"
-    panel.chips[kind].setChecked(True)
-    panel.kind = kind
-    panel.search.blockSignals(True)
-    panel.search.setText(query or "")
-    panel.search.blockSignals(False)
-    panel.fill()
-    if select:
-        QtCore.QTimer.singleShot(250, lambda: _alive(panel) and panel.select(select))
+
+    def apply(panel):
+        k = kind if kind in panel.chips else "all"
+        panel.chips[k].setChecked(True)
+        panel.kind = k
+        panel.search.blockSignals(True)
+        panel.search.setText(query or "")
+        panel.search.blockSignals(False)
+        panel.fill()
+        if select:
+            QtCore.QTimer.singleShot(150, lambda: _alive(panel) and panel.select(select))
+
+    _with_panel(apply)
     return True
 
 
 def _sync_panel_action():
-    try:
-        import FreeCADGui
-
-        command = FreeCADGui.Command.get(PANEL_COMMAND)
-        for action in (command.getAction() if command else []):
-            # FreeCAD runs a checkable command's Activated on toggled: keep this quiet.
-            action.blockSignals(True)
-            action.setCheckable(True)
-            action.setChecked(bool(_state.get("card_wanted")))
-            action.blockSignals(False)
-    except Exception:
-        pass
+    """Nothing to keep in step any more: the command opens the Files tab (kept for the listener list)."""
 
 
 # ----- Browser badges and the status bar -----------------------------------------------------
@@ -3121,7 +3009,6 @@ def _vault_path_changed():
     _state["session_path"] = None  # session() opens the new one
     session()
     changed()
-    _card_visibility()
 
 
 def _shutdown():
@@ -3167,7 +3054,7 @@ def install():
     class _Click(QtCore.QObject):
         def eventFilter(self, obj, event):
             if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
-                QtCore.QTimer.singleShot(0, lambda: show_panel(not _state.get("card_wanted")))
+                QtCore.QTimer.singleShot(0, lambda: show_panel(True))
                 return True
             return False
 
@@ -3206,7 +3093,6 @@ def install():
             _console(f"BruceWorx vault: menu not added: {exc}", "warn")
         session()
         changed()
-        if _prefs().GetBool("VaultPanelVisible", False) and _state["session"] is not None:
-            show_panel(True)
+        _prefs().RemBool("VaultPanelVisible")  # the floating card it brought back is gone
 
     QtCore.QTimer.singleShot(0, late)

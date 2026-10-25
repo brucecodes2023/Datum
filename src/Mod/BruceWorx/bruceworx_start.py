@@ -1340,6 +1340,18 @@ def _make_classes():
             d.addWidget(self.no_vault)
             m.addWidget(self.dash_box)
 
+            # Tab 2: the vault's files (the list that floated over the window until 25 Oct), made when first
+            # shown with a vault open.
+            self.files_box = QtWidgets.QWidget(main)
+            self.files_layout = QtWidgets.QVBoxLayout(self.files_box)
+            self.files_layout.setContentsMargins(0, 0, 0, 0)
+            self.files_panel = None
+            m.addWidget(self.files_box)
+
+            # Tab 3: the vault's structure: drawing, product and where-used trees.
+            self.structure = bwdash.classes()["StructureView"](main)
+            m.addWidget(self.structure)
+
             # Tab 2: recent files (before PDM-10 the whole page: My work, then the recent list).
             self.recent_box = QtWidgets.QWidget(main)
             r = QtWidgets.QVBoxLayout(self.recent_box)
@@ -1419,6 +1431,22 @@ def _make_classes():
             self._tab_vault = (self.vault or {}).get("path")
             self._render()
             self.scroll.verticalScrollBar().setValue(0)
+
+        def _ensure_files(self):
+            """The vault's file list, made the first time the Files tab shows with a vault open."""
+            if self.files_panel is not None and _alive(self.files_panel):
+                return
+            try:
+                import bruceworx_vaultclient as vc
+            except ImportError:
+                return
+            if vc.session() is None:
+                return
+            panel = vc._classes()["VaultPanel"](self.files_box)
+            panel.setMinimumHeight(560)
+            self.files_layout.addWidget(panel)
+            self.files_panel = panel
+            vc.register_panel(panel)
 
         def current_tab(self):
             path = (self.vault or {}).get("path")
@@ -1512,6 +1540,12 @@ def _make_classes():
                 button.setChecked(key == tab)
             self.dash_box.setVisible(tab == "dashboard")
             self.recent_box.setVisible(tab == "recent")
+            self.files_box.setVisible(tab == "files")
+            self.structure.setVisible(tab == "structure")
+            if tab == "files":
+                self._ensure_files()
+            elif tab == "structure":
+                self.structure.set_structure(((self.vault or {}).get("dashboard") or {}).get("structure"))
             if dashboard:
                 # The Recent files tab: every recent file on this Mac (the user's answer of 24 Oct).
                 self.work_box.setVisible(False)
@@ -1726,6 +1760,11 @@ def _vault_changed():
 
 def show_dashboard() -> None:
     """Bring the Start tab forward on the vault's dashboard (the Vault panel's menu, PDM-10)."""
+    show_tab("dashboard")
+
+
+def show_tab(key: str) -> None:
+    """Bring the Start tab forward on one of its tabs ("dashboard", "files", "structure", "recent")."""
     import FreeCADGui
     from PySide import QtCore, QtWidgets
 
@@ -1743,7 +1782,7 @@ def show_dashboard() -> None:
             if sub is not None and sub.mdiArea() is not None:
                 sub.mdiArea().setActiveSubWindow(sub)
         for page in _pages():
-            page.set_tab("dashboard")
+            page.set_tab(key)
 
     QtCore.QTimer.singleShot(150, bring)
 
