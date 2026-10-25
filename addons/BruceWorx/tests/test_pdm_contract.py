@@ -57,6 +57,7 @@ TRANSITIONS = (
     ("F3", "undo_checkout", "POST /items/{pn}/undo-checkout", "locked by me", "unlocked"),
     ("F4", "undo_checkout", "POST /items/{pn}/undo-checkout", "locked by someone else, force", "unlocked"),
     ("B1", "set_bom", "PUT /items/{pn}/revisions/{rev}/bom", "WIP revision", "its BOM replaced"),
+    ("T13", "set_item_type", "PUT /items/{pn}/type", "part or cots, not Obsolete", "cots or part"),
 )
 # Operations in the OpenAPI file that are not journal transitions (reads, and Ops' side).
 READS = {"status", "allocate_part_number", "bom_of", "where_used", "receive_released_bom"}
@@ -169,6 +170,25 @@ class _Lifecycle:
         for refused in (self.v.submit, self.v.approve, self.v.reject):
             with self.assertRaises(LifecycleError):
                 refused(PART)
+
+    def test_T13_item_type(self):
+        self.v.create_item(PART, description="Socket head cap screw M3x40 (COTS)")
+        self.v.set_item_type(PART, "cots")
+        self.assertEqual(self.v.items[PART].item_type, "cots")
+        self.assertIn("item type: part -> cots", self.v.items[PART].latest.history)
+        with self.assertRaises(LifecycleError):
+            self.v.set_item_type(PART, "cots")  # nothing to change
+        self.released()  # a released item may change type too: its file is not touched
+        self.v.set_item_type(PART, "part")
+        self.assertEqual(self.v.items[PART].item_type, "part")
+        with self.assertRaises(ValueError):
+            self.v.set_item_type(PART, "assembly")
+        self.v.create_item(ASSY, "assembly")
+        with self.assertRaises(LifecycleError):
+            self.v.set_item_type(ASSY, "cots")
+        self.v.retire(PART, "replaced")
+        with self.assertRaises(LifecycleError):
+            self.v.set_item_type(PART, "cots")
 
     def test_B1_bom(self):
         self.v.create_item(PART)

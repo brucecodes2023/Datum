@@ -123,6 +123,20 @@ paths:
         content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string, minLength: 1}}}}}
       responses: {"204": {description: Retired}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /items/{pn}/type:
+    put:
+      operationId: set_item_type
+      summary: >
+        Part <-> COTS (MOD-05): change the item type of a part that is bought, or back.
+        Only between part and cots; refused for an obsolete item, for assemblies and
+        drawings, and when the type is already that. Recorded on the latest revision;
+        released files are not touched (the file's ItemType follows at its next check-in).
+      parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [item_type], properties: {item_type: {enum: [part, cots]}}}}}
+      responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
   /items/{pn}/files:
     get:
       summary: Every file version of the item, oldest first, each with the revision it belongs to
@@ -407,7 +421,7 @@ components:
       description: One review or change decision, as recorded (unset fields are left out)
       required: [op]
       properties:
-        op: {enum: [approve, reject, retire, release_eco, raise_ecr, decide_ecr, open_eco]}
+        op: {enum: [approve, reject, retire, release_eco, raise_ecr, decide_ecr, open_eco, set_item_type]}
         by: {type: string, description: "Actor, user@mac"}
         at: {type: string, format: date-time}
         note: {type: string}

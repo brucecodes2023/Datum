@@ -78,6 +78,16 @@ class ReplayTests(_TempDir, unittest.TestCase):
         self.assertEqual(again.items[PART].released.code, "A")
         self.assertEqual(again.problems, [])
 
+    def test_item_type_change_replays(self):
+        vault = FolderVault.init(self.tmp, "Pedestal", actor="bruce@mac")
+        vault.create_item(PART, "part", "Ball bearing 683ZZ (COTS)")
+        vault.set_item_type(PART, "cots")
+        again = FolderVault(self.tmp, actor="bruce@mac")
+        self.assertEqual(again.items[PART].item_type, "cots")
+        self.assertEqual(again.problems, [])
+        self.assertEqual(json.loads(open(vault.journal_path).read().splitlines()[-1])["args"],
+                         {"item_type": "cots", "part_number": PART})
+
     def test_refused_operation_writes_nothing(self):
         vault = FolderVault.init(self.tmp, "Pedestal", actor="bruce@mac")
         vault.create_item(PART)

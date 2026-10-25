@@ -76,6 +76,7 @@ LIFECYCLE_OPS = {
     "open_eco": ("number", "ecr_numbers"),
     "release_eco": ("number", "note", "checklists", "attachments"),
     "set_bom": ("parent", "lines", "revision", "sha256", "missing"),
+    "set_item_type": ("part_number", "item_type"),  # MOD-05: part <-> cots
 }
 FILE_OPS = ("checkout", "undo_checkout", "checkin")
 
@@ -462,6 +463,9 @@ class FolderVault:
     def create_item(self, part_number, item_type="part", description="", drawing_of=None):
         return self._record("create_item", dict(part_number=part_number, item_type=item_type,
                                                 description=description, drawing_of=drawing_of))
+
+    def set_item_type(self, part_number, item_type):
+        return self._record("set_item_type", dict(part_number=part_number, item_type=item_type))
 
     def submit(self, part_number):
         holder = self.locks.get(part_number)

@@ -942,7 +942,7 @@ def program_of(part_number: str, vault_root: str) -> str:
     return offered[0] if offered else (own or DEFAULT_PROGRAM)
 
 
-NEW_ITEM_KINDS = ("part", "assembly")
+NEW_ITEM_KINDS = ("part", "assembly", "cots")  # cots: a bought item (MOD-05), numbered as a part
 
 
 def new_item(vault, kind: str, description: str, make_file, program: str = "", document_type: str = "") -> str:
@@ -957,7 +957,7 @@ def new_item(vault, kind: str, description: str, make_file, program: str = "", d
     from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
 
     if kind not in NEW_ITEM_KINDS:
-        raise ValueError(f"a new item is a part or an assembly, not {kind!r}")
+        raise ValueError(f"a new item is a part, an assembly or a COTS item, not {kind!r}")
     description = str(description or "").strip()
     if not description:
         raise ValueError("a new item needs a description")
@@ -968,7 +968,8 @@ def new_item(vault, kind: str, description: str, make_file, program: str = "", d
         raise ValueError("the vault's numbering has no program")
     program = numbering.normalize_program(program) if program else programs[0]
     types = _vault_document_types(source, data)
-    code = numbering.normalize_document_type(document_type) if document_type else document_type_for(kind, types)
+    code = (numbering.normalize_document_type(document_type) if document_type
+            else document_type_for("part" if kind == "cots" else kind, types))
     key = pdm.strip_revision(source.preview(program, code))
     if key in vault.items:
         raise ValueError(f"{key} is already an item in the vault")

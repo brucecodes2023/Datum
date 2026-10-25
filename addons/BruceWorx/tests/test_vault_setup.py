@@ -113,6 +113,12 @@ class NewItemTests(_Tmp):
         self.assertEqual(vs.new_item(self.vault, "assembly", "Arm", self.make), "LE-02-01001-001")
         self.assertEqual(vs.new_item(self.vault, "part", "Second", self.make), "LE-01-01002-001")
 
+    def test_new_cots_item_is_numbered_as_a_part(self):
+        pn = vs.new_item(self.vault, "cots", "Socket head cap screw ISO 4762 M3x40", self.make)
+        self.assertEqual(pn, "LE-01-01001-001")
+        self.assertEqual(self.vault.items[pn].item_type, "cots")
+        self.assertEqual(vs.new_item(self.vault, "part", "Bracket", self.make), "LE-01-01002-001")
+
     def test_a_file_that_cannot_be_made_burns_no_number(self):
         def broken(path, number):
             raise RuntimeError("no FreeCAD")

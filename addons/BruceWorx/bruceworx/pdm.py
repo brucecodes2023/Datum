@@ -325,6 +325,27 @@ class Vault:
         self.items[part_number] = item
         return item
 
+    def set_item_type(self, part_number, item_type):
+        """Part <-> COTS (MOD-05): a bought item that was made as a part, or the other way.
+        Only between "part" and "cots"; refused for an obsolete item and when nothing changes.
+        Recorded on the latest revision. The file's ItemType property follows at its next
+        check-in; released files are not touched."""
+        item = self.items[part_number]
+        if item_type not in ("part", "cots"):
+            raise ValueError(f"an item type changes only between part and cots, not to {item_type!r}")
+        if item.item_type not in ("part", "cots"):
+            raise LifecycleError(f"{part_number} is a{'n' if item.item_type[0] in 'aeiou' else ''} "
+                                 f"{item.item_type}; only parts and COTS items change type")
+        if item.obsolete:
+            raise LifecycleError(f"{part_number} is obsolete")
+        if item.item_type == item_type:
+            raise LifecycleError(f"{part_number} is already {item_type}")
+        rev = item.latest
+        rev.history.append(f"item type: {item.item_type} -> {item_type}")
+        rev.records.append(self._entry("set_item_type", item_type=item_type, was=item.item_type))
+        item.item_type = item_type
+        return item
+
     def drawings_of(self, part_number):
         return [i for i in self.items.values() if i.drawing_of == part_number]
 
