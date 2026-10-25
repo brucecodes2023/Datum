@@ -180,6 +180,20 @@ class TestPairs(unittest.TestCase):
             self.assertNotIn(key, list(sec.Fits))
         self.assertEqual([x.kind for x in self.result().results], [itf.CLASH])
 
+    def test_check_file_for_the_release_check(self):
+        import os
+        import tempfile
+
+        block = Part.makeBox(20, 20, 20).cut(Part.makeCylinder(2.5, 12, V(10, 10, 8)))
+        _part(self.doc, self.asm, "Block", block)
+        _part(self.doc, self.asm, "Bolt", Part.makeCylinder(2.5, 16, V(10, 10, 4)))
+        self.doc.recompute()
+        path = os.path.join(tempfile.mkdtemp(), "bolt.FCStd")
+        self.doc.saveAs(path)
+        s = itf.check_file(path)
+        self.assertEqual(s["counts"], {itf.CLASH: 1, itf.FIT: 0, itf.CONTACT: 0, itf.CLEARANCE: 0})
+        self.assertEqual(s["results"][0]["volume"], round(math.pi * 2.5 ** 2 * 4, 4))
+
     def test_stepping_gives_the_same_results(self):
         for i in range(4):
             _part(self.doc, self.asm, f"B{i}", Part.makeBox(10, 10, 10, V(9.5 * i, 0, 0)))

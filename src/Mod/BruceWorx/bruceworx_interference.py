@@ -597,7 +597,8 @@ class Checker:
 
 
 def _order(r):
-    return (KINDS.index(r.kind), -r.volume, r.distance, r.pair_label)
+    """Biggest overlap first, then nearest; pairs that measure the same by label (M3x6 1, 2, 3, 4)."""
+    return (KINDS.index(r.kind), -round(r.volume, 2), round(r.distance, 4), r.pair_label)
 
 
 def check(root, gap=0.0, contacts=True, fit_keys=None, include_hidden=False):
@@ -607,15 +608,19 @@ def check(root, gap=0.0, contacts=True, fit_keys=None, include_hidden=False):
 
 def check_file(path, gap=0.0):
     """Open ``path``, check its top assembly, close it; the summary (for the release check)."""
+    import os
+
     App = _app()
-    doc = App.openDocument(path, hidden=True) if App.GuiUp else App.openDocument(path)
+    already = [d for d in App.listDocuments().values() if d.FileName and os.path.samefile(d.FileName, path)]
+    doc = already[0] if already else (App.openDocument(path, hidden=True) if App.GuiUp else App.openDocument(path))
     try:
         root = active_assembly(doc)
         if root is None:
             return {"assembly": None, "counts": {k: 0 for k in KINDS}, "results": [], "errors": ["no assembly"]}
         return check(root, gap).summary()
     finally:
-        App.closeDocument(doc.Name)
+        if not already:
+            App.closeDocument(doc.Name)
 
 
 def prefs():
