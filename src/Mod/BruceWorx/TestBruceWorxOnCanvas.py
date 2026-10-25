@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Tests for on-canvas editing (bruceworx_oncanvas): the drag maths, snapping, names, and where the
-handles of a Pad, Pocket, Hole and Fillet go on a real model (headless)."""
+"""Tests for on-canvas editing (bruceworx_oncanvas): the drag maths, snapping, names, where the
+handles of a Pad, Pocket, Hole and Fillet go on a real model (headless), and in a GUI FreeCAD the
+MOD-14 acceptance: a pad's length, a fillet's radius and a hole's depth edited in the view."""
 
 import math
 import unittest
@@ -393,6 +394,95 @@ class TestHandles(unittest.TestCase):
         self.assertAlmostEqual(d, 5.0, places=5)
         self.assertAlmostEqual(abs(h.u.z), 0.0)
         self.assertEqual(len(h.reference), 1)  # the old sharp edge, dashed
+
+
+def _gui_up():
+    try:
+        import FreeCAD
+
+        return bool(FreeCAD.GuiUp)
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(_gui_up(), "needs a GUI FreeCAD")
+class TestInTheView(unittest.TestCase):
+    """MOD-14 acceptance: double-click a face, drag the arrow or type; no task panel opens."""
+
+    def setUp(self):
+        import FreeCAD
+        import FreeCADGui
+
+        self.FreeCAD, self.Gui = FreeCAD, FreeCADGui
+        oc.install()
+        self.doc, _part, self.body, self.pad, self.boss, self.hole, self.fil = _plate()
+        self.doc.UndoMode = 1
+        self.view = FreeCADGui.getDocument(self.doc.Name).ActiveView
+        self.view.viewIsometric()
+        self.view.fitAll()
+        self.pump()
+        oc._manager.sync()
+        self.vp = oc._graphics_viewport(oc._view_widget(self.view))
+
+    def tearDown(self):
+        oc.end_session(quiet=True)
+        self.FreeCAD.closeDocument(self.doc.Name)
+
+    def pump(self, n=10):
+        for _ in range(n):
+            self.Gui.updateGui()
+
+    def drag(self, session, mm):
+        """Drag the arrow ``mm`` along itself, as the mouse would (pointer positions in Coin pixels)."""
+        h = session.handle
+        session.pointer = self.view.getPointOnViewport(h.base)
+        session.on_start()
+        session.pointer = self.view.getPointOnViewport(h.base + h.u * mm)
+        session.on_motion()
+        self.pump(3)
+        session.on_finish()
+        self.pump(5)
+
+    def type(self, session, text):
+        session.field.edit.setText(text)
+        session.typed()
+        self.pump(3)
+
+    def test_double_click_drag_and_type(self):
+        from PySide import QtCore, QtGui, QtWidgets
+
+        # a real double-click on the boss's cap (its viewport's event filter starts the edit)
+        x, y = self.view.getPointOnViewport(self.FreeCAD.Vector(55, 33, 22))
+        dpr = self.vp.devicePixelRatioF()
+        pos = QtCore.QPointF(x / dpr, self.vp.height() - 1 - y / dpr)
+        event = QtGui.QMouseEvent(QtCore.QEvent.MouseButtonDblClick, pos, self.vp.mapToGlobal(pos),
+                                  QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+        QtWidgets.QApplication.sendEvent(self.vp, event)
+        self.pump(10)
+        s = oc.session()
+        self.assertIsNotNone(s, "the double-click started no edit")
+        self.assertEqual((s.obj, s.handle.label), (self.boss, "Distance"))
+        self.drag(s, 5)
+        self.assertAlmostEqual(self.boss.Length.Value, 19.0)
+        self.type(s, "18 mm")
+        self.assertAlmostEqual(self.boss.Length.Value, 18.0)
+        oc.end_session()
+        s = oc.start(self.fil)
+        self.type(s, "3 mm")
+        self.assertAlmostEqual(self.fil.Radius.Value, 3.0)
+        self.drag(s, 1.0)
+        self.assertAlmostEqual(self.fil.Radius.Value, 4.0)
+        oc.end_session()
+        s = oc.start(self.hole)
+        self.assertEqual(s.handle.label, "Depth")
+        self.type(s, "12 mm")
+        self.assertAlmostEqual(self.hole.Depth.Value, 12.0)
+        oc.end_session()
+        self.assertEqual(s.callbacks, [])  # the arrow's callbacks went with it
+        self.assertFalse(self.Gui.Control.activeDialog())
+        self.assertTrue(self.body.Shape.isValid())
+        self.assertEqual(self.doc.UndoNames[:5], ["Hole: Depth", "Fillet: Radius", "Fillet: Radius",
+                                                  "Boss: Distance", "Boss: Distance"])
 
 
 if __name__ == "__main__":

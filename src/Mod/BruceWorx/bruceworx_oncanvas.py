@@ -904,6 +904,17 @@ def _py_view(view_widget):
         return None
 
 
+def _owner_view(viewport):
+    """The Gui::View3DInventor widget a viewport belongs to, found again from the viewport.
+
+    The wrapper Manager.sync kept (``sub.widget()``) can be dead by the time a double-click comes
+    (PySide drops it; "Internal C++ object already deleted"), so the click did nothing."""
+    w = viewport
+    while w is not None and w.metaObject().className() != VIEW_CLASS:
+        w = w.parentWidget()
+    return w
+
+
 def _theme_is_bruceworx():
     try:
         import bruceworx_navpill
@@ -1112,9 +1123,11 @@ def _make_classes():
             # tiny increment: the dragger reports the raw move; the snapping is ours
             self._field(self.dragger, "translationIncrement", "SoSFDouble").setValue(1e-4)
             top.addChild(kit)
-            self.callbacks = [self.on_start, self.on_motion, self.on_finish]
-            for kind, fn in zip(("addStartCallback", "addMotionCallback", "addFinishCallback"), self.callbacks):
-                self.view.addDraggerCallback(self.dragger, kind, fn)
+            # (kind, the callable the view returns): removeDraggerCallback wants both back
+            self.callbacks = []
+            for kind, fn in (("addStartCallback", self.on_start), ("addMotionCallback", self.on_motion),
+                             ("addFinishCallback", self.on_finish)):
+                self.callbacks.append((kind, self.view.addDraggerCallback(self.dragger, kind, fn)))
             self.view.getSceneGraph().addChild(self.root)
 
         def _line_group(self, parent, rgb, width, pattern):
@@ -1147,12 +1160,14 @@ def _make_classes():
         def _remove_scene(self):
             if self.root is None:
                 return
-            try:
-                for kind, fn in zip(("removeStartCallback", "removeMotionCallback", "removeFinishCallback"),
-                                    self.callbacks):
+            # the same kind names as when they were added ("removeStartCallback" is not one: it raised,
+            # and the callbacks stayed hooked)
+            for kind, fn in self.callbacks:
+                try:
                     self.view.removeDraggerCallback(self.dragger, kind, fn)
-            except Exception:
-                pass
+                except Exception:
+                    pass
+            self.callbacks = []
             try:
                 self.view.getSceneGraph().removeChild(self.root)
             except Exception:
@@ -1636,6 +1651,10 @@ def _make_classes():
             view_widget = self.views.get(key)
             if view_widget is None:
                 return False
+            if not _alive(view_widget):  # a dead wrapper: find the view again from its viewport
+                view_widget = self.views[key] = _owner_view(obj)
+                if view_widget is None:
+                    return False
             if kind == QtCore.QEvent.MouseButtonDblClick and event.button() == QtCore.Qt.LeftButton:
                 if not enabled() or _dialog_open():
                     return False
@@ -1643,7 +1662,7 @@ def _make_classes():
                     return False
                 return start_from_view(view_widget, obj, event.position().toPoint())
             s = _session
-            if s is None or s.closed or s.view_widget is not view_widget:
+            if s is None or s.closed or _cpp(s.view_widget) != _cpp(view_widget):
                 return False
             if kind in (QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride) and event.key() == QtCore.Qt.Key_Escape:
                 if kind == QtCore.QEvent.KeyPress:
@@ -1712,7 +1731,7 @@ def _make_classes():
                 self.filter.trees.add(key)
             if _session is not None and (not _alive(_session.view_widget) or
                                          mdi.activeSubWindow() is None or
-                                         mdi.activeSubWindow().widget() is not _session.view_widget):
+                                         _cpp(mdi.activeSubWindow().widget()) != _cpp(_session.view_widget)):
                 end_session(quiet=True)
 
     _classes = (Field, Bar, Session, ViewFilter, Manager)
