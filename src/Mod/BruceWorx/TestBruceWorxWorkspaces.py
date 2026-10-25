@@ -169,6 +169,27 @@ class TestToolbarRows(unittest.TestCase):
         )
 
 
+
+class TestFairWidths(unittest.TestCase):
+    def test_all_fit_no_limits(self):
+        self.assertIsNone(toolbars.fair_widths([100, 200], [50, 50], 300))
+
+    def test_wide_groups_give_up_room_first(self):
+        widths = toolbars.fair_widths([354, 121, 232, 195, 195, 121, 121, 217], [80] * 8, 1028)
+        self.assertLessEqual(sum(widths), 1028)
+        self.assertGreater(sum(widths), 1028 - 8)
+        # The narrow groups keep their whole width, the wide ones share a cap.
+        self.assertEqual(widths[1], 121)
+        self.assertEqual(widths[0], widths[2])
+        self.assertTrue(all(w >= 80 for w in widths))
+
+    def test_never_below_the_minimum(self):
+        self.assertEqual(toolbars.fair_widths([100, 100], [80, 80], 120), [80, 80])
+
+    def test_minimum_above_hint_is_the_hint(self):
+        self.assertEqual(toolbars.fair_widths([60, 300], [90, 90], 200), [60, 140])
+
+
 def _settle(seconds=0.6):
     import FreeCADGui as Gui
 
@@ -180,7 +201,7 @@ def _settle(seconds=0.6):
 
 @unittest.skipUnless(App.GuiUp, "needs a GUI FreeCAD")
 class TestRibbonInWindow(unittest.TestCase):
-    """UAT 25 Oct: #10 (groups without buttons after a tab switch)."""
+    """UAT 25 Oct: #10 (groups without buttons after a tab switch), #2 (squeezed groups)."""
 
     def setUp(self):
         import FreeCADGui as Gui
@@ -245,6 +266,24 @@ class TestRibbonInWindow(unittest.TestCase):
                 self.assertTrue(shown, label)
                 for b in shown:
                     self.assertGreater(b.height(), 16, label)
+
+    def test_narrow_window_shares_the_tools_row(self):
+        from PySide import QtWidgets
+
+        if self.mw.isFullScreen():
+            self.skipTest("full screen")
+        self.mw.showNormal()
+        self.mw.setGeometry(self.geometry.x(), self.geometry.y(), 1000, max(600, self.geometry.height()))
+        self.bar.select_tab("Solid")
+        _settle(1.0)
+        for tb in self.shown_groups():
+            caption = tb.findChild(QtWidgets.QToolButton, "BruceWorxGroupCaption")
+            # Every group keeps a button and its whole caption ("CON…T" was the bug).
+            self.assertTrue([b for b in self.buttons(tb) if b.isVisible()], tb.objectName())
+            if caption is not None:
+                self.assertGreaterEqual(caption.width(), caption.sizeHint().width(), tb.objectName())
+        right = max(tb.geometry().right() for tb in self.shown_groups())
+        self.assertLessEqual(right, self.mw.width())
 
 
 if __name__ == "__main__":

@@ -9,6 +9,12 @@ step A): File, View and search share the first row, the workspace bar (step C2)
 has the next, and every workbench toolbar follows on the last row with no
 further breaks. With the macOS title row (step C4) on top, the workspace bar
 shares its row with File and View (plan_rows).
+
+When the tools row is narrower than its toolbars, Qt gives the first ones their
+full width and squeezes the last ones to one button and », with their captions
+cut ("CON…T"). fit_tools_row shares the row out instead (fair_widths): every
+toolbar keeps at least its caption's width and shows the buttons that fit; the
+rest are under » and the caption menu (UAT 25 Oct, #2).
 """
 
 from __future__ import annotations
@@ -62,6 +68,29 @@ def plan_breaks(names, app_toolbars=APP_TOOLBARS):
     return {row[0] for row in plan_rows(names, app_toolbars)[1:]}
 
 
+def fair_widths(hints, mins, space):
+    """Widths for toolbars sharing a row of ``space`` px; None when all fit.
+
+    Each gets at most its hint and at least its minimum. The widths shrink
+    together: a toolbar below the common cap keeps its hint, the others get the
+    cap, so a wide group gives up buttons before a narrow one does.
+    """
+    if sum(hints) <= space:
+        return None
+    mins = [min(m, h) for m, h in zip(mins, hints)]
+    if sum(mins) >= space:
+        return list(mins)
+    lo, hi = 0, max(hints)
+    # The largest cap whose widths still fit.
+    while lo < hi:
+        cap = (lo + hi + 1) // 2
+        if sum(max(m, min(h, cap)) for h, m in zip(hints, mins)) <= space:
+            lo = cap
+        else:
+            hi = cap - 1
+    return [max(m, min(h, lo)) for h, m in zip(hints, mins)]
+
+
 def _enabled():
     import FreeCAD
 
@@ -97,6 +126,51 @@ def relayout():
             mw.addToolBarBreak(top)
         mw.addToolBar(top, tb)
         tb.show()
+    fit_tools_row()
+
+
+# Room kept on each side of a caption so the narrowest group does not cut it.
+CAPTION_PAD = 12
+NO_LIMIT = 16777215  # QWIDGETSIZE_MAX
+
+
+def _min_width(tb):
+    from PySide import QtWidgets
+
+    width = tb.minimumSizeHint().width()
+    caption = tb.findChild(QtWidgets.QToolButton, "BruceWorxGroupCaption")
+    if caption is not None:
+        width = max(width, caption.sizeHint().width() + CAPTION_PAD)
+    return width
+
+
+def fit_tools_row():
+    """Share the tools row (the last row) out between its toolbars (fair_widths)."""
+    if not _enabled():
+        return
+    import FreeCADGui
+    from PySide import QtCore, QtWidgets
+
+    mw = FreeCADGui.getMainWindow()
+    top = QtCore.Qt.ToolBarArea.TopToolBarArea
+    bars = [
+        tb
+        for tb in mw.findChildren(QtWidgets.QToolBar)
+        if tb.parent() is mw and tb.isVisible() and mw.toolBarArea(tb) == top and not tb.isFloating()
+    ]
+    rows = plan_rows([tb.objectName() for tb in bars])
+    by_name = {tb.objectName(): tb for tb in bars}
+    tools = set(rows[-1]) if len(rows) > 1 else set()
+    for tb in bars:
+        if tb.objectName() not in tools and tb.maximumWidth() != NO_LIMIT:
+            tb.setMaximumWidth(NO_LIMIT)
+    row = [by_name[name] for name in rows[-1]] if tools else []
+    if not row:
+        return
+    widths = fair_widths([tb.sizeHint().width() for tb in row], [_min_width(tb) for tb in row], mw.width())
+    for tb, width in zip(row, widths or [NO_LIMIT] * len(row)):
+        if tb.maximumWidth() != width:
+            tb.setMaximumWidth(width)
 
 
 def all_hidden(states):
@@ -149,11 +223,33 @@ def _after_switch():
 
 
 _installed = False
+_resize_filter = None
+
+
+def _make_resize_filter():
+    from PySide import QtCore
+
+    class ResizeFilter(QtCore.QObject):
+        """Shares the tools row out again after the window changes width."""
+
+        def __init__(self):
+            super().__init__()
+            self.timer = QtCore.QTimer(self)
+            self.timer.setSingleShot(True)
+            self.timer.setInterval(0)
+            self.timer.timeout.connect(lambda: fit_tools_row())
+
+        def eventFilter(self, obj, event):
+            if event.type() == QtCore.QEvent.Resize and event.size().width() != event.oldSize().width():
+                self.timer.start()
+            return False
+
+    return ResizeFilter()
 
 
 def install():
     """Re-lay the toolbars (and bring them back if all are hidden) after every workbench switch."""
-    global _installed
+    global _installed, _resize_filter
     if _installed:
         return
     import FreeCADGui
@@ -161,6 +257,8 @@ def install():
 
     mw = FreeCADGui.getMainWindow()
     mw.workbenchActivated.connect(lambda _name: QtCore.QTimer.singleShot(0, _after_switch))
+    _resize_filter = _make_resize_filter()
+    mw.installEventFilter(_resize_filter)
     _installed = True
     # The start workbench may already be active.
     QtCore.QTimer.singleShot(0, _after_switch)
