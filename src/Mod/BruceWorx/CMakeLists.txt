@@ -95,6 +95,14 @@ SET(BruceWorx_SRCS
     BruceWorx_Section.svg
     bruceworx_analysis.py
     TestBruceWorxAnalysis.py
+    bruceworx_analysis_gui.py
+    TestBruceWorxInspect.py
+    BruceWorx_Overhang.svg
+    BruceWorx_Draft.svg
+    BruceWorx_Thickness.svg
+    BruceWorx_Curvature.svg
+    BruceWorx_Zebra.svg
+    BruceWorx_MassProperties.svg
     bruceworx_board.py
     bruceworx_board_gui.py
     BruceWorx_InsertBoard.svg

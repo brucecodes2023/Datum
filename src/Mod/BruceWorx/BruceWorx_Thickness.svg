@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a wall in section, thick (green) thinning to too thin (red), with the measured gap -->
+  <path d="M6 14 L58 22 L58 34 L6 50 Z" fill="#4cb85c" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M40 19.2 L58 22 L58 34 L40 39.5 Z" fill="#f59428"/>
+  <path d="M50 20.8 L58 22 L58 34 L50 36.5 Z" fill="#d92020"/>
+  <path d="M6 14 L58 22 L58 34 L6 50 Z" fill="none" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M20 16 L20 46" stroke="#2b2f36" stroke-width="1.6" stroke-dasharray="3 2"/>
+  <path d="M16 20 L20 16 L24 20 M16 42 L20 46 L24 42" fill="none" stroke="#2b2f36" stroke-width="1.6" stroke-linejoin="round"/>
+</svg>

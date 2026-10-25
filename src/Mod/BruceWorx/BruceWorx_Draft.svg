@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a tapered boss pulled up: drafted walls green, a straight wall yellow -->
+  <path d="M14 54 L22 18 L42 18 L42 54 Z" fill="#c2cad5" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M14 54 L22 18" stroke="#4cb85c" stroke-width="4" stroke-linecap="round"/>
+  <path d="M42 18 L42 54" stroke="#f5c932" stroke-width="4" stroke-linecap="round"/>
+  <path d="M6 56 L58 56" stroke="#2b2f36" stroke-width="2" stroke-linecap="round"/>
+  <path d="M52 46 L52 8 M46 14 L52 6 L58 14" fill="none" stroke="#1f6feb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

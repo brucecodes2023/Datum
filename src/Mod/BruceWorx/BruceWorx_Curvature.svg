@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a curved surface coloured from flat (blue) to tight (red) -->
+  <defs><linearGradient id="k" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#2a4ddb"/><stop offset="0.35" stop-color="#2eb3eb"/><stop offset="0.55" stop-color="#5cc75c"/>
+    <stop offset="0.78" stop-color="#f5d638"/><stop offset="1" stop-color="#db3330"/></linearGradient></defs>
+  <path d="M6 48 C 22 48, 30 46, 40 34 C 46 26, 50 14, 58 12 L58 30 C 52 32, 50 42, 44 50 C 38 56, 22 58, 6 58 Z" fill="url(#k)" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+</svg>

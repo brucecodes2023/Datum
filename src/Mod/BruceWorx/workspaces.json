@@ -153,11 +153,17 @@
               "caption": "Inspect",
               "commands": [
                 "Std_Measure",
+                "BruceWorx_MassProperties",
                 "BruceWorx_Interference",
-                "Part_CheckGeometry",
-                "Std_ToggleClipPlane"
+                "BruceWorx_OverhangAnalysis",
+                "BruceWorx_ThicknessAnalysis",
+                "BruceWorx_ZebraAnalysis"
               ],
               "more": [
+                "BruceWorx_DraftAnalysis",
+                "BruceWorx_CurvatureAnalysis",
+                "Part_CheckGeometry",
+                "Std_ToggleClipPlane",
                 "Part_SectionCut"
               ]
             },
@@ -205,6 +211,14 @@
               "more": [
                 "Part_ProjectionOnSurface",
                 "Part_MakeSolid"
+              ]
+            },
+            {
+              "caption": "Inspect",
+              "commands": [
+                "BruceWorx_ZebraAnalysis",
+                "BruceWorx_CurvatureAnalysis",
+                "BruceWorx_DraftAnalysis"
               ]
             },
             {

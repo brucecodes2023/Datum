@@ -501,10 +501,36 @@ def thickness(mesh, minimum=0.8, target=1.2, cap=None):
 # ----- curvature -----------------------------------------------------------------------------------
 
 
+def vertex_areas(mesh):
+    """A third of the area of each vertex's triangles (numpy)."""
+    import numpy as np
+
+    _c, _n, areas = mesh.triangle_geometry()
+    out = np.zeros(len(mesh.points))
+    for k in range(3):
+        np.add.at(out, mesh.triangles[:, k], areas / 3.0)
+    return out
+
+
+def weighted_percentile(values, weights, q, floor=0.0):
+    """The ``q`` percentile of ``values`` above ``floor``, each counted with its weight; None when there are none."""
+    import numpy as np
+
+    keep = values > floor
+    v, w = values[keep], weights[keep]
+    if not len(v) or w.sum() <= 0:
+        return None
+    order = np.argsort(v)
+    cumulative = np.cumsum(w[order])
+    i = min(int(np.searchsorted(cumulative, q / 100.0 * cumulative[-1])), len(v) - 1)
+    return float(v[order][i])
+
+
 def curvature(mesh, kind="Mean", limit=None):
     """Curvature map (1/mm) from ``surface_mesh(..., curvature=True)``. Mean and Gaussian are signed (convex
     positive), Largest is max(|k1|, |k2|). The ramp spans +-limit (signed) or 0..limit; ``limit`` None: the 95th
-    percentile, so a few tight fillets do not wash out the rest."""
+    percentile by area (curved area, not vertex count: small fillets have many vertices), so a few tight fillets
+    do not wash out the rest."""
     import numpy as np
 
     k = mesh.curvature
@@ -519,9 +545,8 @@ def curvature(mesh, kind="Mean", limit=None):
     # OCCT's sign: positive curvature bends towards the normal (a concave surface seen from outside)
     if kind != "Largest":
         value = -value if kind == "Mean" else value
-    magnitude = np.abs(value[np.abs(value) > 1e-12])
     if limit is None:
-        limit = float(np.percentile(magnitude, 95)) if len(magnitude) else 1.0
+        limit = weighted_percentile(np.abs(value), vertex_areas(mesh), 95.0, floor=1e-12) or 1.0
     limit = limit or 1.0
     lo = 0.0 if kind == "Largest" else -limit
     stats = {
