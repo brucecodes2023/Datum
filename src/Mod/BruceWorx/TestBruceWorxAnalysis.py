@@ -80,6 +80,21 @@ class OverhangTests(unittest.TestCase):
         self.assertAlmostEqual(result.stats["bed_area"], 100.0, places=6)
         self.assertEqual(sum(b.area for b in result.bands), result.stats["total_area"])
 
+    def test_texture_colours_of_exact_values(self):
+        # a ceiling (90), a wall (0) and the bed must not land on a band edge in the 512-texel texture
+        shape = Part.makeBox(10, 10, 20).fuse(Part.makeBox(30, 10, 5, V(0, 0, 15))).removeSplitter()
+        result = ba.overhang(ba.surface_mesh(shape))
+        texels = result.band_texture(512)
+
+        def shown(value):
+            s = (value - result.lo) / (result.hi - result.lo)
+            return texels[min(511, int(s * 512))]
+
+        self.assertEqual(shown(90.0), ba.RED)
+        self.assertEqual(shown(0.0), ba.NEUTRAL)
+        self.assertEqual(shown(ba.BED_VALUE), ba.BLUE)
+        self.assertEqual(shown(45.0), ba.YELLOW)  # exactly the threshold prints
+
     def test_upside_down_the_arm_rests_on_nothing(self):
         shape = Part.makeBox(10, 10, 20).fuse(Part.makeBox(30, 10, 5, V(0, 0, 15))).removeSplitter()
         result = ba.overhang(ba.surface_mesh(shape), build=(0, 0, -1))

@@ -43,6 +43,8 @@ OVERHANG_DEFAULT = 45.0  # degrees from vertical (Cura's "support overhang angle
 OVERHANG_MARGIN = 10.0  # the yellow band below the threshold: prints, may sag or curl
 DRAFT_DEFAULT = 1.0  # degrees, injection moulding / casting
 BED_TOLERANCE = 0.05  # mm: a down-facing face this close to the lowest point sits on the bed
+BED_VALUE = 96.0  # the overhang scalar of a face on the bed, past a ceiling's 90
+WALL_LIMIT = 0.5  # degrees: a down-facing tilt this small counts as a vertical wall
 
 # Wall-thickness presets: (name, minimum, target) in mm. Below the minimum is red, between orange.
 THICKNESS_PRESETS = (
@@ -305,7 +307,7 @@ def _band_areas(bands, values, areas):
 
 def overhang(mesh, build=(0, 0, 1), threshold=OVERHANG_DEFAULT, margin=OVERHANG_MARGIN, bed=True):
     """FDM overhang map. The scalar is the angle from vertical in degrees (-90 up-facing .. 90 a ceiling); faces
-    resting on the bed get 95. Stats: support area (mm^2), bed area, the lowest overhang point."""
+    resting on the bed get BED_VALUE (96). Stats: support area (mm^2), bed area, the lowest overhang point."""
     import numpy as np
 
     b = np.array(unit(build))
@@ -322,15 +324,18 @@ def overhang(mesh, build=(0, 0, 1), threshold=OVERHANG_DEFAULT, margin=OVERHANG_
             verts = mesh.vertex_face == fi
             if tri_values[sel].min() >= 89.0 and float(height[verts].max()) - bed_level <= BED_TOLERANCE:
                 bed_tris |= sel
-                scalar[verts] = 95.0
+                scalar[verts] = BED_VALUE
+    # Band limits stay clear of the values that occur exactly (a wall's 0, a ceiling's 90), so the texture
+    # never has to decide on its edge: a wall is neutral, a ceiling red, the bed blue.
+    green = min(max(WALL_LIMIT, threshold - margin), threshold)
     bands = [
-        Band("Faces up or vertical", NEUTRAL, -90.0, 0.0),
-        Band("Prints without support", GREEN, 0.0, max(0.0, threshold - margin)),
-        Band("Near the limit", YELLOW, max(0.0, threshold - margin), threshold),
-        Band("Needs support", RED, threshold, 90.0),
-        Band("On the bed", BLUE, 90.0, 100.0),
+        Band("Faces up or vertical", NEUTRAL, -90.0, WALL_LIMIT),
+        Band("Prints without support", GREEN, WALL_LIMIT, green),
+        Band("Near the limit", YELLOW, green, threshold),
+        Band("Needs support", RED, threshold, 92.5),
+        Band("On the bed", BLUE, 92.5, 100.0),
     ]
-    values = np.where(bed_tris, 95.0, tri_values)
+    values = np.where(bed_tris, BED_VALUE, tri_values)
     _band_areas(bands, values, areas)
     needs = (values > threshold) & ~bed_tris
     stats = {
