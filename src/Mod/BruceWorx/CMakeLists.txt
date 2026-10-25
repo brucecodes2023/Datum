@@ -17,6 +17,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxStart.py
     TestBruceWorxTitleBar.py
     TestBruceWorxVaultWizard.py
+    TestBruceWorxPreview.py
     TestBruceWorxVaultClient.py
     TestBruceWorxBridge.py
     preferences-bruceworx.ui
@@ -44,6 +45,7 @@ SET(BruceWorx_SRCS
     bruceworx_start.py
     bruceworx_dashboard.py
     bruceworx_vaultwizard.py
+    bruceworx_preview.py
     bruceworx_vaultclient.py
     bruceworx_changes.py
     TestBruceWorxChanges.py

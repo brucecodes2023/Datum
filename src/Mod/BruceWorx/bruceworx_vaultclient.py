@@ -1179,6 +1179,12 @@ def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=Tru
         pn = row["part_number"]
         if any(f[0] == pn for f in failed):
             continue
+        try:  # the version's thumbnail: the model in the iso view, centred (the Files tab's tooltip)
+            import bruceworx_preview
+
+            bruceworx_preview.stamp_work_file(s, pn)
+        except Exception as exc:  # noqa: BLE001 -- the picture is never a reason not to check in
+            _console(f"Vault: no iso picture for {pn} ({exc})", "warn")
         try:
             data = [(hook, hook.prepare(s, pn, notes)) for hook in CHECKIN_HOOKS]  # may refuse
             s.work.checkin(pn, comment, keep_checked_out=keep)
@@ -1950,6 +1956,7 @@ def _make_classes():
             self.links_cache = {}
             self.collapsed = set()
             self._filling = False
+            self.pictures = None  # Refresh Pictures: the P/Ns still to render, while it runs
             self.kind = "all"
             self.sort_by_time = False  # a tree reads as a BOM: by part number; the sort button swaps
             base = QtGui.QFont(self.font())
@@ -2374,11 +2381,19 @@ def _make_classes():
             return f"<div>{picture}{'<br>'.join(lines)}</div>"
 
         def thumb_file(self, row):
-            """The thumbnail saved in the latest version's file, as a PNG on disk (for the tooltip's
-            rich text), or "" when it has none."""
+            """The latest version's picture as a PNG on disk (for the tooltip's rich text): the iso
+            picture Refresh Pictures cached, else the thumbnail saved in the file, or ""."""
             sha = row.get("sha")
             if not sha or row.get("item_type") == "change":
                 return ""
+            try:
+                import bruceworx_preview
+
+                cached = bruceworx_preview.cached(sha)
+                if cached:
+                    return cached
+            except ImportError:
+                pass
             if sha not in self.thumb_files:
                 path = ""
                 try:
@@ -2454,6 +2469,11 @@ def _make_classes():
             act.triggered.connect(lambda _c=False: break_lock())
             act = self.more_menu.addAction("Move Vault…")
             act.triggered.connect(lambda _c=False: move_vault_dialog())
+            act = self.more_menu.addAction("Refresh Pictures")
+            act.setToolTip("Render an iso picture of every part and assembly checked in before pictures "
+                           "were made at check-in; kept on this Mac, the vault is not changed")
+            act.setEnabled(_state["session"] is not None and self.pictures is None)
+            act.triggered.connect(lambda _c=False: self.refresh_pictures())
             self.more_menu.addSeparator()
             act = self.more_menu.addAction("Show in Finder")
             s = _state["session"]
@@ -2461,6 +2481,46 @@ def _make_classes():
             if s is not None:
                 act.triggered.connect(lambda _c=False, r=s.root: QtGui.QDesktopServices.openUrl(
                     QtCore.QUrl.fromLocalFile(r)))
+
+        def refresh_pictures(self):
+            """Render the missing iso pictures one file at a time (the window stays live), into the
+            cache on this Mac; the footer counts down."""
+            import bruceworx_preview
+
+            s = _state["session"]
+            if s is None or self.pictures is not None:
+                return
+            todo = [pn for pn in sorted(s.vault.items) if bruceworx_preview.needs_picture(s, pn)]
+            self.pictures = {"todo": todo, "total": len(todo), "done": 0, "empty": [], "failed": []}
+            self._next_picture()
+
+        def _next_picture(self):
+            import bruceworx_preview
+
+            job, s = self.pictures, _state["session"]
+            if job is None or not _alive(self):
+                return
+            if not job["todo"] or s is None:
+                self.pictures = None
+                text = (f"Pictures refreshed: {job['done']} new" if job["total"] else "Every picture is up to date")
+                for key, words in (("empty", "nothing to draw"), ("failed", "could not be opened")):
+                    pns = job[key]
+                    if pns:
+                        text += f" · {len(pns)} {words} ({', '.join(pns[:3])}{'…' if len(pns) > 3 else ''})"
+                self.footer.setText(text)
+                self.thumb_files.clear()
+                return
+            pn = job["todo"].pop(0)
+            self.footer.setText(f"Refreshing pictures · {job['total'] - len(job['todo'])} of {job['total']} · {pn}")
+            try:
+                if bruceworx_preview.refresh_one(s, pn):
+                    job["done"] += 1
+                else:
+                    job["empty"].append(pn)
+            except Exception as exc:  # noqa: BLE001 -- one bad file does not stop the rest
+                _console(f"Vault: no picture for {pn} ({exc})", "warn")
+                job["failed"].append(pn)
+            QtCore.QTimer.singleShot(0, lambda: _alive(self) and self._next_picture())
 
         def restyle_icons(self):
             colour = self.list.colour("secondary")
