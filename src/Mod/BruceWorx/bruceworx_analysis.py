@@ -37,7 +37,7 @@ ORANGE = (0.96, 0.58, 0.16)
 YELLOW = (0.98, 0.84, 0.22)
 GREEN = (0.30, 0.72, 0.36)
 BLUE = (0.22, 0.48, 0.86)
-NEUTRAL = (0.82, 0.83, 0.85)
+NEUTRAL = (0.90, 0.91, 0.93)
 
 OVERHANG_DEFAULT = 45.0  # degrees from vertical (Cura's "support overhang angle", PrusaSlicer's 45 from horizontal)
 OVERHANG_MARGIN = 10.0  # the yellow band below the threshold: prints, may sag or curl
@@ -282,10 +282,12 @@ def surface_mesh(shape, deflection=None, curvature=False):
         mesh = SurfaceMesh(empty, empty, np.zeros((0, 2)), np.zeros(0, np.int64), np.zeros((0, 3), np.int64),
                            np.zeros(0, np.int64), faces, [])
         mesh.curvature = np.zeros((0, 2))
+        mesh.shape = shape
         return mesh
     mesh = SurfaceMesh(np.vstack(pts_all), np.vstack(nrm_all), np.vstack(uv_all), np.concatenate(vf_all),
                        np.vstack(tri_all), np.concatenate(tf_all), faces, exact)
     mesh.curvature = np.vstack(curv_all) if curvature else None
+    mesh.shape = shape
     return mesh
 
 
@@ -371,7 +373,7 @@ def draft(mesh, pull=(0, 0, 1), required=DRAFT_DEFAULT):
 # ----- wall thickness ------------------------------------------------------------------------------
 
 
-def ray_lengths(origins, directions, tri_a, tri_b, tri_c, cap, eps=1e-9):
+def ray_lengths(origins, directions, tri_a, tri_b, tri_c, cap, eps=1e-9, neighbours=None, tri_normals=None):
     """For each ray, the distance to the nearest triangle it hits within ``cap``, or inf (Moller-Trumbore).
 
     Also the index of that triangle (-1 when none). Plain numpy over every (ray, triangle) pair: callers keep
@@ -392,12 +394,36 @@ def ray_lengths(origins, directions, tri_a, tri_b, tri_c, cap, eps=1e-9):
     t = (e2[None, :, :] * q).sum(axis=2) * inv
     hit = ok & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1.0 + 1e-9) & (t > 0.0) & (t <= cap)
     t = np.where(hit, t, np.inf)
+    if neighbours is not None:
+        # (R,T) booleans: the triangle is on the ray's own face or a neighbour (sharing an edge). Such a hit is a
+        # wall only when the face there turns back against the ray's start (normals over 120 degrees apart, the two
+        # sides of a thin fin); otherwise it reads the edge between them: a hole's mouth, a chamfer.
+        facing = directions @ tri_normals.T
+        t = np.where(neighbours & (facing < 0.5), np.inf, t)
     index = np.argmin(t, axis=1)
     best = t[np.arange(len(t)), index]
     return best, np.where(np.isfinite(best), index, -1)
 
 
-def _cast(starts, directions, tri_a, tri_b, tri_c, tri_normals, cap):
+def face_adjacency(shape):
+    """F x F booleans (numpy): True where two faces share an edge, and on the diagonal."""
+    import numpy as np
+
+    faces = shape.Faces
+    out = np.eye(len(faces), dtype=bool)
+    owners = {}
+    for i, face in enumerate(faces):
+        for edge in face.Edges:
+            owners.setdefault(edge.hashCode(), set()).add(i)  # OCCT's hash: the edge, whatever its orientation
+    for group in owners.values():
+        group = list(group)
+        for i in group:
+            out[i, group] = True
+    return out
+
+
+def _cast(starts, directions, tri_a, tri_b, tri_c, tri_normals, cap, ray_face=None, tri_face=None,
+          adjacent=None):
     """Distance along each ray to where it leaves the solid, inf when beyond ``cap`` or unreadable.
 
     A grid of cells ``cap`` wide keeps the candidates near each ray: a ray no longer than ``cap`` that starts in a
@@ -429,7 +455,9 @@ def _cast(starts, directions, tri_a, tri_b, tri_c, tri_normals, cap):
         rays = np.array(rays, dtype=np.int64)
         for chunk in range(0, len(rays), 256):  # keeps the (rays x triangles) arrays small
             r = rays[chunk:chunk + 256]
-            dist, hit = ray_lengths(starts[r], directions[r], tri_a[cand], tri_b[cand], tri_c[cand], cap)
+            mask = None if adjacent is None else adjacent[ray_face[r][:, None], tri_face[cand][None, :]]
+            dist, hit = ray_lengths(starts[r], directions[r], tri_a[cand], tri_b[cand], tri_c[cand], cap,
+                                    neighbours=mask, tri_normals=tri_normals[cand])
             found = hit >= 0
             cos = np.zeros(len(r))
             cos[found] = (tri_normals[cand[hit[found]]] * directions[r[found]]).sum(axis=1)
@@ -444,7 +472,10 @@ def thickness(mesh, minimum=0.8, target=1.2, cap=None):
     """Wall thickness map. Rays go straight into the material, from every vertex (nudged into its face, off the
     edges) and from every triangle's centre, to where they leave the solid. The scalar is per vertex in mm,
     capped at ``cap`` (2 x target by default: thicker walls are all "thick enough"); band areas are measured at
-    the triangle centres. Stats: the thinnest wall and where, the area under the minimum and under the target."""
+    the triangle centres. A ray that meets its own face or a neighbouring one (sharing an edge) reads a wall only
+    where that face turns back against it (a thin fin's other side); otherwise it reads the edge between them (a
+    hole's mouth in a curved hub) and the hit is skipped.
+    Stats: the thinnest wall and where, the area under the minimum and under the target."""
     import numpy as np
 
     if cap is None:
@@ -464,7 +495,10 @@ def thickness(mesh, minimum=0.8, target=1.2, cap=None):
     eps = 1e-4 * cap
     starts = np.vstack([vstart - mesh.normals * eps, centroids - normals * eps]) if count else np.zeros((0, 3))
     directions = np.vstack([-mesh.normals, -normals]) if count else np.zeros((0, 3))
-    found = _cast(starts, directions, a, b, c, normals, cap) if count else np.zeros(0)
+    adjacent = face_adjacency(mesh.shape) if count and getattr(mesh, "shape", None) is not None else None
+    ray_face = np.concatenate([mesh.vertex_face, mesh.triangle_face])
+    found = _cast(starts, directions, a, b, c, normals, cap, ray_face, mesh.triangle_face, adjacent) \
+        if count else np.zeros(0)
     vertex_t, centre_t = found[:len(mesh.points)], found[len(mesh.points):]
     scalar = np.minimum(vertex_t, cap)
     values = np.minimum(centre_t, cap)

@@ -64,7 +64,7 @@ DEFAULTS = {
     "zebra": {"stripes": 12, "vertical": False},
 }
 
-_state = {"panel": None, "observer": None, "installed": False}
+_state = {"panel": None, "observer": None, "installed": False, "message": ""}
 
 
 # ----- what is analysed ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ class Target:
     def __init__(self, obj, shape):
         self.obj = obj
         self.shape = shape
-        self.label = getattr(obj, "Label", "")
+        self.label = part_label(obj)
         try:
             own = obj.Shape.Placement
             self.transform = shape.Placement.multiply(own.inverse())
@@ -108,6 +108,18 @@ class Target:
         return mesh
 
 
+def part_label(obj):
+    """A body's part name: the App::Part around it (a part file's "Housing with ring gear 48T"), else its label."""
+    label = getattr(obj, "Label", "")
+    try:
+        for parent in obj.InList:
+            if parent.TypeId == "App::Part":
+                return parent.Label
+    except Exception:
+        pass
+    return label
+
+
 def targets(doc=None, objects=None):
     """The Targets of ``objects``, of the selection, or of every visible solid of ``doc``."""
     import FreeCAD
@@ -126,7 +138,7 @@ def targets(doc=None, objects=None):
                 vobj = getattr(root, "ViewObject", None)
                 if vobj is not None and not vobj.Visibility:
                     continue
-                bp._collect(None, [], root, owners)
+                bp._collect(root, [], root, owners)  # through the root: links placed
     if owners:
         # A part's faces are hidden under its map, and every link to it shares those nodes: so every visible
         # instance of an analysed part is analysed too.
@@ -138,7 +150,7 @@ def targets(doc=None, objects=None):
         for root in getattr(doc or FreeCAD.ActiveDocument, "RootObjects", []) or []:
             vobj = getattr(root, "ViewObject", None)
             if vobj is None or vobj.Visibility:
-                bp._collect(None, [], root, everything)
+                bp._collect(root, [], root, everything)
         owners = owners + [o for o in everything if name(o.obj) in wanted]
     out, seen = [], set()
     for owner in owners:
@@ -868,6 +880,7 @@ def close():
 
 
 def _message(text):
+    _state["message"] = text
     try:
         import FreeCADGui as Gui
 

@@ -333,6 +333,13 @@ def _global_shape(top, names, obj):
     return shape
 
 
+def _is_shape_feature(obj):
+    try:
+        return obj.isDerivedFrom("Part::Feature")
+    except Exception:
+        return False
+
+
 def _collect(top, names, obj, out, depth=0):
     """Append the owners under ``obj`` (reached from ``top`` by ``names``) to ``out``."""
     if obj is None or depth > 30:
@@ -363,10 +370,11 @@ def _collect(top, names, obj, out, depth=0):
             out.append(Owner(target, shape))
         return
     children = list(getattr(target, "Group", None) or [])
-    # A Part workbench result's operands (a Cut's base and tool) are inside it: count the result only.
+    # A Part workbench result's operands (a Cut's base and tool) are inside it: count the result only. Only
+    # shapes count as results: an assembly's joints and links point at the parts too (MOD-11).
     used = set()
     for child in children:
-        if getattr(child, "TypeId", "") != "PartDesign::Body":
+        if getattr(child, "TypeId", "") != "PartDesign::Body" and _is_shape_feature(child):
             used.update(id(o) for o in getattr(child, "OutList", ()) or ())
     for child in children:
         if id(child) in used:

@@ -206,6 +206,32 @@ class FixtureTests(unittest.TestCase):
         self.assertAlmostEqual(t[0][1], 0.0, delta=scale)
         self.assertAlmostEqual(t[1][2], 0.0, delta=scale)
 
+    def test_links_and_joints_in_a_container(self):
+        # an assembly's joints point at its parts; the parts still count (MOD-11)
+        import FreeCAD
+        import Part
+
+        part = self.doc.addObject("App::Part", "Asm")
+        link = self.doc.addObject("App::Link", "Instance")
+        link.LinkedObject = self.obj
+        link.Placement.Base = FreeCAD.Vector(100, 0, 0)
+        joint = self.doc.addObject("App::FeaturePython", "Joint")
+        joint.addProperty("App::PropertyLinkList", "Parts").Parts = [link]
+        cut = self.doc.addObject("Part::Cut", "Cut")
+        base = self.doc.addObject("Part::Feature", "Base")
+        base.Shape = Part.makeBox(10, 10, 10, FreeCAD.Vector(0, 50, 0))
+        tool = self.doc.addObject("Part::Feature", "Tool")
+        tool.Shape = Part.makeBox(5, 5, 5, FreeCAD.Vector(0, 50, 0))
+        cut.Base, cut.Tool = base, tool
+        part.Group = [link, joint, cut, base, tool]
+        self.doc.recompute()
+        found = []
+        bp._collect(part, [], part, found)
+        names = sorted(o.obj.Name for o in found)
+        self.assertEqual(names, ["Cut", "Fixture"])  # the link's part counts, the cut's operands do not
+        fixture = [o for o in found if o.obj.Name == "Fixture"][0]
+        self.assertAlmostEqual(fixture.shape.BoundBox.XMin, 100.0, places=6)  # placed by the link
+
     def test_reading_the_mass_leaves_the_part_untouched(self):
         # FreeCAD 1.1's getPhysicalValue writes the material back and touches the object (regression, MOD-11)
         from bruceworx import partprops as pp

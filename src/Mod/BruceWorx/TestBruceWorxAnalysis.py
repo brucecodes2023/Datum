@@ -138,6 +138,28 @@ class ThicknessTests(unittest.TestCase):
         self.assertGreater(result.stats["under_target_area"], 0.95 * (shell.Area - rim))
         self.assertEqual(result.bands[1].name, "Thin")
 
+    def test_a_hole_mouth_is_not_a_thin_wall(self):
+        # a radial hole into a hub: rays near the mouth run beside the hole wall (the sun gear's set screw)
+        hub = Part.makeCylinder(5, 8).cut(Part.makeCylinder(2.5, 8))
+        hole = Part.makeCylinder(1.25, 6, V(0, 1.5, 4), V(0, 1, 0))
+        result = ba.thickness(ba.surface_mesh(hub.cut(hole)), 0.8, 1.2)
+        self.assertEqual(result.stats["under_minimum_area"], 0.0)
+
+    def test_a_thin_fin_between_neighbouring_faces(self):
+        # a wedge fin, 10 degrees: its two sides share the tip edge and turn back against each other
+        import math as m
+
+        h = 10.0
+        w = h * m.tan(m.radians(5))
+        fin = Part.Face(Part.makePolygon([V(0, -w, 0), V(0, w, 0), V(h, 0, 0), V(0, -w, 0)])).extrude(V(0, 0, 10))
+        result = ba.thickness(ba.surface_mesh(fin), 0.8, 1.2)
+        self.assertGreater(result.stats["under_minimum_area"], 0.0)
+
+    def test_adjacency(self):
+        box = Part.makeBox(1, 1, 1)
+        adjacent = ba.face_adjacency(box)
+        self.assertEqual(int(adjacent.sum()), 6 + 6 * 4)  # itself and its four neighbours, not the opposite face
+
     def test_box_edges_are_not_thin(self):
         # rays from vertices on a 90 degree edge must not run along the neighbouring face
         result = ba.thickness(ba.surface_mesh(Part.makeBox(5, 5, 5)), 0.8, 1.2)
