@@ -327,6 +327,13 @@ def style_of(objs):
     latest = max(objs, key=lambda o: o.ShownAt)
     c = latest.CapColor
     fits = [tuple(f.split("\t", 1)) for o in objs for f in o.Fits if "\t" in f]
+    try:  # and the fits marked in the Interference check (ASM-06), kept on the assembly
+        import bruceworx_interference
+
+        fits += [tuple(k.split("\t", 1)) for k in bruceworx_interference.fits(latest.Document) if "\t" in k]
+    except Exception:  # noqa: BLE001 -- no interference module: the sections' own fits
+        pass
+    fits = sorted(set(fits))
     uncut = []
     for o in objs:
         for part in uncut_objects(o):

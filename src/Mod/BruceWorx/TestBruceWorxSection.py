@@ -93,6 +93,28 @@ class TestHandles(unittest.TestCase):
                     near(self, n1, turned)
 
 
+class TestFits(unittest.TestCase):
+    def test_fits_marked_in_the_interference_check_count(self):
+        import sys
+        from types import ModuleType, SimpleNamespace
+
+        doc = SimpleNamespace(Name="Asm")
+        section = SimpleNamespace(ShownAt=1.0, CapColor=(0.5, 0.5, 0.5), Fits=["A#Part\tB#Part"], Caps="Part colour",
+                                  Hatch=True, ShowClash=True, NotCut="Nothing", Document=doc)
+        fake = ModuleType("bruceworx_interference")
+        fake.fits = lambda d: {"C#Part\tD#Part": "screw in a tapped hole", "A#Part\tB#Part": ""}
+        saved = sys.modules.get("bruceworx_interference")
+        sys.modules["bruceworx_interference"] = fake
+        try:
+            fits = sec.style_of([section])["fits"]
+        finally:
+            if saved is not None:
+                sys.modules["bruceworx_interference"] = saved
+            else:
+                del sys.modules["bruceworx_interference"]
+        self.assertEqual(fits, [("A#Part", "B#Part"), ("C#Part", "D#Part")])
+
+
 class TestPasses(unittest.TestCase):
     def setUp(self):
         self.p1 = (V(0, 1, 0), 0.0)
