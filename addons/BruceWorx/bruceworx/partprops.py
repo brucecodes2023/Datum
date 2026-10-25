@@ -329,6 +329,29 @@ def sync_states(doc, states: dict, schema: Schema | None = None) -> list[str]:
     return [obj.Name for obj, state in targets if set_state(obj, state, schema)]
 
 
+ITEM_TYPE = "ItemType"
+VAULT_TYPES = ("part", "cots")  # the item types a part file's ItemType follows (MOD-05)
+
+
+def sync_item_types(doc, types: dict) -> list[str]:
+    """Set ``ItemType`` on every object in ``doc`` whose PartNumber the vault types as part or
+    cots (``types``: part number -> item type), so a part the vault calls COTS is COTS in the
+    file too (the section view leaves it uncut, the BOM marks it bought). Only objects that
+    have the property; an unchanged value is not written. Returns the names changed."""
+    changed = []
+    for obj in doc.Objects:
+        wanted = types.get(part_number_of(obj))
+        if wanted not in VAULT_TYPES or ITEM_TYPE not in obj.PropertiesList:
+            continue
+        if getattr(obj, ITEM_TYPE) == wanted:
+            continue
+        if hasattr(obj, "setPropertyStatus"):
+            obj.setPropertyStatus(ITEM_TYPE, "Output")  # no recompute for a type change
+        setattr(obj, ITEM_TYPE, wanted)
+        changed.append(obj.Name)
+    return changed
+
+
 def attach_vault(vault):
     """Have ``vault`` (a FolderVault in this FreeCAD session) write the state of
     every open part whose number changes state. Returns the listener."""
@@ -363,8 +386,8 @@ def vault_path() -> str:
 
 
 def sync_from_vault(doc, path: str | None = None) -> list[str]:
-    """Set the state of ``doc``'s parts from the vault's record (default: the
-    VaultPath preference). Parts the vault does not know are left alone."""
+    """Set the state (and the part / COTS item type) of ``doc``'s parts from the vault's
+    record (default: the VaultPath preference). Parts the vault does not know are left alone."""
     if not any(part_number_of(obj) for obj in doc.Objects):
         return []  # no vault read for documents without part numbers
     path = vault_path() if path is None else path
@@ -373,7 +396,9 @@ def sync_from_vault(doc, path: str | None = None) -> list[str]:
     from bruceworx.pdm_folder import FolderVault  # noqa: PLC0415
 
     vault = FolderVault(os.path.expanduser(path))
-    return sync_states(doc, vault.states())
+    changed = sync_states(doc, vault.states())
+    types = {pn: item.item_type for pn, item in vault.items.items()}
+    return changed + [name for name in sync_item_types(doc, types) if name not in changed]
 
 
 # ----- computed values ---------------------------------------------------------

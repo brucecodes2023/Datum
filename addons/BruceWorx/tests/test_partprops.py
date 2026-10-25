@@ -291,6 +291,20 @@ class VaultWritesStateTests(unittest.TestCase):
         self.assertEqual(partprops.sync_from_vault(self.doc, ""), [])  # no vault set
         self.assertEqual(partprops.sync_from_vault(FakeDoc(), self.vault.root), [])
 
+    def test_opening_a_document_takes_the_vaults_item_type(self):
+        screw = _part("Screw", "P2", ItemType=("App::PropertyEnumeration", None))
+        screw.ItemType = ["part", "assembly", "cots", "drawing"]
+        screw.ItemType = "part"
+        doc = FakeDoc(self.part, screw)
+        self.vault.create_item("P1")
+        self.vault.create_item("P2", "part", "Socket head cap screw M3x40 (COTS)")
+        self.assertEqual(partprops.sync_from_vault(doc, self.vault.root), ["Plate", "Screw"])  # Plate: its state
+        self.assertEqual(screw.ItemType, "part")
+        self.vault.set_item_type("P2", "cots")
+        self.assertEqual(partprops.sync_from_vault(doc, self.vault.root), ["Screw"])
+        self.assertEqual(screw.ItemType, "cots")
+        self.assertEqual(partprops.sync_from_vault(doc, self.vault.root), [])
+
 
 class FakeMaterial:
     def __init__(self, name):
