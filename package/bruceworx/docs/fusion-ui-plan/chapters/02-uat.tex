@@ -20,7 +20,11 @@ is in the Keystone build now in \file{/Applications} (\code{1.1.4-bw.1+4d1d982})
   theme with a stock one that lacks the panel tokens. The first-start page no longer runs, and a profile it
   already overwrote is healed. The 16 panel tokens were also added to FreeCAD Light/Dark
   (\code{a5bedb6}, \eref{UIX-01}).\\
-2 & Ribbon buttons not all visible & Open & Not reproduced yet; next on the list, with \#10.\\
+2 & Ribbon buttons not all visible & Fixed & Two causes. Mostly \#10 below (whole groups empty). And in a
+  narrower window Qt gave the first groups their full width and squeezed the last ones to one button and
+  \guillemotright, cutting their captions (``CON\ldots T''). The tools row is now shared out: the groups shrink
+  together, none below its caption's width; the rest of a group is under \guillemotright{} and its caption
+  menu. Checked at 2056, 1512 and 1028\,px wide (\code{b59bf0a}, \eref{UIX-06}).\\
 3 & Vault sidebar transparent & Fixed & The floating vault card is gone: its list is the Start page's
   \emph{Files} tab (\code{1c3389e}, \eref{PDM-10}).\\
 4 & All drawings as a drawing tree, other views for assembly trees & Fixed & Files is one indented tree:
@@ -30,7 +34,11 @@ is in the Keystone build now in \file{/Applications} (\code{1.1.4-bw.1+4d1d982})
   page only (your choice).\\
 6 & Better rendering, with textures & Open & Appearance from the part's material, plus matcap shading
   (\eref{UIX-08}).\\
-7 & Odd font (halo) in the sidebar & Open & To do.\\
+7 & Odd font (halo) in the sidebar & Fixed & The transparent Browser draws a halo behind its text in
+  the card colour, a theme token. Your profile was in FreeCAD Light then (\#1), which lacked the token, so
+  Qt kept the overlay's built-in 30\,\% black: a dark smudge round every row. The halo now always contrasts
+  with the text (light behind dark text, dark behind light), whatever the theme (\code{f3b6c7e},
+  \eref{UIX-03}).\\
 8 & Section view crashes & Fixed & Coin~4.0.3 crashed tearing down a dragged dragger; Coin~4.0.10 now, and the
   handles' callbacks go through the view, which holds the GIL (\code{d519d29}). Later the same day: the
   Section button is a toggle and faces are found (\S\ref{sec:uat-section}).\\
@@ -39,7 +47,12 @@ is in the Keystone build now in \file{/Applications} (\code{1.1.4-bw.1+4d1d982})
   the pointer, Cmd + swipe orbits about the point a mouse orbit picks. A mouse wheel and pinch are unchanged,
   in every navigation style; Revit stays. Off switch on Preferences $\rightarrow$ BruceWorx
   (\code{4eed4ca}, \eref{UIX-13}). Tested with synthetic swipes; to try on the real trackpad.\\
-10 & Sketch/Modeling buttons gone after switching tabs & Open & Not reproduced yet; next, with \#2.\\
+10 & Sketch/Modeling buttons gone after switching tabs & Fixed & Reproduced with a copy of your settings:
+  the first time a tab showed, all its groups but the last had captions and no buttons. The macOS title row
+  makes the window's content reach under the title strip, and Qt gives a widget there a 40\,px top
+  margin. A tab's groups wait hidden at the top left, so they got it; shown in their row they lost it, but
+  their layout kept buttons 0\,px tall. Toolbars now ignore the title strip, as the docks already did
+  (\code{c4a644a}, \eref{UIX-06}).\\
 \end{longtable}
 \end{center}
 
@@ -117,5 +130,5 @@ whether the thinner lines are still easy to click.
 \end{figure}
 
 \subsection{Still open}
-\#2/\#10 ribbon buttons, \#6 rendering, \#7 sidebar font; MOD-14 on-canvas editing (a teardown
+\#6 rendering; MOD-14 on-canvas editing (a teardown
 fix is in the working tree, not committed); the intermittent segfault of the inspector GUI test.
