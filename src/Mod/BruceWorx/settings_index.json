@@ -1050,6 +1050,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "Fasteners add-on (Insert Fastener)",
+"tip": "On by default. Loads the bundled Fasteners add-on (Mod/fasteners: ISO / DIN screws, nuts, washers, inserts) that Insert Fastener uses. Off skips any Fasteners add-on, a copy from the Addon Manager too",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Feature summary in the Browser",
 "tip": "On by default. Quiet text after a feature's name with its main dimension: Pad 8 mm, R5, Ø9 × 4.",
 "page": "BruceWorx",
@@ -1088,6 +1094,12 @@
 {
 "text": "History timeline (bottom bar: PartDesign history, assembly order)",
 "tip": "On by default. Same switch as BruceWorx > History Timeline. Closing the dock also turns it off.",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
+"text": "Hole presets, cosmetic threads and the fastener library",
+"tip": "On by default. Hole Preset (heat-set insert, tapped, clearance, counterbore and countersink holes), Cosmetic Thread, Hole Callouts on drawings, Insert Fastener and Mark as COTS. Takes effect at once f",
 "page": "BruceWorx",
 "area": "BruceWorx"
 },
@@ -3056,6 +3068,12 @@
 {
 "text": "Rendering",
 "tip": "",
+"page": "3D View",
+"area": "General"
+},
+{
+"text": "Section caps",
+"tip": "Fill the clipped faces of solids in the part's own material, hatched and outlined.",
 "page": "3D View",
 "area": "General"
 },

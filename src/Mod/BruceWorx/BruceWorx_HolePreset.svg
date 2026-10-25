@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a block with a hole cut in it, and an insert above it: the heat-set hole preset -->
+  <path d="M6 30 L32 18 L58 30 L32 42 Z" fill="#c2cad5" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M6 30 L32 42 L32 58 L6 46 Z" fill="#8f9bab" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M32 42 L58 30 L58 46 L32 58 Z" fill="#6b7685" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <ellipse cx="32" cy="30" rx="9" ry="4.5" fill="#2b2f36"/>
+  <rect x="26" y="4" width="12" height="17" rx="1.5" fill="#e0a03c" stroke="#8a5a12" stroke-width="1.6"/>
+  <path d="M26 8 L38 10 M26 12 L38 14 M26 16 L38 18" stroke="#8a5a12" stroke-width="1.4"/>
+  <ellipse cx="32" cy="4.6" rx="3" ry="1.2" fill="#8a5a12"/>
+</svg>

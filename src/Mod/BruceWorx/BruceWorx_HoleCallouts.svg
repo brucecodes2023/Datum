@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a hole on a drawing with a leader to its callout -->
+  <circle cx="18" cy="44" r="10" fill="#ffffff" stroke="#2b2f36" stroke-width="2.4"/>
+  <circle cx="18" cy="44" r="13" fill="none" stroke="#1f6feb" stroke-width="1.6" stroke-dasharray="15 5"/>
+  <path d="M25 37 L38 18 L60 18" fill="none" stroke="#2b2f36" stroke-width="2"/>
+  <path d="M25 37 L26.5 29 L31 32 Z" fill="#2b2f36"/>
+  <path d="M38 10 L58 10 M38 26 L52 26" stroke="#d2463c" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -251,6 +251,44 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="HardwareCommands">
+        <property name="toolTip">
+         <string>On by default. Hole Preset (heat-set insert, tapped, clearance, counterbore and countersink holes), Cosmetic Thread, Hole Callouts on drawings, Insert Fastener and Mark as COTS. Takes effect at once for the buttons' state.</string>
+        </property>
+        <property name="text">
+         <string>Hole presets, cosmetic threads and the fastener library</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>HardwareCommands</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="FastenersAddon">
+        <property name="toolTip">
+         <string>On by default. Loads the bundled Fasteners add-on (Mod/fasteners: ISO / DIN screws, nuts, washers, inserts) that Insert Fastener uses. Off skips any Fasteners add-on, a copy from the Addon Manager too. Takes effect on the next start.</string>
+        </property>
+        <property name="text">
+         <string>Fasteners add-on (Insert Fastener)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>FastenersAddon</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="UseBruceWorxBar">
         <property name="toolTip">
          <string>On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.</string>

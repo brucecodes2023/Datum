@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- two parts overlapping: a block and a bolt through it, the shared material in red -->
+  <path d="M8 26 L30 16 L56 26 L34 36 Z" fill="#c2cad5" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M8 26 L34 36 L34 52 L8 42 Z" fill="#8f9bab" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M34 36 L56 26 L56 42 L34 52 Z" fill="#6b7685" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M27 8 L27 46 A5 2.5 0 0 0 37 46 L37 8 Z" fill="#1f6feb" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <ellipse cx="32" cy="8" rx="5" ry="2.5" fill="#5b9bff" stroke="#2b2f36" stroke-width="2"/>
+  <path d="M27 31 L27 46 A5 2.5 0 0 0 37 46 L37 31 A5 2.5 0 0 1 27 31 Z" fill="#d92020" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+</svg>

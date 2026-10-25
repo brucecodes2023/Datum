@@ -11,6 +11,7 @@ Preferences → BruceWorx. This file:
 * starts the ground grid, which shows only while the preference pack is applied,
 * shades the faces in the Fusion-like studio look, coloured from their materials (bruceworx_studio),
 * registers the Rectangular / Circular Pattern commands (bruceworx_pattern_gui),
+* registers Inspect > Interference for assemblies (bruceworx_interference_gui),
 * creates the shared top-level BruceWorx menu (bruceworx_menu),
 * keeps the toolbars on two rows (bruceworx_toolbars),
 * adds the workspace menu and tabs, with their tool groups (bruceworx_workspaces),
@@ -42,6 +43,8 @@ Preferences → BruceWorx. This file:
   (bruceworx_drawing).
 * lets Claude Code drive FreeCAD after asking once per session (bruceworx_bridge).
 * registers Insert Board… for KiCad boards (bruceworx_board_gui).
+* registers Hole Preset, Cosmetic Thread, Hole Callouts, Insert Fastener and Mark as COTS
+  (bruceworx_hardware, MOD-05).
 
 It runs before the startup workbench is activated, so the first-run pack's
 startup workbench (PartDesign) is already used on that first start.
@@ -122,6 +125,13 @@ try:
     bruceworx_section.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx section views were not installed: {exc}")
+
+try:
+    import bruceworx_interference_gui
+
+    bruceworx_interference_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx interference check was not installed: {exc}")
 
 try:
     import bruceworx_toolbars
@@ -317,3 +327,10 @@ try:
         bruceworx_sheetmetal.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx sheet-metal rules and Export Flat were not installed: {exc}")
+
+try:
+    import bruceworx_hardware
+
+    bruceworx_hardware.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx hole presets, cosmetic threads and fasteners were not installed: {exc}")

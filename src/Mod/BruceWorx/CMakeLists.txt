@@ -79,6 +79,8 @@ SET(BruceWorx_SRCS
     TestBruceWorxSection.py
     bruceworx_interference.py
     TestBruceWorxInterference.py
+    bruceworx_interference_gui.py
+    BruceWorx_Interference.svg
     TestBruceWorxStudio.py
     bruceworx_oncanvas.py
     TestBruceWorxOnCanvas.py
@@ -98,6 +100,13 @@ SET(BruceWorx_SRCS
     BruceWorx_ExportFlat.svg
     BruceWorx_SheetMetalRule.svg
     TestBruceWorxSheetMetal.py
+    bruceworx_hardware.py
+    TestBruceWorxHardware.py
+    BruceWorx_HolePreset.svg
+    BruceWorx_CosmeticThread.svg
+    BruceWorx_HoleCallouts.svg
+    BruceWorx_InsertFastener.svg
+    BruceWorx_MarkCots.svg
 )
 
 # [BW] BruceWorx's own material library (KiCad boards, ECD-06), registered with

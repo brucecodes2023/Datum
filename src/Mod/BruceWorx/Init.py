@@ -29,6 +29,7 @@ FreeCAD.__unit_test__.append("TestBruceWorxDrawing")
 FreeCAD.__unit_test__.append("TestBruceWorxBoard")
 FreeCAD.__unit_test__.append("TestBruceWorxInterference")
 FreeCAD.__unit_test__.append("TestBruceWorxStudio")
+FreeCAD.__unit_test__.append("TestBruceWorxHardware")
 
 # BruceWorx's own material library (FR-4, PCB copper, ...), also used headless.
 try:

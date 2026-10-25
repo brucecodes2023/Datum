@@ -194,5 +194,116 @@ class TestPairs(unittest.TestCase):
         self.assertEqual(whole.summary()["counts"][itf.CLASH], 3)
 
 
+@unittest.skipUnless(App.GuiUp, "needs the GUI")
+class TestPanel(unittest.TestCase):
+    """The Interference tab on a bolt too long for its hole and a plate it sits on."""
+
+    def setUp(self):
+        import FreeCADGui as Gui
+
+        self.doc = App.newDocument("BwInterferenceGui")
+        self.asm = _assembly(self.doc)
+        block = Part.makeBox(20, 20, 20).cut(Part.makeCylinder(2.5, 12, V(10, 10, 8)))
+        self.block = _part(self.doc, self.asm, "Block", block)
+        self.bolt = _part(self.doc, self.asm, "Bolt", Part.makeCylinder(2.5, 16, V(10, 10, 4)))
+        self.plate = _part(self.doc, self.asm, "Plate", Part.makeBox(30, 30, 2, V(-5, -5, -2)))
+        self.doc.recompute()
+        App.setActiveDocument(self.doc.Name)
+        Gui.getDocument(self.doc.Name).activeView()
+        self.pump(5)
+
+    def tearDown(self):
+        import FreeCADGui as Gui
+        import bruceworx_interference_gui as gui
+
+        if gui._state["panel"] is not None:
+            gui._state["panel"].close()
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        App.closeDocument(self.doc.Name)
+
+    def pump(self, n=1):
+        import FreeCADGui as Gui
+
+        for _ in range(n):
+            Gui.updateGui()
+
+    def wait(self, panel, seconds=30.0):
+        import time
+
+        until = time.time() + seconds
+        self.pump(3)
+        while (panel.running or panel.checker is None) and time.time() < until:
+            self.pump()
+        self.assertFalse(panel.running)
+
+    def groups(self, panel):
+        return [panel.tree.topLevelItem(i).text(0) for i in range(panel.tree.topLevelItemCount())]
+
+    def item(self, panel, group):
+        return panel.tree.topLevelItem(group).child(0)
+
+    def overlay(self, panel):
+        import bruceworx_interference_gui as gui
+
+        root = panel.view.getSceneGraph()
+        return [root.getChild(i) for i in range(root.getNumChildren())
+                if root.getChild(i).getName().getString() == gui.OVERLAY_NAME]
+
+    def test_command_lists_shows_and_marks_the_clash(self):
+        import FreeCADGui as Gui
+        import bruceworx_interference_gui as gui
+
+        self.assertTrue(Gui.Command.get("BruceWorx_Interference").isActive())
+        Gui.runCommand("BruceWorx_Interference")
+        panel = gui._state["panel"]
+        self.assertIsNotNone(panel)
+        panel.clearance.setChecked(True)
+        panel.gap.setValue(0.2)
+        panel.contacts.setChecked(True)
+        panel.start()
+        self.wait(panel)
+        self.assertEqual(self.groups(panel), ["Clashes (1)", "Fits (0)", "Clearance (0)", "Contacts (1)"])
+        clash = self.item(panel, 0)
+        self.assertEqual(clash.text(0), "Block / Bolt")
+        self.assertEqual(clash.text(1), "78.5 mm³, 4.0 mm deep")
+        panel.tree.setCurrentItem(clash)
+        self.pump(2)
+        self.assertEqual(len(self.overlay(panel)), 1)
+        picked = sorted(n for s in Gui.Selection.getSelectionEx("", 0) for n in s.SubElementNames)
+        self.assertEqual(picked, ["Block.", "Bolt."])
+        self.assertTrue(panel.fit_button.isEnabled())
+        panel.note.setText("demo")
+        panel.mark_fit(True)
+        self.assertEqual(self.groups(panel)[:2], ["Clashes (0)", "Fits (1)"])
+        key = itf.fit_key(itf.object_key(self.block), itf.object_key(self.bolt))
+        self.assertEqual(list(self.asm.Fits), [key])
+        self.assertEqual(self.item(panel, 1).toolTip(0), "Block and Bolt: demo")
+        panel.tree.setCurrentItem(self.item(panel, 1))
+        panel.mark_fit(False)
+        self.assertEqual(self.groups(panel)[:2], ["Clashes (1)", "Fits (0)"])
+        panel.tree.setCurrentItem(panel.tree.topLevelItem(3).child(0))  # a contact: its point, no overlap
+        self.pump(2)
+        self.assertEqual(len(self.overlay(panel)), 1)
+        panel.close()
+        self.pump(2)
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual(self.overlay(panel), [])
+
+    def test_contacts_and_clearance_can_be_left_out(self):
+        import bruceworx_interference_gui as gui
+
+        panel = gui.open_panel(self.asm)
+        panel.clearance.setChecked(False)
+        panel.contacts.setChecked(False)
+        panel.start()
+        self.wait(panel)
+        self.assertEqual(self.groups(panel), ["Clashes (1)", "Fits (0)"])
+        panel.clearance.setChecked(True)
+        panel.contacts.setChecked(True)
+        panel.start()
+        self.wait(panel)
+
+
 if __name__ == "__main__":
     unittest.main()

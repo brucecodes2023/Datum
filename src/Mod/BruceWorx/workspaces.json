@@ -61,6 +61,8 @@
                 "PartDesign_AdditiveHelix",
                 "PartDesign_Pocket",
                 "PartDesign_Hole",
+                "BruceWorx_HolePreset",
+                "BruceWorx_CosmeticThread",
                 "PartDesign_CompPrimitiveAdditive"
               ],
               "more": [
@@ -108,6 +110,7 @@
               "commands": [
                 "Assembly_CreateAssembly",
                 "Assembly_InsertLink",
+                "BruceWorx_InsertFastener",
                 "Assembly_CreateJointFixed",
                 "Assembly_CreateJointRevolute",
                 "Assembly_CreateJointSlider"
@@ -149,6 +152,7 @@
               "caption": "Inspect",
               "commands": [
                 "Std_Measure",
+                "BruceWorx_Interference",
                 "Part_CheckGeometry",
                 "Std_ToggleClipPlane"
               ],
@@ -340,6 +344,7 @@
               "caption": "Properties",
               "commands": [
                 "BruceWorx_PartNumber",
+                "BruceWorx_MarkCots",
                 "Std_SetMaterial",
                 "Std_SetAppearance",
                 "Std_Placement"
