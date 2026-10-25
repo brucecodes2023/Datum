@@ -44,6 +44,8 @@ SET(BruceWorxHooks_SRCS
     bruceworx/bom.py
     bruceworx/vault_dashboard.py
     bruceworx/vault_trees.py
+    bruceworx/product_tree.py
+    bruceworx/project_setup.py
     bruceworx/hardware.py
     config/document_types.json
     config/numbering.example.json
@@ -98,6 +100,8 @@ INSTALL(
         bruceworx/bom.py
         bruceworx/vault_dashboard.py
         bruceworx/vault_trees.py
+        bruceworx/product_tree.py
+        bruceworx/project_setup.py
         bruceworx/hardware.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )

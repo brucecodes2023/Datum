@@ -41,6 +41,7 @@ Preferences → BruceWorx. This file:
   badges, the save prompt (bruceworx_vaultclient).
 * approve with the release checklist, reject, ECR and ECO (bruceworx_changes).
 * the BOM per revision at check-in, Where Used..., Bill of Materials... (bruceworx_bom).
+* the Vault tab's Structure view (bruceworx_structure) and New Project... (bruceworx_project), PDM-09.
 * registers New Drawing and fills drawing title blocks from the part and vault
   (bruceworx_drawing).
 * lets Claude Code drive FreeCAD after asking once per session (bruceworx_bridge).
@@ -321,6 +322,20 @@ try:
         bruceworx_bom.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx BOM and where-used were not installed: {exc}")
+
+try:
+    import bruceworx_structure
+
+    bruceworx_structure.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Structure view was not installed: {exc}")
+
+try:
+    import bruceworx_project
+
+    bruceworx_project.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx New Project was not installed: {exc}")
 
 try:
     import bruceworx_drawing

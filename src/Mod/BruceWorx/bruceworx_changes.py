@@ -44,7 +44,7 @@ CHANGE_CHIPS = {
 }
 
 # Checklist marks: line state -> glyph.
-MARKS = {"ok": "✓", "fail": "✕", "skip": "–", "todo": "○"}
+MARKS = {"ok": "✓", "fail": "✕", "skip": "–", "todo": "○", "warn": "!"}  # warn: PDM-09, shown, never blocks
 
 # Icons drawn like the vault client's (24 x 24 view box; {c} is the colour).
 _SVG = {
@@ -86,6 +86,8 @@ def line_state(line):
         return "skip"
     if line.ok:
         return "ok"
+    if line.kind == "warn":
+        return "warn"
     return "todo" if line.kind == "manual" else "fail"
 
 

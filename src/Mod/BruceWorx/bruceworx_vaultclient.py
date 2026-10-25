@@ -1329,9 +1329,15 @@ def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=Tru
             bruceworx_preview.stamp_work_file(s, pn)
         except Exception as exc:  # noqa: BLE001 -- the picture is never a reason not to check in
             _console(f"Vault: no iso picture for {pn} ({exc})", "warn")
+        extras = {}
+        for fn in CHECKIN_EXTRAS:  # PDM-09: made_from (drawings), fingerprint (parts); never a reason not to check in
+            try:
+                extras.update(fn(s, pn) or {})
+            except Exception as exc:  # noqa: BLE001
+                _console(f"Vault: {pn}: check-in extras not recorded ({exc})", "warn")
         try:
             data = [(hook, hook.prepare(s, pn, notes)) for hook in CHECKIN_HOOKS]  # may refuse
-            s.work.checkin(pn, comment, keep_checked_out=keep)
+            s.work.checkin(pn, comment, keep_checked_out=keep, **extras)
             done.append(pn)
         except Exception as exc:
             failed.append((pn, str(exc)))
@@ -1348,6 +1354,9 @@ def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=Tru
 # Check-in hooks: objects with prepare(s, pn, notes) -> data (raise to refuse, before the file is
 # stored) and record(s, pn, data, notes) after it is. bruceworx_bom adds the assembly's BOM (PDM-06).
 CHECKIN_HOOKS = []
+# Check-in extras: callables (s, pn) -> {"made_from": ..., "fingerprint": ...} written into the check-in
+# event itself (PDM-09; bruceworx_project.checkin_extras). A failure is logged, the check-in goes on.
+CHECKIN_EXTRAS = []
 
 
 # ----- the save prompt, backups and first edits --------------------------------------------

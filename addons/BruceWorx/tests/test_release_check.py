@@ -154,6 +154,57 @@ class ItemLineTests(Base):
         self.assertFalse(self.lines(PART, no_drawing=True)[rc.DRAWING].passed)
 
 
+class DrawingCurrentTests(Base):
+    """Line 6 (PDM-09): the drawing was made from the model as it is now; a warning, never a blocker."""
+
+    def test_current_metadata_only_and_out_of_date(self):
+        from bruceworx import product_tree as pt
+
+        box = pt.make_fingerprint(1000, 600, (5, 5, 5), (0, 0, 0, 10, 10, 10))
+        self.vault.create_item(PART, "part", "part")
+        self.vault.checkout(PART)
+        part = self.vault.checkin(PART, make_fcstd(os.path.join(self.src, PART + ".FCStd")), comment="first",
+                                  fingerprint=box)
+        self.vault.create_item(DWG, "drawing", "dwg", drawing_of=PART)
+        self.vault.checkout(DWG)
+        self.vault.checkin(DWG, make_fcstd(os.path.join(self.src, DWG + ".FCStd"), title={"part_number": PART}),
+                           comment="views", made_from={PART: part.sha256})
+        line = self.lines(PART)[rc.DRAWING_CURRENT]
+        self.assertEqual((line.kind, line.ok, line.passed, line.warning), (rc.WARN, True, True, False))
+        # metadata only: a new hash, the same fingerprint
+        self.vault.checkout(PART)
+        self.vault.checkin(PART, make_fcstd(os.path.join(self.src, PART + ".FCStd"), text="v2"), comment="desc",
+                           fingerprint=box)
+        self.assertTrue(self.lines(PART)[rc.DRAWING_CURRENT].ok)
+        # geometry changed: a warning, shown and recorded, but not a blocker
+        self.vault.checkout(PART)
+        self.vault.checkin(PART, make_fcstd(os.path.join(self.src, PART + ".FCStd"), text="v3"), comment="longer",
+                           fingerprint=pt.make_fingerprint(1200, 680, (5, 5, 6), (0, 0, 0, 10, 10, 12)))
+        lines = self.lines(PART)
+        line = lines[rc.DRAWING_CURRENT]
+        self.assertEqual((line.ok, line.passed, line.warning), (False, True, True))
+        self.assertIn("older " + PART, line.detail)
+        rc.apply(list(lines.values()), reviewed=True)
+        self.assertEqual(rc.blockers(list(lines.values()), note="go"), [])
+        record = rc.record(list(lines.values()))
+        self.assertEqual(record[rc.DRAWING_CURRENT]["warning"], True)
+        self.assertEqual(record[rc.DRAWING_CURRENT]["ok"], False)
+
+    def test_skipped_with_the_drawing_line(self):
+        self.add(BOLT, "cots")
+        self.assertTrue(self.lines(BOLT)[rc.DRAWING_CURRENT].skipped)
+        self.add(PART)
+        line = self.lines(PART)[rc.DRAWING_CURRENT]
+        self.assertTrue(line.skipped)  # no drawing: line 2 says so already
+
+    def test_old_drawing_judged_by_time(self):
+        self.add(PART)
+        self.add(DWG, "drawing", drawing_of=PART, title={"part_number": PART})
+        line = self.lines(PART)[rc.DRAWING_CURRENT]
+        self.assertTrue(line.ok)
+        self.assertIn("time comparison", line.detail)
+
+
 class ComponentTests(Base):
     def setUp(self):
         super().setUp()

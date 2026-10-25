@@ -29,7 +29,7 @@ from bruceworx.sources import open_number_source
 from bruceworx.step_export import export_step
 from bruceworx.tree import document_tree
 
-COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault")
+COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault", "project")
 VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
     "submit", "approve", "reject", "retire", "fetch", "sync", "import", "settings",
@@ -140,6 +140,18 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--export", dest="export_csv", default="", help="settings: write the tables to this CSV")
     vault.add_argument("--import", dest="import_csv", default="",
                        help="settings: add, rename or retire rows from this CSV")
+    # project (PDM-09): New Project from the command line. preview needs no FreeCAD; new runs in FreeCADCmd.
+    project = sub.add_parser("project", help="New Project: a typed structure becomes numbered files in the vault")
+    project.add_argument("action", choices=("preview", "new"))
+    project.add_argument("--vault", required=True, help="Vault folder or its .bwvault ref file")
+    project.add_argument("--structure", required=True, help="The structure: indented text, or a CSV/TSV table")
+    project.add_argument("--name", default="", help="The project's name (default: the top assembly's line)")
+    project.add_argument("--code", default="", help="The project's code (default: from the name)")
+    project.add_argument("--program", default="", help="Numbering program (default: the vault's first)")
+    project.add_argument("--units", default="", choices=("", "mm", "in"), help="mm or in (default: the vault's)")
+    project.add_argument("--sheet", default="", help="Drawing sheet key (default: the units' sheet)")
+    project.add_argument("--insert-views", action="store_true", help="Drawings with their three views (default blank)")
+    project.add_argument("--actor", default="", help="Who is acting (default: user@host)")
     return parser
 
 
@@ -159,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
             return _number_command(args, allocate=False)
         if args.command == "vault":
             return _vault_command(args)
+        if args.command == "project":
+            return _project_command(args)
         print(f"error: unknown command {args.command}", file=sys.stderr)
         return 2
     except SystemExit as exc:
@@ -396,6 +410,64 @@ def _vault_command(args) -> int:
         payload["state"] = vault.items[args.pn].state
     emit(payload)
     return 0
+
+
+def _project_command(args) -> int:
+    """``project preview``: parse, check and number the structure (nothing written). ``project new``:
+    the same, then the files, items, project and check-ins, inside FreeCADCmd (bruceworx_project)."""
+    from bruceworx import project_setup as ps  # noqa: PLC0415
+    from bruceworx import vault_setup  # noqa: PLC0415
+    from bruceworx.pdm_folder import FolderVault  # noqa: PLC0415
+
+    vault = FolderVault(args.vault, actor=args.actor or None)
+    text = ps.read_structure_file(args.structure)
+    plan = ps.parse_structure(text)
+    programs = open_number_source(vault_setup.numbering_path(vault.root)).programs()
+    program = (args.program or (programs[0] if programs else vault_setup.DEFAULT_PROGRAM)).upper()
+    if plan.root is not None:
+        ps.plan_numbers(plan, vault.root, program)
+    try:
+        retired = vault_setup.load_settings(vault.root).retired
+    except Exception:  # noqa: BLE001 -- a vault without settings
+        retired = {}
+    ps.check(plan, vault, program, retired)
+    units = args.units
+    if not units:
+        try:
+            from bruceworx import drawing_standards  # noqa: PLC0415
+
+            units = drawing_standards.load(vault.root).units
+        except Exception:  # noqa: BLE001
+            units = "mm"
+    name = args.name or (plan.root.name if plan.root is not None else "")
+    payload = {"ok": plan.ok, "command": f"project {args.action}", "name": name, "program": program, "units": units,
+               "issues": [dataclasses.asdict(i) for i in plan.issues], "rows": ps.preview_rows(plan),
+               "summary": ps.summary(plan) if plan.root is not None else {}}
+    for row in payload["rows"]:
+        marks = (" (used in %d places)" % row["uses"]) if row["duplicate"] else ""
+        print(f"{'  ' * row['depth']}{row['name']}{marks:24} {row['pn'] or '-':20} {row['drawing'] or '-':20} "
+              f"x{row['qty'] or 1}")
+    for issue in plan.issues:
+        print(f"{issue.level}: {issue.text}")
+    if args.action == "preview" or not plan.ok:
+        emit(payload)
+        return 0 if plan.ok else 1
+    freecad_io.require_freecad()
+    try:
+        import bruceworx_project  # noqa: PLC0415 -- the BruceWorx module, on the path inside FreeCAD
+    except ImportError as exc:
+        raise RuntimeError(f"project new needs the BruceWorx module (run it in FreeCADCmd): {exc}") from exc
+    from bruceworx.pdm_workspace import Workspace  # noqa: PLC0415
+
+    options = bruceworx_project.Options(name=name, program=program, units=units, drawing_profile=units,
+                                        insert_views=bool(args.insert_views), code=args.code, sheet=args.sheet)
+    report = bruceworx_project.create_project(vault, Workspace(vault), plan, options,
+                                              lambda text, done, total: print(f"[{done}/{total}] {text}"))
+    payload.update({"ok": report.ok, "project": report.project, "top": report.top, "items": report.items,
+                    "drawings": report.drawings, "failed": report.failed})
+    print(report.text())
+    emit(payload)
+    return 0 if report.ok else 1
 
 
 def _vault_review(vault, args, payload):

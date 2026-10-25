@@ -43,7 +43,9 @@ class TestHelpers(unittest.TestCase):
         self.assertEqual(ch.line_state(Line("a", "A")), "fail")
         self.assertEqual(ch.line_state(Line("a", "A", kind="manual")), "todo")
         self.assertEqual(ch.line_state(Line("a", "A", skipped=True)), "skip")
-        self.assertEqual(set(ch.MARKS), {"ok", "fail", "skip", "todo"})
+        self.assertEqual(ch.line_state(Line("a", "A", kind="warn")), "warn")  # PDM-09: shown, never blocks
+        self.assertEqual(ch.line_state(Line("a", "A", kind="warn", ok=True)), "ok")
+        self.assertEqual(set(ch.MARKS), {"ok", "fail", "skip", "todo", "warn"})
 
     def test_ecr_status_text(self):
         ecr = {"kind": "ECR", "number": "ECR-0001", "state": "Open", "items": [PART], "by": "bruce@mac",

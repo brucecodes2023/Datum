@@ -1831,6 +1831,11 @@ QLabel#bwCheckMark[state="ok"] {
   color: @OkColor;
 }
 
+QLabel#bwCheckMark[state="warn"],
+QLabel#bwCheckText[state="warn"] {
+  color: @WarnColor;
+}
+
 QLabel#bwCheckMark[state="fail"] {
   color: @ErrorColor;
 }
@@ -2030,6 +2035,25 @@ QTreeView#bwVaultList::item:selected,
 QTreeView#bwVaultList::branch:selected,
 QTreeView#bwVaultList::branch:hover {
   background: transparent;
+}
+
+/* The Vault tab's Structure view (PDM-09): a plain tree under the vault card's chips. */
+QTreeView#bwStructureList {
+  background: transparent;
+  border: none;
+  border-top: 1px solid @GeneralBorderColor;
+}
+
+QTreeView#bwStructureList::item:selected {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+}
+
+QComboBox#bwStructureRoot {
+  background-color: @TextEditFieldBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 8px;
+  padding: 3px 6px;
 }
 
 QLabel#bwVaultFooter {

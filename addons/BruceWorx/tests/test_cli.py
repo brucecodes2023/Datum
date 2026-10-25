@@ -282,6 +282,43 @@ class WiredCommandTests(unittest.TestCase):
             freecad_io.export_step = real["export"]
 
 
+class ProjectCommandTests(unittest.TestCase):
+    """bw-hooks project preview (PDM-09): the plan as text and JSON, nothing written."""
+
+    def test_preview_numbers_the_structure_without_reserving(self):
+        import json
+
+        from bruceworx import vault_setup as vs
+
+        with tempfile.TemporaryDirectory() as directory:
+            setup = vs.VaultSetup(name="Cart", folder=os.path.join(directory, "vault"))
+            setup.numbering.programs = [vs.ProgramSetup("DM")]
+            vs.create_vault(setup, actor="bruce@mac")
+            structure = os.path.join(directory, "cart.txt")
+            with open(structure, "w", encoding="utf-8") as handle:
+                handle.write("Shop cart\n  Frame x2\n    Side rail x2\n  Caster x4 cots\n")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = main(["project", "preview", "--vault", os.path.join(directory, "vault"), "--structure", structure])
+            self.assertEqual(code, 0, buf.getvalue())
+            text = buf.getvalue()
+            self.assertIn("DM-02-01002-001", text)  # the cart's number
+            self.assertIn("DM-03-", text)  # drawings as type 03
+            self.assertIn("x4", text)
+            # twice: the numbers come out the same, nothing was reserved
+            buf2 = io.StringIO()
+            with contextlib.redirect_stdout(buf2):
+                main(["project", "preview", "--vault", os.path.join(directory, "vault"), "--structure", structure])
+            self.assertEqual([l for l in text.splitlines() if "DM-" in l], [l for l in buf2.getvalue().splitlines() if "DM-" in l])
+            with open(structure, "w", encoding="utf-8") as handle:
+                handle.write("Top\n")
+            buf3 = io.StringIO()
+            with contextlib.redirect_stdout(buf3):
+                code = main(["project", "preview", "--vault", os.path.join(directory, "vault"), "--structure", structure])
+            self.assertEqual(code, 1)
+            self.assertIn("at least one item", buf3.getvalue())
+
+
 class MacroTests(unittest.TestCase):
     def test_macro_run_numbers_document(self):
         box = FakeObj("Box", shape=FakeShape())

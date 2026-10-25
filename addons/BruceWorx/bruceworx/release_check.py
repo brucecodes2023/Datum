@@ -11,7 +11,10 @@ ticked by you where it cannot:
 3. for an assembly, every component is released, or is listed with the reason it
    is not (automatic list; you give the reason);
 4. the drawing has been reviewed against the model (your tick);
-5. a release note (required text; one per approval or per ECO).
+5. a release note (required text; one per approval or per ECO);
+6. (PDM-09, 26 Oct 2026) the drawing is current: made from the model as it is now, by the
+   version its check-in recorded (``made_from``); "metadata only" passes. A *warning* line
+   (answer 6 of the PDM-09 plan): it shows orange and never blocks the release.
 
 The same lines serve Approve (first release, rev A) and Release ECO (one set per
 item; items of the same ECO count as released for each other's component line).
@@ -34,16 +37,19 @@ CHECKED_IN = "checked_in"
 DRAWING = "drawing"
 COMPONENTS = "components"
 REVIEWED = "drawing_reviewed"
+DRAWING_CURRENT = "drawing_current"  # PDM-09
 NOTE = "note"
 
 AUTO = "auto"
 MANUAL = "manual"
+WARN = "warn"  # checked by the tool, shown when not met, never a blocker (PDM-09 answer 6)
 
 TEXTS = {
     CHECKED_IN: "Checked in, no local changes",
     DRAWING: "Drawing checked in, title block shows this P/N",
     COMPONENTS: "Every component released",
     REVIEWED: "Drawing reviewed against the model",
+    DRAWING_CURRENT: "Drawing current (made from this model)",
 }
 
 # Title-block fields that hold the part number, compared without case, "_" or " ".
@@ -65,7 +71,12 @@ class Line:
 
     @property
     def passed(self):
-        return self.skipped or self.ok
+        return self.skipped or self.ok or self.kind == WARN
+
+    @property
+    def warning(self):
+        """A warning line that is not met: shown, not blocking."""
+        return self.kind == WARN and not self.skipped and not self.ok
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +345,36 @@ def _components(ws, pn, batch=()):
     return line
 
 
+def _drawing_current(ws, pn, drawing_line):
+    """Line 6 (PDM-09): every drawing of ``pn`` (or ``pn`` itself, for a drawing) was made from the
+    model as it is now; "metadata only" counts as current. A drawing from before PDM-09 is judged by
+    time and says so. Never blocks (WARN)."""
+    from bruceworx import product_tree as pt  # noqa: PLC0415
+
+    vault = ws.vault
+    item = vault.items[pn]
+    line = Line(DRAWING_CURRENT, TEXTS[DRAWING_CURRENT], kind=WARN)
+    if drawing_line.skipped:
+        line.skipped, line.detail = True, drawing_line.detail
+        return line
+    drawings = [pn] if item.item_type == "drawing" else [d.part_number for d in vault.drawings_of(pn)
+                                                         if not d.obsolete]
+    if not drawings:
+        line.skipped, line.detail = True, "no drawing"
+        return line
+    from bruceworx import vault_trees  # noqa: PLC0415
+
+    bom = vault_trees.structure(vault)["bom"]  # recorded BOMs, else the files' links (an assembly drawing's closure)
+    found = {d: pt.drawing_state(vault, d, bom) for d in drawings}
+    bad = {d: f for d, f in found.items() if f["state"] not in (pt.CURRENT, pt.METADATA_ONLY)}
+    line.ok = not bad
+    texts = [f"{d}: {pt.state_text(f)}" for d, f in (bad or found).items()]
+    line.detail = "; ".join(texts)
+    if not bad and any(f["basis"] == "time" for f in found.values()):
+        line.detail += " (time comparison: the drawing was checked in before PDM-09 recorded what it was made from)"
+    return line
+
+
 def _reviewed(drawing_line):
     line = Line(REVIEWED, TEXTS[REVIEWED], kind=MANUAL)
     if drawing_line.skipped:
@@ -342,10 +383,11 @@ def _reviewed(drawing_line):
 
 
 def check_item(ws, pn, batch=(), no_drawing=False) -> list:
-    """Lines 1-4 for ``pn`` (line 4 unticked). ``batch``: the part numbers releasing
+    """Lines 1-4 and the PDM-09 warning line for ``pn`` (the review tick unticked). ``batch``: the part numbers releasing
     together (an ECO's items). ``ws`` is a ``pdm_workspace.Workspace``."""
     drawing = _drawing(ws, pn, no_drawing)
-    return [_checked_in(ws, pn), drawing, _components(ws, pn, batch), _reviewed(drawing)]
+    return [_checked_in(ws, pn), drawing, _drawing_current(ws, pn, drawing), _components(ws, pn, batch),
+            _reviewed(drawing)]
 
 
 def apply(lines, reviewed=False, waiver="") -> list:
@@ -393,6 +435,8 @@ def record(lines, no_drawing=False, version="") -> dict:
             entry["reason"] = line.waiver
         if line.kind == MANUAL:
             entry["by_hand"] = True
+        if line.warning:
+            entry["warning"] = True  # shown at release, not a blocker (PDM-09 answer 6)
         out[line.key] = entry
     if no_drawing:
         out["no_drawing"] = True
