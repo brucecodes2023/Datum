@@ -150,12 +150,17 @@ the ECO groups affected items, opens their next letter revision in WIP, and rele
 and its drawing.
 \end{epic}
 
-\begin{epic}{PDM-06}{BOM sync \& where-used}{M2}{\stProg}{(new)}
+\begin{epic}{PDM-06}{BOM sync \& where-used}{M2}{\stDone}{(new)}
 On check-in of an assembly, push its BOM (\eref{ASM-04}) to Ops as BOM lines. Where-used is the reverse
 traversal from \S\ref{sec:asm}. Released assemblies resolve children to the latest \emph{released}
 revision. A WIP assembly may also use WIP children, and is flagged when it does.
 \textbf{Plan approved 24 Oct} (\S\ref{sec:pdm06-plan}): children pinned at release, released BOMs only;
-\textbf{paused 24 Oct, half-built}.
+built 24 Oct and paused; \textbf{done 25 Oct}: switched on and checked on a copy of the Vector vault. Checking in the
+gearbox (\code{LE-02-01002}) records its BOM with the version: 12 lines, 24 parts, as counted by hand; \emph{Where
+Used\ldots} on the planet gear lists \code{LE-02-01002} rev 01 $\times3$; \emph{Bill of Materials\ldots} shows a revision
+indented or flattened, with \emph{Export CSV}. The bolt used by Pedestal A and B
+(figure~\ref{fig:pdm06-whereused}) is the headless acceptance test. Ops gets the released BOMs from the outbox once
+it has an API; the \code{LE-02001} run comes with the \eref{PDM-07} pilot.
 \emph{Acceptance:} where-used of a bolt lists every assembly revision that uses it.
 \end{epic}
 
