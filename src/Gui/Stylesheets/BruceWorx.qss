@@ -1336,9 +1336,10 @@ QWidget#thumbnailWidget[state="pressed"] {
 
 #BruceWorxStart QLabel#bwStartCardName {
   font-weight: 600;
+  color: @TextForegroundColor;
 }
 
-#BruceWorxStart QFrame#bwStartCard:disabled QLabel {
+#BruceWorxStart QFrame#bwStartCard QLabel:disabled {
   color: @TextDisabledColor;
 }
 
@@ -1407,6 +1408,225 @@ QWidget#thumbnailWidget[state="pressed"] {
 
 #BruceWorxStart QWidget#bwStartCell {
   background-color: transparent;
+}
+
+/* Vault dashboard on the Start page (bruceworx_dashboard.py, PDM-10): tabs, header, tiles and cards. */
+#BruceWorxStart QPushButton#bwStartTab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0px;
+  padding: 4px 0px 6px 0px;
+  min-height: 22px;
+  color: @TextSecondaryColor;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#BruceWorxStart QPushButton#bwStartTab:hover {
+  color: @TextForegroundColor;
+}
+
+#BruceWorxStart QPushButton#bwStartTab:checked {
+  color: @TextForegroundColor;
+  border-bottom-color: @AccentColor;
+}
+
+#BruceWorxStart QFrame#bwStartTabs {
+  border: none;
+  border-bottom: 1px solid @GeneralBorderColor;
+}
+
+#BruceWorxStart QWidget#bwDashColours {
+  qproperty-wipColor: @WarnColor;
+  qproperty-reviewColor: @AccentColor;
+  qproperty-releasedColor: @OkColor;
+  qproperty-obsoleteColor: @TextDisabledColor;
+  qproperty-trackColor: @GeneralGridLinesColor;
+  qproperty-accentColor: @AccentColor;
+  qproperty-secondaryColor: @TextSecondaryColor;
+  qproperty-okColor: @OkColor;
+  qproperty-warnColor: @WarnColor;
+  qproperty-errorColor: @ErrorColor;
+  qproperty-barColor: @AccentColor;
+}
+
+#BruceWorxStart QLabel#bwDashName {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+#BruceWorxStart QLabel#bwDashSync,
+#BruceWorxStart QLabel#bwDashCount,
+#BruceWorxStart QLabel#bwDashRowSub,
+#BruceWorxStart QLabel#bwDashTime,
+#BruceWorxStart QLabel#bwDashNote,
+#BruceWorxStart QLabel#bwDashChevron {
+  color: @TextSecondaryColor;
+}
+
+#BruceWorxStart QPushButton#bwDashButton,
+#BruceWorxStart QPushButton#bwDashPrimary {
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 7px;
+  padding: 4px 14px;
+  min-height: 22px;
+  background-color: @CardBackgroundColor;
+  color: @TextForegroundColor;
+}
+
+#BruceWorxStart QPushButton#bwDashButton:hover {
+  background-color: @HoverColor;
+}
+
+#BruceWorxStart QPushButton#bwDashPrimary {
+  border-color: @AccentColor;
+  background-color: @AccentColor;
+  color: @AccentTextColor;
+  font-weight: 600;
+}
+
+#BruceWorxStart QPushButton#bwDashButton:disabled,
+#BruceWorxStart QPushButton#bwDashPrimary:disabled {
+  background-color: @GeneralDisabledBackgroundColor;
+  border-color: @GeneralBorderColor;
+  color: @TextDisabledColor;
+}
+
+#BruceWorxStart QFrame#bwDashTile,
+#BruceWorxStart QFrame#bwDashCard {
+  background-color: @CardBackgroundColor;
+  border: 1px solid @GeneralBorderColor;
+  border-radius: 10px;
+}
+
+#BruceWorxStart QFrame#bwDashTile:hover {
+  border-color: @AccentColor;
+}
+
+#BruceWorxStart QFrame#bwDashLegend {
+  background: transparent;
+  border: none;
+}
+
+#BruceWorxStart QLabel#bwDashTileTitle {
+  color: @TextSecondaryColor;
+  font-weight: 600;
+}
+
+#BruceWorxStart QLabel#bwDashNumber {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+#BruceWorxStart QLabel#bwDashLegendText {
+  color: @TextSecondaryColor;
+  font-size: 12px;
+}
+
+#BruceWorxStart QFrame#bwDashLegend:hover QLabel {
+  color: @TextForegroundColor;
+}
+
+#BruceWorxStart QWidget#bwDashHead {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid @GeneralGridLinesColor;
+}
+
+#BruceWorxStart QLabel#bwDashTitle {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#BruceWorxStart QFrame#bwDashRow,
+#BruceWorxStart QFrame#bwDashHealthRow {
+  background: transparent;
+  border: none;
+  border-top: 1px solid @GeneralGridLinesColor;
+}
+
+#BruceWorxStart QFrame#bwDashRow[first="true"] {
+  border-top: none;
+}
+
+#BruceWorxStart QFrame#bwDashFeedRow {
+  background: transparent;
+  border: none;
+}
+
+#BruceWorxStart QFrame#bwDashRow:hover,
+#BruceWorxStart QFrame#bwDashFeedRow:hover,
+#BruceWorxStart QFrame#bwDashHealthRow:hover {
+  background-color: @HoverColor;
+}
+
+#BruceWorxStart QLabel#bwDashRowName {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+#BruceWorxStart QLabel#bwDashRowSub,
+#BruceWorxStart QLabel#bwDashTime {
+  font-size: 12px;
+}
+
+#BruceWorxStart QWidget#bwDashTableHead {
+  background-color: @HoverColor;
+  border: none;
+  border-bottom: 1px solid @GeneralBorderColor;
+}
+
+#BruceWorxStart QLabel#bwDashColumn,
+#BruceWorxStart QLabel#bwDashDay {
+  color: @TextDisabledColor;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+#BruceWorxStart QLabel#bwDashDay {
+  padding: 6px 14px 2px 14px;
+}
+
+#BruceWorxStart QWidget#bwDashGroup {
+  background: transparent;
+  border: none;
+  border-top: 1px solid @GeneralGridLinesColor;
+}
+
+#BruceWorxStart QLabel#bwDashGroupText {
+  color: @TextSecondaryColor;
+  font-size: 11px;
+}
+
+#BruceWorxStart QLabel#bwDashDot {
+  font-size: 10px;
+}
+
+#BruceWorxStart QLabel#bwDashStep {
+  border: 2px solid @GeneralBorderColor;
+  border-radius: 14px;
+  color: @TextSecondaryColor;
+  font-weight: 700;
+}
+
+#BruceWorxStart QLabel#bwDashStep[done="true"] {
+  border-color: @OkColor;
+  background-color: @OkColor;
+  color: #FFFFFF;
+}
+
+#BruceWorxStart QToolButton#bwDashMore {
+  border: none;
+  background: transparent;
+  color: @TextSecondaryColor;
+  padding: 0px 4px;
+}
+
+#BruceWorxStart QToolButton#bwDashMore::menu-indicator {
+  image: none;
+  width: 0px;
 }
 
 /* Navigation pill (bruceworx_navpill.py): a small card at the bottom of each 3D view ------------- */

@@ -41,6 +41,7 @@ SET(BruceWorx_SRCS
     bruceworx_taskcard.py
     bruceworx_statusbar.py
     bruceworx_start.py
+    bruceworx_dashboard.py
     bruceworx_vaultwizard.py
     bruceworx_vaultclient.py
     bruceworx_changes.py

@@ -38,7 +38,8 @@ Approved 24 Oct 2026 (PDM-02 A3, A9, A10 and the PDM-06 plan):
 
 ``Vault.strict`` (default on) applies these rules. A store replaying a journal
 written before them turns it off while replaying: history is accepted as it
-was recorded, new operations are checked.
+was recorded, new operations are checked. A replay also skips the BOM cycle
+check per line; the store runs :meth:`Vault.find_cycle` once at the end.
 """
 
 from __future__ import annotations
@@ -552,11 +553,18 @@ class Vault:
             gaps.append({"name": str(name), "qty": _count(qty)})
         previous = (rev.bom, rev.bom_version, rev.bom_missing)
         rev.bom, rev.bom_version, rev.bom_missing = new, sha256 or "", gaps
-        cycle = self._cycle()
+        # A replay (strict off) skips the whole-graph check: each line was checked when it was
+        # written, and the store checks once after the replay (find_cycle; PDM-10, linear replay).
+        cycle = self._cycle() if self.strict else None
         if cycle:
             rev.bom, rev.bom_version, rev.bom_missing = previous
             raise LifecycleError(f"BOM of {parent} would contain itself: {' -> '.join(cycle)}")
         return rev
+
+    def find_cycle(self):
+        """``[a, b, ..., a]`` when the items' current BOMs contain a cycle, else None. A store runs it
+        once after replaying a journal (two devices' lines can make one that neither wrote)."""
+        return self._cycle()
 
     def cycle_path(self, parent, children):
         """``[parent, child, ..., parent]`` when a BOM of ``parent`` holding ``children`` would

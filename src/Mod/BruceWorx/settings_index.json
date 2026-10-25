@@ -1296,6 +1296,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "Vault dashboard on the Start page",
+"tip": "On by default. With a vault open, the Start page has two tabs: the vault's dashboard (counts by type and state, top assemblies, your work, changes, activity and vault health; every tile opens the filt",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Width",
 "tip": "",
 "page": "BruceWorx",

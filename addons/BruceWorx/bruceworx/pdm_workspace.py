@@ -308,8 +308,11 @@ def _now() -> str:
 class Workspace:
     """One user's working folder in a FolderVault."""
 
-    def __init__(self, vault: FolderVault):
+    def __init__(self, vault: FolderVault, read_only: bool = False):
         self.vault = vault
+        # read_only: a reader (the Start page's worker thread) never writes state.json, so it cannot
+        # overwrite a base the GUI thread recorded meanwhile (PDM-10); operations are refused.
+        self.read_only = read_only
         self.root = os.path.join(vault.root, WORK_DIR, vault.actor)
         self.state_path = os.path.join(self.root, STATE_DIR, STATE_FILE)
         self._hashes = {}  # path -> (size, mtime_ns, sha256)
@@ -329,6 +332,8 @@ class Workspace:
             return {"items": {}}
 
     def _save_state(self) -> None:
+        if self.read_only:
+            raise PermissionError("this workspace was opened read-only")
         self._dirty = False
         os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
         tmp = self.state_path + ".tmp"
@@ -340,6 +345,10 @@ class Workspace:
     def _record_base(self, pn: str, sha: str) -> None:
         self.state["items"][pn] = {"base": sha, "fetched": _now()}
         self._save_state()
+
+    def _writable(self) -> None:
+        if self.read_only:
+            raise PermissionError("this workspace was opened read-only")
 
     def base(self, pn: str) -> str:
         return self.state["items"].get(pn, {}).get("base", "")
@@ -434,7 +443,7 @@ class Workspace:
 
     def statuses(self) -> dict:
         out = {pn: self.status(pn) for pn in sorted(self.vault.model.items)}
-        if self._dirty:
+        if self._dirty and not self.read_only:
             try:
                 self._save_state()
             except OSError:
@@ -455,6 +464,7 @@ class Workspace:
     # --- operations --------------------------------------------------------------
     def _place(self, pn: str, version, writable: bool) -> str:
         """Copy a vault version to <P/N>.FCStd in the work folder and record it as the base."""
+        self._writable()
         os.makedirs(self.root, exist_ok=True)
         self._ensure([os.path.join(self.vault.root, version.object_name)])
         dest = self.path(pn)
@@ -477,6 +487,7 @@ class Workspace:
         An item with no file yet gets no work copy (the caller saves a new file there).
         With with_links, the files it links to that are vault items come along read-only.
         """
+        self._writable()
         local = self.local_hash(self.path(pn))
         if local is not None and self.base(pn) and local != self.base(pn) and self.vault.locks.get(pn) != self.vault.actor:
             raise LifecycleError(f"{pn}: the work copy has changes that are not in the vault; check it out by hand")
@@ -516,6 +527,7 @@ class Workspace:
 
     def checkin(self, pn: str, comment: str, keep_checked_out: bool = False):
         """Store the work copy as a new version. The comment is required."""
+        self._writable()
         if not (comment or "").strip():
             raise ValueError("a check-in needs a comment")
         path = self.path(pn)
@@ -532,6 +544,7 @@ class Workspace:
 
     def undo_checkout(self, pn: str) -> None:
         """Release the lock and put the version the work copy started from back."""
+        self._writable()
         base = self.base(pn)
         self.vault.undo_checkout(pn)
         version = next((v for v in self.vault.versions.get(pn, []) if v.sha256 == base), None)
@@ -551,6 +564,7 @@ class Workspace:
 
     def get_revision(self, pn: str, sha256: str) -> str:
         """An older version into .rev/<P/N>-<rev>.FCStd, read-only."""
+        self._writable()
         version = next((v for v in self.vault.versions.get(pn, []) if v.sha256 == sha256), None)
         if version is None:
             raise LifecycleError(f"{pn} has no version {sha256[:12]}")
@@ -570,6 +584,7 @@ class Workspace:
 
     def break_lock(self, pn: str) -> None:
         """Release a lock nobody can release normally (a crash, a lost work folder); journaled."""
+        self._writable()
         self.vault.undo_checkout(pn, force=True)
 
     # --- links (plan section 4) ----------------------------------------------------
@@ -621,6 +636,7 @@ class Workspace:
         Each target gets a read-only work copy when it has none, so the link resolves.
         Returns how many links changed.
         """
+        self._writable()
         changed = rewrite_links(self.path(pn), lambda old: mapping[old] + SUFFIX if old in mapping else None)
         for target in sorted(set(mapping.values())):
             if not os.path.exists(self.path(target)) and self.vault.latest_version(target) is not None \

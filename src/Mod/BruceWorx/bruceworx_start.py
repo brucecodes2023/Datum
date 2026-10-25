@@ -31,6 +31,13 @@ The page is selected again whenever Start_Start makes a new view
 itself (first-start page dismissed). The first-start page (page 0) is left
 alone; "Getting started" opens it.
 
+* PDM-10 (24 Oct): the main area has two tabs, the vault's dashboard
+  (bruceworx_dashboard; the default while a vault is open; vault items only)
+  and Recent files (every recent file on this Mac; the default with no vault).
+  The worker keeps the vault and reads only new journal lines; the page looks
+  every 5 s while it is visible and after this FreeCAD's vault operations.
+  Preferences/BruceWorx/VaultDashboard off keeps the page above as it was.
+
 Preferences/BruceWorx/StartPage (default on). Off shows the stock page again.
 """
 
@@ -41,8 +48,11 @@ import json
 import os
 import re
 import threading
+import time
 import zipfile
 import xml.etree.ElementTree as ET
+
+import bruceworx_dashboard as bwdash
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF_NAME = "StartPage"
@@ -59,6 +69,7 @@ REF_SUFFIX = ".bwvault"
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 KINDS = ("part", "assembly", "drawing", "simulation", "other")
 FILTERS = (("All", None), ("Parts", "part"), ("Assemblies", "assembly"), ("Drawings", "drawing"))
+POLL_MS = 5000  # the dashboard looks at the vault this often while it is visible (PDM-10)
 
 
 # ----- recent files -----------------------------------------------------------
@@ -339,20 +350,28 @@ def in_folder(path: str, folder: str) -> bool:
     return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
 
 
-def read_vault(path: str, actor: str = "") -> dict:
+def read_vault(path: str, actor: str = "", vault=None, options=None, read_ms=None) -> dict:
     """A snapshot of the vault for the page (replays the journal; worker thread).
 
-    actor is the identity pinned for this vault (see pinned_actor); "" uses user@mac.
+    actor is the identity pinned for this vault (see pinned_actor); "" uses user@mac. ``vault`` is a
+    FolderVault already read (the worker keeps one and reads only new journal lines); ``options``
+    go to the dashboard's activity feed (vault_dashboard.snapshot: days, show_all, mine_only, limit).
+    The workspace is opened read-only: the worker never writes state.json (PDM-10).
     """
     from bruceworx.pdm_folder import FolderVault  # the hooks add-on
 
-    vault = FolderVault(os.path.expanduser(path), actor=actor or None)
+    if vault is None:
+        started = time.perf_counter()
+        vault = FolderVault(os.path.expanduser(path), actor=actor or None)
+        read_ms = (time.perf_counter() - started) * 1000
     status = vault.status()
-    events = [(e.op, e.at, e.args) for e in vault._read_events()]
+    kept = getattr(vault, "events", None)  # the vault keeps what it read (PDM-10); older add-ons do not
+    events = [(e.op, e.at, e.args) for e in (kept if kept is not None else vault._read_events())]
     ecos = {num: list(eco.items) for num, eco in vault.ecos.items()}
     summary = vault_summary(status["items"], events, vault.actor,
                             _dt.datetime.now().astimezone(), ecos)
-    return {
+    work = _workspace(vault)
+    out = {
         "name": status.get("vault") or os.path.basename(vault.root),
         "root": vault.root,
         "summary": summary,
@@ -360,16 +379,33 @@ def read_vault(path: str, actor: str = "") -> dict:
                   for row in status["items"]},
         "missing": len(status.get("missing_objects", [])),
         "problems": len(status.get("problems", [])),
-        "my_work": _my_work(vault),
+        "my_work": _my_work(vault, work),
     }
+    try:
+        from bruceworx import vault_dashboard
+    except ImportError:  # an older hooks add-on: the page as before
+        return out
+    out["dashboard"] = vault_dashboard.snapshot(vault, work, read_ms=read_ms, **(options or {}))
+    return out
 
 
-def _my_work(vault) -> dict:
+def _workspace(vault):
+    """The pinned actor's work folder, read-only (None with an older hooks add-on)."""
     try:
         from bruceworx.pdm_workspace import Workspace
-    except ImportError:  # an older hooks add-on
+    except ImportError:
+        return None
+    try:
+        return Workspace(vault, read_only=True)
+    except TypeError:  # before PDM-10
+        return Workspace(vault)
+
+
+def _my_work(vault, work=None) -> dict:
+    work = work if work is not None else _workspace(vault)
+    if work is None:
         return {}
-    work = Workspace(vault).my_work()
+    work = work.my_work()
     out = {key: [work_row(st) for st in getattr(work, key, [])] for key, _title in MY_WORK_SECTIONS}
     for row in out["in_review"]:
         row["status"] = "In review"  # the reason it is listed, not its file status
@@ -755,8 +791,10 @@ class _Loader:
 
     def __init__(self):
         self.cache = InfoCache()
-        self.vault_cache = {}  # path -> (signature, snapshot)
+        self.vault_cache = {}  # path -> (signature, snapshot, feed options)
         self.actors = {}  # path -> the actor pinned for that vault
+        self.options = {}  # path -> the dashboard's feed options
+        self.vaults = {}  # path -> (actor, FolderVault): read again by its new journal lines only
         self._cond = threading.Condition()
         self._queue = []
         self._thread = None
@@ -764,14 +802,16 @@ class _Loader:
     def request_file(self, path):
         self._put(("file", path))
 
-    def request_vault(self, path, actor=""):
+    def request_vault(self, path, actor="", options=None):
         self.actors[path] = actor
+        if options is not None:
+            self.options[path] = dict(options)
         self._put(("vault", path))
 
     def cached_vault(self, path):
         hit = self.vault_cache.get(path)
         ref = find_vault_ref(path)
-        if hit and ref and hit[0] == vault_signature(os.path.dirname(ref)):
+        if hit and ref and hit[0] == vault_signature(os.path.dirname(ref)) and hit[2] == self.options.get(path, {}):
             return hit[1]
         return None
 
@@ -806,20 +846,37 @@ class _Loader:
                 _log(f"{path}: {exc}")
 
     def _vault(self, path):
+        """The snapshot: the cached one while nothing changed (a 0.1 ms signature check), else the
+        kept FolderVault reads its new journal lines (or replays, see FolderVault.update)."""
         ref = find_vault_ref(path)
         if not ref:
             return {"error": "No vault found at " + path}
         sig = vault_signature(os.path.dirname(ref))
+        options = self.options.get(path, {})
         hit = self.vault_cache.get(path)
-        if hit and hit[0] == sig:
+        syncing = hit and ((hit[1].get("dashboard") or {}).get("health") or {}).get("syncing")
+        if hit and hit[0] == sig and hit[2] == options and not syncing:
             return hit[1]
+        actor = self.actors.get(path, "")
         try:
-            snap = read_vault(path, self.actors.get(path, ""))
+            from bruceworx.pdm_folder import FolderVault
+
+            started = time.perf_counter()
+            kept = self.vaults.get(path)
+            if kept is not None and kept[0] == actor and hasattr(kept[1], "update"):
+                vault = kept[1]
+                vault.update()
+            else:
+                vault = FolderVault(os.path.expanduser(path), actor=actor or None)
+                self.vaults[path] = (actor, vault)
+            read_ms = (time.perf_counter() - started) * 1000
+            snap = read_vault(path, actor, vault=vault, options=options, read_ms=read_ms)
         except ImportError:
             snap = {"error": "The vault needs the BruceWorx hooks add-on"}
         except Exception as exc:
+            self.vaults.pop(path, None)
             snap = {"error": f"Vault unreadable: {exc}"}
-        self.vault_cache[path] = (sig, snap)
+        self.vault_cache[path] = (sig, snap, options)
         return snap
 
 
@@ -1017,6 +1074,129 @@ def _make_classes():
                     item.setSizeHint(0, QtCore.QSize(0, self.ROW))
             self.fit()
 
+    class RecentSection(QtWidgets.QWidget):
+        """Recent files as cards (and, on the Recent files tab, a table): a title, the
+        All / Parts / Assemblies / Drawings filter and a text filter."""
+
+        def __init__(self, page, title, with_table=True, parent=None):
+            super().__init__(parent)
+            self.page = page
+            self.kind_filter = None
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(14)
+            head = QtWidgets.QHBoxLayout()
+            head.setSpacing(10)
+            self.title = label(title, "bwStartTitle", self)
+            head.addWidget(self.title)
+            head.addSpacing(4)
+            seg = QtWidgets.QFrame(self)
+            seg.setObjectName("bwStartSegments")
+            seg_lay = QtWidgets.QHBoxLayout(seg)
+            seg_lay.setContentsMargins(0, 0, 0, 0)
+            seg_lay.setSpacing(0)
+            self.seg_group = QtWidgets.QButtonGroup(self)
+            for i, (text, kind) in enumerate(FILTERS):
+                b = QtWidgets.QPushButton(text, seg)
+                b.setObjectName("bwStartSegment")
+                b.setCheckable(True)
+                b.setChecked(i == 0)
+                b.setProperty("position", "first" if i == 0 else ("last" if i == len(FILTERS) - 1 else "mid"))
+                b.clicked.connect(lambda _c=False, k=kind: self._set_filter(k))
+                self.seg_group.addButton(b)
+                seg_lay.addWidget(b)
+            head.addWidget(seg)
+            head.addStretch(1)
+            self.filter_edit = QtWidgets.QLineEdit(self)
+            self.filter_edit.setObjectName("bwStartFilter")
+            self.filter_edit.setPlaceholderText("Filter by name or P/N")
+            self.filter_edit.setClearButtonEnabled(True)
+            self.filter_edit.setFixedWidth(260)
+            self.filter_edit.textChanged.connect(lambda _t: self.page._timer.start())
+            head.addWidget(self.filter_edit)
+            lay.addLayout(head)
+            self.cards_box = QtWidgets.QWidget(self)
+            self.cards = QtWidgets.QGridLayout(self.cards_box)
+            self.cards.setContentsMargins(0, 0, 0, 0)
+            self.cards.setHorizontalSpacing(14)
+            for col in range(CARD_COUNT):
+                self.cards.setColumnStretch(col, 1)
+            lay.addWidget(self.cards_box)
+            self.table = Table(self) if with_table else None
+            if self.table is not None:
+                lay.addWidget(self.table)
+            self.empty = label("No recent files yet. Files you open or save are listed here.", "bwStartMuted", self)
+            self.empty.setWordWrap(True)
+            lay.addWidget(self.empty)
+
+        def _set_filter(self, kind):
+            self.kind_filter = kind
+            self.page._timer.start()
+
+        def render(self, entries, folder, parts, vault_root, now):
+            """Draw ``entries`` [(path, exists, mtime)]; returns (shown, total)."""
+            page = self.page
+            rows = []
+            text = self.filter_edit.text()
+            for path, exists, mtime in entries:
+                info = page.infos.get(path, {})
+                shown = merge_vault(info, parts)
+                name = os.path.basename(path)
+                if not matches(name, shown["pn"], info.get("kind", "other"), self.kind_filter, text):
+                    continue
+                rows.append((path, exists, mtime, info, shown))
+
+            while self.cards.count():
+                item = self.cards.takeAt(0)
+                if item.widget() is not None:
+                    item.widget().deleteLater()
+            for col, (path, exists, mtime, info, shown) in enumerate(rows[:CARD_COUNT]):
+                card = Card(path, self.cards_box)
+                when = format_edited(mtime, now) if exists else "Not found"
+                card.fill(os.path.splitext(os.path.basename(path))[0], shown["pn"], shown["state"],
+                          shown["rev"], when, page._pixmap(path, mtime, info), info.get("kind", "other"),
+                          not exists)
+                self.cards.addWidget(card, 0, col)
+            self.cards_box.setVisible(bool(rows))
+
+            if self.table is not None:
+                self.table.clear()
+                for path, exists, mtime, info, shown in rows:
+                    item = QtWidgets.QTreeWidgetItem(self.table)
+                    item.setText(0, os.path.basename(path))
+                    item.setIcon(0, _kind_icon(info.get("kind", "other")))
+                    item.setText(1, shown["pn"] or "—")
+                    item.setText(2, shown["rev"])
+                    item.setText(4, format_modified(mtime, now) if exists else "Not found")
+                    item.setText(5, location_text(path, vault_root))
+                    item.setToolTip(0, path if exists else f"Not found: {path}")
+                    item.setToolTip(5, os.path.dirname(path))
+                    item.setData(0, QtCore.Qt.UserRole, path if exists else "")
+                    item.setSizeHint(0, QtCore.QSize(0, Table.ROW))
+                    if not exists:
+                        item.setDisabled(True)
+                    b = badge_label(shown["state"], shown["rev"], True)
+                    if b is not None and exists:
+                        cell = QtWidgets.QWidget()
+                        cell.setObjectName("bwStartCell")
+                        lay = QtWidgets.QHBoxLayout(cell)
+                        lay.setContentsMargins(4, 0, 0, 0)
+                        lay.addWidget(b)
+                        lay.addStretch(1)
+                        self.table.setItemWidget(item, 3, cell)
+                    elif shown["in_vault"] is False:
+                        item.setText(3, "Not in vault")
+                self.table.fit()
+                self.table.setVisible(bool(rows))
+            self.empty.setVisible(not rows)
+            if folder:
+                self.empty.setText("No vault files opened yet. Files you open from this vault are listed here; "
+                                   "files outside it are not." if not entries else "No vault file matches the filter.")
+            else:
+                self.empty.setText("No recent files yet. Files you open or save are listed here."
+                                   if not entries else "No recent file matches the filter.")
+            return len(rows), len(entries)
+
     class Page(QtWidgets.QWidget):
         """The BruceWorx page in StartView's stack."""
 
@@ -1024,15 +1204,23 @@ def _make_classes():
             super().__init__(parent)
             self.stack = stack
             self.setObjectName(PAGE_NAME)
-            self.kind_filter = None
             self.entries = []  # (path, exists, mtime)
             self.infos = {}
             self.pixmaps = {}  # (path, mtime) -> QPixmap
             self.vault = None
+            self.tab = ""  # "dashboard" or "recent" once picked by hand (PDM-10); "" follows the vault
+            self._tab_vault = None  # the vault the hand-picked tab was picked for
+            self._checked_at = None  # when the worker last looked at the vault
+            self._drawn = None  # the dashboard snapshot on screen
             self._timer = QtCore.QTimer(self)
             self._timer.setSingleShot(True)
             self._timer.setInterval(60)
             self._timer.timeout.connect(self._render)
+            # PDM-10: look at the vault every 5 s while the page is visible (a signature check;
+            # the journal's new lines when it changed).
+            self._poll = QtCore.QTimer(self)
+            self._poll.setInterval(POLL_MS)
+            self._poll.timeout.connect(self._poll_vault)
             self._build()
 
         # layout
@@ -1086,13 +1274,78 @@ def _make_classes():
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
             scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.scroll = scroll
             main = QtWidgets.QWidget(scroll)
             main.setObjectName("bwStartMain")
             m = QtWidgets.QVBoxLayout(main)
-            m.setContentsMargins(24, 18, 24, 18)
+            m.setContentsMargins(24, 14, 24, 18)
             m.setSpacing(14)
 
-            self.work_box = QtWidgets.QWidget(main)
+            # The two tabs of the page (PDM-10, the user's answer of 24 Oct): the vault's dashboard
+            # and the recent files on this Mac.
+            self.tabs_box = QtWidgets.QFrame(main)
+            self.tabs_box.setObjectName("bwStartTabs")
+            tl = QtWidgets.QHBoxLayout(self.tabs_box)
+            tl.setContentsMargins(0, 0, 0, 0)
+            tl.setSpacing(18)
+            self.tab_group = QtWidgets.QButtonGroup(self)
+            self.tab_buttons = {}
+            for key, text in bwdash.TABS:
+                b = QtWidgets.QPushButton(text, self.tabs_box)
+                b.setObjectName("bwStartTab")
+                b.setCheckable(True)
+                b.setCursor(QtCore.Qt.PointingHandCursor)
+                b.clicked.connect(lambda _c=False, k=key: self.set_tab(k))
+                self.tab_group.addButton(b)
+                self.tab_buttons[key] = b
+                tl.addWidget(b)
+            tl.addStretch(1)
+            self.tabs_box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+            m.addWidget(self.tabs_box)
+
+            # Tab 1: the dashboard, or what to do without a vault.
+            self.dash_box = QtWidgets.QWidget(main)
+            d = QtWidgets.QVBoxLayout(self.dash_box)
+            d.setContentsMargins(0, 0, 0, 0)
+            d.setSpacing(14)
+            self.dashboard = bwdash.classes()["Dashboard"](self, self.dash_box)
+            d.addWidget(self.dashboard)
+            self.vault_recent = RecentSection(self, "Recent in this vault", False, self.dashboard.recent_box)
+            self.dashboard.recent.addWidget(self.vault_recent)
+            self.vault_count = label("", "bwStartMuted", self.dashboard.recent_box)
+            self.dashboard.recent.addWidget(self.vault_count)
+            self.dash_wait = label("", "bwStartMuted", self.dash_box)
+            self.dash_wait.setWordWrap(True)
+            d.addWidget(self.dash_wait)
+            self.no_vault = QtWidgets.QFrame(self.dash_box)
+            self.no_vault.setObjectName("bwDashCard")
+            nv = QtWidgets.QVBoxLayout(self.no_vault)
+            nv.setContentsMargins(18, 16, 18, 16)
+            nv.setSpacing(8)
+            nv.addWidget(label("No vault is open", "bwDashName", self.no_vault))
+            text = label("A vault keeps part numbers, revisions, check-out and release in one folder (iCloud Drive "
+                         "works). Its dashboard shows here: what is in it, your work, changes and activity.",
+                         "bwStartMuted", self.no_vault)
+            text.setWordWrap(True)
+            nv.addWidget(text)
+            row = QtWidgets.QHBoxLayout()
+            for text, slot, name in (("Open Vault…", lambda: open_vault(self), "bwDashButton"),
+                                     ("Create Vault…", lambda: create_vault(self), "bwDashPrimary")):
+                b = QtWidgets.QPushButton(text, self.no_vault)
+                b.setObjectName(name)
+                b.clicked.connect(lambda _c=False, f=slot: QtCore.QTimer.singleShot(0, f))
+                row.addWidget(b)
+            row.addStretch(1)
+            nv.addLayout(row)
+            d.addWidget(self.no_vault)
+            m.addWidget(self.dash_box)
+
+            # Tab 2: recent files (before PDM-10 the whole page: My work, then the recent list).
+            self.recent_box = QtWidgets.QWidget(main)
+            r = QtWidgets.QVBoxLayout(self.recent_box)
+            r.setContentsMargins(0, 0, 0, 0)
+            r.setSpacing(14)
+            self.work_box = QtWidgets.QWidget(self.recent_box)
             w = QtWidgets.QVBoxLayout(self.work_box)
             w.setContentsMargins(0, 0, 0, 8)
             w.setSpacing(8)
@@ -1102,57 +1355,14 @@ def _make_classes():
             self.work_empty = label("Nothing is checked out to you, waiting for review or newer in the vault.",
                                     "bwStartMuted", self.work_box)
             w.addWidget(self.work_empty)
-            m.addWidget(self.work_box)
-
-            head = QtWidgets.QHBoxLayout()
-            head.setSpacing(10)
-            head.addWidget(label("Recent", "bwStartTitle", main))
-            head.addSpacing(4)
-            seg = QtWidgets.QFrame(main)
-            seg.setObjectName("bwStartSegments")
-            seg_lay = QtWidgets.QHBoxLayout(seg)
-            seg_lay.setContentsMargins(0, 0, 0, 0)
-            seg_lay.setSpacing(0)
-            self.seg_group = QtWidgets.QButtonGroup(self)
-            for i, (text, kind) in enumerate(FILTERS):
-                b = QtWidgets.QPushButton(text, seg)
-                b.setObjectName("bwStartSegment")
-                b.setCheckable(True)
-                b.setChecked(i == 0)
-                b.setProperty("position", "first" if i == 0 else ("last" if i == len(FILTERS) - 1 else "mid"))
-                b.clicked.connect(lambda _c=False, k=kind: self._set_filter(k))
-                self.seg_group.addButton(b)
-                seg_lay.addWidget(b)
-            head.addWidget(seg)
-            head.addStretch(1)
-            self.filter_edit = QtWidgets.QLineEdit(main)
-            self.filter_edit.setObjectName("bwStartFilter")
-            self.filter_edit.setPlaceholderText("Filter by name or P/N")
-            self.filter_edit.setClearButtonEnabled(True)
-            self.filter_edit.setFixedWidth(260)
-            self.filter_edit.textChanged.connect(lambda _t: self._timer.start())
-            head.addWidget(self.filter_edit)
-            m.addLayout(head)
-
-            self.cards_box = QtWidgets.QWidget(main)
-            self.cards = QtWidgets.QGridLayout(self.cards_box)
-            self.cards.setContentsMargins(0, 0, 0, 0)
-            self.cards.setHorizontalSpacing(14)
-            for col in range(CARD_COUNT):
-                self.cards.setColumnStretch(col, 1)
-            m.addWidget(self.cards_box)
-
-            self.table = Table(main)
-            m.addWidget(self.table)
-            self.empty = label("No recent files yet. Files you open or save are listed here.",
-                               "bwStartMuted", main)
-            m.addWidget(self.empty)
-
+            r.addWidget(self.work_box)
+            self.recent = RecentSection(self, "Recent", True, self.recent_box)
+            r.addWidget(self.recent)
             foot = QtWidgets.QHBoxLayout()
             foot.setSpacing(4)
-            self.count_label = label("", "bwStartMuted", main)
+            self.count_label = label("", "bwStartMuted", self.recent_box)
             foot.addWidget(self.count_label)
-            self.examples_box = QtWidgets.QWidget(main)
+            self.examples_box = QtWidgets.QWidget(self.recent_box)
             ex = QtWidgets.QHBoxLayout(self.examples_box)
             ex.setContentsMargins(0, 0, 0, 0)
             ex.setSpacing(4)
@@ -1165,11 +1375,12 @@ def _make_classes():
             self.examples_box.setVisible(bool(examples))
             foot.addWidget(self.examples_box)
             foot.addStretch(1)
-            self.show_box = QtWidgets.QCheckBox("Show this page at startup", main)
+            self.show_box = QtWidgets.QCheckBox("Show this page at startup", self.recent_box)
             self.show_box.setObjectName("bwStartShowOnStartup")
             self.show_box.toggled.connect(self._show_on_startup)
             foot.addWidget(self.show_box)
-            m.addLayout(foot)
+            r.addLayout(foot)
+            m.addWidget(self.recent_box)
             m.addStretch(1)
             scroll.setWidget(main)
             outer.addWidget(scroll, 1)
@@ -1190,10 +1401,6 @@ def _make_classes():
         def _open(self):
             _run("Std_Open")
 
-        def _set_filter(self, kind):
-            self.kind_filter = kind
-            self._timer.start()
-
         def _show_on_startup(self, checked):
             import FreeCAD
 
@@ -1205,6 +1412,35 @@ def _make_classes():
                     box.blockSignals(True)
                     box.setChecked(not checked)
                     box.blockSignals(False)
+
+        def set_tab(self, key):
+            """Pick a tab by hand; it stays until the vault changes."""
+            self.tab = key
+            self._tab_vault = (self.vault or {}).get("path")
+            self._render()
+            self.scroll.verticalScrollBar().setValue(0)
+
+        def current_tab(self):
+            path = (self.vault or {}).get("path")
+            chosen = self.tab if self._tab_vault == path else ""
+            return bwdash.default_tab(self.vault is not None, chosen)
+
+        def request_feed(self, options):
+            """The dashboard's feed range or filter changed: read the snapshot again with them."""
+            if self.vault is not None:
+                _loader.request_vault(self.vault["path"], _actor_for(self.vault["path"]), options)
+
+        def checked_seconds(self):
+            if self._checked_at is None:
+                return None
+            return max(0.0, time.monotonic() - self._checked_at)
+
+        def _poll_vault(self):
+            if not self.isVisible() or self.vault is None:
+                self._poll.stop()
+                return
+            _loader.request_vault(self.vault["path"], _actor_for(self.vault["path"]))
+            self.dashboard.update_header(self.checked_seconds())
 
         # data
         def refresh(self):
@@ -1229,11 +1465,19 @@ def _make_classes():
             path = FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
             if path:
                 snap = _loader.cached_vault(path)
-                self.vault = dict(snap, path=path) if snap else {"path": path, "loading": True}
+                if self.vault is not None and self.vault.get("path") == path and snap is None:
+                    pass  # keep the last snapshot on screen while a new one is read (PDM-10)
+                else:
+                    self.vault = dict(snap, path=path) if snap else {"path": path, "loading": True}
                 if snap is None:
                     _loader.request_vault(path, _actor_for(path))
+                else:
+                    self._checked_at = time.monotonic()
+                if self.isVisible() and bwdash.enabled() and not self._poll.isActive():
+                    self._poll.start()
             else:
                 self.vault = None
+                self._poll.stop()
             self._render()
 
         def file_read(self, path, info):
@@ -1243,6 +1487,10 @@ def _make_classes():
 
         def vault_read(self, path, snap):
             if self.vault is not None and self.vault.get("path") == path:
+                self._checked_at = time.monotonic()
+                if self.vault.get("dashboard") is not None and snap.get("dashboard") is self.vault.get("dashboard"):
+                    self.dashboard.update_header(self.checked_seconds())
+                    return  # nothing changed: only the "read ... ago" line moves
                 self.vault = dict(snap, path=path)
                 self._timer.start()
 
@@ -1254,70 +1502,61 @@ def _make_classes():
             self._render_vault()
             parts = self.vault.get("parts") if self.vault and "parts" in self.vault else None
             vault_root = self.vault.get("root", "") if self.vault else ""
-            # With a vault open the page is the vault's: files from elsewhere are not listed (24 Oct).
             folder = vault_folder(self.vault.get("path", ""), vault_root) if self.vault else ""
-            entries = [e for e in self.entries if in_folder(e[0], folder)] if folder else self.entries
-            rows = []
-            text = self.filter_edit.text()
-            for path, exists, mtime in entries:
-                info = self.infos.get(path, {})
-                shown = merge_vault(info, parts)
-                name = os.path.basename(path)
-                if not matches(name, shown["pn"], info.get("kind", "other"), self.kind_filter, text):
-                    continue
-                rows.append((path, exists, mtime, info, shown))
-
-            while self.cards.count():
-                item = self.cards.takeAt(0)
-                if item.widget() is not None:
-                    item.widget().deleteLater()
-            for col, (path, exists, mtime, info, shown) in enumerate(rows[:CARD_COUNT]):
-                card = Card(path, self.cards_box)
-                when = format_edited(mtime, now) if exists else "Not found"
-                card.fill(os.path.splitext(os.path.basename(path))[0], shown["pn"], shown["state"],
-                          shown["rev"], when, self._pixmap(path, mtime, info), info.get("kind", "other"),
-                          not exists)
-                self.cards.addWidget(card, 0, col)
-            self.cards_box.setVisible(bool(rows))
-
-            self.table.clear()
-            for path, exists, mtime, info, shown in rows:
-                item = QtWidgets.QTreeWidgetItem(self.table)
-                item.setText(0, os.path.basename(path))
-                item.setIcon(0, _kind_icon(info.get("kind", "other")))
-                item.setText(1, shown["pn"] or "—")
-                item.setText(2, shown["rev"])
-                item.setText(4, format_modified(mtime, now) if exists else "Not found")
-                item.setText(5, location_text(path, vault_root))
-                item.setToolTip(0, path if exists else f"Not found: {path}")
-                item.setToolTip(5, os.path.dirname(path))
-                item.setData(0, QtCore.Qt.UserRole, path if exists else "")
-                item.setSizeHint(0, QtCore.QSize(0, Table.ROW))
-                if not exists:
-                    item.setDisabled(True)
-                b = badge_label(shown["state"], shown["rev"], True)
-                if b is not None and exists:
-                    cell = QtWidgets.QWidget()
-                    cell.setObjectName("bwStartCell")
-                    lay = QtWidgets.QHBoxLayout(cell)
-                    lay.setContentsMargins(4, 0, 0, 0)
-                    lay.addWidget(b)
-                    lay.addStretch(1)
-                    self.table.setItemWidget(item, 3, cell)
-                elif shown["in_vault"] is False:
-                    item.setText(3, "Not in vault")
-            self.table.fit()
-            self.table.setVisible(bool(rows))
-            self.empty.setVisible(not rows)
-            if folder:
-                self.empty.setText("No vault files opened yet. Open one from the Vault panel, or start a new part."
-                                   if not entries else "No vault file matches the filter.")
+            # With a vault open the page is the vault's: files from elsewhere are not listed (24 Oct).
+            vault_entries = [e for e in self.entries if in_folder(e[0], folder)] if folder else []
+            dashboard = bwdash.enabled()
+            tab = self.current_tab() if dashboard else "recent"
+            self.tabs_box.setVisible(dashboard)
+            for key, button in self.tab_buttons.items():
+                button.setChecked(key == tab)
+            self.dash_box.setVisible(tab == "dashboard")
+            self.recent_box.setVisible(tab == "recent")
+            if dashboard:
+                # The Recent files tab: every recent file on this Mac (the user's answer of 24 Oct).
+                self.work_box.setVisible(False)
+                self.recent.title.setText("Recent files")
+                shown, total = self.recent.render(self.entries, "", parts, vault_root, now)
+                word = "recent file"
             else:
-                self.empty.setText("No recent files yet. Files you open or save are listed here."
-                                   if not self.entries else "No recent file matches the filter.")
-            total = len(entries)
-            word = "vault file" if folder else "recent file"
-            self.count_label.setText(f"Showing {len(rows)} of {total} {word}{'s' if total != 1 else ''}")
+                # Before PDM-10: My work above the recent list, kept to the vault folder.
+                self.recent.title.setText("Recent")
+                entries = vault_entries if folder else self.entries
+                shown, total = self.recent.render(entries, folder, parts, vault_root, now)
+                word = "vault file" if folder else "recent file"
+            self.count_label.setText(f"Showing {shown} of {total} {word}{'s' if total != 1 else ''}")
+            if tab == "dashboard":
+                self._render_dashboard(vault_entries, folder, parts, vault_root, now)
+
+        def _render_dashboard(self, entries, folder, parts, vault_root, now):
+            snap = (self.vault or {}).get("dashboard")
+            self.no_vault.setVisible(self.vault is None)
+            self.dashboard.setVisible(snap is not None)
+            waiting = self.vault is not None and snap is None
+            self.dash_wait.setVisible(waiting)
+            if waiting:
+                if self.vault.get("error"):
+                    self.dash_wait.setText(self.vault["error"])
+                elif self.vault.get("loading"):
+                    self.dash_wait.setText("Reading the vault…")
+                else:
+                    self.dash_wait.setText("The dashboard needs a newer BruceWorx hooks add-on.")
+                return
+            if snap is None:
+                return
+            if snap is not self._drawn:
+                self.dashboard.fill(snap, self.checked_seconds())
+                self._drawn = snap
+            else:
+                self.dashboard.update_header(self.checked_seconds())
+            shown, total = self.vault_recent.render(entries, folder, parts, vault_root, now)
+            self.vault_recent.setVisible(bool(total))
+            if total:
+                self.vault_count.setText(f"Showing {shown} of {total} vault file{'s' if total != 1 else ''} "
+                                         "· only files in this vault are listed while it is open")
+            else:
+                self.vault_count.setText("No vault files opened yet. Files you open from this vault are listed "
+                                         "here; files outside it are not.")
 
         def _pixmap(self, path, mtime, info):
             data = info.get("thumbnail")
@@ -1335,11 +1574,11 @@ def _make_classes():
             menu = self.vault_menu
             menu.clear()
             if vault is None:
-                self.vault_button.setText("No vault open  \u25be")
+                self.vault_button.setText("No vault open  ▾")
                 self.vault_button.setToolTip("Part numbers, check-out and release live in a vault folder.")
             else:
                 name = vault.get("name") or os.path.basename(vault.get("path", "").rstrip(os.sep)) or "Vault"
-                self.vault_button.setText(f"{name}  \u25be")
+                self.vault_button.setText(f"{name}  ▾")
                 where = storage_name(vault.get("root", "")) if vault.get("root") else vault.get("path", "")
                 tip = [where]
                 if vault.get("missing"):
@@ -1348,18 +1587,21 @@ def _make_classes():
                     tip.append(vault["error"])
                 self.vault_button.setToolTip("\n".join(t for t in tip if t))
             self.vault_button.setIcon(_icon(("BruceWorx_Vault", "folder"), ""))
-            menu.addAction("Open Vault\u2026", lambda: open_vault(self))
-            menu.addAction("Create Vault\u2026", lambda: create_vault(self))
+            if vault is not None and bwdash.enabled():
+                menu.addAction("Dashboard", lambda: self.set_tab("dashboard"))
+                menu.addSeparator()
+            menu.addAction("Open Vault…", lambda: open_vault(self))
+            menu.addAction("Create Vault…", lambda: create_vault(self))
             if vault is not None:
                 menu.addSeparator()
-                menu.addAction("Import Files\u2026", lambda: import_files(self))
-                menu.addAction("Vault Settings\u2026", lambda: vault_settings(self))
+                menu.addAction("Import Files…", lambda: import_files(self))
+                menu.addAction("Vault Settings…", lambda: vault_settings(self))
                 menu.addSeparator()
                 menu.addAction("Close Vault", lambda: close_vault(self))
-            # My work: only with a vault that has been read.
+            # My work (the page before PDM-10): only with a vault that has been read.
             ready = vault is not None and not vault.get("loading") and not vault.get("error")
-            self.work_box.setVisible(ready)
-            if ready:
+            self.work_box.setVisible(ready and not bwdash.enabled())
+            if ready and not bwdash.enabled():
                 sections = my_work_sections(vault)
                 self.work_table.fill(sections)
                 self.work_table.setVisible(bool(sections))
@@ -1369,7 +1611,11 @@ def _make_classes():
             super().showEvent(event)
             QtCore.QTimer.singleShot(0, self.refresh)
 
-    _classes = {"Bridge": Bridge, "Page": Page, "Card": Card, "Table": Table}
+        def hideEvent(self, event):
+            super().hideEvent(event)
+            self._poll.stop()
+
+    _classes = {"Bridge": Bridge, "Page": Page, "Card": Card, "Table": Table, "RecentSection": RecentSection}
     return _classes
 
 
@@ -1471,6 +1717,37 @@ def _refresh_pages():
             page.refresh()
 
 
+def _vault_changed():
+    """A vault operation in this FreeCAD (bruceworx_vaultclient listeners): read the vault now."""
+    for page in _pages():
+        if page.isVisible() and page.vault is not None:
+            _loader.request_vault(page.vault["path"], _actor_for(page.vault["path"]))
+
+
+def show_dashboard() -> None:
+    """Bring the Start tab forward on the vault's dashboard (the Vault panel's menu, PDM-10)."""
+    import FreeCADGui
+    from PySide import QtCore, QtWidgets
+
+    if not _pages():
+        try:
+            FreeCADGui.runCommand("Start_Start")
+        except Exception as exc:
+            _log(f"Start_Start: {exc}")
+
+    def bring():
+        for view in _views():
+            sub = view.parentWidget()
+            while sub is not None and not isinstance(sub, QtWidgets.QMdiSubWindow):
+                sub = sub.parentWidget()
+            if sub is not None and sub.mdiArea() is not None:
+                sub.mdiArea().setActiveSubWindow(sub)
+        for page in _pages():
+            page.set_tab("dashboard")
+
+    QtCore.QTimer.singleShot(150, bring)
+
+
 class _PrefObserver:
     def __init__(self):
         self._timer = None
@@ -1523,6 +1800,12 @@ def install() -> None:
             return
         area.subWindowActivated.connect(lambda _sub: QtCore.QTimer.singleShot(0, update))
         update()
+        try:  # the dashboard follows this FreeCAD's own vault operations at once (PDM-10)
+            import bruceworx_vaultclient
+
+            bruceworx_vaultclient.add_listener(_vault_changed)
+        except ImportError:
+            pass
 
     QtCore.QTimer.singleShot(0, start)
     _installed = True

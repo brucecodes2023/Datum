@@ -80,7 +80,8 @@ def plan_move(source: str, destination_parent: str, free_bytes=None) -> MovePlan
             plan.issues.append(("error", f"Not enough space: the vault needs {plan.size / 1e6:.0f} MB, "
                                          f"{free / 1e6:.0f} MB is free there."))
     try:
-        missing = FolderVault(find_ref_file(source)).missing_objects()
+        health = FolderVault(find_ref_file(source)).object_health()
+        missing = health["missing"] + health["stand_ins"]  # a stand-in is not the file: it cannot be copied
     except Exception as exc:  # noqa: BLE001 -- report, don't crash the dialog
         plan.issues.append(("error", f"The vault cannot be read: {exc}"))
     else:

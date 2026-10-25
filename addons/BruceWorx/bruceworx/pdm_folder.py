@@ -213,22 +213,102 @@ class FolderVault:
         self.model.file_link_users = self._file_link_users
         self.versions: dict[str, list[FileVersion]] = {}
         self.locks: dict[str, str] = {}
+        self.lock_times: dict[str, str] = {}  # P/N -> when its current lock was taken (PDM-10)
         self.released_files: dict[tuple[str, str], str] = {}
         self.problems: list[str] = []
+        self.events: list[Event] = []  # every event, in replay order: readers need no second read
         self._seen: set[str] = set()
         self._seq = 0
-        for event in self._read_events():
+        self._offsets: dict[str, tuple] = {}  # journal file -> (bytes up to its last full line, inode)
+        self._replay(self._read_events(self._offsets))
+        if before is not None:
+            self._notify(before)
+
+    def _replay(self, events):
+        """Apply events in order, then check the BOMs for a cycle once (PDM-10: a linear replay)."""
+        boms = False
+        for event in events:
             self._seen.add(event.id)
+            self.events.append(event)
             if event.actor == self.actor:
                 self._seq = max(self._seq, event.seq)
             try:
                 self._apply(event)
             except (LifecycleError, ValueError, KeyError, TypeError) as exc:
                 self.problems.append(f"{event.at} {event.actor} {event.op}: {exc}")
-        if before is not None:
-            self._notify(before)
+            boms = boms or event.op == "set_bom"
+        if boms:
+            cycle = self.model.find_cycle()
+            if cycle:
+                self.problems.append(f"BOM cycle after merging the journals: {' -> '.join(cycle)}")
 
-    def _read_events(self) -> list[Event]:
+    def update(self) -> bool:
+        """Read only what the journal files gained since the last read (PDM-10).
+
+        New events that all sort after the last one applied are applied to the state held. Anything
+        else replays the whole journal: a late line from another Mac (or one whose clock is behind),
+        a file that shrank, was replaced or went away. Returns True when the state may have changed.
+        """
+        folder = os.path.join(self.root, JOURNAL)
+        try:
+            names = sorted(n for n in os.listdir(folder) if n.endswith(".jsonl"))
+        except OSError:
+            names = []
+        if set(self._offsets) - set(names):
+            self.refresh()
+            return True
+        new, problems, offsets = [], [], dict(self._offsets)
+        for name in names:
+            path = os.path.join(folder, name)
+            try:
+                info = os.stat(path)
+            except OSError:
+                continue
+            start, inode = offsets.get(name, (0, info.st_ino))
+            if info.st_ino != inode or info.st_size < start:
+                self.refresh()
+                return True
+            if info.st_size == start:
+                continue
+            found, used = self._read_file(path, name, start, problems)
+            offsets[name] = (start + used, info.st_ino)
+            new.extend(e for e in found if e.id not in self._seen)
+        self._offsets = offsets
+        self.problems.extend(problems)
+        if not new:
+            return bool(problems)
+        new = sorted({e.id: e for e in reversed(new)}.values(), key=Event.sort_key)
+        if self.events and new[0].sort_key() <= self.events[-1].sort_key():
+            self.refresh()
+            return True
+        before = self.states()
+        self._replay(new)
+        self._notify(before)
+        return True
+
+    @staticmethod
+    def _read_file(path, name, start, problems):
+        """The events in a journal file's complete lines from byte ``start``, and the bytes used.
+        A last line without its newline is still syncing; it waits for the next read."""
+        with open(path, "rb") as handle:
+            handle.seek(start)
+            data = handle.read()
+        used = data.rfind(b"\n") + 1
+        events = []
+        for line in data[:used].decode("utf-8", "replace").split("\n"):
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+                events.append(Event(raw["id"], raw["actor"], int(raw["seq"]), raw["at"], raw["op"],
+                                    raw.get("args", {})))
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                problems.append(f"{name}: unreadable journal line skipped")
+        return events, used
+
+    def _read_events(self, offsets=None) -> list[Event]:
+        """Every event of every journal file, de-duplicated by id, in replay order. ``offsets``
+        (refresh only) records how far each file was read, for :meth:`update`."""
         folder = os.path.join(self.root, JOURNAL)
         events: dict[str, Event] = {}
         if not os.path.isdir(folder):
@@ -236,20 +316,15 @@ class FolderVault:
         for name in sorted(os.listdir(folder)):
             if not name.endswith(".jsonl"):
                 continue
-            with open(os.path.join(folder, name), encoding="utf-8") as handle:
-                text = handle.read()
-            lines = text.split("\n")
-            if not text.endswith("\n"):
-                lines = lines[:-1]  # last line still syncing
-            for line in lines:
-                if not line.strip():
-                    continue
-                try:
-                    raw = json.loads(line)
-                    event = Event(raw["id"], raw["actor"], int(raw["seq"]), raw["at"], raw["op"], raw.get("args", {}))
-                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-                    self.problems.append(f"{name}: unreadable journal line skipped")
-                    continue
+            path = os.path.join(folder, name)
+            try:
+                inode = os.stat(path).st_ino
+            except OSError:
+                continue
+            found, used = self._read_file(path, name, 0, self.problems)
+            if offsets is not None:
+                offsets[name] = (used, inode)
+            for event in found:
                 events.setdefault(event.id, event)
         return sorted(events.values(), key=Event.sort_key)
 
@@ -273,11 +348,14 @@ class FolderVault:
             holder = self.locks.get(pn)
             if holder and holder != event.actor:
                 raise LifecycleError(f"{pn} is checked out by {holder}")
+            if holder != event.actor:
+                self.lock_times[pn] = event.at  # a second check-out keeps the lock's start
             self.locks[pn] = event.actor
         elif event.op == "undo_checkout":
             if self.locks.get(pn) not in (None, event.actor) and not args.get("force"):
                 raise LifecycleError(f"{pn} is checked out by {self.locks[pn]}")
             self.locks.pop(pn, None)
+            self.lock_times.pop(pn, None)
         elif event.op == "checkin":
             self._require_wip(pn, "check in")
             if self.locks.get(pn) != event.actor:
@@ -289,6 +367,7 @@ class FolderVault:
             self.versions.setdefault(pn, []).append(version)
             if not args.get("keep_lock"):
                 self.locks.pop(pn, None)
+                self.lock_times.pop(pn, None)
             return version
         else:
             raise ValueError(f"unknown operation {event.op!r}")
@@ -327,6 +406,7 @@ class FolderVault:
             handle.flush()
             os.fsync(handle.fileno())
         self._seen.add(event.id)
+        self.events.append(event)
         if op in ("approve", "release_eco"):
             self._send_released_boms(event)
         self._notify(before)
@@ -640,18 +720,47 @@ class FolderVault:
         shutil.copyfile(source, dest)
         return dest
 
-    def missing_objects(self) -> list[str]:
-        missing = []
-        for versions in self.versions.values():
-            for version in versions:
-                if not os.path.exists(os.path.join(self.root, version.object_name)):
-                    missing.append(version.object_name)
+    def _object_names(self) -> list[str]:
+        """Every object the journal names: file versions, then ECR attachments (repeats kept)."""
+        names = [version.object_name for versions in self.versions.values() for version in versions]
         for ecr in self.model.ecrs.values():
-            for record in ecr.attachments:
-                name = object_name(record["sha256"], record["filename"])
-                if not os.path.exists(os.path.join(self.root, name)):
-                    missing.append(name)
+            names += [object_name(record["sha256"], record["filename"]) for record in ecr.attachments]
+        return names
+
+    def missing_objects(self) -> list[str]:
+        """Objects the journal names that are not in the folder at all: still syncing from another
+        device. One iCloud evicted (dataless, or its ``.<name>.icloud`` stand-in on macOS 13 and
+        older) is not missing: it downloads when read (:meth:`object_health`, PDM-10)."""
+        from bruceworx.pdm_workspace import icloud_placeholder  # pdm_workspace imports this module
+
+        missing = []
+        for name in self._object_names():
+            path = os.path.join(self.root, name)
+            if not os.path.exists(path) and not icloud_placeholder(path):
+                missing.append(name)
         return missing
+
+    def object_health(self, stat_fn=os.stat) -> dict:
+        """Where the objects are, for the dashboard's iCloud line (each object once): ``listed``,
+        ``local`` (on this Mac), ``cloud`` (in iCloud only, downloads on open), ``stand_ins`` (the
+        cloud ones that are a ``.icloud`` stand-in: not copyable as they are) and ``missing``."""
+        from bruceworx.pdm_workspace import icloud_placeholder, is_dataless  # noqa: PLC0415
+
+        out = {"listed": 0, "local": 0, "cloud": [], "stand_ins": [], "missing": []}
+        for name in dict.fromkeys(self._object_names()):
+            path = os.path.join(self.root, name)
+            out["listed"] += 1
+            if os.path.lexists(path):
+                if is_dataless(path, stat_fn):
+                    out["cloud"].append(name)
+                else:
+                    out["local"] += 1
+            elif icloud_placeholder(path):
+                out["cloud"].append(name)
+                out["stand_ins"].append(name)
+            else:
+                out["missing"].append(name)
+        return out
 
     def changes(self) -> list[dict]:
         """ECRs and ECOs with their state, newest first, as JSON-ready rows."""

@@ -374,3 +374,78 @@ when none is). Building started 24 Oct.
         \emph{Recommendation:} 14 days, as a health line and in \emph{Check vault\ldots} with \emph{Break lock}. Never
         break a lock automatically.
 \end{enumerate}
+
+%----------------------------------------------------------------------
+\subsubsection*{Built (24 Oct 2026)}\label{sec:pdm10-built}
+
+\paragraph{Your answer (24 Oct, evening).} The \emph{Recent files} tab keeps every recent file on this Mac, the open vault's files included (as built).
+
+
+Steps 1 to 7 were built in the plan's order, with your answers: recommendations for questions 1 and 3--9, and for
+question~2 the Start page's two tabs. Your vault \emph{Vector} was never opened: every run used scratch vaults made
+by the engine and a config copy whose \code{VaultPath} points at them.
+
+\begin{itemize}[nosep]
+  \item \textbf{Linear replay} (step 1, \file{pdm.py}, \file{pdm\_folder.py}). \code{set\_bom} checks the whole BOM
+        graph for a cycle only when it records a line (\code{strict}); a replay checks once at the end
+        (\code{Vault.find\_cycle}) and lists a cycle that two Macs' journals made as a problem. A cached BOM map was
+        not needed: with the check out of the replay nothing rebuilds the map while replaying. Every reader of
+        \code{status()}, BOMs, changes, locks, versions and revision records was compared byte for byte before and
+        after on the 500, 2\,000 and 5\,000-item scratch vaults: identical. Open the vault (read and replay):
+        9 / 74 / 420\,ms before, \textbf{6 / 21 / 59\,ms} after.
+  \item \textbf{What the page needs from the engine.} The vault keeps the sorted events it read (\code{events}; the
+        Start page no longer reads the journal twice), keeps when each lock was taken (\code{lock\_times}), and
+        \code{object\_health()} counts objects on this Mac, in iCloud only (dataless or a \file{.icloud} stand-in) and
+        still syncing. \code{missing\_objects()} no longer counts a stand-in as missing; \emph{Move Vault} still waits
+        for stand-ins, since a stand-in cannot be copied.
+  \item \textbf{The \file{state.json} race} is gone: \code{Workspace(vault, read\_only=True)} never saves, and its
+        operations refuse to run. The Start page's worker uses only that.
+  \item \textbf{Reading only what is new} (step 2, \code{FolderVault.update}). Byte offsets per journal file; new
+        complete lines that all sort after the last event are applied in place; a late line, a clock behind, a file
+        that shrank, was replaced or went away replays everything. A half-synced line waits for its end; a conflict
+        copy whose events are known changes nothing.
+  \item \textbf{\file{bruceworx/vault\_dashboard.py}} (step 3, FreeCAD-free): the snapshot of section~2: tiles, top
+        assemblies with a memoised roll-up (each item once, plus drawings; hidden above 12), My work (3 rows a queue;
+        \code{bruce@mbp} counts as you, ``checked out to you on mbp''), changes and what each waits for, the folded
+        feed (10\,min runs, 14 days, check-outs and BOM records only with \emph{Show check-outs}, \emph{Only mine}),
+        health. The spike's generator is the test fixture \file{tests/vault\_fixture.py}; on its 500-item vault the
+        page's data takes about 25\,ms to read and build (test budget 0.1\,s).
+  \item \textbf{The Start page} (steps 4 and 6, \file{bruceworx\_start.py}, new \file{bruceworx\_dashboard.py}). Two
+        tabs: \emph{Vault dashboard} (the default while a vault is open) and \emph{Recent files} (every recent file on
+        this Mac; the default with no vault). The dashboard keeps to the vault: its \emph{Recent in this vault} uses the
+        \code{vault\_folder}/\code{in\_folder} rule. The worker keeps one \code{FolderVault} and reads new lines only;
+        the page looks every 5\,s while visible and at once after a vault operation in this FreeCAD (a check-in showed
+        in the feed 0.12\,s later). The last snapshot stays on screen while a new one is read. Light and dark come
+        from the theme tokens (figure~\ref{fig:pdm10-built}); an empty vault shows \emph{Get started}
+        (figure~\ref{fig:pdm10-built-empty}).
+  \item \textbf{Click-through} (step 5). The Vault panel's search takes \code{type:}, \code{state:}, \code{lock:},
+        \code{status:} and \code{change:} words, and \code{show\_filtered()} opens it on a chip and words. Every tile
+        opened a list with exactly its count (340 / 55 / 85 / 20 on the scratch vault), the legend entries add the
+        state, \emph{+ 22 more} opens the queue, rows select their item or change. \emph{Check vault\ldots} is a task
+        panel listing each problem with its fix (\emph{Break Lock\ldots} for a lock older than 14 days). The vault
+        switcher's menu and the Vault panel's menu have \emph{Dashboard}.
+  \item \textbf{Preference} (step 7): Preferences $\rightarrow$ BruceWorx $\rightarrow$ \emph{Vault dashboard on the
+        Start page} (\code{BruceWorx/VaultDashboard}, on). Off keeps the page as it was.
+  \item \textbf{Not yet:} \emph{New Project\ldots} is shown greyed until PDM-09 adds its command; ``drawings out of
+        date'' waits for PDM-09's \code{made\_from}; sections cannot be folded yet.
+  \item \textbf{Tests.} Add-on: \file{test\_pdm\_replay.py} (linear replay, lock times, stand-ins, read-only
+        workspace, incremental reading) and \file{test\_vault\_dashboard.py}; all 423 add-on tests pass. FreeCAD:
+        \code{TestBruceWorxStart} (tabs, header, query words), \code{TestBruceWorxChanges}, \code{TestBruceWorxBom},
+        \code{TestBruceWorx}, \code{TestBruceWorxPattern}, \code{TestAssemblyWorkbench} pass.
+\end{itemize}
+
+\begin{figure}[!htbp]
+\centering
+\IfFileExists{fig/pdm10_built_light.png}{\includegraphics[width=0.49\linewidth]{fig/pdm10_built_light.png}}{\fbox{pdm10\_built\_light.png}}\hfill
+\IfFileExists{fig/pdm10_built_dark.png}{\includegraphics[width=0.49\linewidth]{fig/pdm10_built_dark.png}}{\fbox{pdm10\_built\_dark.png}}
+\caption{As built: the dashboard of the 500-item scratch vault, light and dark (the page's main area; the Start page's
+left column is unchanged). Compare figures~\ref{fig:pdm10-light} and~\ref{fig:pdm10-dark}.}
+\label{fig:pdm10-built}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\IfFileExists{fig/pdm10_built_empty.png}{\includegraphics[width=0.8\linewidth]{fig/pdm10_built_empty.png}}{\fbox{pdm10\_built\_empty.png}}
+\caption{As built: a new, empty vault made with the Create Vault engine (compare figure~\ref{fig:pdm10-empty}).}
+\label{fig:pdm10-built-empty}
+\end{figure}

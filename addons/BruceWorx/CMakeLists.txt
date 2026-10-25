@@ -42,6 +42,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/flat_dxf.py
     bruceworx/flat_export.py
     bruceworx/bom.py
+    bruceworx/vault_dashboard.py
     config/document_types.json
     config/numbering.example.json
     config/part_properties.json
@@ -92,6 +93,7 @@ INSTALL(
         bruceworx/flat_dxf.py
         bruceworx/flat_export.py
         bruceworx/bom.py
+        bruceworx/vault_dashboard.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )
 INSTALL(

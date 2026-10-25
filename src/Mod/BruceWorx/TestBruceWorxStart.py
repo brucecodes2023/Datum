@@ -329,5 +329,91 @@ class VaultFolderTests(unittest.TestCase):
         self.assertFalse(start.in_folder("/v/Vector/a.FCStd", ""))
 
 
+class DashboardTests(unittest.TestCase):
+    """PDM-10: the Start page's two tabs and the dashboard's text (bruceworx_dashboard)."""
+
+    def test_default_tab(self):
+        import bruceworx_dashboard as dash
+
+        self.assertEqual(dash.default_tab(True), "dashboard")
+        self.assertEqual(dash.default_tab(False), "recent")
+        self.assertEqual(dash.default_tab(True, "recent"), "recent")
+        self.assertEqual(dash.default_tab(False, "dashboard"), "dashboard")
+
+    def test_tile_query(self):
+        import bruceworx_dashboard as dash
+
+        self.assertEqual(dash.tile_query("part"), "type:part")
+        self.assertEqual(dash.tile_query("drawing", "In Review"), "type:drawing state:review")
+
+    def test_header_line(self):
+        import bruceworx_dashboard as dash
+
+        snap = {"storage": "iCloud Drive", "actor": "bruce@mac", "settings": {"units": "mm"},
+                "health": {"syncing": 0}}
+        self.assertEqual(dash.header_line(snap, 75), ("ok", "Up to date \u00b7 read 1 min ago \u00b7 iCloud Drive "
+                                                            "\u00b7 you are bruce@mac \u00b7 units mm"))
+        snap["health"] = {"syncing": 2, "sync_age": 900}
+        level, text = dash.header_line(snap, 5)
+        self.assertEqual(level, "warn")
+        self.assertTrue(text.startswith("2 versions still syncing \u00b7 read just now"))
+        now = dt.datetime.now().astimezone()
+        empty = {"empty": True, "created": now.isoformat(), "storage": "iCloud Drive", "actor": "a@b",
+                 "settings": {"units": "in"}, "health": {}}
+        self.assertTrue(dash.header_line(empty, None, now)[1].startswith("New vault, created today"))
+
+    def test_legend_and_projects(self):
+        import bruceworx_dashboard as dash
+
+        self.assertEqual(dash.legend({"WIP": 3, "In Review": 0, "Released": 2, "Obsolete": 1}),
+                         [("WIP", "WIP", 3), ("Released", "Released", 2), ("Obsolete", "Obsolete", 1)])
+        row = {"part_number": "DM-02-01001-001", "items": 18, "drawings": 13,
+               "states": {"Released": 8, "In Review": 2}, "ecos": []}
+        self.assertEqual(dash.project_text(row), ("8 of 18 released", "2 in review"))
+        self.assertEqual(dash.project_sub(row), "DM-02-01001-001 \u00b7 18 items \u00b7 13 drawings")
+        row["ecos"] = ["ECO-0003"]
+        self.assertEqual(dash.project_text(row)[1], "ECO-0003 open")
+
+    def test_get_started_and_check(self):
+        import bruceworx_dashboard as dash
+
+        snap = {"settings": {"programs": ["DM", "LE"], "example": "DM-01-01001-001", "units": "mm", "sheet": "B"}}
+        steps = dash.get_started(snap, False)
+        self.assertEqual([s[0] for s in steps], ["settings", "project", "import", "part"])
+        self.assertEqual(steps[0][2], "Programs DM, LE \u00b7 numbering DM-01-01001-001 \u00b7 units mm \u00b7 ANSI B drawings")
+        self.assertFalse(steps[1][5])  # New Project waits for PDM-09
+        snap = {"health": {"stale_locks": [{"pn": "P", "who": "alex", "age": "20 d"}], "syncing": 0,
+                           "problems": ["x"], "future_events": [], "conflict_copies": ["a 2.jsonl"]}}
+        found = dash.health_problems(snap)
+        self.assertEqual([(k, f) for k, _t, f, _p in found], [("lock", "break_lock"), ("journal", ""), ("copy", "")])
+
+
+class VaultQueryWordTests(unittest.TestCase):
+    """PDM-10: the Vault panel's search words the dashboard opens it with."""
+
+    def test_words(self):
+        import bruceworx_vaultclient as vc
+
+        part = {"part_number": "DM-01-01001-001", "display": "DM-01-01001-001-01", "description": "Side rail",
+                "item_type": "part", "state": "WIP", "code": "checked_out"}
+        drawing = dict(part, part_number="DM-03-01001-001", item_type="drawing", state="In Review", code="up_to_date")
+        other = dict(part, part_number="DM-01-01002-001", code="checked_out_other")
+        change = {"part_number": "ECO-0003", "display": "ECO-0003", "description": "Jaw insert", "item_type": "change",
+                  "state": "Open", "kind": "ECO", "code": "change"}
+        rows = [part, drawing, other, change]
+
+        def hits(kind, query):
+            return [r["part_number"] for r in rows if vc.matches(r, kind, query)]
+
+        self.assertEqual(hits("all", "type:part"), ["DM-01-01001-001", "DM-01-01002-001"])
+        self.assertEqual(hits("all", "type:drawing state:review"), ["DM-03-01001-001"])
+        self.assertEqual(hits("all", "lock:me"), ["DM-01-01001-001"])
+        self.assertEqual(hits("all", "lock:other"), ["DM-01-01002-001"])
+        self.assertEqual(hits("all", "lock:any rail"), ["DM-01-01001-001", "DM-01-01002-001"])
+        self.assertEqual(hits("changes", "change:eco change:open"), ["ECO-0003"])
+        self.assertEqual(hits("all", "rail state:wip"), ["DM-01-01001-001", "DM-01-01002-001"])
+        self.assertEqual(hits("all", "http://x"), [])  # an unknown key is plain text
+
+
 if __name__ == "__main__":
     unittest.main()
