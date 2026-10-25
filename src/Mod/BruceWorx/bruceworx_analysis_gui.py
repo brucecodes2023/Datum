@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 
 import bruceworx_analysis as ba
+from bruceworx_slots import slot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NODE_NAME = "BWAnalysis"
@@ -566,10 +567,10 @@ class InspectPanel:
         self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
         self.timer.setInterval(120)
-        self.timer.timeout.connect(self.update)
+        self.timer.timeout.connect(slot(self.update))
         self.mode.setCurrentIndex([k for k, _t in MODES].index(session.mode))
         self.pages.setCurrentIndex(self.mode.currentIndex())
-        self.mode.currentIndexChanged.connect(self._mode_changed)
+        self.mode.currentIndexChanged.connect(slot(self._mode_changed))
 
     # settings per mode
     def _spin(self, value, lo, hi, step, suffix, decimals=1):
@@ -627,7 +628,7 @@ class InspectPanel:
             for name, lo, hi in ba.THICKNESS_PRESETS:
                 preset.addItem(name)
             preset.addItem("Custom")
-            preset.currentIndexChanged.connect(self._preset_changed)
+            preset.currentIndexChanged.connect(slot(self._preset_changed))
             form.addRow("Preset", preset)
             self.widgets[key] = {"preset": preset,
                                  "minimum": self._spin(p["minimum"], 0.05, 50.0, 0.1, " mm", 2),

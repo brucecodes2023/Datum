@@ -257,6 +257,112 @@ class SyncTests(unittest.TestCase):
         BruceWorx.sync(prefs, overlay, style, QSS, ["Model"])
         json.loads(prefs.GetString(BruceWorx.SNAPSHOT_KEY))
 
+class SlotTests(unittest.TestCase):
+    """bruceworx_slots.slot: a receiver PySide may keep without keeping (or killing) the object."""
+
+    class Owner:
+        def __init__(self):
+            self.calls = []
+
+        def one(self, value):
+            self.calls.append(value)
+
+        def none(self):
+            self.calls.append("none")
+
+        def many(self, *args):
+            self.calls.append(args)
+
+    def test_arguments_are_trimmed_to_the_method(self):
+        import bruceworx_slots
+
+        owner = self.Owner()
+        bruceworx_slots.slot(owner.one)(7, "extra")
+        bruceworx_slots.slot(owner.none)(True)
+        bruceworx_slots.slot(owner.many)(1, 2, 3)
+        self.assertEqual(owner.calls, [7, "none", (1, 2, 3)])
+
+    def test_the_object_lives_while_connected(self):
+        import gc
+        import weakref
+
+        import bruceworx_slots
+
+        owner = self.Owner()
+        receiver = bruceworx_slots.slot(owner.one)
+        alive = weakref.ref(owner)
+        del owner
+        gc.collect()
+        self.assertIsNotNone(alive())  # the receiver (held by PySide while connected) keeps it
+        receiver(3)
+        self.assertEqual(alive().calls, [3])
+        del receiver
+        gc.collect()
+        self.assertIsNone(alive())
+
+    def test_plain_functions_pass_through(self):
+        import bruceworx_slots
+
+        def f():
+            pass
+
+        self.assertIs(bruceworx_slots.slot(f), f)
+
+
+class ConnectionLintTests(unittest.TestCase):
+    """No plain Python class in this folder connects a widget signal straight to one of its bound
+    methods: when such an object dies PySide 6.8.3 drops every function and lambda connection in
+    the application (bruceworx_slots explains; found 26 Oct 2026). Use ``slot(self.method)``."""
+
+    # Modules another session owns at the time of writing; to be fixed by their owners.
+    KNOWN = {"bruceworx_vaultclient.py", "bruceworx_vaultwizard.py", "bruceworx_drawing.py", "bruceworx_project.py"}
+
+    @staticmethod
+    def offenders(folder):
+        import ast
+        import glob
+
+        def qt_derived(cls, classes):
+            for base in cls.bases:
+                name = ast.unparse(base).split(".")[-1]
+                if name.startswith("Q") and len(name) > 1 and name[1].isupper():
+                    return True
+                if name in classes and classes[name] is not cls and qt_derived(classes[name], classes):
+                    return True
+            return False
+
+        found = []
+        for path in sorted(glob.glob(os.path.join(folder, "bruceworx_*.py"))):
+            with open(path, encoding="utf-8") as handle:
+                tree = ast.parse(handle.read())
+            classes = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
+            for cls in classes.values():
+                if qt_derived(cls, classes):
+                    continue
+                for node in ast.walk(cls):
+                    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "connect" and node.args):
+                        continue
+                    arg = node.args[0]
+                    if isinstance(arg, ast.Attribute) and isinstance(arg.value, ast.Name) and arg.value.id == "self":
+                        found.append((os.path.basename(path), cls.name, node.lineno, arg.attr))
+        return found
+
+    def test_no_bound_method_receivers_in_plain_classes(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        found = [f for f in self.offenders(here) if f[0] not in self.KNOWN]
+        self.assertEqual(found, [], "wrap these in bruceworx_slots.slot(): %s" % found)
+
+    def test_the_lint_sees_the_pattern(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "bruceworx_x.py"), "w") as handle:
+                handle.write("class Plain:\n    def go(self):\n        self.b.clicked.connect(self.on)\n"
+                             "class Fine(QtWidgets.QDialog):\n    def go(self):\n        self.b.clicked.connect(self.on)\n"
+                             "class Wrapped:\n    def go(self):\n        self.b.clicked.connect(slot(self.on))\n")
+            self.assertEqual(self.offenders(tmp), [("bruceworx_x.py", "Plain", 3, "on")])
+
 
 if __name__ == "__main__":
     unittest.main()

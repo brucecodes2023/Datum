@@ -15,6 +15,8 @@ Only while Preferences/BruceWorx/FloatingTaskPanel is on (default).
 
 from __future__ import annotations
 
+from bruceworx_slots import slot
+
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 TASKS_DOCK = "Tasks"
 
@@ -58,7 +60,7 @@ class _Card:
         self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
         self.timer.setInterval(0)
-        self.timer.timeout.connect(self.update)
+        self.timer.timeout.connect(slot(self.update))
 
     def schedule(self):
         self.timer.start()

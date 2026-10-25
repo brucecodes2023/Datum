@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import re
 
+from bruceworx_slots import slot
+
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 FOLD_PREF = "InspectorOpen"  # sections opened (and InspectorOpenClosed: folded) by the user
 MODEL_DOCK = "Model"
@@ -1056,7 +1058,7 @@ class Controller:
         self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
         self.timer.setInterval(0)
-        self.timer.timeout.connect(self.refresh)
+        self.timer.timeout.connect(slot(self.refresh))
         self.busy = False
         self.signature = None
         self.editors = []

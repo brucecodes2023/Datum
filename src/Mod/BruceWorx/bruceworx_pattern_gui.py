@@ -22,6 +22,7 @@ import os
 import FreeCAD as App
 
 import bruceworx_pattern as bp
+from bruceworx_slots import slot
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 ENABLED_KEY = "PatternCommands"
@@ -237,22 +238,22 @@ class PatternTaskPanel:
         layout.addStretch(1)
 
         # Signals.
-        self.kind.currentIndexChanged.connect(self._changed)
+        self.kind.currentIndexChanged.connect(slot(self._changed))
         for group in (self.dir1, self.dir2):
-            group["direction"].currentIndexChanged.connect(self._changed)
+            group["direction"].currentIndexChanged.connect(slot(self._changed))
             group["pick"].clicked.connect(lambda _c=False, g=group: self._pick_direction(g))
-            group["reverse"].toggled.connect(self._changed)
-            group["type"].currentIndexChanged.connect(self._changed)
-            group["distance"].valueChanged.connect(self._changed)
-            group["count"].valueChanged.connect(self._changed)
-            group["symmetric"].toggled.connect(self._changed)
-        self.dir2["box"].toggled.connect(self._changed)
-        self.axis.currentIndexChanged.connect(self._changed)
-        self.axis_pick.clicked.connect(self._pick_axis)
-        self.circ_type.currentIndexChanged.connect(self._changed)
-        self.angle.valueChanged.connect(self._changed)
-        self.circ_count.valueChanged.connect(self._changed)
-        self.instances.itemChanged.connect(self._list_changed)
+            group["reverse"].toggled.connect(slot(self._changed))
+            group["type"].currentIndexChanged.connect(slot(self._changed))
+            group["distance"].valueChanged.connect(slot(self._changed))
+            group["count"].valueChanged.connect(slot(self._changed))
+            group["symmetric"].toggled.connect(slot(self._changed))
+        self.dir2["box"].toggled.connect(slot(self._changed))
+        self.axis.currentIndexChanged.connect(slot(self._changed))
+        self.axis_pick.clicked.connect(slot(self._pick_axis))
+        self.circ_type.currentIndexChanged.connect(slot(self._changed))
+        self.angle.valueChanged.connect(slot(self._changed))
+        self.circ_count.valueChanged.connect(slot(self._changed))
+        self.instances.itemChanged.connect(slot(self._list_changed))
         return form
 
     def _direction_group(self, QtWidgets, title, checkable):

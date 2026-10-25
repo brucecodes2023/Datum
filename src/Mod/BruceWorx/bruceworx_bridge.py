@@ -43,6 +43,8 @@ import os
 import secrets
 import time
 
+from bruceworx_slots import slot
+
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF_NAME = "ClaudeBridge"
 PROTOCOL = 1
@@ -625,7 +627,7 @@ class _GuiBridge:
             if not self.server.listen(host, 0):
                 raise RuntimeError(self.server.errorString())
         self.port = int(self.server.serverPort())
-        self.server.newConnection.connect(self._accept)
+        self.server.newConnection.connect(slot(self._accept))
         import FreeCAD
 
         other = read_state(self.folder)
@@ -744,7 +746,7 @@ class _GuiBridge:
         self.dialog = box
         self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self._timed_out)
+        self.timer.timeout.connect(slot(self._timed_out))
         self.timer.start(CONSENT_TIMEOUT_MS)
         box.open()  # not exec(): no nested event loop inside a socket handler
 
@@ -822,7 +824,7 @@ class _GuiBridge:
             self.chip.setObjectName(CHIP_NAME)
             self.chip.setFlat(True)
             self.chip.setToolTip("Claude Code can control FreeCAD in this session. Click to disconnect.")
-            self.chip.clicked.connect(self.revoke)
+            self.chip.clicked.connect(slot(self.revoke))
             bar.addPermanentWidget(self.chip)
         self.chip.setVisible(bool(on))
 

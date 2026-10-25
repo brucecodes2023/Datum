@@ -32,6 +32,7 @@ SET(BruceWorx_SRCS
     bruceworx_pattern.py
     bruceworx_pattern_gui.py
     bruceworx_section.py
+    bruceworx_slots.py
     bruceworx_studio.py
     bruceworx_toolbars.py
     bruceworx_groups.py

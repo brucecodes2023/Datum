@@ -28,6 +28,8 @@ from __future__ import annotations
 import datetime as _dt
 import os
 
+from bruceworx_slots import slot
+
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 CHANGE_KIND = "change"  # item_type of a change row in the Vault panel
 ECR, ECO = "ECR", "ECO"
@@ -1006,7 +1008,7 @@ def _make_classes():
             checks = box("Release checklist")
             cl = QtWidgets.QVBoxLayout(checks)
             self.checklist = Checklist(s, pn)
-            self.checklist.changed.connect(self.update_ok)
+            self.checklist.changed.connect(slot(self.update_ok))
             cl.addWidget(self.checklist)
             again = QtWidgets.QPushButton("Check Again")
             again.setToolTip("Run the automatic lines again, after a check-in for example")
@@ -1159,9 +1161,9 @@ def _make_classes():
             fl.addWidget(self.files)
             buttons = QtWidgets.QHBoxLayout()
             add = QtWidgets.QPushButton("Add…")
-            add.clicked.connect(self.add_files)
+            add.clicked.connect(slot(self.add_files))
             remove = QtWidgets.QPushButton("Remove")
-            remove.clicked.connect(self.remove_file)
+            remove.clicked.connect(slot(self.remove_file))
             buttons.addWidget(add)
             buttons.addWidget(remove)
             buttons.addStretch(1)
@@ -1409,7 +1411,7 @@ def _make_classes():
                     self.submits[pn] = (sub, label)
                 wl.addLayout(state)
                 cl = Checklist(s, pn, eco.items)
-                cl.changed.connect(self.update_ok)
+                cl.changed.connect(slot(self.update_ok))
                 wl.addWidget(cl)
                 self.checklists[pn] = cl
                 self.form.append(w)

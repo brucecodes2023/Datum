@@ -24,6 +24,8 @@ import itertools
 import os
 import time
 
+from bruceworx_slots import slot
+
 GROUP_NAME = "Sections"
 SECTION_NAME = "Section"
 LIMIT = 3  # planes cutting at once
@@ -667,10 +669,10 @@ class SectionPanel:
         grid.addRow("Tilt", tilts)
         row = QtWidgets.QHBoxLayout()
         flip_button = QtWidgets.QPushButton("Flip")
-        flip_button.clicked.connect(self.flip)
+        flip_button.clicked.connect(slot(self.flip))
         self.quarter = QtWidgets.QCheckBox("Second plane (quarter)")
         self.quarter.setChecked(obj.Quarter)
-        self.quarter.toggled.connect(self.set_quarter)
+        self.quarter.toggled.connect(slot(self.set_quarter))
         row.addWidget(flip_button)
         row.addWidget(self.quarter)
         grid.addRow("", row)
@@ -696,7 +698,7 @@ class SectionPanel:
         self.not_cut = QtWidgets.QComboBox()
         self.not_cut.addItems(NOT_CUT)
         self.not_cut.setCurrentText(obj.NotCut)
-        self.not_cut.currentTextChanged.connect(self.set_not_cut)
+        self.not_cut.currentTextChanged.connect(slot(self.set_not_cut))
         caps.addRow("Don't cut", self.not_cut)
         # clash list
         self.clash_list = QtWidgets.QListWidget()
@@ -707,10 +709,10 @@ class SectionPanel:
         buttons = QtWidgets.QHBoxLayout()
         fit = QtWidgets.QPushButton("Mark as fit")
         fit.setToolTip("The overlap is intended (a screw in a tapped hole): no longer red")
-        fit.clicked.connect(self.mark_fit)
+        fit.clicked.connect(slot(self.mark_fit))
         measure = QtWidgets.QPushButton("Measure")
         measure.setToolTip("The exact overlap volume of the pair")
-        measure.clicked.connect(self.measure)
+        measure.clicked.connect(slot(self.measure))
         buttons.addWidget(fit)
         buttons.addWidget(measure)
         lay.addLayout(buttons)
@@ -718,7 +720,7 @@ class SectionPanel:
         lay.addWidget(self._heading("View"))
         self.camera = QtWidgets.QCheckBox("Save the camera with the section")
         self.camera.setChecked(obj.SaveCamera)
-        self.camera.toggled.connect(self.set_camera)
+        self.camera.toggled.connect(slot(self.set_camera))
         lay.addWidget(self.camera)
         hint = QtWidgets.QLabel("Cuts every 3D view of this file. Drag the blue arrow to move the plane, a ring "
                                 "to tilt it. Offset and tilt take expressions, e.g. Parameters.face_width / 2.")
@@ -730,7 +732,7 @@ class SectionPanel:
         self.handles = Handles(obj)
         self.timer = QtCore.QTimer()
         self.timer.setInterval(400)
-        self.timer.timeout.connect(self.update_clashes)
+        self.timer.timeout.connect(slot(self.update_clashes))
         self.timer.start()
 
     # widgets

@@ -325,6 +325,44 @@ class GuiCommandTests(Tmp):
         self.assertEqual((threads[0].Designation, threads[0].Internal), ("M5x0.8", False))
         self.assertEqual(threads[0].Callout, "M5x0.8-6g \u21a712")
 
+    def test_dialogs_leave_other_connections_alone(self):
+        """A plain Python dialog helper with two bound-method connections used to take every function
+        and lambda connection in the application with it when it died (PySide 6.8.3; the studio's
+        timer went quiet after Hole Preset, 26 Oct)."""
+        import gc
+
+        from PySide import QtCore
+
+        fired = []
+        timer = QtCore.QTimer()
+        timer.timeout.connect(lambda: fired.append(1))
+        signal = QtCore.SIGNAL("timeout()")
+        table = bh.presets(vault_root="")
+        saved = bh.PresetDialog.run
+        try:
+            bh.PresetDialog.run = lambda _self: (table["Tapped M3"], None)
+            dialog = bh.PresetDialog(table, None)
+            dialog.run()
+            del dialog
+        finally:
+            bh.PresetDialog.run = saved
+        gc.collect()
+        self.assertEqual(timer.receivers(signal), 1)
+        from PySide import QtWidgets
+
+        saved_exec = QtWidgets.QDialog.exec
+        try:
+            QtWidgets.QDialog.exec = lambda _self: QtWidgets.QDialog.Rejected
+            dialog = bh.FastenerDialog()
+            dialog.run()
+            del dialog
+        except Exception:
+            pass  # the Fasteners add-on may be off: the PresetDialog check above is the point
+        finally:
+            QtWidgets.QDialog.exec = saved_exec
+        gc.collect()
+        self.assertEqual(timer.receivers(signal), 1)
+
 
 class _VaultSession:
     """What the vault client's Session gives these functions: .vault, .root, .work, refresh()."""

@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import re
 
+from bruceworx_slots import slot
+
 TAB = "BWParameters"
 SHEET_NAME = "Parameters"
 SHEET_TYPE = "Spreadsheet::Sheet"
@@ -732,11 +734,11 @@ class Controller:
         self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
         self.timer.setInterval(250)  # a recompute sends many changes: one refresh
-        self.timer.timeout.connect(self.refresh)
+        self.timer.timeout.connect(slot(self.refresh))
         self.filter_timer = QtCore.QTimer()
         self.filter_timer.setSingleShot(True)
         self.filter_timer.setInterval(120)
-        self.filter_timer.timeout.connect(self.apply_filter)
+        self.filter_timer.timeout.connect(slot(self.apply_filter))
         self.busy = False
         self.updating = False
         self.doc_name = None
@@ -750,13 +752,13 @@ class Controller:
         self.build_ms = 0.0
         tree = tab.tree
         tree.can_edit = self.can_edit
-        tree.itemChanged.connect(self.item_changed)
-        tree.itemExpanded.connect(self.expanded)
-        tree.itemCollapsed.connect(self.collapsed)
-        tree.customContextMenuRequested.connect(self.context_menu)
+        tree.itemChanged.connect(slot(self.item_changed))
+        tree.itemExpanded.connect(slot(self.expanded))
+        tree.itemCollapsed.connect(slot(self.collapsed))
+        tree.customContextMenuRequested.connect(slot(self.context_menu))
         tab.filter.textChanged.connect(lambda _t: self.filter_timer.start())
-        tab.add.clicked.connect(self.add_parameter)
-        tab.sheet.clicked.connect(self.open_sheet)
+        tab.add.clicked.connect(slot(self.add_parameter))
+        tab.sheet.clicked.connect(slot(self.open_sheet))
 
     # -- scheduling --------------------------------------------------------------------------
     def schedule(self):
@@ -926,7 +928,7 @@ class Controller:
         plus.setAutoRaise(True)
         plus.setCursor(QtCore.Qt.PointingHandCursor)
         plus.setToolTip("Add a user parameter")
-        plus.clicked.connect(self.add_parameter)
+        plus.clicked.connect(slot(self.add_parameter))
         h.addWidget(plus)
         self.tab.tree.setItemWidget(item, VALUE, holder)
 

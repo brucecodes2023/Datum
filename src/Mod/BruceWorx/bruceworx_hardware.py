@@ -26,6 +26,7 @@ import math
 import os
 
 import FreeCAD as App
+from bruceworx_slots import slot
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 ENABLED_KEY = "HardwareCommands"
@@ -920,8 +921,8 @@ class PresetDialog:
         buttons.accepted.connect(self.dialog.accept)
         buttons.rejected.connect(self.dialog.reject)
         form.addRow(buttons)
-        self.kind.currentIndexChanged.connect(self._fill)
-        self.preset.currentIndexChanged.connect(self._show)
+        self.kind.currentIndexChanged.connect(slot(self._fill))
+        self.preset.currentIndexChanged.connect(slot(self._show))
         if current is not None:
             self.kind.setCurrentIndex(max(0, self.kind.findData(current.kind)))
         self._fill()
@@ -950,11 +951,14 @@ class PresetDialog:
 
     def run(self):
         _QtCore, _QtGui, QtWidgets = _qt()
-        if self.dialog.exec() != QtWidgets.QDialog.Accepted:
-            return None
-        preset = self.table.get(self.preset.currentText())
-        depth = self.depth.value() or None
-        return (preset, depth) if preset is not None else None
+        try:
+            if self.dialog.exec() != QtWidgets.QDialog.Accepted:
+                return None
+            preset = self.table.get(self.preset.currentText())
+            depth = self.depth.value() or None
+            return (preset, depth) if preset is not None else None
+        finally:
+            self.dialog.deleteLater()
 
 
 class _HolePresetCommand:
@@ -1118,10 +1122,10 @@ class FastenerDialog:
         buttons.accepted.connect(self.dialog.accept)
         buttons.rejected.connect(self.dialog.reject)
         form.addRow(buttons)
-        self.type.currentIndexChanged.connect(self._sizes)
-        self.size.currentIndexChanged.connect(self._lengths)
-        self.length.currentIndexChanged.connect(self._show)
-        self.length.editTextChanged.connect(self._show)
+        self.type.currentIndexChanged.connect(slot(self._sizes))
+        self.size.currentIndexChanged.connect(slot(self._lengths))
+        self.length.currentIndexChanged.connect(slot(self._show))
+        self.length.editTextChanged.connect(slot(self._show))
         self.type.setCurrentIndex(max(0, self.type.findData(ftype)))
         self._sizes()
         self.size.setCurrentIndex(max(0, self.size.findText(diameter)))
@@ -1167,7 +1171,10 @@ class FastenerDialog:
 
     def run(self):
         _QtCore, _QtGui, QtWidgets = _qt()
-        return self.values() if self.dialog.exec() == QtWidgets.QDialog.Accepted else None
+        try:
+            return self.values() if self.dialog.exec() == QtWidgets.QDialog.Accepted else None
+        finally:
+            self.dialog.deleteLater()
 
 
 def _active_assembly():

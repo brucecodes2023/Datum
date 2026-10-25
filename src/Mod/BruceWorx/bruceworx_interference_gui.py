@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 
 import bruceworx_interference as itf
+from bruceworx_slots import slot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ICON = os.path.join(HERE, "BruceWorx_Interference.svg")
@@ -195,10 +196,10 @@ class InterferencePanel:
         row.addStretch(1)
         self.again = QtWidgets.QPushButton("Check again")
         self.again.setObjectName("bwInterferenceCheck")
-        self.again.clicked.connect(self.start)
+        self.again.clicked.connect(slot(self.start))
         row.addWidget(self.again)
         self.stop_button = QtWidgets.QPushButton("Stop")
-        self.stop_button.clicked.connect(self.stop)
+        self.stop_button.clicked.connect(slot(self.stop))
         self.stop_button.hide()
         row.addWidget(self.stop_button)
         lay.addLayout(row)
@@ -220,7 +221,7 @@ class InterferencePanel:
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-        self.tree.currentItemChanged.connect(self.picked)
+        self.tree.currentItemChanged.connect(slot(self.picked))
         self.tree.itemDoubleClicked.connect(lambda *_a: self.zoom())
         lay.addWidget(self.tree, 1)
         buttons = QtWidgets.QHBoxLayout()
@@ -231,7 +232,7 @@ class InterferencePanel:
         self.unfit_button = QtWidgets.QPushButton("Not a fit")
         self.unfit_button.clicked.connect(lambda: self.mark_fit(False))
         self.zoom_button = QtWidgets.QPushButton("Zoom to pair")
-        self.zoom_button.clicked.connect(self.zoom)
+        self.zoom_button.clicked.connect(slot(self.zoom))
         for b in (self.fit_button, self.unfit_button, self.zoom_button):
             buttons.addWidget(b)
         lay.addLayout(buttons)
@@ -240,7 +241,7 @@ class InterferencePanel:
         lay.addWidget(self.note)
         self.timer = QtCore.QTimer()
         self.timer.setInterval(0)
-        self.timer.timeout.connect(self._tick)
+        self.timer.timeout.connect(slot(self._tick))
         self._update_buttons()
         QtCore.QTimer.singleShot(0, self.start)
 

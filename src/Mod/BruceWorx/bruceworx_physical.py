@@ -30,6 +30,8 @@ import csv
 import io
 import math
 
+from bruceworx_slots import slot
+
 TAB = "BWPhysical"
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 FRAME_PREF = "PhysicalInertiaAbout"  # "com" or "origin"
@@ -625,11 +627,11 @@ class Controller:
         self.timer = QtCore.QTimer()
         self.timer.setSingleShot(True)
         self.timer.setInterval(120)  # a recompute sends many changes: one refresh
-        self.timer.timeout.connect(self.refresh)
+        self.timer.timeout.connect(slot(self.refresh))
         self.facts = None
         self.dirty = True
-        tab.copy.clicked.connect(self.copy)
-        tab.export.clicked.connect(self.export)
+        tab.copy.clicked.connect(slot(self.copy))
+        tab.export.clicked.connect(slot(self.export))
 
     def schedule(self):
         self.dirty = True
