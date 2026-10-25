@@ -857,7 +857,7 @@ class SectionPanel:
         import FreeCADGui as Gui
 
         self.timer.stop()
-        self.handles.remove()
+        self.handles.close()
         if commit:
             self.doc.commitTransaction()
         else:
@@ -897,10 +897,23 @@ class Handles:
     def __init__(self, obj):
         self.obj = obj
         self.root = None
+        self.callbacks = []
+        self.active = True
         self.view = _active_view()
         self.rebuild()
 
+    def close(self):
+        """The editing is over: the handles go, and a rebuild still queued does nothing."""
+        self.active = False
+        self.remove()
+
     def remove(self):
+        for dragger, kind, callback in getattr(self, "callbacks", []):
+            try:
+                self.view.removeDraggerCallback(dragger, kind, callback)
+            except Exception:  # noqa: BLE001
+                pass
+        self.callbacks = []
         if self.root is not None and self.view is not None:
             try:
                 self.view.getSceneGraph().removeChild(self.root)
@@ -908,11 +921,23 @@ class Handles:
                 pass
         self.root = None
 
+    def _hook(self, dragger, kind, function):
+        """A dragger callback through the view, which takes the GIL and keeps the function alive.
+        (pivy's own addMotionCallback calls Python without the GIL: FreeCAD crashed on the first
+        real drag, 25 Oct.)"""
+        self.callbacks.append((dragger, kind, self.view.addDraggerCallback(dragger, kind, function)))
+
+    def _rebuild_later(self):
+        """After a drag: not from inside the dragger's own callback, which the rebuild removes."""
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, self.rebuild)
+
     def rebuild(self):
         from pivy import coin
 
         self.remove()
-        if self.view is None:
+        if self.view is None or not self.active:
             return
         App = _app()
         n, d = section_planes(self.obj)[0]
@@ -964,8 +989,8 @@ class Handles:
         self.offset_dragger = coin.SoTranslate1Dragger()
         _dress_arrow(self.offset_dragger)
         self.start_offset = self.obj.Offset.Value
-        self.offset_dragger.addFinishCallback(self._offset_done)
-        self.offset_dragger.addMotionCallback(self._offset_moved)
+        self._hook(self.offset_dragger, "addMotionCallback", self._offset_moved)
+        self._hook(self.offset_dragger, "addFinishCallback", self._offset_done)
         for node in (turn, scale, self.offset_dragger):
             arrow.addChild(node)
         self.root.addChild(arrow)
@@ -975,30 +1000,40 @@ class Handles:
         for axis_turn, angle, prop, rgb in (((0, 1, 0), 1.5707963, "TiltA", (0.91, 0.64, 0.09)),
                                            ((1, 0, 0), -1.5707963, "TiltB", (0.18, 0.70, 0.42))):
             ring = coin.SoSeparator()
+            # out of the cut by its radius: the whole ring is in the cut-away half, where nothing of the
+            # model is left to catch the click
+            forward = coin.SoTranslation()
+            forward.translation.setValue(0, 0, -unit * 1.6)
             r = coin.SoRotation()
             r.rotation.setValue(coin.SbVec3f(*axis_turn), angle)
             sc = coin.SoScale()
             sc.scaleFactor.setValue(unit * 1.6, unit * 1.6, unit * 1.6)
             dragger = coin.SoRotateDiscDragger()
             _dress_ring(dragger, rgb)
-            dragger.addMotionCallback(lambda _d, p=prop, dr=dragger: self._tilt_moved(p, dr))
-            dragger.addFinishCallback(lambda _d, p=prop, dr=dragger: self._tilt_done(p, dr))
+            ring.addChild(forward)
+            self._hook(dragger, "addMotionCallback", lambda _d, p=prop, dr=dragger: self._tilt_moved(p, dr))
+            self._hook(dragger, "addFinishCallback", lambda _d, p=prop, dr=dragger: self._tilt_done(p, dr))
             for node in (r, sc, dragger):
                 ring.addChild(node)
             self.root.addChild(ring)
             self.ring_draggers.append((prop, dragger, getattr(self.obj, prop).Value))
         self.view.getSceneGraph().addChild(self.root)
 
-    def _offset_moved(self, dragger):
-        if self.obj.getExpression("Offset") if hasattr(self.obj, "getExpression") else None:
+    def _bound(self, prop):
+        """True when the property follows an expression: the handle leaves it alone."""
+        return any(path == prop for path, _e in (self.obj.ExpressionEngine or ()))
+
+    def _offset_moved(self, _dragger=None):
+        if self._bound("Offset"):
             return
-        moved = -dragger.translation.getValue()[0] * self.arrow_scale  # the arrow points against the normal
+        # the callback hands a plain SoDragger: read our own translate dragger
+        moved = -self.offset_dragger.translation.getValue()[0] * self.arrow_scale  # the arrow points against the normal
         self.obj.Offset = self.start_offset + moved
         refresh(self.obj.Document)
 
-    def _offset_done(self, _dragger):
+    def _offset_done(self, _dragger=None):
         self.obj.Document.recompute()
-        self.rebuild()
+        self._rebuild_later()
 
     def _tilt_moved(self, prop, dragger):
         from PySide import QtWidgets
@@ -1018,7 +1053,7 @@ class Handles:
 
     def _tilt_done(self, _prop, _dragger):
         self.obj.Document.recompute()
-        self.rebuild()
+        self._rebuild_later()
 
 
 def _part(rgb, *nodes):
