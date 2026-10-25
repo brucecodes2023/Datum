@@ -441,5 +441,20 @@ class VaultAndBom(unittest.TestCase):
         self.assertEqual(bc.file_part_number(self.doc), "XX-01-04242-001")
 
 
+class QueuedCalls(unittest.TestCase):
+    def test_a_closed_document_is_skipped(self):
+        import bruceworx_configs_gui as gui
+
+        seen = []
+        gui._later("NoSuchDocument", seen.append)
+        self.assertEqual(seen, [])
+        doc = App.newDocument("Queued")
+        try:
+            gui._later(doc.Name, seen.append)
+            self.assertEqual(seen, [doc])
+        finally:
+            App.closeDocument(doc.Name)
+
+
 if __name__ == "__main__":
     unittest.main()

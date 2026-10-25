@@ -651,6 +651,16 @@ class _Command:
         show_table()
 
 
+def _later(doc_name, action):
+    """Run ``action(doc)`` from a queued call: the document may have been closed meanwhile (the test
+    suite's Report view showed 15 ``Cannot access attribute 'Objects' of deleted object``, 26 Oct)."""
+    import FreeCAD
+
+    doc = FreeCAD.listDocuments().get(doc_name)
+    if doc is not None:
+        action(doc)
+
+
 class _Observer:
     """Keeps an open table (and the Parameters bar) in step when the file changes."""
 
@@ -659,7 +669,7 @@ class _Observer:
             if any("Touched" in (getattr(doc.getObject(n), "State", None) or []) for n in bc.copies(doc)):
                 from PySide import QtCore
 
-                QtCore.QTimer.singleShot(0, lambda: bc.settle_copies(doc))
+                QtCore.QTimer.singleShot(0, lambda name=doc.Name: _later(name, bc.settle_copies))
         except Exception:
             pass
         dialog = _state["dialogs"].get(doc.Name)
@@ -677,8 +687,7 @@ class _Observer:
             try:
                 from PySide import QtCore
 
-                doc = obj.Document
-                QtCore.QTimer.singleShot(0, lambda: bc.after_switch(doc))
+                QtCore.QTimer.singleShot(0, lambda name=obj.Document.Name: _later(name, bc.after_switch))
             except Exception:
                 pass
 
