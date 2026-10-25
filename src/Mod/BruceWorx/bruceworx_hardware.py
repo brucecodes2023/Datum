@@ -968,7 +968,9 @@ class _HolePresetCommand:
         return App.ActiveDocument is not None and enabled()
 
     def Activated(self):
-        sel = [s.Object for s in _selected_ex()]
+        import FreeCADGui as Gui
+
+        sel = Gui.Selection.getSelection()  # resolved: the hole or sketch itself, inside its body
         holes = [o for o in sel if is_hole(o)]
         sketches = [o for o in sel if o.TypeId == "Sketcher::SketchObject"]
         if not holes and not sketches:
@@ -1073,7 +1075,9 @@ class _HoleCalloutsCommand:
         return App.ActiveDocument is not None and enabled()
 
     def Activated(self):
-        views = [s.Object for s in _selected_ex() if s.Object.isDerivedFrom("TechDraw::DrawViewPart")]
+        import FreeCADGui as Gui
+
+        views = [o for o in Gui.Selection.getSelection() if o.isDerivedFrom("TechDraw::DrawViewPart")]
         if not views:
             _message("Hole Callouts", "Select a drawing view of the part first.")
             return

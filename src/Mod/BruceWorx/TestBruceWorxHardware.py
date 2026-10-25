@@ -260,6 +260,72 @@ class DrawingCalloutTests(Tmp):
         self.assertEqual(len([o for o in self.doc.Objects if o.TypeId == "TechDraw::DrawLeaderLine"]), 2)
 
 
+@unittest.skipUnless(App.GuiUp, "needs the GUI")
+class GuiCommandTests(Tmp):
+    """The commands as a user runs them: select, run, answer the dialog (its run/exec patched)."""
+
+    def run_command(self, name):
+        import FreeCADGui as Gui
+
+        Gui.runCommand(name)
+        self.doc.recompute()
+
+    def select(self, obj, sub=""):
+        import FreeCADGui as Gui
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(self.doc.Name, obj.Name, sub)
+
+    def test_hole_preset_on_a_sketch_and_on_a_hole(self):
+        import FreeCADGui as Gui
+
+        body, hole = plate(self.doc)
+        sketch = hole.Profile[0]
+        self.doc.removeObject(hole.Name)
+        self.doc.recompute()
+        table = bh.presets(vault_root="")
+        saved = bh.PresetDialog.run
+        try:
+            bh.PresetDialog.run = lambda _self: (table["Heat-set M3x5.7"], None)
+            self.select(body, f"{sketch.Name}.")
+            self.run_command("BruceWorx_HolePreset")
+            holes = [o for o in self.doc.Objects if bh.is_hole(o)]
+            self.assertEqual(len(holes), 1)
+            self.assertEqual((holes[0].HolePreset, holes[0].Label), ("Heat-set M3x5.7", "Heat-set M3x5.7"))
+            bh.PresetDialog.run = lambda _self: (table["Tapped M3"], 10.0)
+            self.select(body, f"{holes[0].Name}.")
+            self.run_command("BruceWorx_HolePreset")
+            self.assertTrue(holes[0].Threaded)
+            self.assertAlmostEqual(holes[0].Depth.Value, 10.0)
+            self.doc.undo()  # one transaction per run
+            self.assertFalse(holes[0].Threaded)
+        finally:
+            bh.PresetDialog.run = saved
+            Gui.Selection.clearSelection()
+
+    def test_cosmetic_thread_command_on_a_picked_face(self):
+        import FreeCADGui as Gui
+        from PySide import QtWidgets
+
+        body = self.doc.addObject("PartDesign::Body", "Body")
+        cyl = body.newObject("PartDesign::AdditiveCylinder", "Cylinder")
+        cyl.Radius, cyl.Height = 2.5, 12.0
+        self.doc.recompute()
+        face = cylinder_faces(cyl.Shape, 2.5)[0]
+        saved = QtWidgets.QDialog.exec
+        try:
+            QtWidgets.QDialog.exec = lambda _self: QtWidgets.QDialog.Accepted
+            self.select(body, f"{cyl.Name}.{face}")
+            self.run_command("BruceWorx_CosmeticThread")
+        finally:
+            QtWidgets.QDialog.exec = saved
+            Gui.Selection.clearSelection()
+        threads = [o for o in self.doc.Objects if bh.is_cosmetic_thread(o)]
+        self.assertEqual(len(threads), 1)
+        self.assertEqual((threads[0].Designation, threads[0].Internal), ("M5x0.8", False))
+        self.assertEqual(threads[0].Callout, "M5x0.8-6g \u21a712")
+
+
 class _VaultSession:
     """What the vault client's Session gives these functions: .vault, .root, .work, refresh()."""
 
