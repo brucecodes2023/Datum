@@ -57,6 +57,82 @@ class StripTests(unittest.TestCase):
         self.assertEqual(opened[-1], (4, "Pad", "command", True))
         self.assertFalse(any(c for _i, _t, _k, c in opened[:-1]))
 
+    def test_only_the_tasks_dock_takes_the_command_word(self):
+        """Another dock in the panel (the user's Report view) keeps its own name: with the attachment
+        dialog open both tabs read "Sel...ent" (26 Oct)."""
+        titles = self.TITLES + ["Report View"]
+        opened = rp.strip_items(titles, 4, True, "Select attachment")
+        self.assertEqual([(t, k) for _i, t, k, _c in opened],
+                         [("Properties", "tab"), ("Vault", "tab"), ("Parameters", "tab"), ("Physical", "tab"),
+                          ("Select attachment", "command"), ("Report View", "tab")])
+        # the Tasks dock, already renamed by the task card, is still the command's tab
+        renamed = ["Properties", "Vault", "Parameters", "Physical", "Select attachment", "Report View"]
+        self.assertEqual([t for _i, t, k, _c in rp.strip_items(renamed, 4, True, "Select attachment") if k == "command"],
+                         ["Select attachment"])
+        closed = rp.strip_items(titles, 0, False, "Tasks")
+        self.assertEqual([(t, k) for _i, t, k, _c in closed][-1], ("Report View", "tab"))
+        self.assertNotIn("Tasks", [t for _i, t, _k, _c in closed])
+
+
+class TaskDialogInThePanel(unittest.TestCase):
+    """GUI: a task dialog opened while the Start page is the active view shows in the right panel with
+    its OK/Cancel inside the panel, and one command tab (26 Oct)."""
+
+    def setUp(self):
+        import FreeCAD as App
+
+        if not App.GuiUp:
+            self.skipTest("GUI only")
+
+    def _pump(self, n=15):
+        import time
+
+        import FreeCADGui as Gui
+
+        for _ in range(n):
+            Gui.updateGui()
+            time.sleep(0.02)
+
+    def test_attachment_dialog_from_the_start_page(self):
+        import FreeCAD as App
+        import FreeCADGui as Gui
+        from PySide import QtWidgets
+
+        mw = Gui.getMainWindow()
+        area = mw.findChild(QtWidgets.QMdiArea)
+        start = [s for s in area.subWindowList() if s.widget() and s.widget().metaObject().className() == "StartGui::StartView"]
+        if not start:
+            self.skipTest("no Start page open")
+        doc = App.newDocument("RightPanelAttach")
+        self.addCleanup(lambda: App.closeDocument(doc.Name) if doc.Name in App.listDocuments() else None)
+        doc.addObject("PartDesign::Body", "Body")
+        doc.recompute()
+        self._pump()
+        area.setActiveSubWindow(start[0])
+        self._pump()
+        Gui.Selection.clearSelection()
+        Gui.activateWorkbench("PartDesignWorkbench")
+        Gui.runCommand("PartDesign_NewSketch")
+        self._pump(30)
+        self.addCleanup(lambda: Gui.Control.closeDialog() if Gui.Control.activeDialog() else None)
+        self.assertTrue(Gui.Control.activeDialog(), "the attachment dialog did not open")
+        tabs = rp._overlay()
+        self.assertIsNotNone(tabs)
+        strip = [(b.text(), b.property("kind")) for b in tabs.findChildren(QtWidgets.QToolButton) if b.objectName() == "bwRightTab"]
+        self.assertEqual(len([t for t, k in strip if k == "command"]), 1, strip)
+        dock = mw.findChild(QtWidgets.QDockWidget, rp.TASK_DOCK)
+        self.assertTrue(dock.isVisible())
+        control = [w for w in dock.findChildren(QtWidgets.QWidget) if w.metaObject().className() == "Gui::TaskView::TaskEditControl"]
+        self.assertEqual(len(control), 1)
+        self.assertTrue(control[0].isVisibleTo(mw))
+        shown = dock.rect()
+        for button in control[0].findChildren(QtWidgets.QPushButton):
+            if button.text() in ("OK", "Cancel"):
+                corner = button.mapTo(dock, button.rect().bottomRight())
+                self.assertTrue(shown.contains(corner), f"{button.text()} at {corner} outside the panel {shown}")
+                corner = button.mapTo(mw, button.rect().bottomRight())
+                self.assertTrue(mw.rect().contains(corner), f"{button.text()} at {corner} outside the window")
+
 
 if __name__ == "__main__":
     unittest.main()

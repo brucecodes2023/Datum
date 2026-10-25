@@ -242,7 +242,13 @@ def command_word(title):
 
 
 def strip_items(titles, current, command_open, command_title, badges=None):
-    """[(index, text, kind, is_current)] for the strip: our tabs, then the command's tab while one is open.
+    """[(index, text, kind, is_current)] for the strip: our tabs, any other dock in the panel under its
+    own name, and the Tasks dock as the command's tab while a command is open.
+
+    ``command_title`` is the Tasks dock's title (bruceworx_taskcard names it after the open command,
+    "Select attachment"): only that tab takes the command word. Another dock in the panel (the user's
+    Report view, say) keeps its title; it used to be labelled with the command word too, so two
+    "Sel...ent" tabs showed (26 Oct).
 
     ``badges``: tab title -> short text shown after it ("Vault · in" when the active document's
     units differ from the vault's, PDM-09)."""
@@ -252,8 +258,11 @@ def strip_items(titles, current, command_open, command_title, badges=None):
         if title in ours:
             badge = (badges or {}).get(title, "")
             out.append((i, f"{title} · {badge}" if badge else title, "tab", i == current))
-        elif command_open:
-            out.append((i, command_word(command_title) or title, "command", i == current))
+        elif title in (TASK_DOCK, command_title):
+            if command_open:
+                out.append((i, command_word(command_title) or title, "command", i == current))
+        else:
+            out.append((i, title, "tab", i == current))
     return out
 
 
