@@ -32,8 +32,10 @@ is in the Keystone build now in \file{/Applications} (\code{1.1.4-bw.1+4d1d982})
   \code{0087827}).\\
 5 & ``The vault sidebar needs to be something else'' & Fixed & As \#3: the vault is browsed on the Start
   page only (your choice).\\
-6 & Better rendering, with textures & Open & Appearance from the part's material, plus matcap shading
-  (\eref{UIX-08}).\\
+6 & Better rendering, with textures & Fixed & Your choice, the Fusion-like studio: soft lights and studio
+  reflections, each part coloured and finished from its material (brushed aluminium, steel, ABS, PETG), a hand
+  colour kept; off in Preferences $>$ BruceWorx (stock FreeCAD). No cost in speed on the gearbox
+  (\code{5cbf03e}, \S\ref{sec:uix08-plan}, \eref{UIX-08}).\\
 7 & Odd font (halo) in the sidebar & Fixed & The transparent Browser draws a halo behind its text in
   the card colour, a theme token. Your profile was in FreeCAD Light then (\#1), which lacked the token, so
   Qt kept the overlay's built-in 30\,\% black: a dark smudge round every row. The halo now always contrasts
@@ -130,5 +132,5 @@ whether the thinner lines are still easy to click.
 \end{figure}
 
 \subsection{Still open}
-\#6 rendering; MOD-14 on-canvas editing (a teardown
+MOD-14 on-canvas editing (a teardown
 fix is in the working tree, not committed); the intermittent segfault of the inspector GUI test.
