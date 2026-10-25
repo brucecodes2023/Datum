@@ -325,12 +325,17 @@ where the printed geometry is the thread.
 \subsection{BW-MOD-06 --- Sheet metal}
 %----------------------------------------------------------------------
 
-\begin{epic}{MOD-06}{Sheet metal}{M3}{\stProg}{(new, from the UI plan)}
+\begin{epic}{MOD-06}{Sheet metal}{M3}{\stDone}{(new, from the UI plan)}
 Bundle the SheetMetal add-on (decided; LGPL-2.1-or-later since v0.4.00) and add per-material, per-thickness
 \textbf{rules} (bend radius, K-factor, relief) as a library, like Fusion's sheet-metal rules. Flats and
 DXF are covered in \eref{MFG-03}, and the drawing in \eref{DRW-07}.
-\textbf{Plan approved 24 Oct} (\S\ref{sec:mod06-plan}); \textbf{paused 24 Oct, half-built} (the add-on is vendored;
-\code{BUILD\_BW\_SHEETMETAL=OFF}).
+\textbf{Plan approved 24 Oct} (\S\ref{sec:mod06-plan}); built 24 Oct and paused for want of \code{networkx}.
+\textbf{Done 25 Oct:} \code{networkx} is in \file{pixi.toml} (the lock adds networkx~3.5 and nothing else),
+\code{BUILD\_BW\_SHEETMETAL} is on by default and the sheet-metal module loads: the \emph{Sheet Metal} tab, \emph{Sheet-metal
+rule} and \emph{Export Flat}. One fix: the flat pattern's stationary face was the first of the plate's two equal sides, so
+a bend's direction depended on face order; the side facing the rest of the part now wins and the flange bends up.
+\file{TestBruceWorxSheetMetal} passes (11, headless and in the GUI), with SheetMetal's own tests (7). The flat-pattern
+drawing view and bend table are \eref{DRW-07}; the DXF for the laser shop and the release package hook are \eref{MFG-03}.
 \emph{Acceptance:} the bracket in Figure~\ref{fig:sheet} unfolds to the length given by the bend-allowance
 formula within 0.01\,mm.
 \end{epic}
