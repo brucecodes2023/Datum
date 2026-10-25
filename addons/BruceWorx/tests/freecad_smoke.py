@@ -81,7 +81,7 @@ def run() -> None:
     )
     # Default save name is the part number. FreeCAD reloads Document.Label
     # from that file name.
-    part_number = "LE-01-01001-001-A"
+    part_number = "LE-01-01001-001"  # the P/N carries no revision (PDM-03)
     _check(
         main(
             [
@@ -108,8 +108,8 @@ def run() -> None:
     if numbered_box is None or numbered_box.Label != part_number:
         raise RuntimeError(f"Box label was not set to {part_number}")
     # Hyphens are not legal in an internal Name, so the reopened document is
-    # LE_01_01001_001_A while Label keeps LE-01-01001-001-A.
-    if numbered.Name != "LE_01_01001_001_A":
+    # LE_01_01001_001 while Label keeps LE-01-01001-001.
+    if numbered.Name != "LE_01_01001_001":
         raise RuntimeError(f"internal document name is {numbered.Name!r}")
     FreeCAD.closeDocument(numbered.Name)
     print("BW_SMOKE PASS", flush=True)

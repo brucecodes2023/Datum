@@ -137,7 +137,7 @@ class JsonSourceTests(unittest.TestCase):
             types_before = handle.read()
         stamp = os.path.getmtime(path)
         number = JsonNumberSource(path).preview("LE", "01")
-        self.assertEqual(number, EXAMPLE)
+        self.assertEqual(number, "LE-01-01001-001")  # the shipped example is in the P/N form
         with open(path, "rb") as handle:
             self.assertEqual(handle.read(), before)
         with open(types_path, "rb") as handle:
