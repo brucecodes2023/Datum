@@ -1,5 +1,5 @@
-BruceWorx vendored add-ons (MOD-06)
-===================================
+BruceWorx vendored add-ons (MOD-06, MOD-05)
+===========================================
 
 SheetMetal/  -- the SheetMetal workbench, installed as Mod/SheetMetal
   Upstream   https://github.com/shaise/FreeCAD_SheetMetal
@@ -45,3 +45,31 @@ Addon Manager replaces this one; BruceWorx says so once in the status bar.
 third-party/ -- licence texts installed to share/doc/BruceWorx/third-party/
   SheetMetal-LICENSE.txt is SheetMetal/LICENSE; networkx-LICENSE.txt is the
   BSD-3-Clause text of networkx 3.5 (shipped from the pixi environment).
+
+
+fasteners/  -- the Fasteners workbench, installed as Mod/fasteners (MOD-05)
+  Upstream   https://github.com/shaise/FreeCAD_FastenersWB
+  Version    0.5.67 (tag V0.5.67-beta, the newest tag; master has not moved since)
+  Commit     fddd07af422b7d3a69098b32333711c5eeae184c (package.xml dated 2025-09-10)
+  Licence    GPL-2.0-or-later (LICENSE is the GPL-2 text; package.xml and the file
+             headers agree). Shipped as it is, noted in NOTICE (FND-04): a Keystone
+             build containing it is GPL-2.0-or-later as a whole.
+  Folder     "fasteners", the Addon Manager's name, so a copy installed from the
+             Addon Manager replaces this one (FreeCAD keys modules by folder name).
+  Taken      25 Oct 2026, file by file from raw.githubusercontent.com at the tag, each
+             checked against its git blob SHA-1 in GitHub's tree listing
+             (api.github.com/repos/shaise/FreeCAD_FastenersWB/git/trees/<commit>?recursive=1).
+             Left out: Resources/ (translations .qm/.ts and the README's pictures and
+             screencast), Doc/, .env and .gitignore. Nothing at run time needs them;
+             the menus are English without the translations.
+  Needs      Nothing beyond FreeCAD (Part; Draft for its countersunk-holes tool). No
+             network at run time: every size comes from FsData/*.csv.
+  Patches    none.
+
+Updating the Fasteners add-on:
+  1. Note the new tag's commit, list its tree (the API URL above), fetch the files,
+     check each blob SHA-1, drop the paths left out above.
+  2. Replace fasteners/ with the new tree, update this entry.
+  3. Rebuild, then run
+       FreeCADCmd -t TestBruceWorxHardware   (an ISO 4762 M3x40 to the standard, the
+                                              vault COTS item, nuts and inserts)

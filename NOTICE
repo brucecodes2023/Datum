@@ -25,6 +25,19 @@ This list will be updated as features are added. BruceWorx changes are
 intended to be add-ons and preference changes on standard FreeCAD rather
 than rewrites of FreeCAD core code.
 
+Third-party components
+----------------------
+Bundled add-ons, each with its licence text installed to
+share/doc/BruceWorx/third-party/ (details in package/bruceworx/vendor/VENDOR.txt):
+
+  * Fasteners workbench 0.5.67 (github.com/shaise/FreeCAD_FastenersWB, commit
+    fddd07a), GPL-2.0-or-later, installed as Mod/fasteners. A build that
+    contains it is distributed under the GPL-2.0-or-later as a whole.
+  * SheetMetal workbench 0.8.26 (github.com/shaise/FreeCAD_SheetMetal, commit
+    cbf6595), LGPL-2.1-or-later; eight of its files carry GPL-2.0-or-later
+    headers. Installed as Mod/SheetMetal.
+  * networkx 3.5, BSD-3-Clause (for SheetMetal's unfolder).
+
 Source code
 -----------
 The complete corresponding source code, including all modifications, is

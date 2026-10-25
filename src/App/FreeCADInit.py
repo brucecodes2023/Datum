@@ -124,6 +124,11 @@ def InitApplications():
     if not BruceWorxPrefs.GetBool("SheetMetalAddon", True) and "SheetMetal" not in DisabledAddons:
         DisabledAddons.append("SheetMetal")
         FreeCAD.ConfigSet("DisabledAddons", ";".join(Name for Name in DisabledAddons if Name))
+    # [BW] The bundled Fasteners add-on (MOD-05, folder "fasteners") has one too:
+    # Preferences/BruceWorx/FastenersAddon. Off skips any copy of it.
+    if not BruceWorxPrefs.GetBool("FastenersAddon", True) and "fasteners" not in DisabledAddons:
+        DisabledAddons.append("fasteners")
+        FreeCAD.ConfigSet("DisabledAddons", ";".join(Name for Name in DisabledAddons if Name))
 
     #print FreeCAD.getHomePath()
     if os.path.isdir(FreeCAD.getHomePath()+'src\\Tools'):
@@ -277,6 +282,8 @@ def InitApplications():
                     '(Preferences > BruceWorx)\n')
             elif Name == "SheetMetal" and not BruceWorxPrefs.GetBool("SheetMetalAddon", True):
                 Msg('NOTICE: Addon "SheetMetal" not loaded: switched off in Preferences > BruceWorx\n')
+            elif Name == "fasteners" and not BruceWorxPrefs.GetBool("FastenersAddon", True):
+                Msg('NOTICE: Addon "fasteners" not loaded: switched off in Preferences > BruceWorx\n')
             else:
                 Msg(f'NOTICE: Addon "{Name}" disabled by presence of "--disable-addon {Name}" argument\n')
             return True

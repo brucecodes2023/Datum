@@ -156,6 +156,8 @@ option(BUILD_BW_HISTORY_TIMELINE "BruceWorx: install the History Timeline add-on
 option(BUILD_BW_HOOKS "BruceWorx: install the hooks / part-number add-on (Mod/BruceWorxHooks)" ON)
 # MOD-06 (resumed 25 Oct 2026; networkx is in pixi.toml for its new unfolder).
 option(BUILD_BW_SHEETMETAL "BruceWorx: install the vendored SheetMetal add-on (Mod/SheetMetal, MOD-06)" ON)
+# MOD-05: the Fasteners add-on, folder "fasteners" (the Addon Manager's name, so a user copy wins).
+option(BUILD_BW_FASTENERS "BruceWorx: install the vendored Fasteners add-on (Mod/fasteners, MOD-05)" ON)
 if(BUILD_BW_HISTORY_TIMELINE)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/package/bruceworx/mods/HistoryTimeline
@@ -168,7 +170,7 @@ if(BUILD_BW_HOOKS)
         ${CMAKE_BINARY_DIR}/bruceworx/BruceWorxHooks
     )
 endif()
-if(BUILD_BW_SHEETMETAL)
+if(BUILD_BW_SHEETMETAL OR BUILD_BW_FASTENERS)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/package/bruceworx/vendor
         ${CMAKE_BINARY_DIR}/bruceworx/vendor
