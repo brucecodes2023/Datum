@@ -822,18 +822,16 @@ void NavigationStyle::panCamera(
     }
 }
 
+// [BW] Trackpad swipes: plain pans, Shift zooms at the cursor, Cmd orbits.
 bool NavigationStyle::processTrackpadScroll(const QWheelEvent* event)
 {
+    // A trackpad (or Magic Mouse) scroll comes in phases: begin, updates, momentum, end. A mouse
+    // wheel has none, even where the system adds an estimated pixel delta (macOS does, and so do
+    // high-resolution wheels), so the phase is what tells the two apart.
     const Qt::ScrollPhase phase = event->phase();
-#ifdef Q_OS_MACOS
-    if (phase == Qt::NoScrollPhase && event->pixelDelta().isNull()) {
-        return false;  // a mouse wheel
-    }
-#else
     if (phase == Qt::NoScrollPhase) {
-        return false;  // a mouse wheel; high-resolution wheels send pixel deltas too
+        return false;
     }
-#endif
     static ParameterGrp::handle prefs = App::GetApplication().GetParameterGroupByPath(
         "User parameter:BaseApp/Preferences/BruceWorx"
     );
@@ -847,23 +845,23 @@ bool NavigationStyle::processTrackpadScroll(const QWheelEvent* event)
     const double height = std::max(widget->height(), 1);
     const SbVec2f here(float(pos.x() / width), float(1.0 - pos.y() / height));
 
-    if (phase == Qt::ScrollBegin || phase == Qt::NoScrollPhase) {
+    if (phase == Qt::ScrollBegin) {
         // macOS begins a scroll as soon as the fingers rest on the pad, so the
         // mode is chosen on the first event that moves.
         trackpadPending = true;
-        trackpadMode = TrackpadMode::Zoom;
+        trackpadMode = TrackpadMode::Pan;
     }
     if (trackpadPending && !event->pixelDelta().isNull()) {
         trackpadPending = false;
         const Qt::KeyboardModifiers mods = event->modifiers();
         if (mods & Qt::ShiftModifier) {
-            trackpadMode = TrackpadMode::Pan;
+            trackpadMode = TrackpadMode::Zoom;
         }
         else if (mods & Qt::ControlModifier) {  // Cmd on macOS
             trackpadMode = TrackpadMode::Orbit;
         }
         else {
-            trackpadMode = TrackpadMode::Zoom;
+            trackpadMode = TrackpadMode::Pan;
         }
         if (trackpadMode == TrackpadMode::Orbit) {
             // Orbit about the point under the pointer, as a mouse drag would.
@@ -875,8 +873,23 @@ bool NavigationStyle::processTrackpadScroll(const QWheelEvent* event)
             saveCursorPosition(&location);
         }
     }
+
+    SoCamera* camera = viewer->getSoRenderManager()->getCamera();
+    if (!camera) {
+        return true;
+    }
     if (trackpadMode == TrackpadMode::Zoom) {
-        return false;
+        // As a wheel turn of the same size: zoom step, Invert zoom and Zoom at cursor apply.
+        // The larger axis counts, in case the system turned Shift + scroll into a sideways one.
+        QPoint steps = event->angleDelta();
+        if (steps.isNull()) {
+            steps = event->pixelDelta() * 2;
+        }
+        const int delta = std::abs(steps.y()) >= std::abs(steps.x()) ? steps.y() : steps.x();
+        if (delta != 0) {
+            doZoom(camera, delta, here);
+        }
+        return true;
     }
 
     // The view follows the fingers (pixelDelta already honours natural scrolling).
@@ -885,10 +898,6 @@ bool NavigationStyle::processTrackpadScroll(const QWheelEvent* event)
         return true;
     }
     const SbVec2f moved(here[0] + float(delta.x() / width), here[1] - float(delta.y() / height));
-    SoCamera* camera = viewer->getSoRenderManager()->getCamera();
-    if (!camera) {
-        return true;
-    }
     if (trackpadMode == TrackpadMode::Pan) {
         const float ratio = viewer->getSoRenderManager()->getViewportRegion().getViewportAspectRatio();
         setupPanningPlane(camera);

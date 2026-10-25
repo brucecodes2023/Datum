@@ -611,10 +611,10 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="TrackpadGestures">
         <property name="toolTip">
-         <string>Two-finger swipe on a trackpad: plain swipe zooms, Shift + swipe pans in any direction, Cmd + swipe orbits. A mouse wheel is not affected.</string>
+         <string>Two-finger swipe on a trackpad: a plain swipe pans in any direction (the model follows the fingers), Shift + swipe zooms at the pointer, Cmd + swipe orbits. A mouse wheel and pinch are not affected. Off: a swipe zooms, as in stock FreeCAD.</string>
         </property>
         <property name="text">
-         <string>Trackpad: Shift + swipe pans, Cmd + swipe orbits</string>
+         <string>Trackpad: swipe pans, Shift + swipe zooms, Cmd + swipe orbits</string>
         </property>
         <property name="checked">
          <bool>true</bool>

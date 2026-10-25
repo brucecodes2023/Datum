@@ -225,7 +225,7 @@ public:
         // Thus, we filter out horizontal scrolling.
         if (event->type() == QEvent::Wheel) {
             auto we = static_cast<QWheelEvent*>(event);  // NOLINT
-            // [BW] Trackpad swipes with Shift or Cmd pan or orbit.
+            // [BW] Trackpad swipes pan; with Shift they zoom, with Cmd they orbit.
             auto* viewer3d = static_cast<View3DInventorViewer*>(obj);
             NavigationStyle* style = viewer3d->navigationStyle();
             if (style && style->processTrackpadScroll(we)) {

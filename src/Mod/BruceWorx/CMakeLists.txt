@@ -11,6 +11,7 @@ SET(BruceWorx_SRCS
     TestBruceWorx.py
     TestBruceWorxPattern.py
     TestBruceWorxNavPill.py
+    TestBruceWorxTrackpad.py
     TestBruceWorxGroups.py
     TestBruceWorxWorkspaces.py
     TestBruceWorxSearch.py

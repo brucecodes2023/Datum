@@ -151,10 +151,10 @@ public:
     SbBool isAnimating() const;
     SbBool isSpinning() const;
 
-    /// [BW] A trackpad swipe (two-finger scroll). Shift + swipe pans, Cmd (Ctrl elsewhere) +
-    /// swipe orbits; a plain swipe returns false and zooms as before. The modifier held when
-    /// the swipe starts holds for the whole swipe, momentum included. Mouse wheels (no scroll
-    /// phase, no pixel delta) are not handled. Preferences/BruceWorx/TrackpadGestures.
+    /// [BW] A trackpad swipe (two-finger scroll). A plain swipe pans, Shift + swipe zooms (at
+    /// the cursor when Zoom at cursor is on), Cmd (Ctrl elsewhere) + swipe orbits. The modifier
+    /// held when the swipe starts holds for the whole swipe, momentum included. Mouse wheels
+    /// (no scroll phase) return false and zoom as before. Preferences/BruceWorx/TrackpadGestures.
     bool processTrackpadScroll(const QWheelEvent* event);
     void startAnimating(const std::shared_ptr<NavigationAnimation>& animation, bool wait = false) const;
     void stopAnimating() const;
@@ -357,7 +357,7 @@ private:
         Pan,
         Orbit
     };
-    TrackpadMode trackpadMode = TrackpadMode::Zoom;
+    TrackpadMode trackpadMode = TrackpadMode::Pan;
     bool trackpadPending = false;
 
     SbVec3f rotationCenter;
