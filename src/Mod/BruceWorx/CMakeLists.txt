@@ -91,8 +91,6 @@ SET(BruceWorx_SRCS
     bruceworx_navpill.py
     bruceworx_drawing.py
     TestBruceWorxDrawing.py
-    bruceworx_units.py
-    TestBruceWorxUnits.py
     BruceWorx_RectangularPattern.svg
     BruceWorx_CircularPattern.svg
     BruceWorx_Section.svg
