@@ -150,14 +150,19 @@ class Occurrence:
     "SubAsm.Link."), ``part`` its link target "Doc#Name", ``shape`` its solids in root's frame
     (a copy, meshed here for the proximity search without touching the file's own meshes)."""
 
-    __slots__ = ("root", "sub", "part", "label", "shape", "box", "faces", "deflection")
+    __slots__ = ("root", "sub", "part", "label", "shape", "box", "faces", "deflection", "signature")
 
-    def __init__(self, root, sub, part, label, shape):
+    def __init__(self, root, sub, part, label, shape, geometry=None):
         self.root, self.sub, self.part, self.label = root, sub, part, label
         self.shape = shape.copy()
         self.box = self.shape.BoundBox
         self.faces = None
         self.deflection = None
+        # What a measurement of this occurrence depends on: the part's geometry (its own shape's hash,
+        # new after a recompute) where it stands (the placed solids' box and volume). The cache keys on it.
+        b = self.box
+        self.signature = (part, geometry, tuple(round(v, 4) for v in (b.XMin, b.YMin, b.ZMin, b.XMax, b.YMax, b.ZMax)),
+                          round(self.shape.Volume, 4))
 
     @property
     def key(self):
@@ -231,7 +236,11 @@ def occurrences(root, include_hidden=False):
                     continue
                 solids = _solids(shape) if not shape.isNull() else None
                 if solids is not None:
-                    out.append(Occurrence(root, sub, object_key(target), label, solids))
+                    try:
+                        geometry = target.Shape.hashCode()
+                    except Exception:  # noqa: BLE001 -- no shape of its own: the placed solids tell
+                        geometry = None
+                    out.append(Occurrence(root, sub, object_key(target), label, solids, geometry))
 
     def walk_sub(link, target, prefix, label_prefix):
         """A sub-assembly: its parts, through the link that places it."""
@@ -525,6 +534,45 @@ def _clash(a, b, overlap, fit_keys, depth):
 # ----- the whole check ------------------------------------------------------------------------------
 
 
+# ----- the cache ------------------------------------------------------------------------------------
+#
+# A pair measured once is not measured again while neither part changed or moved: a re-check after
+# moving one part only measures the pairs that part is in. Keyed by the two occurrences' signatures,
+# the gap and whether contacts are wanted; the fit marks are applied afresh (they are a label, not a
+# measurement). Bounded; the oldest entries go first.
+
+CACHE_LIMIT = 4000
+_cache = {}
+
+
+def cache_key(a, b, gap, contacts):
+    first, second = sorted((a.signature, b.signature))
+    return (first, second, round(gap, 6), bool(contacts))
+
+
+def _remember(key, r):
+    _cache[key] = None if r is None else (r.kind, r.volume, r.depth, r.distance, r.points, r.overlap)
+    while len(_cache) > CACHE_LIMIT:
+        _cache.pop(next(iter(_cache)))
+
+
+def _recall(key, a, b, fit_keys, depth):
+    """The cached Result for ``key`` as a fresh Result of ``a`` and ``b`` (or None); KeyError when absent."""
+    stored = _cache[key]
+    if stored is None:
+        return None
+    kind, volume, d, distance, points, overlap = stored
+    if kind in (CLASH, FIT):
+        kind = FIT if fit_key(a.part, b.part) in fit_keys else CLASH
+        if depth and not d and overlap is not None:
+            d = clash_depth(overlap, a, b)
+    return Result(a, b, kind, volume=volume, depth=d, distance=distance, points=points, overlap=overlap)
+
+
+def clear_cache():
+    _cache.clear()
+
+
 class Checker:
     """Checks an assembly a few pairs at a time: ``step(seconds)`` works until the time is up and
     says whether it is done, so a GUI can keep drawing in between. ``results`` grows as it goes."""
@@ -539,6 +587,7 @@ class Checker:
         boxes = [_box(o.box) for o in self.occurrences]
         self.pairs = candidate_pairs(boxes, max(self.gap, DISTANCE_TOL))
         self.done = 0
+        self.cached = 0  # pairs answered from the cache
         self.results = []
         self.errors = []
         self.seconds = time.time() - started
@@ -558,8 +607,14 @@ class Checker:
             i, j = self.pairs[self.done]
             a, b = self.occurrences[i], self.occurrences[j]
             started = time.time()
+            key = cache_key(a, b, self.gap, self.contacts)
             try:
-                r = check_pair(a, b, self.gap, self.contacts, self.fit_keys)
+                if key in _cache:
+                    r = _recall(key, a, b, self.fit_keys, True)
+                    self.cached += 1
+                else:
+                    r = check_pair(a, b, self.gap, self.contacts, self.fit_keys)
+                    _remember(key, r)
             except Exception as exc:  # noqa: BLE001 -- a bad shape: say so, check the rest
                 self.errors.append(f"{a.label} / {b.label}: {exc}")
                 r = None
@@ -591,7 +646,8 @@ class Checker:
     def summary(self):
         counts = {k: len(self.of_kind(k)) for k in KINDS}
         return {"assembly": self.root.Label, "parts": len(self.occurrences), "pairs": len(self.occurrences) * (len(self.occurrences) - 1) // 2,
-                "candidates": self.total, "checked": self.done, "gap": self.gap, "seconds": round(self.seconds, 3),
+                "candidates": self.total, "checked": self.done, "cached": self.cached, "gap": self.gap,
+                "seconds": round(self.seconds, 3),
                 "counts": counts, "errors": list(self.errors),
                 "results": [r.as_dict() for r in sorted(self.results, key=_order)]}
 

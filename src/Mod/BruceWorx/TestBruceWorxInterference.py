@@ -31,6 +31,64 @@ def _part(doc, asm, name, shape):
     return obj
 
 
+class TestCache(unittest.TestCase):
+    """A re-check only measures the pairs whose parts changed or moved (left for later, 25 Oct)."""
+
+    def setUp(self):
+        import Part
+
+        itf.clear_cache()
+        self.doc = App.newDocument("ItfCache")
+        self.asm = _assembly(self.doc)
+        self.a = _part(self.doc, self.asm, "A", Part.makeBox(10, 10, 10))
+        self.b = _part(self.doc, self.asm, "B", Part.makeBox(10, 10, 10, V(8, 0, 0)))  # clashes with A
+        self.c = _part(self.doc, self.asm, "C", Part.makeBox(10, 10, 10, V(30, 0, 0)))  # clear of both
+        self.d = _part(self.doc, self.asm, "D", Part.makeBox(10, 10, 10, V(30, 10.1, 0)))  # 0.1 from C
+        self.doc.recompute()
+
+    def tearDown(self):
+        itf.clear_cache()
+        App.closeDocument(self.doc.Name)
+
+    def test_second_check_comes_from_the_cache(self):
+        first = itf.check(self.asm, gap=0.5)
+        self.assertEqual(first.cached, 0)
+        self.assertEqual(first.summary()["counts"]["clash"], 1)
+        again = itf.check(self.asm, gap=0.5)
+        self.assertEqual(again.cached, again.total)
+        self.assertEqual([r.as_dict() for r in again.results], [r.as_dict() for r in first.results])
+        # a different gap is a different measurement
+        self.assertEqual(itf.check(self.asm, gap=0.0).cached, 0)
+
+    def test_a_moved_part_is_measured_again_and_the_rest_not(self):
+        itf.check(self.asm, gap=0.5)
+        placement = self.d.Placement
+        placement.Base = V(0, 0.2, 0)  # the box's own position is in its shape: D now 0.3 from C
+        self.d.Placement = placement
+        self.doc.recompute()
+        again = itf.check(self.asm, gap=0.5)
+        pairs_with_d = [(i, j) for i, j in again.pairs if "D" in (again.occurrences[i].label, again.occurrences[j].label)]
+        self.assertEqual(again.cached, again.total - len(pairs_with_d))
+        self.assertGreater(len(pairs_with_d), 0)
+        self.assertAlmostEqual(again.of_kind(itf.CLEARANCE)[0].distance, 0.3, places=3)
+
+    def test_fit_marks_apply_to_cached_pairs(self):
+        itf.check(self.asm, gap=0.5)
+        itf.set_fit(self.doc, itf.object_key(self.a), itf.object_key(self.b), True, "press fit")
+        again = itf.check(self.asm, gap=0.5)
+        self.assertEqual(again.cached, again.total)
+        self.assertEqual((len(again.of_kind(itf.CLASH)), len(again.of_kind(itf.FIT))), (0, 1))
+
+    def test_an_edited_part_is_measured_again(self):
+        import Part
+
+        itf.check(self.asm, gap=0.5)
+        self.c.Shape = Part.makeBox(10, 10, 10, V(30, 0, 0)).cut(Part.makeBox(2, 2, 2, V(30, 0, 0)))
+        self.doc.recompute()
+        again = itf.check(self.asm, gap=0.5)
+        self.assertLess(again.cached, again.total)
+
+
 class TestBroadPhase(unittest.TestCase):
     def test_sweep_finds_the_same_pairs_as_every_pair(self):
         rnd = random.Random(7)
