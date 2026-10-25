@@ -79,14 +79,31 @@ def find_unfold(doc):
 
 
 def stationary_face(obj) -> str:
-    """"FaceN": the largest planar face of the shape (what Unfold would pick)."""
-    best = None
-    for index, face in enumerate(obj.Shape.Faces):
-        if face.Surface.__class__.__name__ == "Plane" and (best is None or face.Area > best[0] + 1e-9):
-            best = (face.Area, index)
-    if best is None:
+    """"FaceN": the largest planar face of the shape (what Unfold would pick).
+
+    A plate's two sides are often the same size; then the side facing the rest of the part (its
+    normal towards the centre of mass) wins, so the flanges bend towards the viewer ("up") whatever
+    order the faces come in."""
+    shape = obj.Shape
+    planes = [(face.Area, index, face) for index, face in enumerate(shape.Faces)
+              if face.Surface.__class__.__name__ == "Plane"]
+    if not planes:
         raise ValueError(f"{obj.Label} has no planar face to unfold from.")
-    return f"Face{best[1] + 1}"
+    largest = max(area for area, _i, _f in planes)
+    tied = [(index, face) for area, index, face in planes if area > largest * (1 - 1e-6) - 1e-9]
+    if len(tied) > 1:
+        try:
+            centre = shape.CenterOfMass if hasattr(shape, "CenterOfMass") else shape.Solids[0].CenterOfMass
+
+            def towards(item):
+                face = item[1]
+                normal = face.normalAt(*face.Surface.parameter(face.CenterOfMass))
+                return normal.dot(centre - face.CenterOfMass)
+
+            tied.sort(key=towards, reverse=True)
+        except Exception:  # noqa: BLE001 -- keep the first one
+            pass
+    return f"Face{tied[0][0] + 1}"
 
 
 def new_unfolder_available() -> bool:

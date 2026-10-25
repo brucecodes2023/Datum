@@ -154,8 +154,8 @@ add_subdirectory(BruceWorx)
 # installed to Mod/ by the normal build.
 option(BUILD_BW_HISTORY_TIMELINE "BruceWorx: install the History Timeline add-on (Mod/HistoryTimeline)" ON)
 option(BUILD_BW_HOOKS "BruceWorx: install the hooks / part-number add-on (Mod/BruceWorxHooks)" ON)
-# MOD-06 was paused half-way on 24 Oct 2026 (its networkx dependency is not set up yet): off until it resumes.
-option(BUILD_BW_SHEETMETAL "BruceWorx: install the vendored SheetMetal add-on (Mod/SheetMetal, MOD-06)" OFF)
+# MOD-06 (resumed 25 Oct 2026; networkx is in pixi.toml for its new unfolder).
+option(BUILD_BW_SHEETMETAL "BruceWorx: install the vendored SheetMetal add-on (Mod/SheetMetal, MOD-06)" ON)
 if(BUILD_BW_HISTORY_TIMELINE)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/package/bruceworx/mods/HistoryTimeline

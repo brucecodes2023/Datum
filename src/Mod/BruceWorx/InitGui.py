@@ -50,9 +50,7 @@ startup workbench (PartDesign) is already used on that first start.
 
 # Features whose build was stopped half-way (24 Oct 2026, the user paused the agents): not installed until
 # their work resumes and passes its checks. Remove a name here to switch it back on.
-_BW_PAUSED = (
-    "bruceworx_sheetmetal",
-)
+_BW_PAUSED = ()
 
 
 def _bw_warn(message):
