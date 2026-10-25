@@ -233,6 +233,16 @@ class StylesheetTest(unittest.TestCase):
             missing = tokens - defined - set(appearance.RUNTIME_TOKENS)
             self.assertFalse(missing, f"{filename} missing {sorted(missing)}")
 
+    def test_bruceworx_panel_tokens_exist_in_freecads_themes(self):
+        # Under a stock theme the BruceWorx panels asked for these and FreeCAD warned (UAT, 25 Oct).
+        panel = ("CardBackgroundColor", "TextSecondaryColor", "HoverColor", "AccentSoftColor", "ErrorColor",
+                 "WarnColor", "OkColor", "ChromeColor", "IconPlateColor")
+        for filename in ("FreeCAD Light.yaml", "FreeCAD Dark.yaml"):
+            path = os.path.join(ROOT, "src", "Gui", "Stylesheets", "parameters", filename)
+            with open(path, encoding="utf-8") as handle:
+                defined = {line.split(":", 1)[0].strip() for line in handle if ":" in line and not line.startswith("#")}
+            self.assertFalse(set(panel) - defined, f"{filename} missing {sorted(set(panel) - defined)}")
+
 
 class PackagingTest(unittest.TestCase):
     def test_package_xml_lists_packs(self):
@@ -307,6 +317,31 @@ class DefaultsOnTest(unittest.TestCase):
         )
         # Second start: nothing changes.
         self.assertEqual(defaults.apply_first_run(self.store, self.snap), "already")
+
+    def test_first_run_turns_off_freecads_first_start_page(self):
+        defaults.apply_first_run(self.store, self.snap)
+        self.assertIs(self.store.get(defaults.START_GROUP, defaults.FIRST_START, "bool", True), False)
+
+    def test_a_profile_freecads_first_start_overwrote_is_healed_once(self):
+        # Keystone's new profile: pack applied, then the first-start page put FreeCAD Light over it.
+        self.store.set(defaults.GROUP, pack.APPLIED_NAME, "bool", True)
+        self.store.set(defaults.GROUP, defaults.FIRST_RUN_DONE, "bool", True)
+        self.store.set(defaults.START_GROUP, defaults.FIRST_START, "bool", False)
+        self.store.set(defaults.MAIN_GROUP, "Theme", "text", "FreeCAD Light")
+        self.store.set(defaults.MAIN_GROUP, "StyleSheet", "text", "FreeCAD.qss")
+        self.assertEqual(defaults.apply_first_run(self.store, self.snap), "healed")
+        self.assertEqual(self.store.get(defaults.MAIN_GROUP, "Theme", "text", ""), "BruceWorx")
+        # A stock theme chosen afterwards is the user's choice.
+        self.store.set(defaults.MAIN_GROUP, "Theme", "text", "FreeCAD Light")
+        self.assertEqual(defaults.apply_first_run(self.store, self.snap), "already")
+        self.assertEqual(self.store.get(defaults.MAIN_GROUP, "Theme", "text", ""), "FreeCAD Light")
+
+    def test_a_good_profile_is_checked_once_and_left_alone(self):
+        defaults.apply_first_run(self.store, self.snap)  # applied, theme BruceWorx
+        self.assertEqual(defaults.apply_first_run(self.store, self.snap), "already")
+        self.store.set(defaults.MAIN_GROUP, "Theme", "text", "FreeCAD Dark")  # the user picks a stock theme
+        self.assertEqual(defaults.apply_first_run(self.store, self.snap), "already")
+        self.assertEqual(self.store.get(defaults.MAIN_GROUP, "Theme", "text", ""), "FreeCAD Dark")
 
     def test_first_run_does_not_reapply_after_user_turned_pack_off(self):
         defaults.apply_first_run(self.store, self.snap)

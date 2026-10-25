@@ -204,7 +204,10 @@ python3 "$here/keystone_relocate.py" "$C" "$env" "$build" "$repo" \
 
 # ----- 7. check it starts, then install -----------------------------------------------------------------
 say "checking the staged bundle"
-PYTHONHOME="$C" PYTHONNOUSERSITE=1 "$C/bin/FreeCADCmd" -c "import FreeCAD, Part, sys; print('ok', FreeCAD.Version()[0:3], sys.prefix)" \
+# A throwaway home: the check must not write Keystone's real settings (it once applied the theme headless
+# and left the staging folder in them).
+mkdir -p "$stage/home"
+FREECAD_USER_HOME="$stage/home" PYTHONHOME="$C" PYTHONNOUSERSITE=1 "$C/bin/FreeCADCmd" -c "import FreeCAD, Part, sys; print('ok', FreeCAD.Version()[0:3], sys.prefix)" \
     >"$stage/check.log" 2>&1 || { cat "$stage/check.log"; fail "the staged FreeCADCmd does not start"; }
 grep -q "^ok" "$stage/check.log" || { cat "$stage/check.log"; fail "the staged FreeCADCmd did not import Part"; }
 say "$(grep '^ok' "$stage/check.log")"

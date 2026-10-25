@@ -29,6 +29,14 @@ import bruceworx_pack
 GROUP = bruceworx_pack.APPLIED_GROUP  # BaseApp/Preferences/BruceWorx
 SWITCH = "PreferencePack"
 FIRST_RUN_DONE = "FirstRunPackDone"
+# FreeCAD 1.1's Start page opens on a first-start page with a theme picker; dismissing it puts a stock
+# theme over a pack applied before it (Keystone's new profile, 25 Oct). BruceWorx brings its own theme,
+# so a first run marks that page done; a profile it already overwrote is healed once.
+START_GROUP = "BaseApp/Preferences/Mod/Start"
+FIRST_START = "FirstStart2024"
+MAIN_GROUP = "BaseApp/Preferences/MainWindow"
+STOCK_THEMES = ("FreeCAD Light", "FreeCAD Dark", "FreeCAD Classic")
+HEALED = "FirstStartChecked"
 
 
 def switch_on(store) -> bool:
@@ -43,6 +51,7 @@ def apply_first_run(store, snapshot_path: str) -> str:
     """Apply the pack once on first start. Returns what happened.
 
     ``"applied"``   the pack was applied now;
+    ``"healed"``    FreeCAD's first-start theme picker had put a stock theme over it: applied again;
     ``"already"``   it was already applied (by hand or an earlier start);
     ``"done"``      a previous start already handled first run;
     ``"off"``       the switch is off.
@@ -51,12 +60,28 @@ def apply_first_run(store, snapshot_path: str) -> str:
         return "off"
     if pack_applied(store):
         store.set(GROUP, FIRST_RUN_DONE, "bool", True)
+        if overwritten_by_first_start(store):
+            bruceworx_pack.enable(store, snapshot_path, "light")
+            store.set(GROUP, HEALED, "bool", True)
+            return "healed"
+        # Checked once: a stock theme chosen later is the user's choice and stays.
+        store.set(GROUP, HEALED, "bool", True)
         return "already"
     if store.get(GROUP, FIRST_RUN_DONE, "bool", False):
         return "done"
     bruceworx_pack.enable(store, snapshot_path, "light")
     store.set(GROUP, FIRST_RUN_DONE, "bool", True)
+    store.set(START_GROUP, FIRST_START, "bool", False)  # its theme picker would replace the pack
+    store.set(GROUP, HEALED, "bool", True)
     return "applied"
+
+
+def overwritten_by_first_start(store) -> bool:
+    """The pack was applied, then FreeCAD's first-start page put a stock theme over it: only before
+    this was ever checked (afterwards a stock theme is the user's own choice)."""
+    return (not store.get(GROUP, HEALED, "bool", False)
+            and store.get(START_GROUP, FIRST_START, "bool", True) is False
+            and store.get(MAIN_GROUP, "Theme", "text", "") in STOCK_THEMES)
 
 
 def on_switch_changed(store, snapshot_path: str, value: bool) -> str:
@@ -150,13 +175,15 @@ def startup() -> str:
     except Exception as exc:
         _warn(f"BruceWorx first-run preference pack failed: {exc}")
         result = "error"
-    if result == "applied":
+    if result in ("applied", "healed"):
         try:
             import FreeCAD
 
             FreeCAD.Console.PrintMessage(
-                "BruceWorx: applied the BruceWorx preference pack (first start). "
-                "Your previous values are saved; uncheck Preferences → BruceWorx → "
+                ("BruceWorx: applied the BruceWorx preference pack (first start). "
+                 if result == "applied" else
+                 "BruceWorx: FreeCAD's first-start page had replaced the BruceWorx theme; applied it again. ")
+                + "Your previous values are saved; uncheck Preferences → BruceWorx → "
                 "Preference pack to restore them.\n"
             )
         except Exception:
