@@ -594,7 +594,7 @@ void SoQtOffscreenRenderer::makeFrameBuffer(int width, int height, int samples)
 
     QOpenGLFramebufferObjectFormat fmt;
     fmt.setSamples(samples);
-    fmt.setAttachment(QOpenGLFramebufferObject::Depth);
+    fmt.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);  // [BW] section caps need the stencil
     // With enabled alpha a transparent background is supported but
     // at the same time breaks semi-transparent models. A workaround
     // is to use a certain background color using GL_RGB as texture

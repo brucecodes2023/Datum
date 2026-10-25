@@ -1,0 +1,140 @@
+<!doctype html>
+<!-- MOD-16 section view mock (25 Oct): the Browser's Sections folder, a section on the canvas with its drag
+     arrow, tilt rings and offset field, and the Section command tab in the right panel. The canvas image is
+     fig/mod16_target.png (exact cuts standing in for the GPU caps). Rendered by headless Chrome into
+     fig/mod16_mock.png (?dark for the dark variant). -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#e9ecf1; --card:#ffffff; --border:#d8dce3; --text:#1d1f23; --sec:#6b717c; --dim:#9aa0aa;
+          --accent:#007aff; --soft:#e3eefc; --hover:#f0f2f5; --field:#ffffff; --warn:#b26a00; --clash:#d92020; }
+  body.dark { --bg:#202227; --card:#2b2d33; --border:#3b3e45; --text:#e8eaee; --sec:#a3a8b2; --dim:#767b85;
+          --accent:#2f8bff; --soft:#22344d; --hover:#34373e; --field:#1f2126; --warn:#e0a03c; }
+  html, body { margin:0; }
+  body { width:1600px; height:900px; background:var(--bg); font:12.5px -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+         color:var(--text); display:flex; gap:14px; padding:14px; box-sizing:border-box; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column;
+          box-shadow:0 2px 14px rgba(0,0,0,.08); overflow:hidden; }
+  .browser { width:270px; }
+  .head { padding:9px 12px 7px; font-weight:600; border-bottom:1px solid var(--border); display:flex; }
+  .head .sub { margin-left:auto; color:var(--sec); font-weight:400; }
+  .tree { padding:6px 4px; }
+  .tr { display:flex; align-items:center; height:24px; padding-right:8px; border-radius:6px; }
+  .tr.sel { background:var(--soft); }
+  .tr .tw { width:14px; color:var(--dim); font-size:10px; text-align:center; }
+  .tr .ic { width:15px; height:15px; border-radius:3px; margin-right:6px; background:var(--hover); border:1px solid var(--border); box-sizing:border-box; }
+  .tr .ic.sec { background:linear-gradient(135deg, transparent 45%, var(--accent) 45%, var(--accent) 55%, transparent 55%); border-color:var(--accent); }
+  .tr .ic.fold { background:#f2c94c; border-color:#d9a92a; }
+  .tr .lbl { flex:1; white-space:nowrap; }
+  .tr .meta { color:var(--sec); margin-left:6px; font-size:11.5px; }
+  .tr .eye { width:16px; text-align:center; color:var(--sec); }
+  .tr .eye.off { color:var(--dim); opacity:.45; }
+  .note { color:var(--sec); font-size:11.5px; padding:8px 12px; border-top:1px solid var(--border); line-height:1.45; }
+  .canvas { flex:1; position:relative; background:#ffffff; }
+  body.dark .canvas { background:#ffffff; }
+  .canvas img { position:absolute; left:300px; top:70px; height:760px; }
+  .canvas svg { position:absolute; left:0; top:0; }
+  .chip { position:absolute; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:4px 8px;
+          box-shadow:0 2px 10px rgba(0,0,0,.12); font-variant-numeric:tabular-nums; }
+  .chip .u { color:var(--dim); }
+  .legend { position:absolute; left:16px; bottom:16px; }
+  .legend div { margin:3px 0; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:6px; border:1px solid rgba(0,0,0,.2); }
+  .panel { width:320px; }
+  .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 6px; }
+  .tab { padding:9px 7px 7px; color:var(--sec); font-size:11.5px; font-weight:600; border-bottom:2px solid transparent; }
+  .tab.cmd { margin-left:auto; color:var(--text); border-bottom-color:var(--accent); }
+  .body { padding:8px 12px; flex:1; overflow:hidden; }
+  .sect { display:flex; align-items:center; gap:6px; margin:8px 0 4px; font-weight:600; }
+  .sect .sub { color:var(--sec); font-weight:400; }
+  .row { display:flex; align-items:center; min-height:27px; }
+  .row .k { width:92px; color:var(--sec); }
+  .row .v { flex:1; display:flex; gap:6px; align-items:center; }
+  .f { flex:1; background:var(--field); border:1px solid var(--border); border-radius:5px; height:21px; display:flex; align-items:center;
+       padding:0 7px; box-sizing:border-box; font-variant-numeric:tabular-nums; }
+  .f .u { margin-left:auto; color:var(--dim); }
+  .f.dd::after { content:"▾"; margin-left:auto; color:var(--dim); font-size:10px; }
+  .seg { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex:1; }
+  .seg div { flex:1; text-align:center; padding:2px 0; color:var(--sec); border-left:1px solid var(--border); }
+  .seg div:first-child { border-left:none; }
+  .seg div.on { background:var(--soft); color:var(--text); font-weight:600; }
+  .btn { border:1px solid var(--border); border-radius:6px; padding:2px 9px; }
+  .chk { display:inline-block; width:12px; height:12px; border:1px solid var(--border); border-radius:3px; vertical-align:-2px; margin-right:6px; }
+  .chk.on { background:var(--accent); border-color:var(--accent); }
+  .sep { border-top:1px solid var(--border); margin:8px -12px; }
+  .hint { color:var(--sec); font-size:11.5px; line-height:1.45; }
+  .btns { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); }
+  .btns .b { flex:1; text-align:center; border:1px solid var(--border); border-radius:6px; padding:4px; }
+  .btns .b.p { background:var(--accent); color:#fff; border-color:var(--accent); }
+</style>
+</head>
+<body>
+<script>if (location.search.indexOf("dark") >= 0) document.body.classList.add("dark");</script>
+
+<div class="card browser">
+  <div class="head">Browser <span class="sub">LE-02-01002</span></div>
+  <div class="tree">
+    <div class="tr"><span class="tw">▾</span><span class="ic"></span><span class="lbl">NEMA 17 planetary gearbox 5:1</span></div>
+    <div class="tr" style="padding-left:14px"><span class="tw">▸</span><span class="ic"></span><span class="lbl">Joints</span><span class="meta">30</span></div>
+    <div class="tr" style="padding-left:14px"><span class="tw">▸</span><span class="ic"></span><span class="lbl">Housing</span><span class="eye">◉</span></div>
+    <div class="tr" style="padding-left:14px"><span class="tw">▸</span><span class="ic"></span><span class="lbl">Carrier</span><span class="eye">◉</span></div>
+    <div class="tr" style="padding-left:14px"><span class="tw"></span><span class="ic"></span><span class="lbl" style="color:var(--sec)">… 21 more parts</span></div>
+    <div class="tr"><span class="tw">▾</span><span class="ic fold"></span><span class="lbl">Sections</span><span class="meta">1 of 3 on</span></div>
+    <div class="tr sel" style="padding-left:14px"><span class="tw"></span><span class="ic sec"></span><span class="lbl">Through the axis</span><span class="meta">XZ</span><span class="eye">◉</span></div>
+    <div class="tr" style="padding-left:14px"><span class="tw"></span><span class="ic sec"></span><span class="lbl">Gear plane</span><span class="meta">XY 10</span><span class="eye off">◉</span></div>
+    <div class="tr" style="padding-left:14px"><span class="tw"></span><span class="ic sec"></span><span class="lbl">Quarter</span><span class="meta">2 planes</span><span class="eye off">◉</span></div>
+  </div>
+  <div class="note">A section is saved in the file like a view: the eye turns it on and off, double-click edits it.
+    Up to three planes cut at once. Stock FreeCAD opens the file and ignores the folder.</div>
+</div>
+
+<div class="card canvas">
+  <img src="../../fig/mod16_target.png">
+  <svg width="1000" height="872" viewBox="0 0 1000 872">
+    <!-- the section plane's frame (y = 0), seen in the isometric view -->
+    <polygon points="300,130 700,325 700,835 300,640" fill="rgba(0,122,255,0.06)" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <!-- drag arrow along the normal, from the frame's centre -->
+    <line x1="500" y1="480" x2="390" y2="530" stroke="#007aff" stroke-width="3"/>
+    <polygon points="372,538 397,518 400,537" fill="#007aff"/>
+    <circle cx="500" cy="480" r="6" fill="#fff" stroke="#007aff" stroke-width="2"/>
+    <!-- tilt rings about the plane's two in-plane axes -->
+    <path d="M 470 380 A 60 30 25 0 1 560 420" fill="none" stroke="#e8a317" stroke-width="3"/>
+    <circle cx="560" cy="420" r="5" fill="#e8a317"/>
+    <path d="M 640 520 A 30 60 0 0 1 640 640" fill="none" stroke="#2fb36b" stroke-width="3"/>
+    <circle cx="640" cy="640" r="5" fill="#2fb36b"/>
+  </svg>
+  <div class="chip" style="left:250px; top:545px">Offset <b>0</b> <span class="u">mm</span></div>
+  <div class="chip" style="left:575px; top:388px">Tilt <b>0°</b></div>
+  <div class="legend chip">
+    <div><span class="sw" style="background:#9aa6b6"></span>Each part's cap in its own colour, its own hatch</div>
+    <div><span class="sw" style="background:var(--clash)"></span>Two parts' material overlapping on the cut: a clash</div>
+  </div>
+</div>
+
+<div class="card panel">
+  <div class="tabs"><div class="tab">Properties</div><div class="tab">Vault</div><div class="tab">Parameters</div><div class="tab cmd">Section</div></div>
+  <div class="body">
+    <div class="sect">Through the axis <span class="sub">Section 1 of 3</span></div>
+    <div class="row"><span class="k">Plane</span><span class="v"><div class="seg"><div>XY</div><div class="on">XZ</div><div>YZ</div><div>Face</div><div>View</div></div></span></div>
+    <div class="row"><span class="k">Offset</span><span class="v"><div class="f">0 mm<span class="u">ƒx</span></div></span></div>
+    <div class="row"><span class="k">Tilt</span><span class="v"><div class="f">0°<span class="u">ƒx</span></div><div class="f">0°<span class="u">ƒx</span></div></span></div>
+    <div class="row"><span class="k"></span><span class="v"><span class="btn">⇅ Flip</span><span class="btn">＋ Second plane</span></span></div>
+    <div class="sep"></div>
+    <div class="sect">Caps</div>
+    <div class="row"><span class="k">Colour</span><span class="v"><div class="f dd">Each part's colour</div></span></div>
+    <div class="row"><span class="k"></span><span class="v"><span><span class="chk on"></span>Hatch, a pattern per part</span></span></div>
+    <div class="row"><span class="k"></span><span class="v"><span><span class="chk on"></span>Clashes in red</span></span></div>
+    <div class="row"><span class="k">Don't cut</span><span class="v"><div class="f dd">Nothing</div></span></div>
+    <div class="sep"></div>
+    <div class="sect">View</div>
+    <div class="row"><span class="k"></span><span class="v"><span><span class="chk"></span>Save the camera with the section</span></span></div>
+    <div class="row"><span class="k">In views</span><span class="v"><div class="f dd">Every view of this file</div></span></div>
+    <div class="sep"></div>
+    <div class="hint">Drag the blue arrow to move the plane, a ring to tilt it; the mouse wheel over the frame steps the
+      offset. Offset and tilt take expressions, e.g. <code>Parameters.face_width / 2</code>.</div>
+  </div>
+  <div class="btns"><div class="b">Cancel</div><div class="b p">OK</div></div>
+</div>
+</body>
+</html>

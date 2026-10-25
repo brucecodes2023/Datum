@@ -115,6 +115,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx pattern commands were not installed: {exc}")
 
 try:
+    import bruceworx_section
+
+    bruceworx_section.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx section views were not installed: {exc}")
+
+try:
     import bruceworx_toolbars
 
     bruceworx_toolbars.install()

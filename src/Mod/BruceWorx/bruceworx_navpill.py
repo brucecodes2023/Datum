@@ -3,9 +3,8 @@
 
 Roadmap §13.3, marker 10 (UIX-06). Left group: orbit, pan, zoom, fit. Right
 group: display style, camera, section, measure. The right group and Fit run
-FreeCAD's own commands (Std_DrawStyle, Std_OrthographicCamera /
-Std_PerspectiveCamera, Std_ToggleClipPlane, Std_Measure, Std_ViewFitAll) and
-show their icons; orbit, pan, zoom and fit use the mock's line glyphs, drawn
+their commands (Std_DrawStyle, Std_OrthographicCamera / Std_PerspectiveCamera,
+BruceWorx_Section, Std_Measure, Std_ViewFitAll) and show their icons; orbit, pan, zoom and fit use the mock's line glyphs, drawn
 in the theme's secondary text colour.
 
 Orbit, pan and zoom are modes, as in Fusion: click one, then drag in the view
@@ -377,8 +376,9 @@ def _make_classes():
                     action.toggled.connect(self._refresh_later)
             layout.addWidget(camera)
 
-            # Section and measure mirror FreeCAD's actions (icon, tooltip, enabled).
-            for key, command in (("section", "Std_ToggleClipPlane"), ("measure", "Std_Measure")):
+            # Section and measure mirror their commands' actions (icon, tooltip, enabled). Section is
+            # BruceWorx's saved section view (MOD-16); FreeCAD's Clipping dock stays in the View menu.
+            for key, command in (("section", "BruceWorx_Section"), ("measure", "Std_Measure")):
                 actions = _command_actions(command)
                 if not actions:
                     continue

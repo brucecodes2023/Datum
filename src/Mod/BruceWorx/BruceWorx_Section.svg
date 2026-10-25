@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a block cut through: the kept half, its hatched cap, and the plane's frame -->
+  <path d="M10 22 L30 12 L30 44 L10 54 Z" fill="#8f9bab" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M10 22 L30 12 L52 22 L32 32 Z" fill="#c2cad5" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M32 32 L52 22 L52 42 L32 52 Z" fill="#6b7685" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <clipPath id="cap"><path d="M30 12 L32 32 L32 52 L30 44 Z M10 22 L32 32 L32 52 L10 54 Z"/></clipPath>
+  <path d="M10 22 L32 32 L32 52 L10 54 Z" fill="#e0a03c" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <g clip-path="url(#cap)" stroke="#8a5a12" stroke-width="1.6">
+    <path d="M4 40 L28 16 M4 48 L34 18 M6 56 L36 26 M14 56 L38 32 M22 56 L40 38"/>
+  </g>
+  <path d="M4 18 L36 33 L36 60 L4 46 Z" fill="none" stroke="#1f6feb" stroke-width="2.2" stroke-dasharray="4 3"/>
+</svg>

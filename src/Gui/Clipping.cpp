@@ -28,6 +28,7 @@
 #include <Inventor/sensors/SoTimerSensor.h>
 #include <QDockWidget>
 #include <QPointer>
+#include <QSignalBlocker>
 
 #include "Clipping.h"
 #include "ui_Clipping.h"
@@ -188,6 +189,12 @@ Clipping::Clipping(Gui::View3DInventor* view, QWidget* parent)
         d->ui.clipY->setDecimals(minDecimals);
         d->ui.clipZ->setDecimals(minDecimals);
     }
+
+    // reflect the viewer's setting, without changing it
+    {
+        QSignalBlocker blocker(d->ui.checkBoxCaps);
+        d->ui.checkBoxCaps->setChecked(viewer->isSectionCapping());
+    }
 }
 
 Clipping* Clipping::makeDockWidget(Gui::View3DInventor* view)
@@ -222,6 +229,8 @@ void Clipping::setupConnections()
             this, &Clipping::onGroupBoxYToggled);
     connect(d->ui.groupBoxZ, &QGroupBox::toggled,
             this, &Clipping::onGroupBoxZToggled);
+    connect(d->ui.checkBoxCaps, &QCheckBox::toggled,
+            this, &Clipping::onCheckBoxCapsToggled);
     connect(d->ui.clipX, qOverload<double>(&QDoubleSpinBox::valueChanged),
             this, &Clipping::onClipXValueChanged);
     connect(d->ui.clipY, qOverload<double>(&QDoubleSpinBox::valueChanged),
@@ -257,6 +266,13 @@ void Clipping::reject()
     auto dw = qobject_cast<QDockWidget*>(parent());
     if (dw) {
         dw->deleteLater();
+    }
+}
+
+void Clipping::onCheckBoxCapsToggled(bool on)
+{
+    if (d->view) {
+        d->view->getViewer()->setSectionCapping(on);
     }
 }
 

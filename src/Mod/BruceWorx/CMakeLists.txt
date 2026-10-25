@@ -28,6 +28,7 @@ SET(BruceWorx_SRCS
     ground_grid.py
     bruceworx_pattern.py
     bruceworx_pattern_gui.py
+    bruceworx_section.py
     bruceworx_toolbars.py
     bruceworx_groups.py
     bruceworx_workspaces.py
@@ -68,6 +69,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxParameters.py
     bruceworx_toasts.py
     TestBruceWorxToasts.py
+    TestBruceWorxSection.py
     bruceworx_oncanvas.py
     TestBruceWorxOnCanvas.py
     bruceworx_sketchrepair.py
@@ -77,6 +79,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxDrawing.py
     BruceWorx_RectangularPattern.svg
     BruceWorx_CircularPattern.svg
+    BruceWorx_Section.svg
     bruceworx_board.py
     bruceworx_board_gui.py
     BruceWorx_InsertBoard.svg

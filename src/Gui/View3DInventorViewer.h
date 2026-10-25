@@ -90,6 +90,14 @@ namespace Base
 class BoundBox2d;
 }
 
+class SbPlane;
+
+namespace Gui::Inventor
+{
+class SoFCSectionCap;
+struct SectionCapStyle;
+}
+
 namespace Gui
 {
 class NavigationAnimation;
@@ -406,6 +414,25 @@ public:
     /** Checks whether a clipping plane is set or not. */
     bool hasClippingPlane() const;
 
+    /** Section caps for the active clip planes (see SoFCSectionCap). */
+    void setSectionCapping(bool on);
+    bool isSectionCapping() const;
+    /// Null while section caps are off.
+    const Gui::Inventor::SoFCSectionCap* getSectionCap() const;
+
+    /** [BW] Persistent section views. Each pass draws the model clipped by its planes (OpenGL keeps
+     * what is on the kept side of all of them) and caps it; several passes draw the union of their
+     * kept regions (a quarter section). Only the model is cut: not the grid or the root's other
+     * children. Independent of the Clipping dialog's planes. */
+    void setSectionPasses(
+        const std::vector<std::vector<SbPlane>>& passes,
+        const Gui::Inventor::SectionCapStyle& style
+    );
+    void clearSectionPasses();
+    bool hasSectionPasses() const;
+    /// Null while no section is on.
+    const Gui::Inventor::SoFCSectionCap* getSectionPassCap() const;
+
     /** Project the given normalized 2d point onto the near plane */
     SbVec3f projectOnNearPlane(const SbVec2f&) const;
 
@@ -588,6 +615,9 @@ private:
     SoFCUnifiedSelection* selectionRoot;
 
     SoClipPlane* pcClipPlane;
+    Gui::Inventor::SoFCSectionCap* pcSectionCap {nullptr};
+    SoSeparator* pcSectionRoot {nullptr};                    // [BW] section passes, in objectGroup's place
+    Gui::Inventor::SoFCSectionCap* pcSectionsCap {nullptr};  // [BW] their caps
 
     RenderType renderType;
     QOpenGLFramebufferObject* framebuffer;

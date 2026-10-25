@@ -56,6 +56,7 @@
 #include <Inventor/events/SoKeyboardEvent.h>
 #include <Inventor/events/SoMotion3Event.h>
 #include <Inventor/manips/SoClipPlaneManip.h>
+#include <Inventor/nodes/SoClipPlane.h>
 #include <Inventor/nodes/SoAnnotation.h>
 #include <Inventor/nodes/SoBaseColor.h>
 #include <Inventor/nodes/SoCallback.h>
@@ -90,6 +91,8 @@
 #include <QVariantAnimation>
 #include <QWheelEvent>
 
+#include <App/Datums.h>
+#include <App/Link.h>
 #include <App/Document.h>
 #include <App/GeoFeatureGroupExtension.h>
 #include <Base/Console.h>
@@ -103,6 +106,7 @@
 #include <Quarter/eventhandlers/EventFilter.h>
 #include <Gui/BitmapFactory.h>
 
+#include "Inventor/SoFCSectionCap.h"
 #include "View3DInventorViewer.h"
 #include "Application.h"
 #include "Command.h"
@@ -739,6 +743,19 @@ View3DInventorViewer::~View3DInventorViewer()
     // the root node but isn't destroyed when closing this viewer so
     // that it prevents all children from being deleted. To reduce this
     // likelihood we explicitly remove all child nodes now.
+    if (this->pcSectionRoot) {
+        this->pcSectionRoot->removeAllChildren();  // its passes hold objectGroup
+        this->pcSectionRoot->unref();
+        this->pcSectionRoot = nullptr;
+        this->pcSectionsCap->setScene(nullptr);
+        this->pcSectionsCap->unref();
+        this->pcSectionsCap = nullptr;
+    }
+    if (this->pcSectionCap) {
+        this->pcSectionCap->setScene(nullptr);  // drop its ref on objectGroup
+        this->pcSectionCap->unref();
+        this->pcSectionCap = nullptr;
+    }
     coinRemoveAllChildren(this->pcViewProviderRoot);
     this->pcViewProviderRoot->unref();
     this->pcViewProviderRoot = nullptr;
@@ -2287,7 +2304,7 @@ void View3DInventorViewer::setRenderType(RenderType type)
                 gl->makeCurrent();
                 QOpenGLFramebufferObjectFormat fboFormat;
                 fboFormat.setSamples(getNumSamples());
-                fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
+                fboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);  // [BW] section caps need the stencil
                 auto fbo = new QOpenGLFramebufferObject(width, height, fboFormat);
                 if (fbo->format().samples() > 0) {
                     renderToFramebuffer(fbo);
@@ -2334,7 +2351,7 @@ QImage View3DInventorViewer::grabFramebuffer()
     else {
         QOpenGLFramebufferObjectFormat fboFormat;
         fboFormat.setSamples(getNumSamples());
-        fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
+        fboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);  // [BW] section caps need the stencil
         fboFormat.setTextureTarget(GL_TEXTURE_2D);
         fboFormat.setInternalTextureFormat(getInternalTextureFormat());
 
@@ -2373,7 +2390,7 @@ void View3DInventorViewer::imageFromFramebuffer(
 
     QOpenGLFramebufferObjectFormat fboFormat;
     fboFormat.setSamples(samples);
-    fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
+    fboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);  // [BW] section caps need the stencil
     // With enabled alpha a transparent background is supported but
     // at the same time breaks semi-transparent models. A workaround
     // is to use a certain background color using GL_RGB as texture
@@ -3341,6 +3358,165 @@ void View3DInventorViewer::toggleClippingPlane(
 bool View3DInventorViewer::hasClippingPlane() const
 {
     return pcClipPlane != nullptr;
+}
+
+namespace
+{
+/// "Doc#Object" for a view provider root ("Doc#Link\tDoc#Target" for a link), else ""; datums and
+/// origins are never capped.
+std::string sectionCapResolver(SoNode* node, bool& excluded)
+{
+    if (!node->isOfType(SoSeparator::getClassTypeId())) {
+        return {};
+    }
+    // search every document: a link's nodes may belong to another one
+    App::DocumentObject* obj = nullptr;
+    for (App::Document* doc : App::GetApplication().getDocuments()) {
+        Gui::Document* gdoc = Application::Instance->getDocument(doc);
+        if (ViewProviderDocumentObject* vp = gdoc ? gdoc->getViewProvider(node) : nullptr) {
+            obj = vp->getObject();
+            break;
+        }
+    }
+    if (!obj || !obj->isAttachedToDocument()) {
+        return {};
+    }
+    excluded = obj->isDerivedFrom<App::DatumElement>()
+        || obj->isDerivedFrom<App::LocalCoordinateSystem>();
+    auto fullName = [](App::DocumentObject* o) {
+        return std::string(o->getDocument()->getName()) + "#" + o->getNameInDocument();
+    };
+    std::string name = fullName(obj);
+    // an array link does not forward getLinkedObject(); ask the extension
+    App::DocumentObject* target = obj->getLinkedObject(true);
+    if (target == obj) {
+        if (auto ext = obj->getExtensionByType<App::LinkBaseExtension>(true)) {
+            target = ext->getTrueLinkedObject(true);
+        }
+    }
+    if (target && target != obj && target->isAttachedToDocument()) {
+        name += "\t" + fullName(target);
+    }
+    return name;
+}
+}  // namespace
+
+void View3DInventorViewer::setSectionCapping(bool on)
+{
+    if (on == isSectionCapping()) {
+        return;
+    }
+    if (on) {
+        pcSectionCap = new Gui::Inventor::SoFCSectionCap();
+        pcSectionCap->ref();
+        pcSectionCap->setResolver(sectionCapResolver);
+        pcSectionCap->setScene(objectGroup);
+        // last child, so that every clip plane is in the traversal state
+        pcViewProviderRoot->addChild(pcSectionCap);
+    }
+    else {
+        int index = pcViewProviderRoot->findChild(pcSectionCap);
+        if (index >= 0) {
+            pcViewProviderRoot->removeChild(index);
+        }
+        pcSectionCap->setScene(nullptr);
+        pcSectionCap->unref();
+        pcSectionCap = nullptr;
+    }
+    redraw();
+}
+
+bool View3DInventorViewer::isSectionCapping() const
+{
+    return pcSectionCap != nullptr;
+}
+
+const Gui::Inventor::SoFCSectionCap* View3DInventorViewer::getSectionCap() const
+{
+    return pcSectionCap;
+}
+
+void View3DInventorViewer::setSectionPasses(
+    const std::vector<std::vector<SbPlane>>& passes,
+    const Gui::Inventor::SectionCapStyle& style
+)
+{
+    if (passes.empty()) {
+        clearSectionPasses();
+        return;
+    }
+    if (!pcSectionRoot) {
+        // the passes take the model's place under the root, so the grid, measurements and the
+        // other children of the root are never cut
+        pcSectionRoot = new SoSeparator();
+        pcSectionRoot->ref();
+        pcSectionRoot->setName("SectionRoot");
+        pcSectionsCap = new Gui::Inventor::SoFCSectionCap();
+        pcSectionsCap->ref();
+        pcSectionsCap->setResolver(sectionCapResolver);
+        pcSectionsCap->setScene(objectGroup);
+        int index = pcViewProviderRoot->findChild(objectGroup);
+        if (index >= 0) {
+            pcViewProviderRoot->replaceChild(index, pcSectionRoot);
+        }
+        else {
+            pcViewProviderRoot->addChild(pcSectionRoot);
+        }
+    }
+    pcSectionsCap->setStyle(style);
+    pcSectionRoot->removeAllChildren();
+    // the cap node is drawn once per pass: its report is of the whole frame
+    auto frame = new SoCallback();
+    frame->setCallback(
+        [](void* cap, SoAction* action) {
+            if (action->isOfType(SoGLRenderAction::getClassTypeId())) {
+                static_cast<Gui::Inventor::SoFCSectionCap*>(cap)->beginFrame();
+            }
+        },
+        pcSectionsCap
+    );
+    pcSectionRoot->addChild(frame);
+    // one pass per piece of the kept region: each draws the model clipped by its planes, then caps it
+    for (const std::vector<SbPlane>& planes : passes) {
+        auto pass = new SoSeparator();
+        for (const SbPlane& plane : planes) {
+            auto clip = new SoClipPlane();
+            clip->plane.setValue(plane);
+            pass->addChild(clip);
+        }
+        pass->addChild(objectGroup);
+        pass->addChild(pcSectionsCap);
+        pcSectionRoot->addChild(pass);
+    }
+    redraw();
+}
+
+void View3DInventorViewer::clearSectionPasses()
+{
+    if (!pcSectionRoot) {
+        return;
+    }
+    int index = pcViewProviderRoot->findChild(pcSectionRoot);
+    if (index >= 0) {
+        pcViewProviderRoot->replaceChild(index, objectGroup);
+    }
+    pcSectionRoot->removeAllChildren();
+    pcSectionRoot->unref();
+    pcSectionRoot = nullptr;
+    pcSectionsCap->setScene(nullptr);
+    pcSectionsCap->unref();
+    pcSectionsCap = nullptr;
+    redraw();
+}
+
+bool View3DInventorViewer::hasSectionPasses() const
+{
+    return pcSectionRoot != nullptr;
+}
+
+const Gui::Inventor::SoFCSectionCap* View3DInventorViewer::getSectionPassCap() const
+{
+    return pcSectionsCap;
 }
 
 /**

@@ -47,6 +47,7 @@
 #include <Base/RotationPy.h>
 #include <Base/VectorPy.h>
 
+#include "Inventor/SoFCSectionCap.h"
 #include "View3DPy.h"
 
 #include "Camera.h"
@@ -332,6 +333,50 @@ void View3DInventorPy::init_type()
         "hasClippingPlane",
         &View3DInventorPy::hasClippingPlane,
         "hasClippingPlane(): check whether this clipping plane is active"
+    );
+    add_varargs_method(
+        "setSectionCapping",
+        &View3DInventorPy::setSectionCapping,
+        "setSectionCapping(on=True): fill the cuts of the active clip planes in each part's\n"
+        "material, hatched and outlined.  Opaque closed solids only; changes no document object."
+    );
+    add_noargs_method(
+        "isSectionCapping",
+        &View3DInventorPy::isSectionCapping,
+        "isSectionCapping(): whether section caps are on"
+    );
+    add_noargs_method(
+        "getSectionCaps",
+        &View3DInventorPy::getSectionCaps,
+        "getSectionCaps() -> [{key, component, plane, status, color, hatch}]: what the cap\n"
+        "renderer did per occurrence and plane in the last frame (not proof of pixels)"
+    );
+    add_noargs_method(
+        "getSectionCapStatus",
+        &View3DInventorPy::getSectionCapStatus,
+        "getSectionCapStatus(): what the cap renderer did in the last frame\n"
+        "('capped', 'no-plane', 'no-geometry', 'no-cap', 'no-stencil', 'off')"
+    );
+    add_varargs_method(
+        "setSectionPasses",
+        &View3DInventorPy::setSectionPasses,
+        "setSectionPasses(passes, style={}): [BW] cut the model (not the grid) and cap it.\n"
+        "passes: [[(normal, distance), ...], ...]; each pass keeps what is on the kept side\n"
+        "(normal . p >= distance) of all its planes, and the passes add up (a quarter section\n"
+        "is two passes). style: fill ('part', 'single', 'none'), single (r, g, b), hatch,\n"
+        "planeHatch, clash (bool), clashColor (r, g, b), lift (0-1, grey mixed into the caps), minClashPixels, seams [(normal, distance)] never\n"
+        "capped, fits [(component, component)] whose overlap is intended, uncut ['Doc#Name']."
+    );
+    add_noargs_method(
+        "clearSectionPasses",
+        &View3DInventorPy::clearSectionPasses,
+        "clearSectionPasses(): [BW] the model is whole again"
+    );
+    add_noargs_method(
+        "getSectionReport",
+        &View3DInventorPy::getSectionReport,
+        "getSectionReport() -> {status, caps: [{key, component, plane, status, color, hatch}],\n"
+        "clashes: [{first, second, plane, pixels}]}: [BW] the section passes' last frame"
     );
     add_noargs_method(
         "graphicsView",
@@ -2766,6 +2811,204 @@ Py::Object View3DInventorPy::toggleClippingPlane(const Py::Tuple& args, const Py
 Py::Object View3DInventorPy::hasClippingPlane()
 {
     return Py::Boolean(getView3DInventorPtr()->getViewer()->hasClippingPlane());
+}
+
+Py::Object View3DInventorPy::setSectionCapping(const Py::Tuple& args)
+{
+    PyObject* on = Py_True;
+    if (!PyArg_ParseTuple(args.ptr(), "|O!", &PyBool_Type, &on)) {
+        throw Py::Exception();
+    }
+    getView3DInventorPtr()->getViewer()->setSectionCapping(on == Py_True);
+    return Py::None();
+}
+
+Py::Object View3DInventorPy::isSectionCapping()
+{
+    return Py::Boolean(getView3DInventorPtr()->getViewer()->isSectionCapping());
+}
+
+Py::Object View3DInventorPy::getSectionCaps()
+{
+    Py::List out;
+    const auto* cap = getView3DInventorPtr()->getViewer()->getSectionCap();
+    if (!cap) {
+        return out;
+    }
+    for (const auto& rec : cap->lastRecords()) {
+        const SbColor& c = rec.color;
+        Py::Dict d;
+        d.setItem("key", Py::String(rec.key));
+        d.setItem("component", Py::String(rec.component));
+        d.setItem("plane", Py::Long(rec.plane));
+        d.setItem("status", Py::String(rec.status));
+        d.setItem("color", Py::TupleN(Py::Float(c[0]), Py::Float(c[1]), Py::Float(c[2])));
+        d.setItem("hatch", Py::String(rec.hatch));
+        out.append(d);
+    }
+    return out;
+}
+
+Py::Object View3DInventorPy::getSectionCapStatus()
+{
+    const auto* cap = getView3DInventorPtr()->getViewer()->getSectionCap();
+    return Py::String(cap ? cap->lastStatus() : std::string("off"));
+}
+
+namespace
+{
+SbVec3f sectionVector(const Py::Object& item)
+{
+    Py::Sequence v(item);
+    if (v.size() != 3) {
+        throw Py::ValueError("a normal or a colour has three numbers");
+    }
+    return {
+        static_cast<float>(Py::Float(v[0])),
+        static_cast<float>(Py::Float(v[1])),
+        static_cast<float>(Py::Float(v[2])),
+    };
+}
+
+SbPlane sectionPlane(const Py::Object& item)
+{
+    Py::Sequence pair(item);
+    if (pair.size() != 2) {
+        throw Py::ValueError("a plane is (normal, distance)");
+    }
+    SbVec3f normal = sectionVector(pair[0]);
+    if (normal.normalize() == 0.0f) {
+        throw Py::ValueError("a plane's normal must not be zero");
+    }
+    return {normal, static_cast<float>(Py::Float(pair[1]))};
+}
+
+SbColor sectionColor(const Py::Object& item)
+{
+    const SbVec3f c = sectionVector(item);
+    return {c[0], c[1], c[2]};
+}
+}  // namespace
+
+Py::Object View3DInventorPy::setSectionPasses(const Py::Tuple& args)
+{
+    PyObject* passesObj = nullptr;
+    PyObject* styleObj = nullptr;
+    if (!PyArg_ParseTuple(args.ptr(), "O|O!", &passesObj, &PyDict_Type, &styleObj)) {
+        throw Py::Exception();
+    }
+    std::vector<std::vector<SbPlane>> passes;
+    for (const auto& pass : Py::Sequence(passesObj)) {
+        std::vector<SbPlane>& planes = passes.emplace_back();
+        for (const auto& plane : Py::Sequence(pass)) {
+            planes.push_back(sectionPlane(plane));
+        }
+    }
+    Gui::Inventor::SectionCapStyle style;
+    if (styleObj) {
+        Py::Dict d(styleObj);
+        if (d.hasKey("fill")) {
+            const std::string fill = Py::String(d.getItem("fill"));
+            if (fill == "part") {
+                style.fill = Gui::Inventor::SectionCapStyle::Fill::Part;
+            }
+            else if (fill == "single") {
+                style.fill = Gui::Inventor::SectionCapStyle::Fill::Single;
+            }
+            else if (fill == "none") {
+                style.fill = Gui::Inventor::SectionCapStyle::Fill::None;
+            }
+            else {
+                throw Py::ValueError("fill is 'part', 'single' or 'none'");
+            }
+        }
+        if (d.hasKey("single")) {
+            style.single = sectionColor(d.getItem("single"));
+        }
+        if (d.hasKey("hatch")) {
+            style.hatch = Py::Boolean(d.getItem("hatch"));
+        }
+        if (d.hasKey("planeHatch")) {
+            style.planeHatch = Py::Boolean(d.getItem("planeHatch"));
+        }
+        if (d.hasKey("clash")) {
+            style.clash = Py::Boolean(d.getItem("clash"));
+        }
+        if (d.hasKey("minClashPixels")) {
+            style.minClashPixels = static_cast<unsigned>(static_cast<long>(Py::Long(d.getItem("minClashPixels"))));
+        }
+        if (d.hasKey("lift")) {
+            style.lift = static_cast<float>(Py::Float(d.getItem("lift")));
+        }
+        if (d.hasKey("clashColor")) {
+            style.clashColor = sectionColor(d.getItem("clashColor"));
+        }
+        if (d.hasKey("seams")) {
+            for (const auto& plane : Py::Sequence(d.getItem("seams"))) {
+                style.seams.push_back(sectionPlane(plane));
+            }
+        }
+        if (d.hasKey("fits")) {
+            for (const auto& pair : Py::Sequence(d.getItem("fits"))) {
+                Py::Sequence ab(pair);
+                if (ab.size() != 2) {
+                    throw Py::ValueError("a fit is (component, component)");
+                }
+                style.fits.insert(Gui::Inventor::SoFCSectionCap::pairKey(
+                    Py::String(ab[0]).as_std_string(),
+                    Py::String(ab[1]).as_std_string()
+                ));
+            }
+        }
+        if (d.hasKey("uncut")) {
+            for (const auto& name : Py::Sequence(d.getItem("uncut"))) {
+                style.uncut.insert(Py::String(name).as_std_string());
+            }
+        }
+    }
+    getView3DInventorPtr()->getViewer()->setSectionPasses(passes, style);
+    return Py::None();
+}
+
+Py::Object View3DInventorPy::clearSectionPasses()
+{
+    getView3DInventorPtr()->getViewer()->clearSectionPasses();
+    return Py::None();
+}
+
+Py::Object View3DInventorPy::getSectionReport()
+{
+    Py::Dict out;
+    const auto* cap = getView3DInventorPtr()->getViewer()->getSectionPassCap();
+    out.setItem("status", Py::String(cap ? cap->lastStatus() : std::string("off")));
+    Py::List caps;
+    Py::List clashes;
+    if (cap) {
+        for (const auto& rec : cap->lastRecords()) {
+            const SbColor& c = rec.color;
+            Py::Dict r;
+            r.setItem("key", Py::String(rec.key));
+            r.setItem("component", Py::String(rec.component));
+            r.setItem("plane", Py::Long(rec.plane));
+            r.setItem("status", Py::String(rec.status));
+            r.setItem("color", Py::TupleN(Py::Float(c[0]), Py::Float(c[1]), Py::Float(c[2])));
+            r.setItem("hatch", Py::String(rec.hatch));
+            caps.append(r);
+        }
+        for (const auto& clash : cap->lastClashes()) {
+            Py::Dict r;
+            r.setItem("first", Py::String(clash.first));
+            r.setItem("second", Py::String(clash.second));
+            r.setItem("firstKey", Py::String(clash.firstKey));
+            r.setItem("secondKey", Py::String(clash.secondKey));
+            r.setItem("plane", Py::Long(clash.plane));
+            r.setItem("pixels", Py::Long(static_cast<long>(clash.pixels)));
+            clashes.append(r);
+        }
+    }
+    out.setItem("caps", caps);
+    out.setItem("clashes", clashes);
+    return out;
 }
 
 Py::Object View3DInventorPy::graphicsView()

@@ -1132,6 +1132,7 @@ SET(Inventor_CPP_SRCS
     Inventor/SoAxisCrossKit.cpp
     Inventor/SoFCPlacementIndicatorKit.cpp
     Inventor/SoDrawingGrid.cpp
+    Inventor/SoFCSectionCap.cpp
     Inventor/SoFCBackgroundGradient.cpp
     Inventor/SoFCBoundingBox.cpp
     Inventor/SoMouseWheelEvent.cpp
@@ -1172,6 +1173,7 @@ SET(Inventor_SRCS
     Inventor/SoAxisCrossKit.h
     Inventor/SoFCPlacementIndicatorKit.h
     Inventor/SoDrawingGrid.h
+    Inventor/SoFCSectionCap.h
     Inventor/SoFCBackgroundGradient.h
     Inventor/SoFCBoundingBox.h
     Inventor/SoMouseWheelEvent.h

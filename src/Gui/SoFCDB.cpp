@@ -78,6 +78,7 @@
 #include "Inventor/SoAutoZoomTranslation.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/SoDrawingGrid.h"
+#include "Inventor/SoFCSectionCap.h"
 #include "Inventor/SoFCBackgroundGradient.h"
 #include "Inventor/SoFCBoundingBox.h"
 #include "Inventor/SoMouseWheelEvent.h"
@@ -146,6 +147,7 @@ void Gui::SoFCDB::init()
     SoAxisCrossKit ::initClass();
     SoRegPoint ::initClass();
     SoDrawingGrid ::initClass();
+    SoFCSectionCap::initClass();
     SoFCTransform ::initClass();
     SoAutoZoomTranslation ::initClass();
     MarkerBitmaps ::initClass();
