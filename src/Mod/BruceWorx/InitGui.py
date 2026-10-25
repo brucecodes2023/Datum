@@ -228,6 +228,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx Physical and Parameters tabs were not installed: {exc}")
 
 try:
+    import bruceworx_configs_gui
+
+    bruceworx_configs_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx configurations were not installed: {exc}")
+
+try:
     import bruceworx_toasts
 
     bruceworx_toasts.install()

@@ -102,7 +102,8 @@
                 "Part_RefineShape",
                 "PartDesign_MoveFeature",
                 "PartDesign_MoveFeatureInTree",
-                "PartDesign_MoveTip"
+                "PartDesign_MoveTip",
+                "BruceWorx_Configurations"
               ]
             },
             {

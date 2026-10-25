@@ -968,6 +968,10 @@ def open_from_vault(pn=None, ask=True):
         import bruceworx_changes
 
         return bruceworx_changes.show_change(pn)
+    if getattr(s.vault.model.items.get(pn), "configuration_of", None):  # MOD-03: its file, in that row
+        import bruceworx_configs_gui
+
+        return bruceworx_configs_gui.open_configuration_item(pn)
     path = s.work.path(pn)
     st = s.status(pn)
     doc = document_for(path)

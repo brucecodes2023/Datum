@@ -485,8 +485,14 @@ def collect_model(doc, sheet):
     """[(feature, [Param])] for the document, in tree order; features without dimensions left out."""
     aliases = {a for _c, a in sheet_aliases(sheet)}
     groups = []
+    try:
+        import bruceworx_configs
+
+        copied = bruceworx_configs.copies(doc)  # parts copied in for instances in a row of their own
+    except Exception:
+        copied = set()
     for obj in ordered_objects(doc.Objects):
-        if obj.TypeId in SKIP_OBJECT_TYPES:
+        if obj.TypeId in SKIP_OBJECT_TYPES or obj.Name in copied:
             continue
         try:
             params = collect_feature(obj, aliases, sheet)
@@ -580,6 +586,13 @@ def _make_classes():
             t = QtWidgets.QVBoxLayout(top)
             t.setContentsMargins(10, 8, 10, 4)
             t.setSpacing(4)
+            try:  # MOD-03: the active configuration, when the file has configurations
+                import bruceworx_configs_gui
+
+                self.configbar = bruceworx_configs_gui.bar(top)
+                t.addWidget(self.configbar)
+            except Exception:
+                self.configbar = None
             self.filter = QtWidgets.QLineEdit(top)
             self.filter.setObjectName("bwParamFilter")
             self.filter.setPlaceholderText("Filter")
@@ -787,6 +800,11 @@ class Controller:
         t0 = time.perf_counter()
         doc = FreeCAD.ActiveDocument
         tab = self.tab
+        if getattr(tab, "configbar", None) is not None:
+            try:
+                tab.configbar.update_from(doc)
+            except Exception:
+                pass
         if doc is None:
             self.signature = None
             self.doc_name = None
@@ -1211,11 +1229,38 @@ class Controller:
 
         return self.commit(obj.Label, p.label, change)
 
+    def _configured(self, sheet, cell):
+        """(document, alias) when a user parameter reads its file's configuration table (MOD-03)."""
+        try:
+            import bruceworx_configs as bc
+        except Exception:
+            return None
+        table = bc.table(sheet.Document)
+        current = sheet.getContents(cell) or ""
+        if table is None or not current.startswith(f"={table.Name}."):
+            return None
+        alias = current[len(table.Name) + 2:].strip()
+        return (sheet.Document, alias) if alias in bc.aliases(table) else None
+
     def _set_cell(self, p, content):
         sheet = self._sheet()
         if sheet is None:
             return False
         cell = p.expr_key or sheet.getCellFromAlias(p.key)
+        configured = self._configured(sheet, cell)
+        if configured is not None and content != sheet.getContents(cell):
+            import bruceworx_configs as bc
+
+            doc, alias = configured
+            if content.startswith("="):
+                self.tab.show_error(f"{p.key} is per configuration: give this configuration a value "
+                                    "(expressions per row go in the Configuration Table)")
+                return False
+            name = bc.active(doc)
+            value = sheet.get(cell)
+            if not has_unit(content) and hasattr(value, "Unit") and " " in bc._quantity_text(value):
+                content = f"{content} {bc._quantity_text(value).split(' ', 1)[1]}"  # "120" keeps the mm
+            return self.commit(f"{name}", p.key, lambda _d: bc.set_cell(_d, name, alias, content), doc=doc)
         if content and not content.startswith("="):
             content = cell_content(content)
 
@@ -1359,6 +1404,45 @@ class Controller:
 
             FreeCADGui.getDocument(obj.Document.Name).setEdit(obj.Name)
 
+    def _configure_action(self, menu, p):
+        """MOD-03: "Per configuration" for a user parameter or a plain model dimension, when the file has
+        configurations."""
+        if p is None or not p.editable:
+            return
+        try:
+            import bruceworx_configs as bc
+            import bruceworx_configs_gui
+        except Exception:
+            return
+        doc = self._doc()
+        if doc is None or not bc.has_configurations(doc):
+            return
+        if p.kind == USER:
+            sheet = self._sheet()
+            if sheet is None or sheet.Document is not doc or self._configured(sheet, p.expr_key) is not None:
+                return
+            action = menu.addAction("Per configuration")
+            action.triggered.connect(lambda _c=False: self._configure(doc, f"configure {p.key}",
+                                                                      lambda d: bc.add_parameter_column(d, p.key)))
+        elif p.kind == PROP and not p.expression:
+            obj = doc.getObject(p.owner)
+            if obj is None:
+                return
+            action = menu.addAction("Per configuration")
+            action.triggered.connect(lambda _c=False: self._configure(doc, f"configure {obj.Label} {p.key}",
+                                                                      lambda d: bc.add_dimension_column(d, obj, p.key)))
+        else:
+            return
+        menu.addAction("Configuration Table…", lambda: bruceworx_configs_gui.show_table(doc))
+        menu.addSeparator()
+
+    def _configure(self, doc, label, change):
+        import bruceworx_configs_gui
+
+        ok, error = bruceworx_configs_gui.run(doc, label, change)
+        self.tab.show_error("" if ok else error)
+        self.schedule()
+
     def context_menu(self, pos):
         from PySide import QtCore, QtGui, QtWidgets
 
@@ -1369,6 +1453,7 @@ class Controller:
         data = str(item.data(NAME, QtCore.Qt.UserRole) or "")
         menu = QtWidgets.QMenu(tree)
         p = self.params.get(data)
+        self._configure_action(menu, p)
         if data.startswith("group\x1f"):
             name = data.split("\x1f")[1]
             menu.addAction("Edit feature", lambda: self.open_feature(name))

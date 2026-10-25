@@ -1145,6 +1145,8 @@ class Controller:
         actions.append(self._menu_button(objs))
         key_rows, more_rows = split_key_rows(first.TypeId, [r for r in rows if r.group != PART_DATA])
         s = insp.section("feature", title, sub, actions)
+        if len(objs) == 1:
+            self.add_configuration(s, first)
         for row in key_rows:
             self.add_editor(s, objs, row)
         if not key_rows and not more_rows:
@@ -1207,6 +1209,7 @@ class Controller:
         if "Description" in by_name:
             self.add_editor(s, [part], by_name["Description"])
             shown.add("Description")
+        self.add_configuration(s, part)
         body = body_of(part)
         material = None
         try:
@@ -1242,6 +1245,17 @@ class Controller:
             for row in plan_rows(part, []):
                 if row.group == POSITION:
                     self.add_editor(pos, [part], row)
+
+    def add_configuration(self, section, obj):
+        """MOD-03: the active configuration of a configured part, or the one an instance shows."""
+        try:
+            import bruceworx_configs_gui
+
+            box = bruceworx_configs_gui.combo(obj)
+        except Exception:
+            box = None
+        if box is not None:
+            section.add_row("Configuration", box, box.toolTip())
 
     def add_appearance(self, section, owners):
         """Colour and opacity of ``owners`` (bodies)."""
