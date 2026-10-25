@@ -24,8 +24,7 @@ rebuilt from the working tree through the day; the last one installed is \code{1
         and off again, lighter joint markers, the drag direction.
   \item \textbf{Afternoon: agents.} You asked for an agent on the in-progress epics, then more agents for features
         (up to four at once). They finished 10 in-progress epics and built trackpad navigation, studio shading,
-        the three UI bugs, \eref{MOD-05}, \eref{ASM-06}, \eref{MOD-03} and (still running at the time of writing)
-        \eref{MOD-11}.
+        the three UI bugs, \eref{MOD-05}, \eref{ASM-06}, \eref{MOD-03} and \eref{MOD-11}.
 \end{enumerate}
 
 \subsection{Your decisions}
@@ -96,8 +95,9 @@ Epic & What & Commits\\
   \code{c49ffb9}--\code{70d88a0}\\
 \eref{MOD-03} & Configurations on FreeCAD's own configuration table; configuration items and dash numbers in the
   vault; one BOM line per configuration; opens in stock FreeCAD 1.1.4 & \code{d6b569d}--\code{8728f84}\\
-\eref{MOD-11} & Inspect maps (overhang, draft, wall thickness, curvature, zebra) and mass properties; still being
-  finished & \code{f848538}, \code{051f6a9}, \code{82614d2}\\
+\eref{MOD-11} & Inspect maps (overhang for FDM, draft, wall thickness, curvature, zebra) over studio shading, whole
+  assemblies; Mass Properties; mass no longer touches the part. Found a real thin wall: the sun gear's set-screw
+  hole 0.5\,mm from the hub's end face & \code{f848538}--\code{c31ddcc}\\
 \end{longtable}
 \end{center}
 
@@ -138,8 +138,8 @@ Vault & Mark as COTS (\code{set\_item\_type}) and configuration numbers (\code{a
 \eref{UIX-08} & Plastic colours (PETG charcoal, ABS ivory, PLA white, nylon natural, POM white): your real ones, or
   colours on the shop material cards (\eref{PDM-11})? Studio lit with the camera (now) or fixed to the world?
   Section caps in the studio colour? A ground shadow? A matcap as a second look? Aluminium greyer?\\
-Part properties & Computing mass touches the body each time (FreeCAD 1.1 writes the material back). Read the
-  physical properties instead? (Recommended.)\\
+Part properties & Computing mass touched the body each time (FreeCAD 1.1 writes the material back). Fixed with
+  \eref{MOD-11}: density is read from the physical properties (say if you would rather it were not).\\
 \eref{UIX-13} & Should choosing another navigation style turn the trackpad mapping off? Should the model always follow
   the fingers, even with natural scrolling off?\\
 \eref{UIX-03} & The Browser's soft text halo: keep it, none, or a crisp 1\,px outline?\\
@@ -153,6 +153,13 @@ Part properties & Computing mass touches the body each time (FreeCAD 1.1 writes 
 \eref{MOD-03} & Releasing the file releases all its configurations; one feature copy per configured instance; the
   BOM of the saved configuration only; drawing views show the active configuration. Recommendations: keep,
   keep, a BOM per configuration next, views pick their own configuration with the next drawings pass.\\
+\eref{MOD-11} & Save analyses in the file with an eye in the Browser (now: while the panel is open)? Wall limits
+  0.8\,mm minimum / 1.2\,mm target for PETG/ABS on a 0.4\,mm nozzle? Build direction as a part property
+  (\eref{MFG-01})? Short flat ceilings as bridges? Anything for sheet metal beyond \eref{MOD-06}? In an assembly,
+  judge each part in the assembly's orientation (now) or its own file's? The same density bug in
+  \file{bruceworx\_board.py} (\eref{ECD-06}): fix it the same way?\\
+Sun gear & The M3 set-screw hole is 0.5\,mm from the hub's end face: fine in steel; move it up or lengthen the hub if
+  the sun is printed?\\
 \eref{FND-08} & A sketch on a face: origin at the body origin projected (now, as Fusion and SolidWorks) or the face
   centre? Which file showed the counterbore preview pointing out of the plate?\\
 \eref{MOD-01} & Ship pattern Compute ``Identical'' only and add ``Adjust'' later?\\
@@ -179,4 +186,6 @@ Next & \eref{PDM-09} (New Project, units, structure) and \eref{UIX-04} (timeline
   \item Ribbon: in a sketch edit at half-screen width the View toolbar collapses to ``$\gg$''; the squeezed
         workspace tab bar of UAT screenshot 2 did not reproduce.
   \item Trackpad: tested with synthetic swipes only; a real swipe takes one more path through Qt.
+  \item Inspect maps: bridges are flagged as needing support; islands are not detected; section planes do not cut
+        the map.
 \end{itemize}
