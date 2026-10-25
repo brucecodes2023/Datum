@@ -1019,6 +1019,140 @@ def open_from_vault(pn=None, ask=True):
     return True
 
 
+def make_new_file(path, pn, kind, description, vault_root):
+    """Write a new part (an App::Part holding a Body) or assembly for New Part in Vault, with
+    the vault's part properties, its number, revision 01 and description; saved and closed."""
+    import FreeCAD
+
+    from bruceworx import partprops, pdm
+
+    doc = FreeCAD.newDocument(pn.replace("-", "_"), hidden=True)
+    try:
+        doc.Label = pn
+        if kind == "assembly":
+            main = doc.addObject("Assembly::AssemblyObject", "Assembly")
+            main.newObject("Assembly::JointGroup", "Joints")
+        else:
+            main = doc.addObject("App::Part", "Part")
+            main.addObject(doc.addObject("PartDesign::Body", "Body"))
+        main.Label = description
+        report = partprops.load_schema(extra_layers=partprops.vault_layers(vault_root)).apply(main)
+        clash = [t for t in report["conflicts"] if t.split(" ", 1)[0] in ("PartNumber", "Revision")]
+        if clash:
+            raise ValueError("; ".join(clash))
+        main.PartNumber = pn
+        main.Revision = pdm.first_prerelease()
+        if "Description" in main.PropertiesList:
+            main.Description = description
+        doc.recompute()
+        doc.saveAs(path)
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _new_part_dialog(s):
+    """(kind, description, program) from a small dialog, or None when cancelled."""
+    from PySide import QtWidgets
+
+    from bruceworx import vault_setup
+    from bruceworx.sources import JsonNumberSource
+
+    source = JsonNumberSource(vault_setup.numbering_path(s.root))
+    programs = source.programs()
+    dialog = QtWidgets.QDialog(_window())
+    dialog.setWindowTitle("New Part in Vault")
+    form = QtWidgets.QFormLayout(dialog)
+    kind = QtWidgets.QComboBox()
+    kind.addItems(["Part", "Assembly"])
+    form.addRow("Type", kind)
+    program = QtWidgets.QComboBox()
+    program.addItems(programs)
+    if len(programs) > 1:
+        form.addRow("Program", program)
+    text = QtWidgets.QLineEdit()
+    text.setPlaceholderText("e.g. Motor bracket")
+    form.addRow("Description", text)
+    number = QtWidgets.QLabel()
+    form.addRow("Number", number)
+    buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+    ok = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+    ok.setText("Create")
+    form.addRow(buttons)
+
+    def update(*_args):
+        word = kind.currentText().lower()
+        try:
+            types = vault_setup._vault_document_types(source, source._load())
+            code = vault_setup.document_type_for(word, types)
+            from bruceworx import pdm
+
+            number.setText(f"{pdm.strip_revision(source.preview(program.currentText(), code))}  ·  WIP 01")
+        except Exception as exc:
+            number.setText(str(exc))
+        ok.setEnabled(bool(text.text().strip()))
+
+    for signal in (kind.currentIndexChanged, program.currentIndexChanged, text.textChanged):
+        signal.connect(update)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    update()
+    if dialog.exec() != QtWidgets.QDialog.Accepted:
+        return None
+    return kind.currentText().lower(), text.text().strip(), program.currentText()
+
+
+def new_part(kind=None, description=None, program="", open_it=True):
+    """New Part in Vault (FND-08): number a new part or assembly, check it in as WIP 01 and check
+    it out to you; it opens ready to model. Without ``kind`` and ``description`` a dialog asks.
+    Returns the part number, or "" when cancelled or refused."""
+    s = session()
+    if s is None:
+        _message("New Part in Vault", "Open a vault first (Preferences > BruceWorx, or the Start page).")
+        return ""
+    if kind is None or description is None:
+        answer = _new_part_dialog(s)
+        if answer is None:
+            return ""
+        kind, description, program = answer
+    from bruceworx import vault_setup
+
+    def make(path, pn):
+        make_new_file(path, pn, kind, description, s.root)
+
+    ok, pn = _run("New Part in Vault", vault_setup.new_item, s.vault, kind, description, make, program)
+    if not ok:
+        return ""
+    s.refresh()
+    ok, _path = _run("New Part in Vault", s.work.checkout, pn)
+    if not ok:
+        return pn
+    _console(f"BruceWorx vault: new {kind} {pn} ({description}), WIP 01, checked out to you", "msg")
+    if open_it:
+        _load(s.work.path(pn))
+        _activate_new(s.work.path(pn))
+        _update_tabs()
+    return pn
+
+
+def _activate_new(path):
+    """Make the new part's Body the active body (and its Part the active part), ready for a sketch."""
+    import FreeCADGui
+
+    doc = document_for(path)
+    if doc is None:
+        return
+    try:
+        view = FreeCADGui.getDocument(doc.Name).ActiveView
+        part = doc.getObject("Part")
+        body = doc.getObject("Body")
+        if part is not None:
+            view.setActiveObject("part", part)
+        if body is not None:
+            view.setActiveObject("pdbody", body)
+    except Exception:  # no 3D view yet: the user activates the body by hand
+        pass
+
+
 def check_in(pn=None):
     """Open the Check In task panel for pn (default: the current target)."""
     import FreeCADGui
@@ -1500,6 +1634,7 @@ COMMANDS = (
      "secondary", lambda: show_in_panel(), _active_show, ""),
 )
 PANEL_COMMAND = "BruceWorx_VaultPanel"
+NEW_PART_COMMAND = "BruceWorx_VaultNewPart"
 # The right-click menus (Browser, Vault panel): in this order, None is a separator.
 CONTEXT_COMMANDS = ("BruceWorx_VaultCheckOut", "BruceWorx_VaultCheckIn", "BruceWorx_VaultUndoCheckOut",
                     "BruceWorx_VaultGetLatest", "BruceWorx_VaultGetRevision", None, "BruceWorx_VaultSubmit",
@@ -1537,6 +1672,22 @@ class _Command:
             self.fn()
         except Exception as exc:
             _message(self.text.rstrip("…"), str(exc), "warning")
+
+
+class _NewPartCommand:
+    def GetResources(self):
+        return {"Pixmap": _icon_name("checkin", "accent"), "MenuText": "New Part in Vault…",
+                "ToolTip": "Make a new numbered part or assembly in the open vault (WIP 01, checked out to "
+                           "you), without importing a file."}
+
+    def IsActive(self):
+        return session() is not None
+
+    def Activated(self):
+        try:
+            new_part()
+        except Exception as exc:
+            _message("New Part in Vault", str(exc), "warning")
 
 
 class _PanelCommand:
@@ -2233,7 +2384,8 @@ def _make_classes():
             elif not total and changes:
                 self.empty.setText("No ECRs or ECOs yet.\nRaise ECR… on a released item starts one.")
             elif not total:
-                self.empty.setText("The vault is empty.\nBruceWorx → Import Files into Vault… adds files.")
+                self.empty.setText("The vault is empty.\nBruceWorx → Vault → New Part in Vault… makes a part;\n"
+                                   "Import Files into Vault… adds files.")
             else:
                 self.empty.setText("Nothing matches.")
             self.empty.setVisible(not hits)
@@ -2459,7 +2611,7 @@ def _make_classes():
                 self.more_menu.addSeparator()
             except ImportError:
                 pass
-            entries = (("Vault Settings…", "BruceWorx_VaultSettings"),
+            entries = (("New Part in Vault…", NEW_PART_COMMAND), ("Vault Settings…", "BruceWorx_VaultSettings"),
                        ("Import Files into Vault…", "BruceWorx_ImportIntoVault"))
             for text, name in entries:
                 act = self.more_menu.addAction(text)
@@ -3282,7 +3434,7 @@ def _install_menu():
     if sub is None:
         sub = QtWidgets.QMenu("Vault", window)
         sub.setObjectName("BruceWorxVaultMenu")
-        names = [PANEL_COMMAND, None] + list(CONTEXT_COMMANDS[:-2]) + [None, "BruceWorx_VaultBreakLock"]
+        names = [PANEL_COMMAND, NEW_PART_COMMAND, None] + list(CONTEXT_COMMANDS[:-2]) + [None, "BruceWorx_VaultBreakLock"]
         actions = []
         for name in names:
             if name is None:
@@ -3290,6 +3442,8 @@ def _install_menu():
                 continue
             if name == PANEL_COMMAND:
                 text, icon = "Vault Panel", _icon_name("panel", "secondary")
+            elif name == NEW_PART_COMMAND:
+                text, icon = "New Part in Vault…", _icon_name("checkin", "accent")
             else:
                 entry = next(e for e in COMMANDS if e[0] == name)
                 text, icon = entry[1], _icon_name(entry[3], entry[4])
@@ -3299,7 +3453,8 @@ def _install_menu():
 
         def update():
             for name, act in actions:
-                act.setEnabled(session() is not None if name == PANEL_COMMAND else available(name))
+                act.setEnabled(session() is not None if name in (PANEL_COMMAND, NEW_PART_COMMAND)
+                               else available(name))
 
         sub.aboutToShow.connect(update)
     bruceworx_menu.add_action(sub.menuAction(), "BruceWorxMenu_Vault")
@@ -3342,6 +3497,7 @@ def install():
     for entry in COMMANDS:
         FreeCADGui.addCommand(entry[0], _Command(*entry))
     FreeCADGui.addCommand(PANEL_COMMAND, _PanelCommand())
+    FreeCADGui.addCommand(NEW_PART_COMMAND, _NewPartCommand())
 
     def timer(key, ms, slot):
         t = QtCore.QTimer()

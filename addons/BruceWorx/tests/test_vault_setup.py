@@ -87,6 +87,49 @@ class _Tmp(unittest.TestCase):
         return vs.create_vault(setup, actor="bruce@mac")
 
 
+class NewItemTests(_Tmp):
+    """New Part in Vault (FND-08): a numbered WIP 01 item without an import."""
+
+    def make(self, path, number):
+        self.made.append(number)
+        with open(path, "wb") as handle:
+            handle.write(b"fcstd " + number.encode())
+
+    def setUp(self):
+        super().setUp()
+        self.made = []
+        self.vault = self.new_vault(programs=[vs.ProgramSetup("LE")])
+
+    def test_new_part_is_numbered_wip_01_and_checked_in(self):
+        pn = vs.new_item(self.vault, "part", "Motor bracket", self.make)
+        self.assertEqual(pn, "LE-01-01001-001")
+        self.assertEqual(self.made, [pn])
+        item = self.vault.items[pn]
+        self.assertEqual((item.item_type, item.description), ("part", "Motor bracket"))
+        self.assertEqual((item.latest.code, item.latest.state), ("01", "WIP"))
+        self.assertIsNotNone(self.vault.latest_version(pn))
+        self.assertNotIn(pn, self.vault.locks)
+        self.assertFalse(os.path.exists(os.path.join(self.vault.root, vs.STAGING_DIR)))
+        self.assertEqual(vs.new_item(self.vault, "assembly", "Arm", self.make), "LE-02-01001-001")
+        self.assertEqual(vs.new_item(self.vault, "part", "Second", self.make), "LE-01-01002-001")
+
+    def test_a_file_that_cannot_be_made_burns_no_number(self):
+        def broken(path, number):
+            raise RuntimeError("no FreeCAD")
+
+        with self.assertRaises(RuntimeError):
+            vs.new_item(self.vault, "part", "Bracket", broken)
+        self.assertEqual(vs.new_item(self.vault, "part", "Bracket", self.make), "LE-01-01001-001")
+
+    def test_refusals(self):
+        with self.assertRaises(ValueError):
+            vs.new_item(self.vault, "part", "  ", self.make)
+        with self.assertRaises(ValueError):
+            vs.new_item(self.vault, "drawing", "Sheet", self.make)
+        self.assertEqual(self.made, [])
+        self.assertEqual(self.vault.items, {})
+
+
 class LocationTests(_Tmp):
     def levels(self, issues):
         return [i.level for i in issues]

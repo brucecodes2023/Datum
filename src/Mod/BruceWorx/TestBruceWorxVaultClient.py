@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Pure-logic tests for the vault client (bruceworx_vaultclient)."""
+"""Tests for the vault client (bruceworx_vaultclient): pure logic, and in a GUI FreeCAD New Part in Vault."""
 
 import datetime as dt
 import os
@@ -303,6 +303,66 @@ class TestCheckInLinks(unittest.TestCase):
                               needs_import=False)
         self.assertEqual(vc.link_summary([fix, fix])[0],
                          ["1 link to vault files is pointed at the part number before the check-in."])
+
+
+def _gui_up():
+    try:
+        import FreeCAD
+
+        return bool(FreeCAD.GuiUp)
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(_gui_up(), "needs a GUI FreeCAD")
+class TestNewPartInVault(unittest.TestCase):
+    """FND-08: New Part in Vault makes a numbered WIP 01 part, checked out and open, without an import."""
+
+    def setUp(self):
+        import shutil
+
+        import FreeCAD
+        from bruceworx import vault_setup as vs
+
+        self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-new-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        setup = vs.VaultSetup(name="New", folder=os.path.join(self.tmp, "vault"),
+                              numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("LE")]))
+        self.ref = vs.create_vault(setup, actor="bruce@mac").ref_path
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        prefs.SetString("VaultPath", self.ref)
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+        self.FreeCAD = FreeCAD
+
+    def tearDown(self):
+        for name, doc in list(self.FreeCAD.listDocuments().items()):
+            if doc.FileName.startswith(self.tmp):
+                self.FreeCAD.closeDocument(name)
+
+    def test_new_part_is_wip_01_checked_out_and_open(self):
+        pn = vc.new_part("part", "Motor bracket")
+        self.assertEqual(pn, "LE-01-01001-001")
+        s = vc.session()
+        self.assertEqual(s.vault.locks.get(pn), s.me)
+        item = s.vault.model.items[pn]
+        self.assertEqual((item.latest.code, item.latest.state, item.description), ("01", "WIP", "Motor bracket"))
+        path = s.work.path(pn)
+        self.assertTrue(os.access(path, os.W_OK))
+        doc = vc.document_for(path)
+        self.assertIsNotNone(doc, "the new part did not open")
+        part = doc.getObject("Part")
+        self.assertEqual((part.PartNumber, part.Revision, part.Label), (pn, "01", "Motor bracket"))
+        self.assertEqual(doc.Label, pn)
+        self.assertTrue(any(o.TypeId == "PartDesign::Body" for o in part.Group))
+        import FreeCADGui
+
+        view = FreeCADGui.getDocument(doc.Name).ActiveView
+        self.assertEqual(view.getActiveObject("pdbody").Name, "Body")  # ready for a sketch
+        self.assertIn(s.status(pn).code, vc.WRITABLE)
+        # an assembly takes the assembly document type; the parts' counter goes on
+        self.assertEqual(vc.new_part("assembly", "Arm", open_it=False), "LE-02-01001-001")
+        self.assertEqual(vc.new_part("part", "Second", open_it=False), "LE-01-01002-001")
 
 
 class TestICloudDownload(unittest.TestCase):

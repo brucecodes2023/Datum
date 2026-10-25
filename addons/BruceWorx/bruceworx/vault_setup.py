@@ -942,6 +942,67 @@ def program_of(part_number: str, vault_root: str) -> str:
     return offered[0] if offered else (own or DEFAULT_PROGRAM)
 
 
+NEW_ITEM_KINDS = ("part", "assembly")
+
+
+def new_item(vault, kind: str, description: str, make_file, program: str = "", document_type: str = "") -> str:
+    """Number a new part or assembly and check it in as WIP 01, without an import (FND-08).
+
+    ``vault`` is a FolderVault; ``make_file(path, part_number)`` writes the FreeCAD file
+    (a part with its part properties, the number and revision 01 already set). The number
+    is previewed first and taken only once the file exists, so a file that cannot be made
+    burns no number. ``program`` defaults to the vault's first program, ``document_type``
+    to the code named like the kind. Returns the part number; the item is not checked out.
+    """
+    from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
+
+    if kind not in NEW_ITEM_KINDS:
+        raise ValueError(f"a new item is a part or an assembly, not {kind!r}")
+    description = str(description or "").strip()
+    if not description:
+        raise ValueError("a new item needs a description")
+    source = JsonNumberSource(numbering_path(vault.root))
+    data = source._load()
+    programs = source.programs()
+    if not programs:
+        raise ValueError("the vault's numbering has no program")
+    program = numbering.normalize_program(program) if program else programs[0]
+    types = _vault_document_types(source, data)
+    code = numbering.normalize_document_type(document_type) if document_type else document_type_for(kind, types)
+    key = pdm.strip_revision(source.preview(program, code))
+    if key in vault.items:
+        raise ValueError(f"{key} is already an item in the vault")
+    staging = os.path.join(vault.root, STAGING_DIR)
+    os.makedirs(staging, exist_ok=True)
+    staged = os.path.join(staging, key + ".FCStd")
+    try:
+        make_file(staged, key)
+        if not os.path.isfile(staged):
+            raise ValueError(f"no file was made for {key}")
+        taken = pdm.strip_revision(source.allocate(program, code))
+        if taken != key:
+            raise ValueError(f"the number moved on while the file was made ({taken}, not {key}); try again")
+        vault.create_item(key, kind, description)
+        vault.checkout(key)
+        try:
+            vault.checkin(key, staged, comment=f"New {kind}: {description}")
+        except Exception:
+            vault.undo_checkout(key)
+            raise
+    finally:
+        for name in os.listdir(staging):
+            if name == key + ".FCStd" or (name.startswith(key + ".") and re.search(r"\.(FCBak|FCStd\d+)$", name)):
+                try:
+                    os.remove(os.path.join(staging, name))
+                except OSError:
+                    pass
+        try:
+            os.rmdir(staging)
+        except OSError:
+            pass
+    return key
+
+
 def import_linked_files(vault, paths, program: str, known=None, writer=None, progress=None):
     """Import files a checked-in assembly links from outside the vault, with what they link in turn.
 
