@@ -63,11 +63,15 @@ A failing feature gets a red chip in the Browser that opens it. Thin dependency 
 in the Browser on hover.
 \emph{Acceptance:} every face of \code{LE-02001} traces to its feature; a broken sketch shows a chip that opens it.
 \end{epic}
-\begin{epic}{UIX-12}{Property inspector}{UI}{\stProg}{(new, Nxt review)}
+\begin{epic}{UIX-12}{Property inspector}{UI}{\stDone}{(new, Nxt review)}
 A simpler inspector for the selection, grouped by meaning (size, position, appearance, part data), next to
 FreeCAD's property editor, which stays for everything else. Built 24 Oct in the Browser, then redesigned as a tabbed
-right panel: Properties built, Physical and Parameters paused half-built (\S\ref{sec:uix12-plan}).
+right panel (\S\ref{sec:uix12-plan}): Properties built 24 Oct, Physical and Parameters finished and switched on 25 Oct.
 \emph{Acceptance:} Pad, Pocket and Fillet edited from the inspector without the Data tab.
+\textbf{Done 25 Oct:} the acceptance is a GUI test (\code{TestBruceWorxInspector.EditInPlaceTests}: Pad
+\emph{Distance} 14\,mm, Pocket \emph{Depth} 6\,mm and Fillet \emph{Radius} 2\,mm typed on the Properties tab, one named
+undo step each, the body still valid). It passed three runs out of three; the crash seen earlier with a scratch script
+did not come back.
 \end{epic}
 
 \input{chapters/91-uix12-plan}

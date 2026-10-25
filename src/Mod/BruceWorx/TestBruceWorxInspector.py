@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Property inspector: which property goes where, labels, multi-selection. No GUI."""
+"""Property inspector: which property goes where, labels, multi-selection; and, in a GUI FreeCAD, the
+UIX-12 acceptance (Pad, Pocket and Fillet edited from the Properties tab)."""
 
 import os
 import sys
@@ -8,6 +9,11 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bruceworx_inspector as bi
+
+try:
+    import FreeCAD as App
+except ImportError:  # plain Python
+    App = None
 
 
 class Obj:
@@ -264,6 +270,99 @@ class SmallTests(unittest.TestCase):
     def test_location(self):
         self.assertEqual(bi.location_text("Pad", "Body"), "Pad · in Body")
         self.assertEqual(bi.location_text("Part"), "Part")
+
+
+@unittest.skipUnless(App is not None and App.GuiUp, "needs a GUI FreeCAD")
+class EditInPlaceTests(unittest.TestCase):
+    """UIX-12 acceptance: Pad, Pocket and Fillet edited from the inspector, without the Data tab."""
+
+    def setUp(self):
+        import Part
+        import Sketcher
+
+        V = App.Vector
+        self.doc = App.newDocument("BWInspectorEdit")
+        self.doc.UndoMode = 1
+        body = self.doc.addObject("PartDesign::Body", "Body")
+        sk = body.newObject("Sketcher::SketchObject", "Sketch")
+        sk.AttachmentSupport = [(body.Origin.OriginFeatures[3], "")]
+        sk.MapMode = "FlatFace"
+        pts = [V(0, 0, 0), V(40, 0, 0), V(40, 30, 0), V(0, 30, 0)]
+        for i in range(4):
+            sk.addGeometry(Part.LineSegment(pts[i], pts[(i + 1) % 4]))
+        for i in range(4):
+            sk.addConstraint(Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1))
+        self.doc.recompute()
+        self.pad = body.newObject("PartDesign::Pad", "Pad")
+        self.pad.Profile = sk
+        self.pad.Length = 10
+        self.doc.recompute()
+        sk2 = body.newObject("Sketcher::SketchObject", "Sketch001")
+        sk2.AttachmentSupport = [(self.pad, "Face6")]
+        sk2.MapMode = "FlatFace"
+        sk2.addGeometry(Part.Circle(V(20, 15, 0), V(0, 0, 1), 5))
+        self.doc.recompute()
+        self.pocket = body.newObject("PartDesign::Pocket", "Pocket")
+        self.pocket.Profile = sk2
+        self.pocket.Length = 4
+        self.doc.recompute()
+        top = max(e.BoundBox.ZMax for e in self.pocket.Shape.Edges)
+        edge = next(i for i, e in enumerate(self.pocket.Shape.Edges, 1)
+                    if e.Curve.TypeId == "Part::GeomLine" and abs(e.BoundBox.ZMin - top) < 1e-6)
+        self.fillet = body.newObject("PartDesign::Fillet", "Fillet")
+        self.fillet.Base = (self.pocket, [f"Edge{edge}"])
+        self.fillet.Radius = 1
+        self.doc.recompute()
+        self.body = body
+
+    def tearDown(self):
+        import FreeCADGui as Gui
+
+        Gui.Selection.clearSelection()
+        App.closeDocument(self.doc.Name)
+
+    def _pump(self, n=6):
+        import FreeCADGui as Gui
+
+        for _ in range(n):
+            Gui.updateGui()
+
+    def _edit(self, feature, labels, text):
+        """Select the feature, find its row on the Properties tab, type a value; the row's label."""
+        import FreeCADGui as Gui
+        import bruceworx_rightpanel as rp
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(feature)
+        self._pump()
+        rp.show_tab(rp.PROPERTIES)
+        c = bi.controller()
+        c.signature = None
+        c.refresh()
+        self._pump()
+        for row, _objs, widget, _b in c.editors:
+            if getattr(row, "label", "") in labels and widget is not None \
+                    and widget.metaObject().className() == "Gui::QuantitySpinBox":
+                widget.setProperty("value", App.Units.Quantity(text))
+                self._pump()
+                return row.label
+        self.fail(f"no {labels} row for {feature.Name}: {[getattr(r, 'label', r) for r, *_x in c.editors]}")
+
+    def test_pad_pocket_fillet_edited_in_place(self):
+        v0 = self.body.Shape.Volume
+        self.assertEqual(self._edit(self.pad, ("Distance",), "14 mm"), "Distance")
+        self.assertEqual(self._edit(self.pocket, ("Depth",), "6 mm"), "Depth")
+        self.assertEqual(self._edit(self.fillet, ("Radius",), "2 mm"), "Radius")
+        self.assertAlmostEqual(self.pad.Length.Value, 14.0)
+        self.assertAlmostEqual(self.pocket.Length.Value, 6.0)
+        self.assertAlmostEqual(self.fillet.Radius.Value, 2.0)
+        self.assertTrue(self.body.Shape.isValid())
+        self.assertGreater(self.body.Shape.Volume, v0)
+        # one undo step each, named after what changed
+        self.assertEqual(self.doc.UndoNames[:3], ["Fillet: Radius", "Pocket: Depth", "Pad: Distance"])
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertAlmostEqual(self.fillet.Radius.Value, 1.0)
 
 
 if __name__ == "__main__":

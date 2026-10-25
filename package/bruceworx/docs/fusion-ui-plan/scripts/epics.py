@@ -425,9 +425,9 @@ EPICS = [
       "(new, from the Nxt add-on review, 23 Oct)",
       "Click a face: the Browser and timeline show the feature that made it. A failing feature gets a red chip that opens it; dependency lines (Sketch to Pad) in the Browser.",
       "Every face of LE-02001 traces to its feature; a broken sketch shows a chip that opens it."),
-    E("UIX-12", "Property inspector", "UI", "In progress", ["UIX-07"],
+    E("UIX-12", "Property inspector", "UI", "Done", ["UIX-07"],
       "(new, from the Nxt add-on review, 23 Oct)",
-      "A grouped inspector for a feature, face, body, part or several objects; FreeCAD's editor one click away. Card in the Browser built 24 Oct (bruceworx_inspector.py); redesigned at your request as a tabbed right panel (Properties, Vault, Parameters, Physical): Properties tab built 24 Oct; Physical and Parameters tabs finished and on 25 Oct (local/linked sheet, dependents, ml shown as cm3). Also 24 Oct evening: Create Vault opens as a full-window tab; document tabs at the bottom or top (Preferences > BruceWorx > Document tabs, default bottom) with the Start page pinned as the first tab.",
+      "A grouped inspector for a feature, face, body, part or several objects; FreeCAD's editor one click away. Card in the Browser built 24 Oct (bruceworx_inspector.py); redesigned at your request as a tabbed right panel (Properties, Vault, Parameters, Physical): Properties tab built 24 Oct; Physical and Parameters tabs finished and on 25 Oct (local/linked sheet, dependents, ml shown as cm3). Also 24 Oct evening: Create Vault opens as a full-window tab; document tabs at the bottom or top (Preferences > BruceWorx > Document tabs, default bottom) with the Start page pinned as the first tab. Done 25 Oct: the acceptance is a GUI test (TestBruceWorxInspector.EditInPlaceTests: Pad Distance, Pocket Depth and Fillet Radius typed on the Properties tab, one named undo step each), passed 3 runs of 3 with no crash; Physical, Parameters and Document tabs suites pass in the GUI.",
       "Pad, Pocket and Fillet edited from the inspector without the Data tab."),
     # Kernel --------------------------------------------------------------
     E("KRN-01", "OCCT coupling survey", "BG", "To do", [],
