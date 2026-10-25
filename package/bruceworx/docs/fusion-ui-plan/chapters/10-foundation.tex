@@ -97,14 +97,28 @@ Found on 24 Oct while the Leonardo actuator was modelled in your vault \emph{Vec
 \begin{enumerate}[nosep]
   \item \textbf{No ``New part in vault'' command.} New items enter the vault only through \emph{Import Files into
         Vault}, until \eref{PDM-09}'s New Project wizard; a single numbered part should be one command
-        (\eref{PDM-04}).
+        (\eref{PDM-04}). \textbf{Fixed 25 Oct:} BruceWorx $\rightarrow$ Vault $\rightarrow$ \emph{New Part in Vault\ldots}
+        (also in the Files tab's menu) asks for part or assembly, program and description and shows the number; the
+        file (an App::Part holding a Body, with the vault's part properties) is numbered, checked in as WIP~01,
+        checked out to you and opened with the Body active. The number is taken only once the file exists, so a
+        failure burns none (\code{vault\_setup.new\_item}; GUI test \code{TestNewPartInVault}).
   \item \textbf{New vaults still write \code{-REV}} in the part-number format (the import proposed
         \code{LE-01-01001-001-A}), although \eref{PDM-03} moved revisions out of the P/N: the Create Vault engine
-        still writes the old format.
+        still writes the old format. \textbf{Fixed 25 Oct:} Create Vault and Vault Settings write the P/N form
+        (\code{LE-01-01001-001}); the wizard's ``first revision'' and \code{vault init --first-revision} are gone.
   \item \textbf{Create Assembly fails silently} when a spreadsheet tab is in front: it needs a 3D view. It should
-        switch to the document's 3D view or say why (\eref{ASM-01}).
-  \item \textbf{A face sketch's ``centre'' lands off-centre} (\eref{MOD-12}).
-  \item \textbf{A counterbored Hole's preview points out of the plate} (\eref{MOD-05}).
+        switch to the document's 3D view or say why (\eref{ASM-01}). \textbf{Fixed 25 Oct:} the assembly was made
+        and set to edit, but marked active in the \emph{sheet's} view, so the 3D view had no active assembly and every
+        assembly command stayed greyed. Create and Activate Assembly now bring the 3D view to the front first
+        (making one if there is none; \code{[BW]} in \file{CommandCreateAssembly.py}; GUI test).
+  \item \textbf{A face sketch's ``centre'' lands off-centre} (\eref{MOD-12}). \textbf{Checked 25 Oct, open:} a sketch
+        made on a face (\emph{New Sketch} with the face selected) has its origin at the body origin projected onto the
+        face, not at the face's centre: on a plate from (10,10) to (70,50) the sketch's (0,0) is at (0,0,8), while the
+        face centre is (40,30,8). Fusion and SolidWorks do the same, so I left it; question for you below.
+  \item \textbf{A counterbored Hole's preview points out of the plate} (\eref{MOD-05}). \textbf{Checked 25 Oct, not
+        reproduced:} a counterbored Hole on a top-face and on a bottom-face sketch cuts into the plate with its head at
+        that face, and the panel's preview overlay sits on the face (GUI test \code{TestBruceWorxGaps}). The case seen
+        on 24 Oct was made through the bridge; if it comes back, the file it happened in is what is needed.
   \item \textbf{Parts reading the Parameters sheet of another file do not rebuild} when the sheet changes; each has
         to be touched and recomputed by hand. An \emph{Update from Parameters} command, and a stale-part marker,
         belong to \eref{MOD-02}.

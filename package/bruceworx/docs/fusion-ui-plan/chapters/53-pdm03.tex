@@ -45,9 +45,8 @@ item, which is the point of the decision.
 
 \paragraph{Still to do.}
 \begin{itemize}[nosep]
-  \item Switch \emph{new} numbering files to the P/N form: the Create Vault panel, Vault Settings and the shipped example
-        still write the old form (the vault strips the letter on import). A one-line change each, plus the tests that
-        expect \code{-A}; left to the owners of those files.
+  \item \textbf{Done 25 Oct} (\eref{FND-08}): \emph{new} numbering files are in the P/N form; Create Vault, Vault Settings
+        and the shipped example no longer write \code{-REV}.
   \item A way to run the migration without Python: a \emph{Migrate numbering} button in Vault Settings, or
         \code{bw-hooks} subcommand.
   \item The Ops side: the Ops app does not serve \code{/part-numbers} yet. \eref{PDM-03}'s acceptance (\emph{P/N
