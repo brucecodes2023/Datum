@@ -15,7 +15,7 @@ Feature patterns & \code{LinearPattern} (2 directions), \code{PolarPattern}, \co
 Body/component patterns & Draft link arrays & Not assembly-aware; no Fusion options\\
 Parameters & Spreadsheet, \code{App::VarSet}, expressions & No Change Parameters dialog\\
 Top-down & \code{ShapeBinder}, \code{SubShapeBinder} (cross-document) & No skeleton/derive workflow\\
-Configurations & none (no configuration table in \file{src/Mod/Spreadsheet} or \file{src/App}) & Missing\\
+Configurations & Spreadsheet configuration table; \code{App::Link} \code{CopyOnChange} (section~\ref{sec:mod03-plan}) & No readable table, P/N per row, BOM or vault\\
 Direct edit & \code{Part\_Defeaturing} (delete faces) & No press-pull, move or replace face\\
 Threads & \code{Hole} has \code{ModelThread}; TechDraw draws cosmetic threads on views & No model-level cosmetic thread\\
 Sheet metal & add-on only & Bundle (decided)\\
@@ -252,8 +252,11 @@ one history serves all rows. Two consequences follow:
         unsuppressed has to be suppressed in the rows where that edge is missing. Per-row validation runs
         every configuration in CI and reports which features fail in which rows.
 \end{enumerate}
-Storage: a \code{BruceWorx::ConfigurationTable} object (FeaturePython) in the part file. It can import and
+Storage (first idea, replaced on 25 Oct by FreeCAD's own configuration table, section~\ref{sec:mod03-plan}):
+a \code{BruceWorx::ConfigurationTable} object (FeaturePython) in the part file. It can import and
 export CSV, so variants can be edited in a spreadsheet, as with a SolidWorks design table.
+
+\input{chapters/23-mod03-plan}
 
 %----------------------------------------------------------------------
 \subsection{BW-MOD-04 --- Direct edit on imported geometry}
