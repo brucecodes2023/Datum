@@ -169,5 +169,52 @@ class ModelTests(unittest.TestCase):
         self.assertFalse(bpar.fold_default(bpar.FOLD_LIMIT + 1))
 
 
+
+class ProductSheetTests(unittest.TestCase):
+    """One Parameters sheet for the product, in the root file, read by parts in other files."""
+
+    def test_referenced_sheets(self):
+        refs = bpar.referenced_sheets(["LE_02_01001_001#Parameters.face_width / 2", "Root#<<Parameters>>.t + 1",
+                                       "Parameters.local", "x * 2"])
+        self.assertEqual(refs, {("LE_02_01001_001", "Parameters"), ("Root", "<<Parameters>>")})
+
+    def test_short_names_across_files(self):
+        ref = "LE_02_01001_001#Parameters"
+        self.assertEqual(bpar.short_expr(f"{ref}.face_width / 2", {"face_width"}, ref), "face_width / 2")
+        self.assertEqual(bpar.qualify("face_width / 2", {"face_width"}, ref), f"{ref}.face_width / 2")
+
+    def test_a_part_reads_the_root_sheet_and_is_rebuilt(self):
+        import os
+        import shutil
+        import tempfile
+
+        import FreeCAD
+
+        tmp = tempfile.mkdtemp(prefix="bw-params-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        root = FreeCAD.newDocument("BWRoot")
+        part = FreeCAD.newDocument("BWPart")
+        self.addCleanup(lambda: [FreeCAD.closeDocument(n) for n in ("BWPart", "BWRoot") if n in FreeCAD.listDocuments()])
+        sheet = bpar.make_sheet(root)
+        sheet.set("A2", "plate_t")
+        sheet.set("B2", "5 mm")
+        sheet.setAlias("B2", "plate_t")
+        root.recompute()
+        root.saveAs(os.path.join(tmp, "BWRoot.FCStd"))
+        box = part.addObject("Part::Box", "Box")
+        part.saveAs(os.path.join(tmp, "BWPart.FCStd"))  # a link to another file needs its owner saved
+        box.setExpression("Height", "BWRoot#Parameters.plate_t")
+        part.recompute()
+        self.assertIsNone(bpar.local_sheet(part))
+        self.assertIs(bpar.find_sheet(part), sheet)
+        self.assertEqual(bpar.sheet_ref(sheet, part), "BWRoot#Parameters")
+        self.assertEqual(bpar.sheet_ref(sheet, root), "Parameters")
+        self.assertEqual(bpar.dependents(sheet), [box])
+        sheet.set("B2", "8 mm")
+        root.recompute()
+        self.assertEqual(bpar.update_dependents(sheet), ["BWPart"])
+        self.assertAlmostEqual(box.Height.Value, 8.0)
+
+
 if __name__ == "__main__":
     unittest.main()

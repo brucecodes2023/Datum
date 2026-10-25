@@ -24,6 +24,8 @@ Inertia is the tensor (products are -∫xy dm, as OpenCASCADE gives them).
 
 from __future__ import annotations
 
+import re
+
 import csv
 import io
 import math
@@ -147,9 +149,14 @@ def box_text(sizes, decimals=2, unit=""):
     return f"{text} {unit}".rstrip()
 
 
+_LITRES = {"ml": "cm³", "l": "dm³", "µl": "mm³"}
+
+
 def pretty(text):
-    """FreeCAD's "cm^2" and "kg/m^3" with superscripts: "cm²", "kg/m³"."""
-    return (text or "").replace("^2", "²").replace("^3", "³")
+    """FreeCAD's "cm^2" and "kg/m^3" with superscripts: "cm²", "kg/m³"; volumes in cubic lengths, as CAD
+    shows them ("14.52 ml" -> "14.52 cm³": the unit schema speaks of litres)."""
+    text = (text or "").replace("^2", "²").replace("^3", "³")
+    return re.sub(r"(^|(?<=[\d\s]))(ml|l|µl)$", lambda m: m.group(1) + _LITRES[m.group(2)], text)
 
 
 def inertia_unit(mass_unit, length_unit):

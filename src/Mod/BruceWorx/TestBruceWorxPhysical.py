@@ -101,6 +101,10 @@ class TextTests(unittest.TestCase):
         self.assertEqual(bp.pretty("116.67 cm^2"), "116.67 cm²")
         self.assertEqual(bp.pretty("2700.00 kg/m^3"), "2700.00 kg/m³")
         self.assertEqual(bp.pretty(""), "")
+        self.assertEqual(bp.pretty("14.52 ml"), "14.52 cm³")
+        self.assertEqual(bp.pretty("2.10 l"), "2.10 dm³")
+        self.assertEqual(bp.pretty("ml"), "cm³")  # the CSV's unit column
+        self.assertEqual(bp.pretty("kg/l"), "kg/l")  # a density keeps its unit
 
     def test_units_and_counts(self):
         self.assertEqual(bp.inertia_unit("g", "mm"), "g·mm²")

@@ -4,11 +4,15 @@
 Fusion's Change Parameters as a tab: every dimension of the active document
 in one table (Name, Expression, Value), with a filter.
 
-* User parameters live in a spreadsheet named "Parameters" (made by the first
-  "+ Parameter"): column A the name, B the value or expression (its alias is
-  the name), C a comment. Every aliased cell of the sheet is listed.
-  Expressions elsewhere refer to them as Parameters.<name>; the tab shows and
-  takes the bare name.
+* User parameters live in a spreadsheet named "Parameters": column A the name,
+  B the value or expression (its alias is the name), C a comment. Every aliased
+  cell is listed. Decided 24 Oct: one sheet for the whole product, at the root of
+  the top-assembly file. A part without a sheet of its own uses the one its
+  expressions read in another file (Root#Parameters.<name>), or that the files
+  its links point at read; only a file with neither gets its own, made by the
+  first "+ Parameter". The tab shows and takes the bare name.
+* An edit of the sheet rebuilds the open parts in other files that read it:
+  FreeCAD does not recompute them on its own.
 * Model parameters: every dimension of every feature (its length, angle and
   count properties, inactive ones left out) and every dimensional sketch
   constraint, named or not, grouped by feature in tree order.
@@ -262,8 +266,8 @@ def _obj_alive(obj):
         return False
 
 
-def find_sheet(doc):
-    """The document's "Parameters" spreadsheet, or None."""
+def local_sheet(doc):
+    """The document's own "Parameters" spreadsheet, or None."""
     if doc is None:
         return None
     obj = doc.getObject(SHEET_NAME)
@@ -273,6 +277,96 @@ def find_sheet(doc):
         if obj.TypeId == SHEET_TYPE:
             return obj
     return None
+
+
+_XDOC = re.compile(r"(?<![\w.])([A-Za-z_][A-Za-z0-9_]*)#([A-Za-z_][A-Za-z0-9_]*|<<[^>]+>>)\.")
+
+
+def referenced_sheets(expressions):
+    """{(document name, object name or <<label>>)} of the other files' objects the expressions read."""
+    found = set()
+    for expr in expressions:
+        for match in _XDOC.finditer(expr or ""):
+            found.add((match.group(1), match.group(2)))
+    return found
+
+
+def linked_sheet(doc):
+    """The product's Parameters sheet in another file (decided 24 Oct: one sheet at the root of the
+    top-assembly file), found through the expressions of this document, or of the files its links
+    point at (an assembly reads the sheet only through its parts)."""
+    import FreeCAD
+
+    def sheet_in(refs):
+        for doc_name, obj_name in sorted(refs):
+            other = FreeCAD.listDocuments().get(doc_name)
+            if other is None:
+                continue
+            obj = (other.getObjectsByLabel(obj_name[2:-2]) or [None])[0] if obj_name.startswith("<<") else other.getObject(obj_name)
+            if obj is not None and obj.TypeId == SHEET_TYPE:
+                return obj
+        return None
+
+    def refs_of(d):
+        return referenced_sheets(e for o in d.Objects for _p, e in (getattr(o, "ExpressionEngine", None) or ()))
+
+    found = sheet_in(refs_of(doc))
+    if found is not None:
+        return found
+    seen = {doc.Name}
+    for obj in doc.Objects:
+        target = obj.getLinkedObject(True) if obj.TypeId == "App::Link" else None
+        other = getattr(target, "Document", None)
+        if other is None or other.Name in seen:
+            continue
+        seen.add(other.Name)
+        found = local_sheet(other) or sheet_in(refs_of(other))
+        if found is not None:
+            return found
+    return None
+
+
+def find_sheet(doc):
+    """The Parameters spreadsheet this document uses: its own, else the product's in another file."""
+    if doc is None:
+        return None
+    return local_sheet(doc) or linked_sheet(doc)
+
+
+def sheet_ref(sheet, doc):
+    """How expressions in ``doc`` name the sheet: "Parameters", or "File#Parameters" across files."""
+    if sheet is None:
+        return SHEET_NAME
+    if doc is None or sheet.Document is doc:
+        return sheet.Name
+    return f"{sheet.Document.Name}#{sheet.Name}"
+
+
+def dependents(sheet):
+    """Objects in other open files whose expressions read the sheet."""
+    import FreeCAD
+
+    prefix = f"{sheet.Document.Name}#"
+    out = []
+    for doc in FreeCAD.listDocuments().values():
+        if doc is sheet.Document:
+            continue
+        for obj in doc.Objects:
+            if any(prefix in (e or "") for _p, e in (getattr(obj, "ExpressionEngine", None) or ())):
+                out.append(obj)
+    return out
+
+
+def update_dependents(sheet):
+    """Rebuild the parts in other files that read the sheet: FreeCAD does not recompute them when the
+    sheet changes (found 24 Oct, FND-08). Returns the names of the files rebuilt."""
+    docs = {}
+    for obj in dependents(sheet):
+        obj.touch()
+        docs[obj.Document.Name] = obj.Document
+    for doc in docs.values():
+        doc.recompute(None, True, True)
+    return sorted(docs)
 
 
 def make_sheet(doc):
@@ -348,7 +442,7 @@ def collect_feature(obj, aliases, sheet):
 
     import bruceworx_inspector as bi
 
-    sheet_name = sheet.Name if sheet is not None else SHEET_NAME
+    sheet_name = sheet_ref(sheet, obj.Document)
     sheet_label = sheet.Label if sheet is not None else SHEET_NAME
     exprs = expression_map(getattr(obj, "ExpressionEngine", ()))
     params = []
@@ -998,13 +1092,14 @@ class Controller:
 
         return FreeCAD.getDocument(self.doc_name) if self.doc_name else FreeCAD.ActiveDocument
 
-    def commit(self, label, field, change):
-        """One undo step "<label>: <field>": ``change()`` then a recompute. A raised error undoes it."""
+    def commit(self, label, field, change, doc=None):
+        """One undo step "<label>: <field>": ``change()`` then a recompute. A raised error undoes it.
+        ``doc``: the document the step belongs to (the sheet's, when it is in another file)."""
         import FreeCAD
 
         import bruceworx_inspector as bi
 
-        doc = self._doc()
+        doc = doc or self._doc()
         if doc is None:
             return False
         name = bi.transaction_name([label], field)
@@ -1026,6 +1121,15 @@ class Controller:
             doc.commitTransaction()
             self.tab.show_error("")
             ok = True
+            sheet = self._sheet()
+            if sheet is not None and sheet.Document is doc:
+                try:
+                    rebuilt = update_dependents(sheet)
+                except Exception as exc:  # noqa: BLE001
+                    FreeCAD.Console.PrintWarning(f"Parameters: the parts reading {sheet.Label} were not rebuilt: {exc}\n")
+                else:
+                    if rebuilt:
+                        FreeCAD.Console.PrintMessage(f"Parameters: rebuilt {', '.join(rebuilt)}\n")
         finally:
             self.busy = False
         self.schedule()
@@ -1057,7 +1161,7 @@ class Controller:
                 return False
             return self.commit(obj.Label, p.label, lambda _d: obj.setExpression(p.expr_key, None))
         sheet = self._sheet()
-        expr = qualify(body, self._aliases(), sheet.Name if sheet is not None else SHEET_NAME)
+        expr = qualify(body, self._aliases(), sheet_ref(sheet, obj.Document))
         try:
             obj.evalExpression(expr)
         except Exception as exc:
@@ -1114,7 +1218,7 @@ class Controller:
             if "Invalid" in sheet.State:
                 raise ValueError(f"{content.lstrip('=')} does not evaluate")
 
-        return self.commit(sheet.Label, p.key, change)
+        return self.commit(sheet.Label, p.key, change, doc=sheet.Document)
 
     def rename(self, p, new):
         sheet = self._sheet()
@@ -1136,7 +1240,7 @@ class Controller:
             if cell.startswith("B") and (sheet.getContents(label_cell) or "") == old:
                 sheet.set(label_cell, new)
 
-        return self.commit(sheet.Label, f"rename {old}", change)
+        return self.commit(sheet.Label, f"rename {old}", change, doc=sheet.Document)
 
     def check_new(self, name, text, unit):
         """The add dialog's check of an expression (bare names are the sheet's aliases)."""
@@ -1168,8 +1272,10 @@ class Controller:
         """A user parameter in a new row of the sheet (made first if missing): one undo step."""
         content = cell_content(text, unit)
 
+        existing = self._sheet()
+
         def change(d):
-            sheet = find_sheet(d) or make_sheet(d)
+            sheet = existing or make_sheet(d)
             row = next_row(sheet.getUsedCells())
             sheet.set(f"A{row}", name)
             sheet.set(f"B{row}", content)
@@ -1181,7 +1287,7 @@ class Controller:
                 raise ValueError(f"{content.lstrip('=')} does not evaluate")
 
         self.signature = None
-        return self.commit(SHEET_NAME, f"add {name}", change)
+        return self.commit(SHEET_NAME, f"add {name}", change, doc=existing.Document if existing is not None else None)
 
     def delete_parameter(self, p):
         doc = self._doc()
@@ -1189,9 +1295,10 @@ class Controller:
         if doc is None or sheet is None:
             return
         users = []
-        for obj in doc.Objects:
+        for obj in list(sheet.Document.Objects) + dependents(sheet):
+            ref = sheet_ref(sheet, obj.Document)
             for path, expr in getattr(obj, "ExpressionEngine", ()) or ():
-                if uses_alias(expr, p.key, sheet.Name, sheet.Label, bare=obj is sheet):
+                if uses_alias(expr, p.key, ref, sheet.Label, bare=obj is sheet):
                     users.append(f"{obj.Label}.{path.lstrip('.')}" if obj is not sheet else path.lstrip("."))
         for cell, alias in sheet_aliases(sheet):
             if alias != p.key and uses_alias(sheet.getContents(cell) or "", p.key, bare=True):
@@ -1211,7 +1318,7 @@ class Controller:
                         sheet.clear(other)
 
         self.signature = None
-        self.commit(sheet.Label, f"delete {p.key}", change)
+        self.commit(sheet.Label, f"delete {p.key}", change, doc=sheet.Document)
 
     # -- actions -----------------------------------------------------------------------------
     def open_sheet(self):
@@ -1227,7 +1334,7 @@ class Controller:
                 return
             sheet = find_sheet(doc)
         try:
-            FreeCADGui.getDocument(doc.Name).setEdit(sheet.Name)
+            FreeCADGui.getDocument(sheet.Document.Name).setEdit(sheet.Name)
         except Exception:
             pass
 
