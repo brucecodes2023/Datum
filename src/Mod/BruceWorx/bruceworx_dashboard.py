@@ -58,6 +58,11 @@ def default_tab(vault_open: bool, chosen: str = "") -> str:
     return "dashboard" if vault_open else "recent"
 
 
+def tip_words(text: str) -> str:
+    """Lower case for a tool tip, keeping acronyms: "WIP" stays, "Bought (COTS)" -> "bought (COTS)"."""
+    return " ".join(w if w.strip("()").isupper() and len(w.strip("()")) > 1 else w.lower() for w in text.split())
+
+
 def tile_query(item_type: str, state: str = "") -> str:
     """Vault panel search words for a tile ("type:part") or one of its legend entries."""
     query = f"type:{item_type}"
@@ -668,7 +673,7 @@ def classes():
             kinds = {"part": "part", "assembly": "assembly", "drawing": "drawing"}
             for col, tile in enumerate(snap["tiles"]):
                 t = Click("bwDashTile", lambda ty=tile["type"]: open_filtered("all", tile_query(ty)), self.tiles_box,
-                          f"Show the {tile['title'].lower()} in the Vault panel")
+                          f"Show the {tip_words(tile['title'])} in the Files tab")
                 v = QtWidgets.QVBoxLayout(t)
                 v.setContentsMargins(16, 12, 14, 12)
                 v.setSpacing(6)
@@ -698,7 +703,7 @@ def classes():
                     key = dict((s, k) for s, k, _t in STATE_KEYS)[state]
                     colour = self.colours.colour(key).name()
                     entry = Click("bwDashLegend", lambda ty=tile["type"], st=state: open_filtered(
-                        "all", tile_query(ty, st)), t, f"Show {text.lower()} {tile['title'].lower()}")
+                        "all", tile_query(ty, st)), t, f"Show {tip_words(text)} {tip_words(tile['title'])}")
                     el = QtWidgets.QHBoxLayout(entry)
                     el.setContentsMargins(0, 0, 0, 0)
                     lab = label(f'<span style="color:{colour}">■</span> {text} <b>{n:,}</b>'.replace(",", " "),
@@ -736,7 +741,7 @@ def classes():
                 return
             for i, row in enumerate(projects["rows"]):
                 r = Click("bwDashRow", lambda pn=row["part_number"]: open_filtered("all", pn, pn), card,
-                          f"{row['display']}: show it in the Vault panel")
+                          f"{row['display']}: show it in the Files tab")
                 r.setProperty("first", i == 0)
                 h = QtWidgets.QHBoxLayout(r)
                 h.setContentsMargins(16, 9, 16, 9)
@@ -842,7 +847,7 @@ def classes():
             card.count.setText(f"{changes['total']} open" if changes["total"] else "")
             for row in changes["rows"][:6]:
                 r = Click("bwDashRow", lambda n=row["number"]: open_filtered("changes", "", n), card,
-                          f"{row['number']}: show it in the Vault panel")
+                          f"{row['number']}: show it in the Files tab")
                 h = QtWidgets.QHBoxLayout(r)
                 h.setContentsMargins(14, 7, 14, 7)
                 h.setSpacing(10)

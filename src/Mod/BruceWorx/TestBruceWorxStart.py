@@ -343,6 +343,13 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dash.default_tab(True, "structure"), "dashboard")  # the tab folded into Files
         self.assertEqual(dash.default_tab(False, "files"), "recent")  # no vault: no file list
 
+    def test_tip_words(self):
+        import bruceworx_dashboard as dash
+
+        self.assertEqual(dash.tip_words("WIP"), "WIP")
+        self.assertEqual(dash.tip_words("Bought (COTS)"), "bought (COTS)")
+        self.assertEqual(dash.tip_words("Review Parts"), "review parts")
+
     def test_tile_query(self):
         import bruceworx_dashboard as dash
 
