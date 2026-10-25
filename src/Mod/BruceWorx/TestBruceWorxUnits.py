@@ -190,3 +190,148 @@ class TestDecimalsSwitch(unittest.TestCase):
         units.apply_units(self.docs[0], "in")
         self.assertEqual(self._shown(), "0.250 in")
         self.assertEqual(units.badge(self.docs[0], ""), "")  # no vault: no badge
+
+
+@unittest.skipUnless(FreeCAD.GuiUp, "New Part in Vault and TechDraw views need the GUI")
+class TestInchVaultAcceptance(unittest.TestCase):
+    """PDM-09 steps 1-3 acceptance: in a vault created with units=in, New Part shows inch with three
+    decimals and its drawing is ANSI B with the inch tolerance block and .250-style dimensions; a mm
+    vault is unchanged."""
+
+    def setUp(self):
+        import bruceworx_vaultclient as vc
+
+        self.vc = vc
+        self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-pdm09-acc-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.refs = {u: _scratch_vault(self.tmp, u, "Shop " + u) for u in ("in", "mm")}
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+        self.prefs = prefs
+        group = FreeCAD.ParamGet(units.UNITS_PATH)
+        td = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/TechDraw/Dimensions")
+        saved = {k: group.GetInt(k, -1) for k in ("DecimalsMetric", "DecimalsInch")}
+        saved_zero = td.GetBool("DropLeadingZeroInch", False)
+        group.SetInt("DecimalsMetric", 2)
+        group.SetInt("DecimalsInch", 3)
+        td.SetBool("DropLeadingZeroInch", True)
+
+        def restore():
+            for k, v in saved.items():
+                group.SetInt(k, v) if v >= 0 else group.RemInt(k)
+            td.SetBool("DropLeadingZeroInch", saved_zero)
+
+        self.addCleanup(restore)
+
+    def tearDown(self):
+        for name, doc in list(FreeCAD.listDocuments().items()):
+            if doc.FileName.startswith(self.tmp):
+                FreeCAD.closeDocument(name)
+
+    def _wait(self, ms=1500):
+        from PySide import QtCore
+
+        loop = QtCore.QEventLoop()
+        QtCore.QTimer.singleShot(ms, loop.quit)
+        loop.exec_()
+
+    def _shown(self):
+        return FreeCAD.Units.Quantity(6.35, FreeCAD.Units.Length).UserString.replace(" ", " ")
+
+    def _new_part_with_cube(self, label):
+        pn = self.vc.new_part("part", label)
+        self.assertTrue(pn)
+        doc = FreeCAD.ActiveDocument
+        body = doc.getObject("Body")
+        box = body.newObject("PartDesign::AdditiveBox", "Cube")
+        box.Length = box.Width = box.Height = 6.35  # a quarter-inch cube: every edge reads .250
+        doc.recompute()
+        return doc
+
+    def _dimension(self, doc, page):
+        import bruceworx_drawing as drawing
+
+        try:
+            page.ViewObject.doubleClicked()  # the page's view, so its SVG can be exported
+        except Exception:  # noqa: BLE001
+            pass
+        self._wait()
+        doc.recompute()
+        front = page.Views[0].Views[0]
+        dim = doc.addObject("TechDraw::DrawViewDimension", "Dim")
+        page.addView(dim)
+        dim.Type = "Distance"
+        dim.References2D = [(front, "Edge0")]
+        doc.recompute()
+        drawing.fill_page(page)
+        self._wait(500)
+        doc.recompute()
+        self._wait(500)
+        return dim
+
+    def _texts(self, page, name):
+        """The dimension texts of the page as drawn (its exported SVG)."""
+        import re
+
+        import TechDrawGui
+
+        path = os.path.join(self.tmp, name + ".svg")
+        TechDrawGui.exportPageAsSvg(page, path)
+        with open(path, encoding="utf-8") as handle:
+            svg = handle.read()
+        found = re.findall(r">([^<>]*\d[^<>]*)</(?:tspan|text)>", svg)
+        if not any("." in t for t in found if t.replace(".", "").isdigit()):
+            dims = [(d.Name, d.State, d.getText()) for d in page.Views if d.isDerivedFrom("TechDraw::DrawViewDimension")]
+            found.append(f"[no dimension text drawn; dims={dims}; svg has {svg.count('<text')} text elements]")
+        return found
+
+    def test_inch_vault_then_mm_vault(self):
+        import bruceworx_drawing as drawing
+        from bruceworx import drawing_standards as ds
+
+        self.prefs.SetString("VaultPath", self.refs["in"])
+        doc = self._new_part_with_cube("Inch cube")
+        self.assertEqual(units.document_units(doc), "in")
+        self.assertEqual(FreeCAD.Units.getSchema(), 3)
+        self.assertEqual(self._shown(), "0.250 in")
+        self.assertEqual(units.badge(doc), "")  # same as the vault: no badge
+        self.assertEqual(units.status_suffix(), " · inch")
+        page = drawing.new_drawing(doc.getObject("Part"))
+        self.assertEqual(ds.sheet_of_template(page.Template.Template), "ANSI_B_Landscape")
+        texts = page.Template.EditableTexts
+        self.assertEqual((texts["units"], texts["tol1"], texts["tol2"]),
+                         ("inch", "X.X ±.1  ·  X.XX ±.01", "X.XXX ±.005  ·  Angles ±1°"))
+        self.assertEqual(texts["standard_note"], "Interpret per ASME Y14.5-2018")
+        dim = self._dimension(doc, page)
+        self.assertEqual(dim.FormatSpec, "%.3f")
+        drawn = self._texts(page, "inch")
+        self.assertIn(".250", drawn)  # [BW] leading zero dropped (ASME)
+        self.assertNotIn("0.250", drawn)
+        doc.save()
+
+        self.prefs.SetString("VaultPath", self.refs["mm"])
+        doc2 = self._new_part_with_cube("Metric cube")
+        self.assertEqual(units.document_units(doc2), "mm")
+        self.assertEqual(FreeCAD.Units.getSchema(), 0)
+        self.assertEqual(self._shown(), "6.35 mm")
+        self.assertEqual(units.status_suffix(), " · mm")
+        page2 = drawing.new_drawing(doc2.getObject("Part"))
+        texts = page2.Template.EditableTexts
+        self.assertEqual((texts["units"], texts["tol1"]), ("mm", "X.X ±0.5  ·  X.XX ±0.25"))
+        dim2 = self._dimension(doc2, page2)
+        self.assertEqual(dim2.FormatSpec, "%.2w")
+        self.assertIn("6.35", self._texts(page2, "mm"))
+        # the inch document, brought back under a mm vault, wears the badge
+        FreeCAD.setActiveDocument(doc.Name)
+        self.assertEqual(units.badge(doc), "in")
+        self.assertEqual(self._shown(), "0.250 in")
+
+    def test_create_vault_page_asks_the_units(self):
+        import bruceworx_vaultwizard as wizard
+
+        panel = wizard._make_classes()["CreateVaultPanel"](os.path.join(self.tmp, "new"), "Inch Shop")
+        self.assertEqual(panel.build_setup().standards.get("units"), "mm")
+        panel.units.setCurrentIndex(panel.units.findData("in"))
+        self.assertEqual(panel.build_setup().standards["units"], "in")
+        self.assertEqual(panel.current_settings().standards["units"], "in")

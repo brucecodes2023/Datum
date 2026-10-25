@@ -193,10 +193,12 @@ class TestPage(unittest.TestCase):
         page = drawing.new_drawing(part, root="")
         self.assertEqual(page.Template.EditableTexts["units"], "mm")
         observer = drawing._Observer()
-        self.doc.UnitSystem = 3  # Imperial decimal, as the status bar's unit button would
+        drawing._state["pending"].clear()
         observer.slotChangedDocument(self.doc, "Label")
-        self.assertEqual(page.Template.EditableTexts["units"], "mm")  # not a units change: untouched
+        self.assertNotIn(self.doc.Name, drawing._state["pending"])  # not a units change
+        self.doc.UnitSystem = 3  # Imperial decimal, as the status bar's unit button would
         observer.slotChangedDocument(self.doc, "UnitSystem")
+        drawing.flush()  # the GUI flushes on a timer; headless at once
         texts = page.Template.EditableTexts
         self.assertEqual((texts["units"], texts["tol1"]), ("inch", "X.X ±.1  ·  X.XX ±.01"))
 

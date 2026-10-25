@@ -1358,6 +1358,14 @@ def _make_classes():
             row.addWidget(self.folder_edit, 1)
             row.addWidget(choose)
             form.addRow("Folder", row)
+            self.units = QtWidgets.QComboBox()  # PDM-09: the vault's default units
+            self.units.addItem("Millimetres (mm)", "mm")
+            self.units.addItem("Inches (in)", "in")
+            self.units.setToolTip("New parts, assemblies and drawings in this vault are made in these units; "
+                                  "any document can be switched from the status bar. Drawings get the mm or "
+                                  "inch standards of Vault Settings.")
+            self.units.currentIndexChanged.connect(lambda _i: self.changed())
+            form.addRow("Units", self.units)
             lay.addLayout(form)
             self.make_default = QtWidgets.QCheckBox("Make this the open vault")
             self.make_default.setChecked(True)
@@ -1531,17 +1539,27 @@ def _make_classes():
             return issues
 
         # --- CSV
+        def standards(self):
+            """The drawing standards the new vault gets: a CSV's rows, with the units chosen here."""
+            out = dict(getattr(self, "csv_standards", None) or {})
+            out["units"] = self.units.currentData() or "mm"
+            return out
+
         def current_settings(self):
             numbering, _issues = self.numbering()
             chosen, custom = self.properties()
             settings = self.vs.settings_from_setup(numbering, chosen + custom)
-            if getattr(self, "csv_standards", None):
-                settings.standards = dict(self.csv_standards)
+            settings.standards = self.standards()
             return settings
 
         def apply_settings(self, settings):
-            # Drawing standards from a CSV have no box here: kept and passed to the new vault.
+            # Drawing standards from a CSV have no box here: kept and passed to the new vault (the
+            # units row shows the CSV's units).
             self.csv_standards = dict(getattr(settings, "standards", None) or {})
+            units = str(self.csv_standards.get("units", "")).strip().lower()
+            index = self.units.findData("in" if units.startswith("in") else "mm") if units else -1
+            if index >= 0:
+                self.units.setCurrentIndex(index)
             numbering, _issues = self.numbering()
             numbering, properties = self.vs.apply_to_setup(settings, numbering)
             self.programs.clear()
@@ -1588,7 +1606,7 @@ def _make_classes():
                 numbering=numbering,
                 properties=chosen + custom,
                 make_default=self.make_default.isChecked(),
-                standards=dict(getattr(self, "csv_standards", None) or {}),
+                standards=self.standards(),
             )
 
         def create(self):

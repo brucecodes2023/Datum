@@ -100,13 +100,22 @@ def format_number(value, digits: int = 3) -> str:
 
 
 def length_digits(units: str) -> int:
-    return 4 if norm_units(units) == "in" else 3
+    """Decimals a length is shown with: 3 for inch (PDM-09: the inch profile's decimals, .060), 3 for mm
+    (trailing zeros dropped)."""
+    return 3
 
 
 def format_length(mm: float, units: str = "mm", unit: bool = True) -> str:
-    """A length stored in mm, shown in units: "1.5 mm", "0.0598 in"."""
+    """A length stored in mm, shown in units: "1.5 mm", "0.060 in" (inch keeps its three places, as
+    a shop drawing writes a gauge thickness; mm drops trailing zeros)."""
     units = norm_units(units)
-    text = format_number(from_mm(mm, units), length_digits(units))
+    value = from_mm(mm, units)
+    if units == "in":
+        text = f"{value:.{length_digits(units)}f}"
+        if text == "-0.000":
+            text = "0.000"
+    else:
+        text = format_number(value, length_digits(units))
     return f"{text} {units}" if unit else text
 
 
