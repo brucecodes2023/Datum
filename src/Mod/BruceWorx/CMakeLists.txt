@@ -54,6 +54,8 @@ SET(BruceWorx_SRCS
     TestBruceWorxChanges.py
     bruceworx_bom.py
     TestBruceWorxBom.py
+    bruceworx_configs.py
+    TestBruceWorxConfigs.py
     bruceworx_bridge.py
     bruceworx_bridge_tools.py
     bruceworx_browser.py
