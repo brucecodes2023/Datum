@@ -3,6 +3,10 @@
 # 0.3.0-draft (24 Oct 2026, approved list A3/A5/A9/A10 and BW-PDM-06): required texts and
 # the refusals that need no files are rules of pdm.py; BOMs are kept per revision with
 # resolved child revisions; where-used returns revisions; retire also counts file links.
+# 0.4.0-draft (26 Oct 2026, BW-PDM-09): projects as journal records (create_project,
+# update_project); a check-in may record what a drawing was made from (made_from) and a
+# part's geometry fingerprint, from which a client tells an out-of-date drawing from one
+# whose model only changed its metadata (bruceworx/product_tree.py).
 #
 # Storage-independent: the folder vault (BW-PDM-01, bruceworx/pdm_folder.py) implements
 # these operations today as journal events; a later server (Ops) implements the same.
@@ -15,7 +19,7 @@
 openapi: 3.1.0
 info:
   title: BruceWorx PDM
-  version: 0.3.0-draft
+  version: 0.4.0-draft
   description: >
     Items, revisions, lifecycle (WIP -> In Review -> Released -> Obsolete),
     change control (ECR -> ECO), BOM and where-used, file vaulting with
@@ -186,7 +190,11 @@ paths:
         unless keep_lock. Needs the caller's lock and a comment. Same SHA-256 as the
         latest version: no new version, only the lock is released. For an assembly the
         client then records the revision's BOM, read from the open assembly (set_bom
-        with this version's sha256).
+        with this version's sha256). A drawing's check-in records made_from (PDM-09):
+        for every item in the closure of files it links, the version its work copy held,
+        so "out of date" is exact (the drawing was made from another version), not a
+        time comparison. A part's check-in records its geometry fingerprint, so a
+        drawing whose model changed only its metadata shows "metadata only".
       parameters: [{$ref: "#/components/parameters/pn"}]
       requestBody:
         required: true
@@ -199,6 +207,8 @@ paths:
                 file: {type: string, format: binary}
                 comment: {type: string, minLength: 1, description: "Required (decided 23 Oct; a rule of the store since 24 Oct)"}
                 keep_lock: {type: boolean, default: false}
+                made_from: {type: object, additionalProperties: {type: string}, description: "Drawings: P/N -> SHA-256 of the version it was made from, over its closure (PDM-09)"}
+                fingerprint: {$ref: "#/components/schemas/Fingerprint"}
       responses:
         "201": {description: Stored, content: {application/json: {schema: {$ref: "#/components/schemas/FileVersion"}}}}
         "409": {$ref: "#/components/responses/Lifecycle"}
@@ -349,6 +359,50 @@ paths:
                 attachments: {type: array, items: {$ref: "#/components/schemas/Attachment"}}
       responses: {"200": {description: Released, content: {application/json: {schema: {$ref: "#/components/schemas/Eco"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /projects:
+    get:
+      summary: Every project (PDM-09); the Structure view's picker and the Start page list them
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/Project"}}}}}
+    post:
+      operationId: create_project
+      summary: >
+        A project (PDM-09): a code (unique), a name, the numbering program, its top assembly
+        (an assembly item that is not obsolete), the units it is drawn in (mm | in) and its
+        drawing profile. Its structure is never stored twice: it is the top assembly's BOM.
+        New documents made in the project take its units. Refused without a name or program,
+        for a code already taken, a top that is not an assembly, or units not mm or in.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/NewProject"}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/Project"}}}}
+        "409": {$ref: "#/components/responses/Lifecycle"}
+  /projects/{code}:
+    patch:
+      operationId: update_project
+      summary: >
+        Rename a project, point it at another top assembly, change its units or drawing
+        profile, or close it (status Closed; Open reopens it). Fields left out keep their
+        value; a request that changes nothing is refused.
+      parameters: [{name: code, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, minLength: 1}
+                top: {type: string}
+                units: {enum: [mm, in]}
+                drawing_profile: {type: string}
+                description: {type: string}
+                status: {enum: [Open, Closed]}
+      responses:
+        "200": {description: Changed, content: {application/json: {schema: {$ref: "#/components/schemas/Project"}}}}
+        "409": {$ref: "#/components/responses/Lifecycle"}
+
   /part-numbers:
     servers:
       - url: https://ops.example/api
@@ -482,6 +536,39 @@ components:
         checked_in_by: {type: string}
         checked_in_at: {type: string, format: date-time}
         comment: {type: string}
+        made_from: {type: object, additionalProperties: {type: string}, description: "Drawings (PDM-09): P/N -> SHA-256 it was made from; absent for older versions"}
+        fingerprint: {$ref: "#/components/schemas/Fingerprint"}
+    Fingerprint:
+      type: object
+      description: >
+        A part's geometry at a version (PDM-09): volume (mm^3), area (mm^2), centre of mass
+        and bounding box (mm), each rounded to 7 significant digits (about 1e-6 relative).
+        Equal fingerprints mean the change was metadata only; absent for older versions and
+        for files without a solid.
+      properties:
+        volume: {type: number}
+        area: {type: number}
+        centre: {type: array, items: {type: number}, minItems: 3, maxItems: 3}
+        box: {type: array, items: {type: number}, minItems: 6, maxItems: 6, description: "[xmin, ymin, zmin, xmax, ymax, zmax]"}
+        solids: {type: integer}
+    NewProject:
+      type: object
+      required: [code, name, program, top]
+      properties:
+        code: {type: string, minLength: 1}
+        name: {type: string, minLength: 1}
+        program: {type: string, description: The numbering program its items take}
+        top: {type: string, description: The top assembly's P/N}
+        units: {enum: [mm, in], default: mm}
+        drawing_profile: {type: string, description: "The drawing standards profile; blank: the vault's"}
+        description: {type: string}
+    Project:
+      allOf:
+        - $ref: "#/components/schemas/NewProject"
+        - type: object
+          properties:
+            status: {enum: [Open, Closed]}
+            records: {type: array, items: {$ref: "#/components/schemas/Decision"}}
     Lock:
       type: object
       properties:

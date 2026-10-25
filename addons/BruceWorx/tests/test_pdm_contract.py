@@ -60,6 +60,8 @@ TRANSITIONS = (
     ("T13", "set_item_type", "PUT /items/{pn}/type", "part or cots, not Obsolete", "cots or part"),
     ("T14", "add_configuration", "POST /items/{pn}/configurations", "part or assembly, not Obsolete",
      "configuration item sharing its revisions"),
+    ("P1", "create_project", "POST /projects", "(new), an assembly item", "project Open, naming its top"),
+    ("P2", "update_project", "PATCH /projects/{code}", "project", "renamed, re-pointed, or Closed"),
 )
 # Operations in the OpenAPI file that are not journal transitions (reads, and Ops' side).
 READS = {"status", "allocate_part_number", "bom_of", "where_used", "receive_released_bom"}
@@ -231,6 +233,49 @@ class _Lifecycle:
         self.assertEqual(self.v.items[PART + "-S"].state, OBSOLETE)
         with self.assertRaises(LifecycleError):
             self.v.add_configuration(PART + "-L", PART, "Long")  # obsolete
+
+    def test_P1_create_project(self):
+        self.v.create_item(ASSY, "assembly", "Cart")
+        project = self.v.create_project("CART", "Shop cart", "le", ASSY, units="in", drawing_profile="in")
+        self.assertEqual((project.code, project.program, project.top, project.units, project.status),
+                         ("CART", "LE", ASSY, "in", "Open"))
+        self.assertEqual(project.records[0]["op"], "create_project")
+        self.assertEqual(self.v.projects_of(ASSY), [project])
+        with self.assertRaisesRegex(LifecycleError, "already exists"):
+            self.v.create_project("CART", "Again", "LE", ASSY)
+        self.v.create_item(PART, "part")
+        with self.assertRaisesRegex(LifecycleError, "an assembly"):
+            self.v.create_project("P2", "Part top", "LE", PART)
+        with self.assertRaisesRegex(LifecycleError, "unknown item"):
+            self.v.create_project("P3", "No top", "LE", "LE-02-09999-001")
+        with self.assertRaisesRegex(LifecycleError, "project name"):
+            self.v.create_project("P4", "", "LE", ASSY)
+        with self.assertRaisesRegex(LifecycleError, "program"):
+            self.v.create_project("P5", "No program", "", ASSY)
+        with self.assertRaisesRegex(ValueError, "units"):
+            self.v.create_project("P6", "Yards", "LE", ASSY, units="yd")
+        with self.assertRaisesRegex(LifecycleError, "code"):
+            self.v.create_project("", "No code", "LE", ASSY)
+
+    def test_P2_update_project(self):
+        self.v.create_item(ASSY, "assembly", "Cart")
+        self.v.create_item(PED, "assembly", "Pedestal")
+        self.v.create_project("CART", "Shop cart", "LE", ASSY)
+        project = self.v.update_project("CART", name="Shop cart Mk II", top=PED, units="in")
+        self.assertEqual((project.name, project.top, project.units), ("Shop cart Mk II", PED, "in"))
+        self.assertEqual(project.records[-1]["op"], "update_project")
+        self.assertEqual(self.v.update_project("CART", status="Closed").status, "Closed")
+        self.assertEqual(self.v.projects_of(PED), [])  # closed projects are not offered
+        self.assertEqual(self.v.update_project("CART", status="Open").status, "Open")
+        with self.assertRaisesRegex(LifecycleError, "unknown project"):
+            self.v.update_project("NOPE", name="x")
+        with self.assertRaisesRegex(LifecycleError, "nothing to change"):
+            self.v.update_project("CART")
+        with self.assertRaisesRegex(ValueError, "Open or Closed"):
+            self.v.update_project("CART", status="Done")
+        with self.assertRaisesRegex(LifecycleError, "an assembly"):
+            self.v.create_item(PART, "part")
+            self.v.update_project("CART", top=PART)
 
     def test_B1_bom(self):
         self.v.create_item(PART)
@@ -604,6 +649,30 @@ class FileContractTests(_Folder, unittest.TestCase):
         self.assertEqual(len(self.v.versions[PART]), 2)  # no new version, lock released
         self.assertEqual(unchanged.sha256, self.v.latest_version(PART).sha256)
         self.assertNotIn(PART, self.v.locks)
+
+    def test_F2_checkin_records_made_from_and_fingerprint(self):
+        """PDM-09: a drawing's check-in says what it was made from; a part's its geometry."""
+        self.v.checkout(PART)
+        print_ = {"volume": 1234.5678, "area": 99.5, "centre": [1.0, 2.0, 3.0], "box": [0, 0, 0, 1, 2, 3]}
+        version = self.v.checkin(PART, self.file, "shape", fingerprint=print_)
+        self.assertEqual(version.fingerprint, print_)
+        self.assertIsNone(version.made_from)
+        self.v.create_item(DWG, "drawing", drawing_of=PART)
+        self.v.checkout(DWG)
+        self.write(b"drawing")
+        version = self.v.checkin(DWG, self.file, "views", made_from={PART: version.sha256})
+        self.assertEqual(version.made_from, {PART: self.v.latest_version(PART).sha256})
+        self.assertIsNone(version.fingerprint)
+        again = self.reopen()
+        self.assertEqual(again.latest_version(DWG).made_from, version.made_from)
+        self.assertEqual(again.latest_version(PART).fingerprint, print_)
+        self.assertEqual(again.version_with(PART, version.made_from[PART]).fingerprint, print_)
+        # a version checked in without them (every version before PDM-09) reads as None
+        with open(self.v.journal_path, encoding="utf-8") as handle:
+            lines = [json.loads(line) for line in handle if line.strip()]
+        plain = next(l for l in lines if l["op"] == "checkin" and l["args"]["part_number"] == PART)
+        self.assertIn("fingerprint", plain["args"])
+        self.assertNotIn("made_from", plain["args"])
 
     def test_F3_undo_checkout(self):
         self.v.checkout(PART)

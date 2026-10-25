@@ -37,7 +37,7 @@ SYNC_WARN_SECONDS = 600  # "still syncing" turns orange after 10 minutes
 FUTURE_SLACK_SECONDS = 300
 QUIET_OPS = ("checkout", "undo_checkout", "set_bom")  # shown only with show_all
 FEED_OPS = ("checkin", "submit", "approve", "reject", "retire", "raise_ecr", "decide_ecr", "open_eco",
-            "release_eco", "create_item", "create_project") + QUIET_OPS
+            "release_eco", "create_item", "create_project", "update_project") + QUIET_OPS
 _CONFLICT = re.compile(r"( \d+| \(.*conflicted copy.*\)|\.sync-conflict-.*)\.jsonl$", re.IGNORECASE)
 
 
@@ -156,12 +156,23 @@ def closures(vault, tops, bom=None) -> dict:
 
 def projects(vault) -> dict:
     """{"label", "total", "hidden", "rows": [...]}; each row rolls up its closure and the drawings
-    of everything in it: each item counts once, whatever its quantity."""
+    of everything in it: each item counts once, whatever its quantity. The rows are the vault's open
+    projects (PDM-09, each at its top assembly, with "code", "name" and "units"); a vault without
+    projects shows its top assemblies instead, hidden above MAX_PROJECTS of them."""
     bom = vault.bom
-    tops = top_assemblies(vault, bom)
-    out = {"label": "top assembly", "total": len(tops), "hidden": len(tops) > MAX_PROJECTS, "rows": []}
+    recorded = [p for p in (getattr(vault, "projects", None) or {}).values()
+                if p.status == "Open" and p.top in vault.items]
+    if recorded:
+        tops = sorted({p.top for p in recorded})
+        out = {"label": "project", "total": len(recorded), "hidden": False, "rows": []}
+    else:
+        tops = top_assemblies(vault, bom)
+        out = {"label": "top assembly", "total": len(tops), "hidden": len(tops) > MAX_PROJECTS, "rows": []}
     if out["hidden"] or not tops:
         return out
+    by_top = {}
+    for project in recorded:
+        by_top.setdefault(project.top, project)
     drawings = {}
     for pn, item in vault.items.items():
         if item.drawing_of:
@@ -177,11 +188,14 @@ def projects(vault) -> dict:
         latest = vault.latest_version(top) if hasattr(vault, "latest_version") else None
         open_ecos = sorted(eco.number for eco in vault.ecos.values()
                            if eco.status == "Open" and set(eco.items) & everything)
+        project = by_top.get(top)
         rows.append({
             "part_number": top, "description": item.description, "revision": item.latest.code,
             "display": pdm.display_part_number(top, item.latest.code), "state": item.state,
             "items": len(everything), "drawings": len(dwgs), "states": states, "ecos": open_ecos,
             "at": latest.at if latest else "",
+            "code": project.code if project else "", "name": project.name if project else "",
+            "units": project.units if project else "",
         })
     rows.sort(key=lambda r: (r["at"], r["part_number"]), reverse=True)
     out["rows"] = rows
@@ -323,7 +337,10 @@ def _verb(event, count, vault, me):
     if op == "release_eco":
         return f"released {target}"
     if op == "create_project":
-        return f"created project {target}"
+        return f"created project {event.args.get('code', '')} ({event.args.get('name', '')})".replace(" ()", "")
+    if op == "update_project":
+        status = event.args.get("status")
+        return f"{'closed' if status == 'Closed' else 'reopened' if status else 'changed'} project {event.args.get('code', '')}"
     return f"{op} {target}".strip()
 
 

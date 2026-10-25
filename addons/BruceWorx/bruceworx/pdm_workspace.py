@@ -424,6 +424,28 @@ class Workspace:
             level = nxt
         return sorted(seen)
 
+    def made_from(self, pn: str) -> dict:
+        """What the work copy of ``pn`` was made from (PDM-09): for every vault item its file links,
+        transitively through the work folder (its closure C(D)), the version the work copy of that
+        item started from (its base), else the vault's latest version. {} when it links nothing."""
+        out, todo, seen = {}, [pn], {pn}
+        while todo:
+            current = todo.pop()
+            path = self.path(current)
+            if not os.path.exists(path):
+                continue
+            for name in linked_files(path):
+                target = os.path.splitext(os.path.basename(name))[0]
+                if target in seen or target not in self.vault.model.items:
+                    continue
+                seen.add(target)
+                latest = self.vault.latest_version(target)
+                base = self.base(target) or (latest.sha256 if latest else "")
+                if base:
+                    out[target] = base
+                todo.append(target)
+        return out
+
     # --- status --------------------------------------------------------------
     def status(self, pn: str) -> FileStatus:
         vault = self.vault
@@ -525,8 +547,9 @@ class Workspace:
                 todo.append(target)
         return fetched
 
-    def checkin(self, pn: str, comment: str, keep_checked_out: bool = False):
-        """Store the work copy as a new version. The comment is required."""
+    def checkin(self, pn: str, comment: str, keep_checked_out: bool = False, made_from=None, fingerprint=None):
+        """Store the work copy as a new version. The comment is required. ``made_from`` and
+        ``fingerprint`` go into the journal with the version (PDM-09, pdm_folder.CHECKIN_EXTRAS)."""
         self._writable()
         if not (comment or "").strip():
             raise ValueError("a check-in needs a comment")
@@ -534,7 +557,8 @@ class Workspace:
         if not os.path.exists(path) and not icloud_placeholder(path):
             raise FileNotFoundError(f"{pn}: there is no work copy to check in ({path})")
         self._ensure([path])
-        version = self.vault.checkin(pn, path, comment=comment.strip(), keep_lock=keep_checked_out)
+        version = self.vault.checkin(pn, path, comment=comment.strip(), keep_lock=keep_checked_out,
+                                     made_from=made_from, fingerprint=fingerprint)
         latest = self.vault.latest_version(pn)
         if latest is not None:
             self._record_base(pn, latest.sha256)

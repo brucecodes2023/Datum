@@ -78,8 +78,16 @@ LIFECYCLE_OPS = {
     "set_bom": ("parent", "lines", "revision", "sha256", "missing"),
     "set_item_type": ("part_number", "item_type"),  # MOD-05: part <-> cots
     "add_configuration": ("part_number", "configuration_of", "configuration", "description"),  # MOD-03
+    # PDM-09 (26 Oct 2026): a project is a journal record naming its top assembly.
+    "create_project": ("code", "name", "program", "top", "units", "drawing_profile", "description"),
+    "update_project": ("code", "name", "top", "units", "drawing_profile", "description", "status"),
 }
 FILE_OPS = ("checkout", "undo_checkout", "checkin")
+# A check-in may also carry (PDM-09) ``made_from`` (for a drawing: P/N -> the SHA-256 of the version
+# of each file it was made from, its closure C(D)) and ``fingerprint`` (for a part: its geometry,
+# see bruceworx.product_tree). Both are optional and come from the FreeCAD side; a journal without
+# them replays as before. Every Keystone copy must know an operation before the vault uses it.
+CHECKIN_EXTRAS = ("made_from", "fingerprint")
 
 
 class VaultFormatError(ValueError):
@@ -95,6 +103,10 @@ class FileVersion:
     actor: str
     at: str
     comment: str = ""
+    # PDM-09: what a drawing was made from ({P/N: sha256}) and a part's geometry fingerprint
+    # ({"volume", "area", "centre", "box"}); None for versions checked in without them.
+    made_from: dict | None = None
+    fingerprint: dict | None = None
 
     @property
     def object_name(self) -> str:
@@ -369,6 +381,7 @@ class FolderVault:
             version = FileVersion(
                 args["sha256"], int(args["size"]), args["filename"],
                 self.model.items[pn].latest.code, event.actor, event.at, args.get("comment", ""),
+                made_from=args.get("made_from") or None, fingerprint=args.get("fingerprint") or None,
             )
             self.versions.setdefault(pn, []).append(version)
             if not args.get("keep_lock"):
@@ -478,6 +491,26 @@ class FolderVault:
 
     def configurations_of(self, part_number):
         return self.model.configurations_of(part_number)
+
+    # ----- projects (PDM-09) ------------------------------------------------------
+
+    @property
+    def projects(self):
+        return self.model.projects
+
+    def create_project(self, code, name, program, top, units="mm", drawing_profile="", description=""):
+        return self._record("create_project", _optional(dict(code=code, name=name, program=program, top=top,
+                                                             units=units), drawing_profile=drawing_profile,
+                                                        description=description))
+
+    def update_project(self, code, name=None, top=None, units=None, drawing_profile=None, description=None,
+                       status=None):
+        args = {k: v for k, v in dict(name=name, top=top, units=units, drawing_profile=drawing_profile,
+                                      description=description, status=status).items() if v is not None}
+        return self._record("update_project", dict(code=code, **args))
+
+    def projects_of(self, top):
+        return self.model.projects_of(top)
 
     def submit(self, part_number):
         holder = self.locks.get(part_number)
@@ -653,9 +686,11 @@ class FolderVault:
     def undo_checkout(self, part_number, force=False):
         return self._record("undo_checkout", dict(part_number=part_number, force=bool(force)))
 
-    def checkin(self, part_number, path: str, comment: str = "", keep_lock: bool = False):
+    def checkin(self, part_number, path: str, comment: str = "", keep_lock: bool = False,
+                made_from: dict | None = None, fingerprint: dict | None = None):
         """Store ``path`` as a new version. Unchanged content only releases the lock. A comment
-        is required (PDM-02 A3)."""
+        is required (PDM-02 A3). ``made_from`` and ``fingerprint`` (PDM-09, see CHECKIN_EXTRAS)
+        are written only when given."""
         if not (comment or "").strip():
             raise LifecycleError("a check-in comment is required")
         if self.locks.get(part_number) != self.actor:
@@ -667,8 +702,13 @@ class FolderVault:
                 self.undo_checkout(part_number)
             return current
         stored = self.store_object(path, digest)
-        return self._record("checkin", dict(part_number=part_number, comment=comment,
-                                            keep_lock=bool(keep_lock), **stored))
+        return self._record("checkin", _optional(dict(part_number=part_number, comment=comment,
+                                                      keep_lock=bool(keep_lock), **stored),
+                                                 made_from=made_from, fingerprint=fingerprint))
+
+    def version_with(self, part_number, sha256: str) -> FileVersion | None:
+        """The version of ``part_number`` with this SHA-256, or None."""
+        return next((v for v in self.versions.get(self.file_item(part_number), []) if v.sha256 == sha256), None)
 
     def store_object(self, path: str, digest: str | None = None) -> dict:
         """Copy a file into ``objects/`` (write-once, by SHA-256); returns its record."""
@@ -839,6 +879,9 @@ class FolderVault:
             "root": self.root,
             "actor": self.actor,
             "items": rows,
+            "projects": [{"code": p.code, "name": p.name, "program": p.program, "top": p.top, "units": p.units,
+                          "drawing_profile": p.drawing_profile, "status": p.status}
+                         for p in self.model.projects.values()],
             "missing_objects": self.missing_objects(),
             "problems": list(self.problems),
         }

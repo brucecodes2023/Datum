@@ -46,6 +46,13 @@ MOD-03 (25 Oct 2026, built on the plan's recommendations):
   Lifecycle steps on it are refused with the file's P/N; retiring the file's
   item retires its configurations.
 
+PDM-09 (26 Oct 2026, plan approved 24 Oct):
+
+* A *project* is a journal record (:meth:`Vault.create_project`): a code, a name, the
+  numbering program, its top assembly, the units it is drawn in (``mm`` or ``in``) and
+  its drawing profile. Its structure is never stored twice: it is the top assembly's
+  BOM. :meth:`Vault.update_project` renames, re-points or closes it.
+
 ``Vault.strict`` (default on) applies these rules. A store replaying a journal
 written before them turns it off while replaying: history is accepted as it
 was recorded, new operations are checked. A replay also skips the BOM cycle
@@ -65,6 +72,8 @@ STATES = (WIP, IN_REVIEW, RELEASED, OBSOLETE)
 INITIAL_STATE = WIP  # a new item's first revision
 
 ITEM_TYPES = ("part", "assembly", "drawing", "cots")
+UNITS = ("mm", "in")  # PDM-09: the two unit profiles a project or vault is drawn in
+PROJECT_STATES = ("Open", "Closed")
 
 # ASME Y14.35: skip letters that read like digits.
 RELEASE_LETTERS = "ABCDEFGHJKLMNPRTUVWY"
@@ -296,6 +305,22 @@ class ECO:
 
 
 @dataclass
+class Project:
+    """A project (PDM-09): what the Structure view's picker lists and the units default of new
+    documents made in it. Its structure is its top assembly's BOM."""
+
+    code: str
+    name: str
+    program: str
+    top: str  # the top assembly's P/N
+    units: str = "mm"
+    drawing_profile: str = ""  # the drawing standards profile ("" = the vault's)
+    description: str = ""
+    status: str = "Open"  # Open | Closed
+    records: list = field(default_factory=list)  # create, update (see Revision.records)
+
+
+@dataclass
 class BomLine:
     """One BOM line of a parent revision (PDM-06): a child item, how many per parent, the find
     number, and the child revision it resolves to (seen at check-in, pinned at release)."""
@@ -357,6 +382,7 @@ class Vault:
         self.items: dict[str, Item] = {}
         self.ecrs: dict[str, ECR] = {}
         self.ecos: dict[str, ECO] = {}
+        self.projects: dict[str, Project] = {}  # PDM-09
         # Merged into every decision record; a store sets who and when ({"by", "at"}).
         self.context: dict = {}
         # The rules of 24 Oct (required texts, BOM items, file links); a store replaying an older
@@ -459,6 +485,73 @@ class Vault:
             raise LifecycleError(f"{part_number} is configuration {item.configuration!r} of "
                                  f"{item.configuration_of}; {action} {item.configuration_of}, its file")
         return item
+
+    # ----- projects (PDM-09) ------------------------------------------
+
+    def create_project(self, code, name, program, top, units="mm", drawing_profile="", description=""):
+        """A project record. ``code`` is unique; ``top`` names an assembly item that is not
+        obsolete; ``units`` is ``mm`` or ``in``. The name and program are required."""
+        code = str(code or "").strip()
+        if not code:
+            raise LifecycleError("a project needs a code")
+        if code in self.projects:
+            raise LifecycleError(f"project {code} already exists")
+        self._text(name, "a project name")
+        self._text(program, "the project's numbering program")
+        self._check_top(top)
+        if units not in UNITS:
+            raise ValueError(f"units must be one of {', '.join(UNITS)}, not {units!r}")
+        project = Project(code, str(name).strip(), str(program).strip().upper(), top, units,
+                          drawing_profile or "", description or "")
+        project.records.append(self._entry("create_project"))
+        self.projects[code] = project
+        return project
+
+    def update_project(self, code, name=None, top=None, units=None, drawing_profile=None, description=None,
+                       status=None):
+        """Rename a project, point it at another top assembly, change its units or drawing
+        profile, or close (and reopen) it. Fields left None keep their value."""
+        project = self.projects.get(code)
+        if project is None:
+            raise LifecycleError(f"unknown project {code}")
+        changes = {}
+        if name is not None:
+            self._text(name, "a project name")
+            changes["name"] = str(name).strip()
+        if top is not None:
+            self._check_top(top)
+            changes["top"] = top
+        if units is not None:
+            if units not in UNITS:
+                raise ValueError(f"units must be one of {', '.join(UNITS)}, not {units!r}")
+            changes["units"] = units
+        if drawing_profile is not None:
+            changes["drawing_profile"] = drawing_profile
+        if description is not None:
+            changes["description"] = description
+        if status is not None:
+            if status not in PROJECT_STATES:
+                raise ValueError(f"a project is {' or '.join(PROJECT_STATES)}, not {status!r}")
+            changes["status"] = status
+        if not changes:
+            raise LifecycleError(f"nothing to change on project {code}")
+        for key, value in changes.items():
+            setattr(project, key, value)
+        project.records.append(self._entry("update_project", **changes))
+        return project
+
+    def _check_top(self, top):
+        item = self.items.get(top)
+        if item is None:
+            raise LifecycleError(f"unknown item {top}")
+        if self.strict and item.item_type != "assembly":
+            raise LifecycleError(f"{top} is a {item.item_type}; a project's top is an assembly")
+        if self.strict and item.obsolete:
+            raise LifecycleError(f"{top} is obsolete")
+
+    def projects_of(self, top):
+        """The open projects whose top assembly is ``top``, in creation order."""
+        return [p for p in self.projects.values() if p.top == top and p.status == "Open"]
 
     # ----- review and release ----------------------------------------
 

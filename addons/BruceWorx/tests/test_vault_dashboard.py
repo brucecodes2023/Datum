@@ -86,6 +86,20 @@ class CountsAndProjects(_Vault):
         for top in (TOP, SUB):
             self.assertEqual(closure[top], {top} | set(self.vault.explode(top)))
 
+    def test_recorded_projects_replace_the_top_assemblies(self):
+        """PDM-09: once the journal names projects, the section lists them, whatever the top count."""
+        self.structure()
+        for i in range(vd.MAX_PROJECTS + 1):
+            self.vault.create_item(f"DM-02-0{2000 + i}-001", "assembly")
+        self.vault.create_project("CART", "Shop cart", "DM", TOP, units="in")
+        projects = vd.projects(self.vault)
+        self.assertEqual((projects["label"], projects["total"], projects["hidden"]), ("project", 1, False))
+        row = projects["rows"][0]
+        self.assertEqual((row["part_number"], row["code"], row["name"], row["units"]), (TOP, "CART", "Shop cart", "in"))
+        self.assertEqual((row["items"], row["drawings"]), (5, 1))
+        self.vault.update_project("CART", status="Closed")
+        self.assertEqual(vd.projects(self.vault)["label"], "top assembly")
+
     def test_many_tops_hide_the_section(self):
         for i in range(vd.MAX_PROJECTS + 1):
             self.vault.create_item(f"DM-02-0{2000 + i}-001", "assembly")
