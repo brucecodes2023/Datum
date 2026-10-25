@@ -69,7 +69,7 @@ headless FreeCAD (\file{scripts/}), and the harness generalises that.
 \emph{Acceptance:} \code{pixi run acceptance} runs all checks in CI in under 15 minutes.
 \end{epic}
 
-\begin{epic}{FND-06}{Fixes found in review}{M0}{\stProg}{(new)}
+\begin{epic}{FND-06}{Fixes found in review}{M0}{\stDone}{(new)}
 \begin{enumerate}
   \item \textbf{Linear Pattern direction 2 drops a row} (\S\ref{sec:bug}). \code{Spacings2} is declared
         \code{(\{\})}, which stores \code{[0.0]}. Fix the declaration, migrate saved files, add a test.
@@ -79,6 +79,11 @@ headless FreeCAD (\file{scripts/}), and the harness generalises that.
   \item \textbf{Overlay model tree missing} on the screenshot, although it is on by default; root cause unknown \verify.
 \end{enumerate}
 \emph{Acceptance:} a $4\times3$ pattern gives 12 instances; only intended workbenches are visible; the tree shows on first run.
+\textbf{Done 25 Oct.} Checked in the GUI on a fresh profile: the $4\times3$ pattern gives 12 solids; seven
+workbenches are enabled and the workspace bar's \emph{More} menu lists only Assembly, Draft, Part, Sketcher and
+Spreadsheet (no stock selector); the Browser shows as soon as a document is open (the empty Start page has it
+hidden); the Report view is clean. Item~2 was the \code{int(None)} crash, fixed in \code{9991ddf}; item~3 was the
+auto-hide default, now off.
 \end{epic}
 
 \begin{epic}{FND-07}{On by default, each with an off switch}{M0}{\stDone}{FCB-P1-01, P1-10}
