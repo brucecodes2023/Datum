@@ -655,6 +655,13 @@ class _Observer:
     """Keeps an open table (and the Parameters bar) in step when the file changes."""
 
     def slotRecomputedDocument(self, doc):
+        try:  # instances copied again after their part changed take their row one recompute later
+            if any("Touched" in (getattr(doc.getObject(n), "State", None) or []) for n in bc.copies(doc)):
+                from PySide import QtCore
+
+                QtCore.QTimer.singleShot(0, lambda: bc.settle_copies(doc))
+        except Exception:
+            pass
         dialog = _state["dialogs"].get(doc.Name)
         if dialog is not None and not dialog.filling:
             try:

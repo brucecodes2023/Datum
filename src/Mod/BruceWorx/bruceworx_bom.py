@@ -128,6 +128,12 @@ def walk(doc, imported=None) -> list:
     the same file is walked into (its quantity multiplies); anything in another file is one
     row; a part or body in this file is a row with no keys (it is not a vault item)."""
     imported = {os.path.realpath(p): pn for p, pn in (imported or {}).items()}
+    try:
+        import bruceworx_configs
+
+        bruceworx_configs.settle_copies(doc)  # instances in a row of their own show that row (MOD-03)
+    except Exception:
+        pass
     top = top_assembly(doc)
     objects = list(top.Group) if top is not None else [o for o in doc.RootObjects]
     rows = []

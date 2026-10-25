@@ -569,6 +569,7 @@ def after_switch(doc):
         doc.recompute()
         # a copy made in a recompute takes its row in the next one (seen 25 Oct)
         doc.recompute()
+    settle_copies(doc)
 
 
 def check_all(doc):
@@ -823,6 +824,20 @@ def copy_of(link):
     return target
 
 
+def settle_copies(doc, tries=3):
+    """Recompute again while configuration copies are left touched: when its part changes, a Tracking
+    instance copies it again and takes its own row only in the next recompute (seen 25 Oct, stock
+    1.1.4 too: one recompute shows the part's active row). Returns how many recomputes it took."""
+    done = 0
+    while done < tries:
+        names = copies(doc)
+        if not any("Touched" in (getattr(doc.getObject(n), "State", None) or []) for n in names):
+            break
+        doc.recompute()
+        done += 1
+    return done
+
+
 def _is_instance(obj):
     return obj.TypeId == "App::Link" and configurable(source_of(obj))
 
@@ -873,6 +888,7 @@ def set_instance_configuration(link, name):
     if _follows(link):
         _force_copy(link)
     doc.recompute()
+    settle_copies(doc)
     return name
 
 
