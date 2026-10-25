@@ -93,8 +93,54 @@ def icon_kind(type_id: str) -> str:
     return "feature"
 
 
+def kind_name(type_id: str) -> str:
+    """``"PartDesign::AdditiveCylinder"`` -> ``"Additive Cylinder"``, ``"Sketcher::SketchObject"`` -> ``"Sketch"``."""
+    short = type_id.rsplit("::", 1)[-1]
+    if short == "SketchObject":
+        return "Sketch"
+    if short == "VarSet":
+        return "Variable set"
+    words = []
+    for ch in short:
+        if ch.isupper() and words and words[-1][-1].islower():
+            words.append(ch)
+        elif words:
+            words[-1] += ch
+        else:
+            words.append(ch)
+    return " ".join(words)
+
+
+def feature_error(obj):
+    """``(is_error, text)``: a failed recompute (State lists Invalid or Error, or
+    isValid() says no) and FreeCAD's status text for it."""
+    try:
+        state = list(obj.State)
+    except (AttributeError, RuntimeError, TypeError):
+        state = []
+    try:
+        valid = bool(obj.isValid())
+    except (AttributeError, RuntimeError, TypeError):
+        valid = True
+    error = "Invalid" in state or "Error" in state or not valid
+    if not error:
+        return False, ""
+    try:
+        text = (obj.getStatusString() or "").strip()
+    except (AttributeError, RuntimeError, TypeError):
+        text = ""
+    if text in ("", "Valid", "Touched"):
+        text = "recompute failed"
+    return True, text
+
+
 class TimelineEntry:
-    """One ``Body.Group`` child, in Group order."""
+    """One ``Body.Group`` child, in Group order.
+
+    ``parent`` is the name of the solid this sketch is folded under (Fusion folds
+    a sketch into the feature that consumes it), ``children`` the names folded
+    under this solid. ``error`` / ``error_text`` mark a failed recompute.
+    """
 
     def __init__(self, obj, index, tip, tip_index):
         self.obj = obj
@@ -103,9 +149,11 @@ class TimelineEntry:
         self.label = obj.Label
         self.type_id = obj.TypeId
         self.kind = icon_kind(self.type_id)
+        self.kind_name = kind_name(self.type_id)
         self.is_solid = is_solid_feature(obj)
         self.suppressed = is_suppressed(obj)
         self.base_name = _link_name(getattr(obj, "BaseFeature", None))
+        self.error, self.error_text = feature_error(obj)
         self.is_tip = tip is not None and obj == tip
         if tip is None or tip_index is None:
             # Tip is unset, or it points outside Group (usually Body.BaseFeature).
@@ -114,6 +162,30 @@ class TimelineEntry:
         else:
             self.after_tip = index > tip_index
         self.icon = None  # optional QIcon, filled in by the dock
+        self.parent = None
+        self.children = []
+
+    @property
+    def tooltip(self):
+        lines = [self.label, f"{self.kind_name} · {self.name}"]
+        if self.base_name:
+            lines.append(f"on {self.base_name}")
+        state = []
+        if self.is_tip:
+            state.append("tip")
+        if self.after_tip:
+            state.append("rolled back")
+        if self.suppressed:
+            state.append("suppressed")
+        if self.parent:
+            state.append(f"sketch of {self.parent}")
+        if self.children:
+            state.append("sketch: " + ", ".join(self.children))
+        if state:
+            lines.append(", ".join(state))
+        if self.error:
+            lines.append("Error: " + self.error_text)
+        return "\n".join(lines)
 
     def __repr__(self):
         flags = []
@@ -125,6 +197,10 @@ class TimelineEntry:
             flags.append("after-tip")
         if self.suppressed:
             flags.append("suppressed")
+        if self.error:
+            flags.append("error")
+        if self.parent:
+            flags.append(f"under:{self.parent}")
         extra = (" " + ",".join(flags)) if flags else ""
         return f"<TimelineEntry {self.name} {self.type_id}{extra}>"
 
@@ -140,6 +216,7 @@ class Timeline:
         self.tip_index = tip_index
         self.tip_in_group = tip_index is not None
         self.base_feature_name = _link_name(body.BaseFeature)
+        self.has_groups = any(entry.parent for entry in entries)
 
     def entry(self, name):
         for item in self.entries:
@@ -158,7 +235,7 @@ class Timeline:
                 f"  [{item.index}] {item.label} ({item.name}) {item.type_id}"
                 f" solid={item.is_solid} suppressed={item.suppressed}"
                 f" tip={item.is_tip} after_tip={item.after_tip}"
-                f" base={item.base_name}"
+                f" base={item.base_name} error={item.error} parent={item.parent}"
             )
         return "\n".join(lines)
 
@@ -174,6 +251,17 @@ def read_timeline(body) -> Timeline:
                 tip_index = index
                 break
     entries = [TimelineEntry(obj, i, tip, tip_index) for i, obj in enumerate(group)]
+    by_name = {entry.name: entry for entry in entries}
+    for entry in entries:
+        if not entry.is_solid:
+            continue
+        for obj in feature_group(body, entry.obj):
+            if obj == entry.obj:
+                continue
+            child = by_name.get(obj.Name)
+            if child is not None and child.parent is None:
+                child.parent = entry.name
+                entry.children.append(child.name)
     return Timeline(body, entries, tip, tip_index)
 
 

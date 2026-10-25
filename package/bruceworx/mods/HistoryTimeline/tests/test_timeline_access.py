@@ -506,6 +506,52 @@ def test_reorder_rules_and_move():
         App.closeDocument(doc.Name)
 
 
+def test_entries_groups_and_errors():
+    doc = App.newDocument("TimelineEntries")
+    try:
+        body, f = build_pad_hole_fillet(doc)
+        timeline = model.read_timeline(body)
+        emit(timeline.format_report())
+        check(timeline.has_groups, "the timeline has folded sketches")
+        pad, sk_pad = timeline.entry("Pad"), timeline.entry("PadSketch")
+        check(sk_pad.parent == "Pad" and pad.children == ["PadSketch"], "the pad's sketch folds under the pad")
+        check(timeline.entry("HoleSketch").parent == "Hole", "the hole's sketch folds under the hole")
+        check(timeline.entry("TopSketch").parent == "Pocket2", "the top sketch folds under its pocket")
+        check(timeline.entry("Fillet").children == [], "a fillet folds nothing")
+        check(pad.kind_name == "Pad" and sk_pad.kind_name == "Sketch" and timeline.entry("Hole").kind_name == "Pocket", "kind names")
+        check(model.kind_name("PartDesign::AdditiveCylinder") == "Additive Cylinder", "kind_name splits words")
+        check("Pad · Pad" in pad.tooltip and "sketch: PadSketch" in pad.tooltip, f"pad tooltip {pad.tooltip!r}")
+        check("sketch of Pad" in sk_pad.tooltip, "sketch tooltip names its feature")
+        check(not any(e.error for e in timeline.entries), "no errors in a valid body")
+
+        fillet = f["fillet"]
+        fillet.Radius = 100  # bigger than the part: the fillet fails
+        doc.recompute()
+        error, text = model.feature_error(fillet)
+        check(error and text, f"feature_error reports the failed fillet: {text!r}")
+        timeline = model.read_timeline(body)
+        entry = timeline.entry("Fillet")
+        check(entry.error and entry.error_text == text, "the entry carries the error")
+        check("Error:" in entry.tooltip, "tooltip shows the error")
+        check(not timeline.entry("Pad").error, "earlier features are not marked")
+        fillet.Radius = 1
+        doc.recompute()
+        check(not model.read_timeline(body).entry("Fillet").error, "error clears with the fix")
+
+        # A sketch used by two solids is not folded.
+        doc2_body = body
+        pad2 = doc.addObject("PartDesign::Pad", "Pad2")
+        pad2.Profile = f["sk_hole"]
+        pad2.Length = 2
+        doc2_body.addObject(pad2)
+        doc.recompute()
+        timeline = model.read_timeline(body)
+        check(timeline.entry("HoleSketch").parent is None, "a sketch shared by two features stays on its own")
+        check(timeline.entry("Hole").children == [], "the hole no longer folds the shared sketch")
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def test_reorder_is_not_free():
     doc = App.newDocument("TimelineReorder")
     try:
@@ -619,6 +665,7 @@ def main():
         test_playback_targets()
         test_delete_feature()
         test_reorder_rules_and_move()
+        test_entries_groups_and_errors()
         test_reorder_is_not_free()
     except Exception:
         traceback.print_exc()

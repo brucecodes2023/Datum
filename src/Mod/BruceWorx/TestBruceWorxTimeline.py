@@ -104,6 +104,15 @@ class TimelineGuiCase(unittest.TestCase):
         row = self.bar.row_widget()
         start = QtCore.QPoint(marker.width() // 2, marker.height() // 2)
         _mouse(marker, QtCore.QEvent.MouseButtonPress, start)
+        if not marker.is_dragging():
+            _say(
+                "DIAG press lost: modal=%r popup=%r kgrab=%r mgrab=%r visible=%r enabled=%r "
+                "same=%r drag=%r live_doc=%r" % (
+                    QtWidgets.QApplication.activeModalWidget(), QtWidgets.QApplication.activePopupWidget(),
+                    QtWidgets.QWidget.keyboardGrabber(), QtWidgets.QWidget.mouseGrabber(),
+                    marker.isVisibleTo(self.bar), marker.isEnabled(), marker is self.bar.marker_widget(),
+                    self.dock._drag, App.ActiveDocument.Name if App.ActiveDocument else None)
+            )
         self.assertTrue(marker.is_dragging())
         target_global = row.mapToGlobal(QtCore.QPoint(int(row_x), row.height() // 2))
         local = marker.mapFromGlobal(target_global)
@@ -503,3 +512,84 @@ class TestReorder(TimelineGuiCase):
         self.assertFalse(actions["earlier"].isEnabled())
         self.assertIn("TopSketch", actions["earlier"].toolTip())
         self.assertIn("Fillet", actions["earlier"].toolTip())
+
+
+class TestChips(TimelineGuiCase):
+    """Error badge, hover preselection, tooltips and the folded sketches."""
+
+    def make_body(self, doc):
+        return build_pad_hole_fillet(doc)
+
+    def test_sketches_fold_under_their_features(self):
+        _say("Timeline: sketches are folded under their features; the disclosure shows them")
+        disclosure = self.bar.disclosure_widget()
+        self.assertTrue(disclosure.isVisibleTo(self.bar), "disclosure shown when there are groups")
+        self.assertFalse(self.bar.is_expanded())
+        self.assertFalse(self.chip("PadSketch").isVisibleTo(self.bar.row_widget()))
+        self.assertTrue(self.chip("Pad").isVisibleTo(self.bar.row_widget()))
+        self.assertEqual(self.bar._order, ["Pad", "Hole", "Fillet"])
+        self.assertEqual(self.chip("Pad").entry.children, ["PadSketch"])
+        disclosure.click()
+        _pump(50)
+        self.assertTrue(self.bar.is_expanded())
+        self.assertTrue(self.chip("PadSketch").isVisibleTo(self.bar.row_widget()))
+        self.assertEqual(self.bar._order, ["PadSketch", "Pad", "HoleSketch", "Hole", "Fillet"])
+        self.assertTrue(self.hd.show_sketches(), "the disclosure state is remembered")
+        # A rebuild keeps the choice.
+        self.dock.refresh()
+        _pump(50)
+        self.assertTrue(self.bar.is_expanded())
+        self.assertTrue(self.bar.button_widget("PadSketch").isVisibleTo(self.bar.row_widget()))
+        self.bar.disclosure_widget().click()
+        _pump(50)
+        self.assertFalse(self.hd.show_sketches())
+        self.assertFalse(self.bar.button_widget("PadSketch").isVisibleTo(self.bar.row_widget()))
+
+    def test_no_disclosure_without_groups(self):
+        other = App.newDocument("TimelinePrimitives")
+        try:
+            body = build_primitive_body(other)
+            Gui.ActiveDocument.ActiveView.setActiveObject("pdbody", body)
+            self.dock.refresh()
+            _pump(50)
+            self.assertFalse(self.bar.disclosure_widget().isVisibleTo(self.bar))
+        finally:
+            App.closeDocument(other.Name)
+            _pump()
+
+    def test_tooltip_names_feature_and_type(self):
+        tip = self.chip("Hole").toolTip()
+        self.assertIn("Hole", tip)
+        self.assertIn("Pocket · Hole", tip)
+        self.assertIn("sketch: HoleSketch", tip)
+        self.assertIn("tip", self.chip("Fillet").toolTip())
+
+    def test_error_badge(self):
+        _say("Timeline: a fillet too big for the part gets a red badge and the error in its tooltip")
+        fillet = self.doc.getObject("Fillet")
+        fillet.Radius = 100
+        self.doc.recompute()
+        self.dock.refresh()
+        _pump(50)
+        chip = self.chip("Fillet")
+        self.assertTrue(chip.entry.error)
+        self.assertIn("Error:", chip.toolTip())
+        self.assertFalse(self.chip("Pad").entry.error)
+        fillet.Radius = 1
+        self.doc.recompute()
+        self.dock.refresh()
+        _pump(50)
+        self.assertFalse(self.chip("Fillet").entry.error)
+
+    def test_hover_preselects_the_feature(self):
+        _say("Timeline: hovering the Pad chip preselects the pad in the 3D view")
+        chip = self.chip("Pad")
+        local = QtCore.QPointF(chip.width() / 2, chip.height() / 2)
+        global_pos = QtCore.QPointF(chip.mapToGlobal(local.toPoint()))
+        QtWidgets.QApplication.sendEvent(chip, QtGui.QEnterEvent(local, global_pos, global_pos))
+        _pump(30)
+        pre = Gui.Selection.getPreselection()
+        self.assertEqual(pre.ObjectName, "Pad")
+        QtWidgets.QApplication.sendEvent(chip, QtCore.QEvent(QtCore.QEvent.Leave))
+        _pump(30)
+        self.assertNotEqual(Gui.Selection.getPreselection().ObjectName, "Pad")

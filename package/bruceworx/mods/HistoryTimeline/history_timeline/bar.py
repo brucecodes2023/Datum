@@ -22,6 +22,7 @@ PLAYBACK = (
 
 _BG = "#323232"
 _SLASH = "#ff5d5d"
+_BADGE = "#e0443e"
 
 # One row of 28 px icon chips, as in the roadmap §13.3 mock.
 RIBBON_HEIGHT = 36
@@ -180,6 +181,7 @@ class FeatureButton(QtWidgets.QWidget):
     clicked = QtCore.Signal()
     doubleClicked = QtCore.Signal()
     contextMenu = QtCore.Signal(object)
+    hovered = QtCore.Signal(bool)
 
     def __init__(self, entry, parent=None):
         super().__init__(parent)
@@ -190,25 +192,41 @@ class FeatureButton(QtWidgets.QWidget):
         self.setCursor(_pointing_hand())
         self.setMouseTracking(True)
         self._suppress_release = False
-        type_id = getattr(entry, "type_id", entry.kind)
-        base = getattr(entry, "base_name", None)
-        state = []
-        if entry.is_tip:
-            state.append("tip")
-        if entry.after_tip:
-            state.append("after tip")
-        if entry.suppressed:
-            state.append("suppressed")
-        state_text = ", ".join(state) if state else "in history"
-        tooltip = getattr(entry, "tooltip", None)
-        self.setToolTip(
-            tooltip or f"{entry.label}\n{type_id}\nbase: {base or '—'}\n{state_text}"
-        )
+        self.refresh_tooltip()
         icon = getattr(entry, "icon", None)
         if icon is not None:
             self._pixmap = icon.pixmap(QtCore.QSize(CHIP_ICON, CHIP_ICON))
         else:
             self._pixmap = glyph(entry.kind, CHIP_ICON)
+
+    def refresh_tooltip(self):
+        entry = self.entry
+        tooltip = getattr(entry, "tooltip", None)
+        if not tooltip:
+            type_id = getattr(entry, "type_id", entry.kind)
+            base = getattr(entry, "base_name", None)
+            state = []
+            if entry.is_tip:
+                state.append("tip")
+            if entry.after_tip:
+                state.append("rolled back")
+            if entry.suppressed:
+                state.append("suppressed")
+            tooltip = f"{entry.label}\n{type_id}\nbase: {base or '—'}\n" + (
+                ", ".join(state) if state else "in history"
+            )
+        self.setToolTip(tooltip)
+
+    def enterEvent(self, event):
+        self.hovered.emit(True)
+        # Qt 6 hands a QEnterEvent here; a plain QEvent (a synthetic one) must not
+        # reach the C++ base, which casts it.
+        if not hasattr(QtGui, "QEnterEvent") or isinstance(event, QtGui.QEnterEvent):
+            super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.hovered.emit(False)
+        super().leaveEvent(event)
 
     def paintEvent(self, _event):
         painter = QtGui.QPainter(self)
@@ -232,6 +250,17 @@ class FeatureButton(QtWidgets.QWidget):
             painter.setOpacity(1.0)
             painter.setPen(QtGui.QPen(QtGui.QColor(_SLASH), 2))
             painter.drawLine(8, self.height() - 6, self.width() - 8, 6)
+        if getattr(self.entry, "children", None):
+            # A sketch is folded under this feature: small mark, bottom left.
+            painter.setPen(_no_pen())
+            painter.setBrush(colors["accent"])
+            painter.drawRoundedRect(QtCore.QRectF(3, self.height() - 6, 6, 3), 1.5, 1.5)
+        if getattr(self.entry, "error", False):
+            # Red badge, top right: the feature failed to recompute (tooltip says why).
+            painter.setOpacity(1.0)
+            painter.setPen(QtGui.QPen(colors["fill"], 1.5))
+            painter.setBrush(QtGui.QColor(_BADGE))
+            painter.drawEllipse(QtCore.QRectF(self.width() - 9, 1, 8, 8))
         if self.property("traced"):
             # [BW] The feature that made the face picked in the 3D view (bruceworx_picktrace).
             painter.setOpacity(1.0)
@@ -452,6 +481,8 @@ class TimelineBar(QtWidgets.QWidget):
     tipDragCancelled = QtCore.Signal()
     playbackRequested = QtCore.Signal(str)
     renameRequested = QtCore.Signal(str, str)
+    hoverChanged = QtCore.Signal(object)
+    expandedChanged = QtCore.Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -494,6 +525,18 @@ class TimelineBar(QtWidgets.QWidget):
         self._playback = PlaybackStrip(self)
         self._playback.requested.connect(self.playbackRequested.emit)
         outer.addWidget(self._playback)
+        # Disclosure for the sketches folded under their features; shown only when
+        # the row has such groups.
+        self._disclosure = QtWidgets.QToolButton(self)
+        self._disclosure.setObjectName("HistoryTimelineDisclosure")
+        self._disclosure.setAutoRaise(True)
+        self._disclosure.setCheckable(True)
+        self._disclosure.setFixedSize(16, RIBBON_HEIGHT - 10)
+        self._disclosure.setFocusPolicy(qt_enum(QtCore.Qt, ("FocusPolicy", "NoFocus"), ("NoFocus",)))
+        self._disclosure.setToolTip("Show the sketches folded under their features")
+        self._disclosure.toggled.connect(self._on_disclosure)
+        self._disclosure.hide()
+        outer.addWidget(self._disclosure)
         outer.addWidget(scroll, 1)
         # Right-hand note (assembly order); empty and hidden for PartDesign.
         self._note = QtWidgets.QLabel()
@@ -514,6 +557,9 @@ class TimelineBar(QtWidgets.QWidget):
         self._has_marker = False
         self._rename_edit = None
         self._rename_name = None
+        self._expanded = False
+        self._all_order = []
+        self._hovered = None
 
     # ----- building the row -----------------------------------------------------------------
 
@@ -525,9 +571,11 @@ class TimelineBar(QtWidgets.QWidget):
         self.cancel_rename()
         self._buttons = {}
         self._order = []
+        self._all_order = []
         self._entries = {}
         self._marker = None
         self._preview_tip = None
+        self._hovered = None
         self._has_marker = bool(marker) and bool(entries)
         while self._row.count():
             item = self._row.takeAt(0)
@@ -546,8 +594,11 @@ class TimelineBar(QtWidgets.QWidget):
             label.setObjectName("HistoryTimelineHint")
             self._row.addWidget(label)
             self._row.addStretch(1)
+            self._disclosure.hide()
             return
 
+        has_groups = any(getattr(entry, "parent", None) for entry in entries)
+        self._disclosure.setVisible(has_groups)
         for entry in entries:
             button = FeatureButton(entry)
             button.clicked.connect(lambda name=entry.name: self._schedule_click(name))
@@ -555,10 +606,19 @@ class TimelineBar(QtWidgets.QWidget):
             button.contextMenu.connect(
                 lambda pos, name=entry.name: self.contextMenuRequested.emit(name, pos)
             )
+            button.hovered.connect(lambda on, name=entry.name: self._on_hover(name, on))
             self._buttons[entry.name] = button
             self._entries[entry.name] = entry
-            self._order.append(entry.name)
+            self._all_order.append(entry.name)
             self._row.addWidget(button)
+            if getattr(entry, "parent", None):
+                button.setProperty("folded", True)
+                button.setVisible(self._expanded)
+        # Chips just added to the layout are not shown yet, so decide from the entries.
+        self._order = [
+            n for n in self._all_order
+            if not getattr(self._entries[n], "parent", None) or self._expanded
+        ]
 
         if self._has_marker:
             self._marker = MarkerWidget()
@@ -599,6 +659,48 @@ class TimelineBar(QtWidgets.QWidget):
 
     def row_widget(self):
         return self._row_host
+
+    def disclosure_widget(self):
+        return self._disclosure
+
+    def is_expanded(self):
+        return self._expanded
+
+    def set_expanded(self, expanded, emit=False):
+        """Show (True) or fold (False) the sketches under their features."""
+        expanded = bool(expanded)
+        if self._disclosure.isChecked() != expanded:
+            self._disclosure.blockSignals(True)
+            self._disclosure.setChecked(expanded)
+            self._disclosure.blockSignals(False)
+        self._disclosure.setArrowType(
+            qt_enum(QtCore.Qt, ("ArrowType", "DownArrow"), ("DownArrow",))
+            if expanded
+            else qt_enum(QtCore.Qt, ("ArrowType", "RightArrow"), ("RightArrow",))
+        )
+        changed = expanded != self._expanded
+        self._expanded = expanded
+        for name in self._all_order:
+            entry = self._entries[name]
+            if getattr(entry, "parent", None):
+                self._buttons[name].setVisible(expanded)
+        self._order = [n for n in self._all_order if not getattr(self._entries[n], "parent", None) or expanded]
+        if changed and emit:
+            self.expandedChanged.emit(expanded)
+
+    def _on_disclosure(self, checked):
+        self.set_expanded(checked, emit=True)
+
+    def _on_hover(self, name, on):
+        if on:
+            self._hovered = name
+            self.hoverChanged.emit(name)
+        elif self._hovered == name:
+            self._hovered = None
+            self.hoverChanged.emit(None)
+
+    def hovered_name(self):
+        return self._hovered
 
     def set_traced(self, name):
         """Ring the chip of feature ``name`` (None clears) and scroll it into view."""
@@ -720,7 +822,7 @@ class TimelineBar(QtWidgets.QWidget):
                 index -= 1
             self._row.insertWidget(index, self._marker)
         after = tip_name is None
-        for name in self._order:
+        for name in self._all_order:
             entry = self._entries[name]
             button = self._buttons[name]
             is_tip = name == tip_name
@@ -730,6 +832,7 @@ class TimelineBar(QtWidgets.QWidget):
             if is_tip:
                 after = True
             if changed:
+                button.refresh_tooltip()
                 button.update()
         self._update_playback()
 

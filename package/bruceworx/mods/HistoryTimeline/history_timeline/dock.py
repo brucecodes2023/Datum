@@ -45,6 +45,9 @@ def prefs():
 
 ENABLED_DEFAULT = True
 HIDE_WHEN_EMPTY_DEFAULT = True
+# Sketches folded under their features are shown (True) or folded (False); the
+# disclosure on the bar toggles and remembers it.
+SHOW_SKETCHES_DEFAULT = False
 # How often the dock checks the active body / assembly / object in edit.
 # None of those changes reaches a document observer.
 POLL_MS = 400
@@ -60,6 +63,10 @@ def is_enabled() -> bool:
 
 def hide_when_empty() -> bool:
     return bool(prefs().GetBool("HideWhenEmpty", HIDE_WHEN_EMPTY_DEFAULT))
+
+
+def show_sketches() -> bool:
+    return bool(prefs().GetBool("ShowSketches", SHOW_SKETCHES_DEFAULT))
 
 
 def _bottom_area():
@@ -207,6 +214,9 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self._bar.tipDragCancelled.connect(self._on_drag_cancelled)
         self._bar.playbackRequested.connect(self._on_playback)
         self._bar.renameRequested.connect(self._rename)
+        self._bar.hoverChanged.connect(self._on_hover)
+        self._bar.expandedChanged.connect(self._on_expanded)
+        self._bar.set_expanded(show_sketches())
         self._drag = None
         self._last_move_error = None
         self.setWidget(self._bar)
@@ -385,6 +395,31 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
                 _show_only(body, feature)
 
         self._transaction("Roll history tip", apply)
+
+    def _on_hover(self, name):
+        """Preselect the hovered feature in the 3D view (and the tree), as hovering
+        it there would; None clears."""
+        if not FreeCAD.GuiUp:
+            return
+        import FreeCADGui
+
+        try:
+            if name is None:
+                FreeCADGui.Selection.clearPreselection()
+                return
+            if self._kind == "assembly":
+                obj = self._assembly_object(name)
+            else:
+                _body, obj = self._feature(name)
+            if obj is None:
+                FreeCADGui.Selection.clearPreselection()
+                return
+            FreeCADGui.Selection.setPreselection(obj, "")
+        except Exception as exc:
+            FreeCAD.Console.PrintLog(f"History timeline: preselection: {exc}\n")
+
+    def _on_expanded(self, expanded):
+        prefs().SetBool("ShowSketches", bool(expanded))
 
     def _on_playback(self, action):
         """To start / back / forward / to end: Set tip on the step's solid."""
