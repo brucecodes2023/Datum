@@ -194,9 +194,9 @@ EPICS = [
       "Gravity, forces, motor torque and contact over time; plots and video.",
       "Arm under gravity matches analytic pendulum period within 2 %."),
     # Drawings ------------------------------------------------------------
-    E("DRW-01", "ASME templates & title block", "M2", "In progress", [],
+    E("DRW-01", "ASME templates & title block", "M2", "Done", [],
       "FCB-P2-06/07/08",
-      "ANSI A-D sheets, third-angle symbol, tolerance block; fields filled from PDM metadata.",
+      "ANSI A-D sheets, third-angle symbol, tolerance block; fields filled from PDM metadata. Built 24 Oct (ten templates, the fill observer, New Drawing). Done 25 Oct: on a copy of the Vector vault a new part with PLA and a finish, released as A, gets a drawing whose 20 title-block fields all fill by themselves (company, units, projection, standard, tolerances, title, P/N, revision A, material, finish, mass 15 g, drawn/checked/approved with dates, scale, sheet); a GUI test repeats it on a fresh vault. LE-01001 itself is drawn in the PDM-07 pilot.",
       "LE-01001 sample drawing fills every field automatically."),
     E("DRW-02", "Associative BOM table & balloons", "M2", "To do", ["ASM-04"],
       "FCB-P2A-06",

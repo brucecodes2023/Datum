@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Tests for drawing title blocks (bruceworx_drawing, DRW-01): the field map, the
-keep-what-the-user-typed rule, the template choice, the template variants, and a
-headless page filled from a part."""
+keep-what-the-user-typed rule, the template choice, the template variants, a
+headless page filled from a part, and (GUI) the DRW-01 acceptance: a released vault part's
+drawing fills every field by itself."""
 
 import os
 import re
@@ -116,6 +117,68 @@ class TestPage(unittest.TestCase):
         page.Template = template
         self.assertIsNone(drawing.fill_page(page, root=""))
         self.assertNotIn(drawing.FILLED_PROP, page.PropertiesList)
+
+
+@unittest.skipUnless(FreeCAD.GuiUp, "needs a GUI FreeCAD (New Part in Vault)")
+class TestAcceptance(unittest.TestCase):
+    """DRW-01: a part made in a vault, given a material and finish and released as A, gets a drawing
+    whose title block fills every field by itself (company to signatures)."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        import bruceworx_vaultclient as vc
+        from bruceworx import vault_setup as vs
+
+        self.vc = vc
+        self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-drw01-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        setup = vs.VaultSetup(name="Shop", folder=os.path.join(self.tmp, "vault"),
+                              numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("LE")]))
+        ref = vs.create_vault(setup, actor="bruce@mac").ref_path
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        prefs.SetString("VaultPath", ref)
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+
+    def tearDown(self):
+        for name, doc in list(FreeCAD.listDocuments().items()):
+            if doc.FileName.startswith(self.tmp):
+                FreeCAD.closeDocument(name)
+
+    def test_released_part_fills_every_field(self):
+        import Materials
+
+        pn = self.vc.new_part("part", "Sample mounting plate")
+        doc = FreeCAD.ActiveDocument
+        part, body = doc.getObject("Part"), doc.getObject("Body")
+        box = body.newObject("PartDesign::AdditiveBox", "Plate")
+        box.Length, box.Width, box.Height = 60, 40, 5
+        pla = next(m for m in Materials.MaterialManager().Materials.values()
+                   if m.Name.startswith("PLA") and m.hasPhysicalProperty("Density"))
+        body.ShapeMaterial = pla
+        part.Finish = "As printed"
+        doc.recompute()
+        doc.save()
+        s = self.vc.session()
+        s.work.checkin(pn, "sample plate")
+        s.vault.submit(pn)
+        s.vault.approve(pn, note="Sample release")
+        s.refresh()
+        page = drawing.new_drawing(part)
+        drawing.fill_page(page)
+        texts = dict(page.Template.EditableTexts)
+        lines = len([line for line in ds.tolerance_lines(drawing.standards()) if line.strip()])  # the rest blank
+        empty = sorted(k for k, v in texts.items() if not str(v).strip() and k not in
+                       {f"tol{i}" for i in range(lines + 1, 9)})
+        self.assertEqual(empty, [], texts)
+        self.assertEqual((texts["part_number"], texts["revision"], texts["title"]), (pn, "A", "Sample mounting plate"))
+        self.assertEqual((texts["material"], texts["finish"]), (pla.Name, "As printed"))
+        self.assertTrue(texts["mass"].endswith("g"))
+        for role in ("drawn", "checked", "approved"):
+            self.assertTrue(texts[f"{role}_by"] and texts[f"{role}_date"], role)
+        self.assertEqual(texts["company"], "Shop")  # no company set: the vault's name
 
 
 if __name__ == "__main__":

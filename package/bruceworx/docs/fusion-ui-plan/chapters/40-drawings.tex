@@ -85,12 +85,18 @@ released); title block filled from item metadata, printed as \code{P/N-REV}.}
 \label{fig:sheet-mock}
 \end{figure}
 
-\begin{epic}{DRW-01}{ASME templates \& title block}{M2}{\stProg}{FCB-P2-06/07/08}
+\begin{epic}{DRW-01}{ASME templates \& title block}{M2}{\stDone}{FCB-P2-06/07/08}
 ANSI A--D sheet templates with the third-angle symbol, a general tolerance block, and fields for P/N, revision,
 title, material, finish, mass, scale, sheet and approvals. Fields fill from PDM item metadata
 (\eref{PDM-02}) through TechDraw's existing autofill, which is extended for the new keys. The \code{LE-01001}
 sample drawing (overall size, thickness, print Z, PETG/ABS, heat-set inserts) is the first user.
 \emph{Acceptance:} the \code{LE-01001} drawing fills every field automatically. Plan: section~\ref{sec:drw01-plan}.
+\textbf{Done 25 Oct.} On a copy of the Vector vault, a new part (\emph{New Part in Vault}, PLA, finish ``As printed'')
+released as A gets a drawing whose twenty title-block fields all fill by themselves: company (the vault's name, none
+set), units, projection, standard note, the two tolerance lines of the decimal block, title, P/N, revision A,
+material, finish, mass (15\,g), drawn, checked and approved with dates, scale and sheet. The GUI test
+\code{TestBruceWorxDrawing.TestAcceptance} repeats it on a fresh vault. \code{LE-01001} itself is drawn in the
+\eref{PDM-07} pilot.
 \end{epic}
 
 \input{chapters/42-drw01-plan}
