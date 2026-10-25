@@ -55,6 +55,44 @@ class TestPlanes(unittest.TestCase):
             sec.three_point_normal(V(0, 0, 0), V(1, 0, 0), V(2, 0, 0))
 
 
+class TestHandles(unittest.TestCase):
+    """The on-canvas handles move the plane the way they are dragged, flipped or not (UAT 25 Oct:
+    a face section, usually flipped, moved against the arrow)."""
+
+    PLANES = [(sec.placement_for(V(0, 1, 0), V(0, 0, 5)), 0.0, 0.0),
+              (sec.placement_for(V(0.3, -0.2, 0.9), V(4, 2, 1)), 20.0, -35.0)]
+
+    def test_the_frame_is_the_cut(self):
+        for flipped in (False, True):
+            for plc, ta, tb in self.PLANES:
+                n, _d = sec.plane_of(plc, 0, ta, tb, flipped)
+                near(self, sec.handle_frame(plc, ta, tb, flipped).multVec(V(0, 0, 1)), n)
+
+    def test_the_arrow_moves_the_plane_its_way(self):
+        for flipped in (False, True):
+            for plc, ta, tb in self.PLANES:
+                frame = sec.handle_frame(plc, ta, tb, flipped)
+                arrow = frame.multVec(V(0, 0, -1))  # out of the cut
+                step = sec.drag_signs(flipped)[0] * 2.5  # 2.5 mm along the arrow
+                n0, d0 = sec.plane_of(plc, 0, ta, tb, flipped)
+                n1, d1 = sec.plane_of(plc, step, ta, tb, flipped)
+                p0 = plc.Base
+                along = (d1 - n1.dot(p0)) / n1.dot(arrow)
+                self.assertAlmostEqual(along, 2.5, places=6, msg=f"flipped={flipped}")
+
+    def test_the_rings_turn_the_plane_their_way(self):
+        for flipped in (False, True):
+            for plc, _ta, _tb in self.PLANES[:1] + [(self.PLANES[1][0], 0.0, 0.0)]:
+                frame = sec.handle_frame(plc, 0, 0, flipped)
+                n0, _d = sec.plane_of(plc, 0, 0, 0, flipped)
+                for index, prop, axis in ((1, "TiltA", V(1, 0, 0)), (2, "TiltB", V(0, 1, 0))):
+                    turned = App.Rotation(frame.multVec(axis), 10).multVec(n0)  # the ring turned 10 deg
+                    tilt = sec.drag_signs(flipped)[index] * 10
+                    n1, _d1 = sec.plane_of(plc, 0, tilt if prop == "TiltA" else 0, tilt if prop == "TiltB" else 0,
+                                           flipped)
+                    near(self, n1, turned)
+
+
 class TestPasses(unittest.TestCase):
     def setUp(self):
         self.p1 = (V(0, 1, 0), 0.0)

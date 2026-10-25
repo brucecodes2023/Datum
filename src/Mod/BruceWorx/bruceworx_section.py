@@ -67,6 +67,28 @@ def plane_of(placement, offset=0.0, tilt_a=0.0, tilt_b=0.0, flipped=False):
     return n, n.dot(point)
 
 
+def handle_frame(placement, tilt_a=0.0, tilt_b=0.0, flipped=False):
+    """The handles' rotation: its Z the cut's normal (``plane_of``, into the kept side), its X and
+    Y the plane's own axes turned by the tilts, so the TiltA ring turns about X and the TiltB ring
+    about Y; a flipped plane is turned half round its X."""
+    App = _app()
+    rot = placement.Rotation
+    u = rot.multVec(App.Vector(1, 0, 0))
+    v = rot.multVec(App.Vector(0, 1, 0))
+    turn = App.Rotation(v, float(tilt_b)).multiply(App.Rotation(u, float(tilt_a)))
+    frame = turn.multiply(rot)
+    if flipped:
+        frame = frame.multiply(App.Rotation(App.Vector(1, 0, 0), 180))
+    return frame
+
+
+def drag_signs(flipped):
+    """(offset, TiltA, TiltB) per unit of handle motion. The arrow points out of the cut (the
+    frame's -Z): along the plane's own normal when flipped, against it when not. The flip turns
+    the frame half round X, which reverses Y (the TiltB ring) but not X (TiltA)."""
+    return (1.0, 1.0, -1.0) if flipped else (-1.0, 1.0, 1.0)
+
+
 def flip(plane):
     n, d = plane
     return -n, -d
@@ -949,7 +971,8 @@ class Handles:
         box = _model_box(doc)
         centre = box.Center if box.isValid() else App.Vector()
         centre = centre - n * (n.dot(centre) - d)
-        rot = App.Rotation(App.Vector(0, 0, 1), n)
+        rot = handle_frame(self.obj.Plane, self.obj.TiltA.Value, self.obj.TiltB.Value, self.obj.Flipped)
+        self.signs = drag_signs(self.obj.Flipped)
         u, v = rot.multVec(App.Vector(1, 0, 0)), rot.multVec(App.Vector(0, 1, 0))
         # the frame: the model's extent on the plane, a little more
         half_u = half_v = 10.0
@@ -1031,7 +1054,7 @@ class Handles:
         if self._bound("Offset"):
             return
         # the callback hands a plain SoDragger: read our own translate dragger
-        moved = -self.offset_dragger.translation.getValue()[0] * self.arrow_scale  # the arrow points against the normal
+        moved = self.offset_dragger.translation.getValue()[0] * self.arrow_scale * self.signs[0]
         self.obj.Offset = self.start_offset + moved
         refresh(self.obj.Document)
 
@@ -1052,7 +1075,8 @@ class Handles:
         shift = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier)
         step = 1.0 if shift else 5.0
         start = next(s for p, _d, s in self.ring_draggers if p == prop)
-        setattr(self.obj, prop, start + round(degrees / step) * step)
+        sign = self.signs[1] if prop == "TiltA" else self.signs[2]
+        setattr(self.obj, prop, start + round(sign * degrees / step) * step)
         refresh(self.obj.Document)
 
     def _tilt_done(self, _prop, _dragger):
