@@ -500,3 +500,170 @@ vault wears the ``in'' badge. The pack's stdlib tests cover the new entries.
   \item Import: keep ``imported files take the vault's units'', or only files that still have FreeCAD's
         default? \emph{Recommendation:} keep it; the vault reads as one.
 \end{enumerate}
+
+%----------------------------------------------------------------------
+\subsubsection*{Built, 26 Oct: steps 4--8 (B --- the product tree, C --- New Project)}
+
+Built by the second PDM-09 agent alongside steps 1--3, in three commits (\code{9125bd3} the journal,
+\code{2eba35e} the FreeCAD-free engine, \code{3a61662} the window), on the plan's recommendations and your three
+changes of 24 Oct. All of steps 4--8 passed the plan's acceptance, first on a scratch inch vault, then on a copy of
+Vector (never the real one).
+
+\paragraph{Step 4 --- the journal.} \file{pdm.py} gained the \emph{project} record (\code{create\_project}: code,
+name, program, top assembly, units \code{mm}|\code{in}, drawing profile; \code{update\_project}: rename, re-point,
+change units, close and reopen) with its rules: a unique code, a name and a program required, the top an assembly
+that is not obsolete. \file{pdm\_folder.py} replays both, and a check-in may carry \code{made\_from} (a drawing:
+P/N $\rightarrow$ the SHA-256 of the version its work copy held, over the closure $C(D)$ of the files it links) and
+\code{fingerprint} (a part: volume, area, centre of mass, bounding box and solid count, each to 7 significant
+digits, about $10^{-6}$ relative), both written only when given, so every journal from before reads exactly as it
+did. The workspace computes \code{made\_from} from its \file{state.json} bases; \file{docs/pdm-openapi.yaml} is
+0.4.0-draft (\code{/projects}, \code{PATCH /projects/\{code\}}, the two check-in fields, a \code{Fingerprint}
+schema); the contract table has rows P1, P2 and a check-in-extras test. The dashboard's \emph{Projects} section
+lists the recorded projects once a vault has any (top assemblies stand in until then, as PDM-10 said).
+\textbf{Every Keystone copy must know \code{create\_project}, \code{update\_project} and the two check-in fields
+before the real vault uses them}: an older Keystone would list those journal lines as problems, as the 25 Oct
+record says for Mark as COTS and configuration numbers.
+
+\paragraph{Theory as code.} \file{bruceworx/product\_tree.py} (FreeCAD-free, 15 tests) is the plan's
+section~3: \code{drawing\_state} compares $r_D$ with $v(x)$ over $C(D)$ (the released version of each $x$ for a
+released drawing, else the latest), calls a change \emph{metadata} when the two versions' fingerprints are equal
+and \emph{geometry} otherwise, and reports out of date / metadata only / current with the list of what changed;
+a drawing without $r_D$ falls back to the time comparison and says so (\code{basis} \code{"time"}). The Drawing
+cell of an item adds \emph{missing}, \emph{no file yet} (a drawing item without a version), \emph{in model} (the
+part's own file holds a TechDraw page: read from the stored object, cached by SHA-256) and \emph{none needed}
+(bought parts). \code{Tree} gives the rows one level at a time from \file{vault\_trees.structure} (the recorded
+BOM, else the file's links, marked), the chip counts of everything strictly below an assembly, the flat roll-up
+$Q_t$ for the List view, and the out-of-date drawings under a root for \emph{Update drawings}.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.46\linewidth]{fig/pdm09_structure_built.png}\hfill
+\includegraphics[width=0.50\linewidth]{fig/pdm09_wizard_built.png}
+\caption{As built, rendered off screen. Left: the Vault tab's Structure view on a scratch project after the side
+rail was modelled: the rail's, the frame's and the cart's drawings are out of date, the deck plate's is current,
+the caster needs none; the chips carry the counts and the ``in'' badge says the project is in inches under a mm
+vault. Right: the New Project panel's three boxes with a structure that names \emph{Frame} and \emph{Caster 4 in}
+twice, so both carry the duplicate bubble; the preview shows every number and ``16 parts in all''.}
+\label{fig:pdm09-built}
+\end{figure}
+
+\paragraph{Step 5 --- the Structure view} (\file{bruceworx\_structure.py}, the right panel's \code{BWVault} tab,
+figure~\ref{fig:pdm09-built}). \emph{List | Structure} as two chips at the top, a root picker (the open projects
+first, then every assembly) that follows an assembly selected in the Browser, the three filter chips with counts,
+the tree with \emph{Item} (P/N-REV, description, $\times$quantity), \emph{State} (with ``from links'' and the
+lock holder) and \emph{Drawing} coloured by state, lazy one level at a time (a placeholder row until the arrow is
+clicked), the row menu (Open, Open drawing, Update drawing, Create drawing, Where used\ldots, Bill of materials\ldots,
+Show in list, Show on the Start page) and the footer (Open top, Bill of materials, Update drawings\ldots, which
+checks out each out-of-date drawing, opens it, recomputes it and opens the Check In panel for the first, listing
+the rest). The empty state offers \emph{New Project\ldots}. It refreshes on every vault change through the vault
+client's listener. \emph{Create drawing} makes a numbered blank drawing of an item that has none, checked in as
+WIP~01 with \code{made\_from} over the item's closure.
+
+\paragraph{Step 6 --- the engine} (\file{bruceworx/project\_setup.py}, 11 tests). The parser reads the plan's
+text form (two spaces or a tab per level; \code{x2}, \code{2x} or \code{×2}; \code{cots}; a leading P/N reuses a
+vault item; blank lines and \code{\#} comments skipped), a spreadsheet paste (tab-separated \emph{level, name,
+qty, type}, header optional, levels relative) and CSV files (\emph{Load CSV\ldots}, \code{read\_structure\_file}),
+into one rooted DAG: the same name is the same node, \code{uses} counts its parents, and the preview marks ``used in
+$n$ places'' (answer~10). Errors: no root, two roots at the margin, a root without items, an item holding itself,
+a bought part with children, a quantity below~1, a P/N as the top; a deeper indent than one level is read as one
+level with a warning. \code{check} looks the reused P/Ns up (unknown, obsolete, a drawing), warns that items typed
+under an existing item are not added to it, and refuses a retired program or document type. \code{plan\_numbers}
+simulates the reservations on a copy of \file{numbering.json} (consecutive numbers, nothing written), flat, one
+parent each; \code{order\_of\_work} is children first; \code{summary} gives $Q_t$ over the leaves as ``$N$ parts in
+all'' with the counts of parts, assemblies, bought parts, reused items, drawings and files.
+
+\paragraph{Step 7 --- the writer and the panel} (\file{bruceworx\_project.py}). \code{create\_project} does the
+plan's steps 2--5 in order: files in \file{<vault>/.import/project-<id>}, children first (a part is an
+\code{App::Part} with a Body and the vault's part properties, ``bought'' sets \code{ItemType}; an assembly is saved
+\emph{before} its links, one \code{App::Link} per instance 50\,mm apart, the first child grounded with Assembly's
+\code{GroundedJoint}; a drawing is its own file with a link to the model, saved before the link too, a blank page from
+the template of the project's units and the title block filled, with \code{BWModel} naming its link so \emph{Insert
+Views} can add the front, top and right views later); \emph{verify} reopens every staged assembly and compares the
+walker's counts with the structure; then the numbers are taken, each file is numbered (P/N, revision~01, units,
+and for a drawing the title block's part-number field) \emph{while its links still resolve}, renamed to
+\file{<P/N>.FCStd} and relinked by name (\code{rewrite\_links}, \code{clear\_link\_errors}); then \code{create\_item}
+for every item and drawing, \code{create\_project}, and one check-in per file: parts with their fingerprint
+(\code{None} while empty), each assembly's BOM recorded for revision~01 from the structure as typed (so the
+Structure view reads ``bom'', not ``from links''), drawings last with \code{made\_from} over their closure; work
+copies fetched read-only; backups off throughout; staging removed. A failure before the numbers are taken leaves
+the vault untouched (tested); after, the file is listed and its number stays unused, as an import does. The task
+panel (figure~\ref{fig:pdm09-built}) has the project box (name, code made from the name, program, units with the
+vault's default marked, drawing sheet following the units, the \emph{Insert views} tick box off by default), the
+structure box (monospace text with the cart as placeholder, \emph{Load CSV\ldots}, \emph{Example}) and the preview
+(item, P/N, drawing; the duplicate bubble in orange; the summary line; the issues in red), with \emph{Create
+project} enabled only when the plan is complete; Create runs with a progress dialog, then opens the top and shows
+the Structure view on the project. Entry points: \emph{File $\rightarrow$ New Project\ldots} (after New, put
+back after every workbench change), the BruceWorx menu, the Start page's \emph{New Project\ldots} (its
+\code{BruceWorx\_NewProject} hook now resolves), Cmd-K, and the Structure view's empty state. Headless:
+\code{bw-hooks project preview --vault V --structure cart.txt} (numbers and issues, nothing written) and
+\code{project new} (the same, then the files, inside \code{FreeCADCmd}; \code{--units}, \code{--sheet},
+\code{--insert-views}, \code{--code}). Check-ins from the window now record the two fields through
+\code{bruceworx\_vaultclient.CHECKIN\_EXTRAS}: a drawing's \code{made\_from} from the workspace, a part's fingerprint
+from the open document (or the file, opened hidden); a failure there is logged and never stops the check-in.
+
+\paragraph{Step 8 --- release and acceptance.} The release checklist has a sixth line, \emph{Drawing current (made
+from this model)}, of a new kind \code{warn}: checked by the tool, orange with a ``!'' when the drawing was made from
+an older version (metadata only passes; a pre-PDM-09 drawing is judged by time and says so), never a blocker and
+recorded as \code{warning: true} with the approval (answer~6). Acceptance, headless in \code{FreeCADCmd}
+(\file{TestBruceWorxProject.py}): the six-line cart on a scratch vault with inch standards becomes 6 items
+(\code{DM-01}, \code{DM-02}) and 5 drawings (\code{DM-03}), every file WIP~01 with one version, \code{UnitSystem}
+Imperial decimal in the top and in a drawing, the top's links by number with the walker counting 2 frames, 1 plate
+and 4 casters, the first child grounded, the drawing blank with \code{BWModel} and the number in its title block,
+every Drawing cell current and the caster ``none needed'', no staging or backup left; then the side rail gets a
+$1\times1\times24$\,in box and is checked in with its fingerprint: the rail's, the frame's and the cart's drawings are
+out of date (the frame's names the rail as the geometry change), the cross bar's and the plate's current, the top row
+counts 2 below it, \emph{Update drawings} lists exactly those three; \emph{Insert Views} on the rail's drawing and a
+check-in with \code{made\_from} make it current again while the frame's stays out of date; the checklist of the
+frame warns and does not block. The same on a \textbf{copy of Vector} (\file{vector\_accept.py}, the CLI's
+\code{project new} with \code{--units in} under program \code{LE}): \code{LE-02-01004-001} and ten more numbers
+after the gearbox's, the project \code{SHOP-CART-ACCEPT} in inches under a mm vault, the same out-of-date chain
+after the rail changed, Vector's own items untouched (``missing'': they have no drawing items). In the GUI:
+\code{TestBruceWorxProject} (8), \code{TestBruceWorxChanges} (12), \code{TestBruceWorxVaultClient} (30) pass; the
+hooks add-on's 300-odd stdlib tests pass.
+
+\paragraph{Decided while building} (where the plan left a choice).
+\begin{itemize}[nosep]
+  \item \textbf{List is scoped to the root}, not the vault: every item under the picked project or assembly once,
+        with its total quantity $Q_t$; vault browsing stays on the Start page (your 25 Oct decision). \emph{Show in
+        list} selects the row there; \emph{Show on the Start page} finds it in the Files tree.
+  \item \textbf{A project's code} is made from its name (\code{SHOP-CART}, unique with a numbered suffix) and can
+        be edited; \code{update\_project} renames or closes it (closed projects leave the picker).
+  \item \textbf{The project's units are recorded with it} (question~1, recommendation taken) and shown as the
+        badge when they differ from the vault's; \code{drawing\_profile} is stored as the units until the
+        drawing-standards profiles of step~2 give it another name.
+  \item \textbf{The sheet}: inch projects on ANSI~B (question~4), mm projects on the vault's default sheet; the
+        panel lets you pick another before Create.
+  \item \textbf{Drawings are numbered as document type 03} (question~11) and their title block shows the
+        drawing's number; the drawing-of link is the vault's. When PDM-07 settles the drawing key, the wizard
+        changes one line.
+  \item \textbf{A bought part is modelled too}: it gets a file (an empty part with \code{ItemType} cots) so the
+        assembly can link it; it gets no drawing. A reused P/N is linked from its work copy and typed items under it
+        are not added to it (its structure is its own file's).
+  \item \textbf{Each assembly's BOM is recorded at creation} from the structure as typed, with the version it
+        describes, so the Structure view and where-used are exact from the first minute; a later check-in's walker
+        replaces it as usual.
+  \item \textbf{An empty part has no fingerprint}, so a change to it before it has a shape counts as geometry
+        (there is nothing to compare); the first modelled version starts the fingerprints.
+  \item \textbf{The assembly drawing's closure uses the recorded BOM, else the file's links} (question~9), both in
+        the Structure view and in the checklist line, so an older vault without BOMs still gets the chain.
+  \item \textbf{Instances in a row, 50\,mm apart}, the first grounded: enough for empty parts to open without
+        overlapping; the user places them when modelling.
+  \item \textbf{The Insert Views command} lives on the drawing (\code{BruceWorx\_InsertViews}, active when the
+        document's page names its model); the panel's tick box inserts them at creation instead (answer~8).
+\end{itemize}
+
+\paragraph{Questions after steps 4--8.}
+\begin{enumerate}[nosep]
+  \item \textbf{Projects on the Start page.} The dashboard lists recorded projects by code and name now; should
+        the Start page's project row open the Structure view on it (one call), and should \emph{New Project} be
+        offered beside \emph{New Part} in the toolbar? \emph{Recommendation:} yes to both.
+  \item \textbf{Update drawings and several files.} It opens the Check In panel for the first drawing and lists
+        the rest (one panel at a time). Should it instead check them all in at once with one comment, as the
+        check-in panel's rows do? \emph{Recommendation:} yes, once you have seen the recomputed sheets once.
+  \item \textbf{Out of date through metadata of an assembly.} An assembly's own file changes with every placement
+        or link edit and has no fingerprint, so its drawing reads ``out of date'' after any save of the assembly.
+        Fingerprint assemblies too (the compound of their instances)? \emph{Recommendation:} yes, in a later pass,
+        with the same seven digits.
+  \item \textbf{Family numbers.} The wizard numbers flat (one parent each); the spike showed family numbers collide
+        across document types. Keep flat until Ops allocates? \emph{Recommendation:} keep flat.
+\end{enumerate}
