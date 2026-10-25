@@ -1248,6 +1248,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "Studio shading (soft lights, reflections, colours from materials)",
+"tip": "On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ",
+"page": "BruceWorx",
+"area": "BruceWorx"
+},
+{
 "text": "Top offset",
 "tip": "",
 "page": "BruceWorx",

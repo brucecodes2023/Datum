@@ -628,6 +628,25 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="StudioShading">
+        <property name="toolTip">
+         <string>On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ivory, PETG charcoal...). A colour you set by hand is kept. Same switch as BruceWorx &gt; Studio Shading. Off: FreeCAD's own shading, exactly. Drawn while the preference pack is applied.</string>
+        </property>
+        <property name="text">
+         <string>Studio shading (soft lights, reflections, colours from materials)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>StudioShading</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="NavigationPill">
         <property name="toolTip">
          <string>A small bar at the bottom of each 3D view: orbit, pan, zoom (click, then drag in the view; Esc stops), fit all, display style, orthographic/perspective, clipping planes, measure.</string>

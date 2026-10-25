@@ -9,6 +9,7 @@ Preferences → BruceWorx. This file:
 * adds the Properties, Vault, Parameters and Physical tabs to the right panel
   (bruceworx_rightpanel),
 * starts the ground grid, which shows only while the preference pack is applied,
+* shades the faces in the Fusion-like studio look, coloured from their materials (bruceworx_studio),
 * registers the Rectangular / Circular Pattern commands (bruceworx_pattern_gui),
 * creates the shared top-level BruceWorx menu (bruceworx_menu),
 * keeps the toolbars on two rows (bruceworx_toolbars),
@@ -103,6 +104,13 @@ try:
     ground_grid.startup()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx ground grid was not started: {exc}")
+
+try:
+    import bruceworx_studio
+
+    bruceworx_studio.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx studio shading was not installed: {exc}")
 
 try:
     import bruceworx_pattern_gui
