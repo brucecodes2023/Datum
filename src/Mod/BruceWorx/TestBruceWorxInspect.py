@@ -55,7 +55,51 @@ class TestInspectMaps(unittest.TestCase):
         App.closeDocument(self.doc.Name)
 
     def _scene_has_map(self):
-        return Gui.ActiveDocument.ActiveView.getSceneGraph().getByName(self.g.NODE_NAME) is not None
+        """A search by name through the whole scene (the map sits in the viewer's ObjectGroup, which a
+        section moves under its passes; SoNode.getByName answers for the last node named, not this scene)."""
+        from pivy import coin
+
+        search = coin.SoSearchAction()
+        search.setName(self.g.NODE_NAME)
+        search.setInterest(coin.SoSearchAction.FIRST)
+        search.setSearchingAll(True)
+        search.apply(Gui.ActiveDocument.ActiveView.getSceneGraph())
+        return search.getPath() is not None
+
+    def test_the_map_is_cut_by_a_section(self):
+        """The map hangs in the viewer's ObjectGroup, which the section passes clip (known gap of 25 Oct:
+        section planes did not cut the map)."""
+        import bruceworx_section as sec
+
+        g = self.g
+        session = g.show("overhang", objects=[self.obj])
+        pump()
+        root = Gui.ActiveDocument.ActiveView.getSceneGraph()
+        groups = [root.getChild(i) for i in range(root.getNumChildren()) if root.getChild(i).getName().getString() == g.OBJECT_GROUP]
+        self.assertEqual(len(groups), 1)
+        self.assertGreaterEqual(groups[0].findChild(session.root), 0)
+        self.assertLess(root.findChild(session.root), 0)
+        before = self.picture()
+        plane = sec.make(self.doc, "XZ")
+        plane.Offset = 5.0
+        self.doc.recompute()
+        pump()
+        self.assertTrue(self._scene_has_map())
+        self.assertNotEqual(before, self.picture())  # the cut shows: part and map alike
+        g.close()
+        pump()
+        self.assertFalse(self._scene_has_map())
+
+    def picture(self):
+        import os
+        import tempfile
+
+        from PySide import QtGui
+
+        path = os.path.join(tempfile.gettempdir(), "bw-inspect-cut.png")
+        Gui.ActiveDocument.ActiveView.saveImage(path, 200, 150, "Current")
+        image = QtGui.QImage(path)
+        return bytes(image.constBits())[: image.sizeInBytes()] if not image.isNull() else b""
 
     def test_overhang_map_round_trip(self):
         g = self.g

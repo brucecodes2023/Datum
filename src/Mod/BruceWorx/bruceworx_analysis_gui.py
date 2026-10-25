@@ -284,9 +284,49 @@ def build_node(mesh, analysis=None, zebra=None):
     return sep
 
 
+OBJECT_GROUP = "ObjectGroup"  # the viewer's group of the document's view providers (Gui/View3DInventorViewer)
+
+
+def _find(root, name=None, node=None, from_tail=0):
+    """The first node called ``name`` (or ``node`` itself) under ``root``, or its ancestor ``from_tail``
+    steps up; None when absent. (The path belongs to the action: read while it lives.)"""
+    from pivy import coin
+
+    search = coin.SoSearchAction()
+    if node is not None:
+        search.setNode(node)
+    else:
+        search.setName(name)
+    search.setInterest(coin.SoSearchAction.FIRST)
+    search.setSearchingAll(True)
+    search.apply(root)
+    path = search.getPath()
+    if path is None or path.getLength() <= from_tail:
+        return None
+    return path.getNodeFromTail(from_tail)
+
+
 def _scene(view):
+    """Where the map is drawn: the viewer's ObjectGroup, which the section passes clip (the map is cut
+    with the parts; before 26 Oct it hung off the root and showed whole through a section), else the
+    root. A section on moves the group under its passes, so it is searched for, not read off the root."""
     try:
-        return view.getSceneGraph()
+        root = view.getSceneGraph()
+    except Exception:
+        return None
+    try:
+        group = _find(root, name=OBJECT_GROUP)
+        if group is not None:
+            return group
+    except Exception:
+        pass
+    return root
+
+
+def _parent_of(view, node):
+    """The group ``node`` hangs in now (the map's ObjectGroup can move under a section's passes)."""
+    try:
+        return _find(view.getSceneGraph(), node=node, from_tail=1)
     except Exception:
         return None
 
@@ -427,10 +467,10 @@ class Session:
         self.hidden.clear()
         if self.root is None:
             return
-        scene = _scene(self.view)
         try:
-            if scene is not None and scene.findChild(self.root) >= 0:
-                scene.removeChild(self.root)
+            parent = _parent_of(self.view, self.root)
+            if parent is not None and parent.findChild(self.root) >= 0:
+                parent.removeChild(self.root)
         except Exception:
             pass
         self.root = None
