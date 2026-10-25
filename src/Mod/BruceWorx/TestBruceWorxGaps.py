@@ -46,12 +46,22 @@ class CreateAssemblyTests(unittest.TestCase):
         self.Gui.getDocument(self.doc.Name).setEdit(self.sheet)
         self._pump()
         area = self.Gui.getMainWindow().findChild(QtWidgets.QMdiArea)
+
+        def kind(sub):
+            widget = sub.widget()
+            return widget.metaObject().className() if widget is not None else ""
+
         if close_3d:
             for sub in area.subWindowList():
-                if sub.widget().metaObject().className() == "Gui::View3DInventor":
+                if kind(sub) == "Gui::View3DInventor":
                     sub.close()
             self._pump()
-        self.assertEqual(area.activeSubWindow().widget().metaObject().className(), "SpreadsheetGui::SheetView")
+        if area.activeSubWindow() is None:  # the previous test module left no active sub-window
+            for sub in area.subWindowList():
+                if kind(sub) == "SpreadsheetGui::SheetView":
+                    area.setActiveSubWindow(sub)
+            self._pump()
+        self.assertEqual(kind(area.activeSubWindow()), "SpreadsheetGui::SheetView")
         return area
 
     def _create(self, close_3d):

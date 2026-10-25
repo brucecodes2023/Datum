@@ -1304,7 +1304,7 @@ class Joint:
                     part.Placement = plc
             self.partsMovedByPresolved = {}
 
-            if joint.ViewObject:
+            if joint.ViewObject and getattr(joint.ViewObject, "Proxy", None):
                 joint.ViewObject.Proxy.redrawJointPlacements(joint)
 
     def preventParallel(self, joint):
