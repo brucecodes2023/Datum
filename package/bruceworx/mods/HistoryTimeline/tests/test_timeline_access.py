@@ -308,6 +308,36 @@ def test_set_tip_and_suppress():
         App.closeDocument(doc.Name)
 
 
+def test_playback_targets():
+    doc = App.newDocument("TimelinePlayback")
+    try:
+        built = build_body(doc)
+        body = built["body"]
+        box, cylinder, sphere = built["box"], built["cylinder"], built["sphere"]
+        check(model.solids_in_group(body) == [box, cylinder, sphere], "solids_in_group lists the three solids")
+        check(model.playback_target(body, "end") == (False, sphere), "end at the end: no change")
+        check(model.playback_target(body, "forward") == (False, sphere), "forward at the end: no change")
+        check(model.playback_target(body, "back") == (True, cylinder), "back steps to the previous solid")
+        check(model.playback_target(body, "start") == (True, None), "start clears the tip")
+        model.set_tip(body, box)
+        check(model.playback_target(body, "back") == (True, None), "back before the first solid clears the tip")
+        check(model.playback_target(body, "forward") == (True, cylinder), "forward steps to the next solid")
+        model.set_tip(body, None)
+        check(model.playback_target(body, "forward") == (True, box), "forward from a cleared tip picks the first solid")
+        check(model.playback_target(body, "back") == (False, None), "back from a cleared tip: no change")
+        check(model.playback_target(body, "end") == (True, sphere), "end from a cleared tip picks the last solid")
+        refused = False
+        try:
+            model.playback_target(body, "sideways")
+        except ValueError:
+            refused = True
+        check(refused, "unknown playback action is refused")
+        model.set_tip(body, sphere)
+        doc.recompute()
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def test_reorder_is_not_free():
     doc = App.newDocument("TimelineReorder")
     try:
@@ -418,6 +448,7 @@ def main():
     try:
         test_read_order_tip_and_chain()
         test_set_tip_and_suppress()
+        test_playback_targets()
         test_reorder_is_not_free()
     except Exception:
         traceback.print_exc()

@@ -207,3 +207,60 @@ class TestMarkerDrag(TimelineGuiCase):
             self.assertEqual(self.body.Tip.Name, "Box")
         finally:
             self.hd.LIVE_PREVIEW_MAX = saved
+
+
+class TestPlayback(TimelineGuiCase):
+    def press(self, name):
+        strip = self.bar.playback_widget()
+        self.assertTrue(strip.isVisibleTo(self.bar), "playback strip hidden for a body")
+        button = strip.buttons[name]
+        self.assertTrue(button.isEnabled(), f"{name} disabled")
+        button.click()
+        _pump(50)
+
+    def test_buttons_step_through_the_history(self):
+        _say("Timeline: playback back, back, forward, to end, to start")
+        undo_before = self.doc.UndoCount
+        self.press("back")
+        self.assertEqual(self.body.Tip.Name, "Cylinder")
+        self.press("back")
+        self.assertEqual(self.body.Tip.Name, "Box")
+        self.press("forward")
+        self.assertEqual(self.body.Tip.Name, "Cylinder")
+        self.press("end")
+        self.assertEqual(self.body.Tip.Name, "Sphere")
+        self.press("start")
+        self.assertIsNone(self.body.Tip)
+        self.assertEqual(self.doc.UndoCount, undo_before + 5)
+        strip = self.bar.playback_widget()
+        self.assertFalse(strip.buttons["start"].isEnabled())
+        self.assertFalse(strip.buttons["back"].isEnabled())
+        self.assertTrue(strip.buttons["forward"].isEnabled())
+        self.press("forward")
+        self.assertEqual(self.body.Tip.Name, "Box")
+        self.assertTrue(self.doc.getObject("Box").Visibility)
+
+    def test_end_buttons_disabled_at_the_end(self):
+        strip = self.bar.playback_widget()
+        self.assertFalse(strip.buttons["end"].isEnabled())
+        self.assertFalse(strip.buttons["forward"].isEnabled())
+        self.assertTrue(strip.buttons["back"].isEnabled())
+        for name, button in strip.buttons.items():
+            self.assertFalse(button.icon().isNull(), f"{name} has no icon")
+
+    def test_hidden_for_an_assembly(self):
+        _say("Timeline: an assembly shows creation order, no playback and no marker")
+        asm_doc = App.newDocument("TimelineAsm")
+        try:
+            assembly = asm_doc.addObject("Assembly::AssemblyObject", "Assembly")
+            assembly.newObject("Assembly::JointGroup", "Joints")
+            assembly.newObject("Part::Box", "Base")
+            asm_doc.recompute()
+            self.dock.refresh()
+            _pump(50)
+            self.assertEqual(self.dock._kind, "assembly")
+            self.assertFalse(self.bar.playback_widget().isVisibleTo(self.bar))
+            self.assertIsNone(self.bar.marker_widget())
+        finally:
+            App.closeDocument(asm_doc.Name)
+            _pump()

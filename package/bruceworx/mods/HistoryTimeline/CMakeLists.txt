@@ -15,6 +15,14 @@ SET(HistoryTimeline_SRCS
     history_timeline/dock.py
     history_timeline/model.py
     history_timeline/qtcompat.py
+    history_timeline/icons/timeline_start-light.svg
+    history_timeline/icons/timeline_back-light.svg
+    history_timeline/icons/timeline_forward-light.svg
+    history_timeline/icons/timeline_end-light.svg
+    history_timeline/icons/timeline_start-dark.svg
+    history_timeline/icons/timeline_back-dark.svg
+    history_timeline/icons/timeline_forward-dark.svg
+    history_timeline/icons/timeline_end-dark.svg
 )
 
 ADD_CUSTOM_TARGET(BW_HistoryTimeline ALL
@@ -36,4 +44,16 @@ INSTALL(
         history_timeline/model.py
         history_timeline/qtcompat.py
     DESTINATION Mod/HistoryTimeline/history_timeline
+)
+INSTALL(
+    FILES
+        history_timeline/icons/timeline_start-light.svg
+        history_timeline/icons/timeline_back-light.svg
+        history_timeline/icons/timeline_forward-light.svg
+        history_timeline/icons/timeline_end-light.svg
+        history_timeline/icons/timeline_start-dark.svg
+        history_timeline/icons/timeline_back-dark.svg
+        history_timeline/icons/timeline_forward-dark.svg
+        history_timeline/icons/timeline_end-dark.svg
+    DESTINATION Mod/HistoryTimeline/history_timeline/icons
 )

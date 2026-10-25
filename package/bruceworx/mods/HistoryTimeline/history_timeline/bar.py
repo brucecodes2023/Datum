@@ -6,9 +6,19 @@ Entries are duck-typed: ``name``, ``label``, ``kind``, ``is_tip``, ``after_tip``
 optional tooltip fields; an entry's own ``tooltip`` replaces them.
 """
 
+import os
+
 from history_timeline.qtcompat import load_qt, qt_enum
 
 QtCore, QtGui, QtWidgets = load_qt()
+
+ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+PLAYBACK = (
+    ("start", "To start: roll everything back (Body.Tip cleared)"),
+    ("back", "Back one feature"),
+    ("forward", "Forward one feature"),
+    ("end", "To end: the last feature is the tip"),
+)
 
 _BG = "#323232"
 _SLASH = "#ff5d5d"
@@ -353,6 +363,74 @@ class MarkerWidget(QtWidgets.QWidget):
         self.update()
 
 
+def is_dark_palette(widget) -> bool:
+    """Dark theme: the window colour is dark. Works without FreeCAD's preferences."""
+    pal = widget.palette()
+    window = pal.color(qt_enum(QtGui.QPalette, ("ColorRole", "Window"), ("Window",)))
+    return window.lightness() < 128
+
+
+def playback_icon(name, dark) -> QtGui.QIcon:
+    """``icons/timeline_<name>-<light|dark>.svg`` from the mod."""
+    path = os.path.join(ICON_DIR, f"timeline_{name}-{'dark' if dark else 'light'}.svg")
+    return QtGui.QIcon(path)
+
+
+class PlaybackStrip(QtWidgets.QWidget):
+    """Fusion's four playback buttons: to start, back one, forward one, to end.
+
+    ``requested(action)`` carries ``"start"``, ``"back"``, ``"forward"`` or
+    ``"end"``. The icons follow the palette (light or dark set).
+    """
+
+    requested = QtCore.Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("HistoryTimelinePlayback")
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.buttons = {}
+        for name, tip in PLAYBACK:
+            button = QtWidgets.QToolButton(self)
+            button.setObjectName(f"HistoryTimelinePlay_{name}")
+            button.setAutoRaise(True)
+            button.setToolTip(tip)
+            button.setFocusPolicy(qt_enum(QtCore.Qt, ("FocusPolicy", "NoFocus"), ("NoFocus",)))
+            button.setIconSize(QtCore.QSize(16, 16))
+            button.setFixedSize(22, RIBBON_HEIGHT - 10)
+            button.clicked.connect(lambda _checked=False, n=name: self.requested.emit(n))
+            layout.addWidget(button)
+            self.buttons[name] = button
+        self._dark = None
+        self.refresh_icons()
+
+    def refresh_icons(self):
+        dark = is_dark_palette(self)
+        if dark == self._dark:
+            return
+        self._dark = dark
+        for name, button in self.buttons.items():
+            button.setIcon(playback_icon(name, dark))
+
+    def set_position(self, at_start, at_end):
+        """Grey out the buttons that would not move the marker."""
+        self.buttons["start"].setEnabled(not at_start)
+        self.buttons["back"].setEnabled(not at_start)
+        self.buttons["forward"].setEnabled(not at_end)
+        self.buttons["end"].setEnabled(not at_end)
+
+    def event(self, event):
+        kind = event.type()
+        if kind in (
+            qt_enum(QtCore.QEvent, ("Type", "PaletteChange"), ("PaletteChange",)),
+            qt_enum(QtCore.QEvent, ("Type", "StyleChange"), ("StyleChange",)),
+        ):
+            QtCore.QTimer.singleShot(0, self.refresh_icons)
+        return super().event(event)
+
+
 class TimelineBar(QtWidgets.QWidget):
     """Horizontal feature row plus the rollback marker.
 
@@ -372,6 +450,7 @@ class TimelineBar(QtWidgets.QWidget):
     tipPreviewRequested = QtCore.Signal(object)
     tipDragFinished = QtCore.Signal(object)
     tipDragCancelled = QtCore.Signal()
+    playbackRequested = QtCore.Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -410,6 +489,10 @@ class TimelineBar(QtWidgets.QWidget):
         outer.setContentsMargins(8, 2, 4, 2)
         outer.setSpacing(6)
         outer.addWidget(self._title)
+        # Playback buttons (PartDesign only; hidden with the marker for assemblies).
+        self._playback = PlaybackStrip(self)
+        self._playback.requested.connect(self.playbackRequested.emit)
+        outer.addWidget(self._playback)
         outer.addWidget(scroll, 1)
         # Right-hand note (assembly order); empty and hidden for PartDesign.
         self._note = QtWidgets.QLabel()
@@ -451,6 +534,7 @@ class TimelineBar(QtWidgets.QWidget):
         self._title.setText(body_label or "History")
         self._note.setText(note or "")
         self._note.setVisible(bool(note))
+        self._playback.setVisible(self._has_marker)
 
         if not entries:
             message = empty_message or "No feature history in this document."
@@ -489,6 +573,7 @@ class TimelineBar(QtWidgets.QWidget):
                 tip_name = self._order[-1]
             self._preview_tip = tip_name
             self._row.insertWidget(self._marker_index_for(tip_name), self._marker)
+            self._update_playback()
         self._row.addStretch(1)
         self.set_traced(self._traced)
 
@@ -497,6 +582,16 @@ class TimelineBar(QtWidgets.QWidget):
 
     def marker_widget(self):
         return self._marker
+
+    def playback_widget(self):
+        return self._playback
+
+    def _update_playback(self):
+        solids = [n for n in self._order if getattr(self._entries[n], "is_solid", False)]
+        tip = self._preview_tip
+        at_start = tip is None or not solids
+        at_end = bool(solids) and tip == solids[-1]
+        self._playback.set_position(at_start, at_end)
 
     def row_widget(self):
         return self._row_host
@@ -564,6 +659,7 @@ class TimelineBar(QtWidgets.QWidget):
                 after = True
             if changed:
                 button.update()
+        self._update_playback()
 
     def preview_tip_name(self):
         return self._preview_tip

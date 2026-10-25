@@ -212,6 +212,51 @@ def set_tip(body, feature):
     body.Tip = feature
 
 
+PLAYBACK_ACTIONS = ("start", "back", "forward", "end")
+
+
+def solids_in_group(body):
+    """The body's solid features in Group order."""
+    return [obj for obj in body.Group if is_solid_feature(obj)]
+
+
+def playback_target(body, action):
+    """Where a playback button moves the tip. Returns ``(changed, feature_or_None)``.
+
+    ``start`` clears the tip (everything rolled back, as Fusion's first button),
+    ``back`` steps to the previous solid (or clears it before the first), ``forward``
+    to the next solid and ``end`` to the last solid. Suppressed solids count as
+    steps: the marker can rest after them.
+    """
+    if action not in PLAYBACK_ACTIONS:
+        raise ValueError(f"unknown playback action {action!r}")
+    solids = solids_in_group(body)
+    if not solids:
+        return False, None
+    tip = body.Tip
+    index = None
+    for i, obj in enumerate(solids):
+        if obj == tip:
+            index = i
+            break
+    if action == "start":
+        target = None
+    elif action == "end":
+        target = solids[-1]
+    elif action == "back":
+        if index is None:
+            # Tip unset (or outside Group, the base feature): nothing earlier.
+            target = None
+        else:
+            target = solids[index - 1] if index > 0 else None
+    else:  # forward
+        if index is None:
+            target = solids[0]
+        else:
+            target = solids[index + 1] if index + 1 < len(solids) else solids[-1]
+    return target != tip, target
+
+
 def set_suppressed(feature, value: bool):
     """Toggle ``Feature.Suppressed``.
 

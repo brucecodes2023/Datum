@@ -205,6 +205,7 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
         self._bar.tipPreviewRequested.connect(self._on_drag_preview)
         self._bar.tipDragFinished.connect(self._on_drag_finished)
         self._bar.tipDragCancelled.connect(self._on_drag_cancelled)
+        self._bar.playbackRequested.connect(self._on_playback)
         self._drag = None
         self.setWidget(self._bar)
         # One row, no dock title: the bar is the only header (roadmap §13.3).
@@ -380,6 +381,22 @@ class HistoryTimelineDock(QtWidgets.QDockWidget):
             # Match PartDesign_MoveTip: show the tip feature and nothing else.
             if FreeCAD.GuiUp:
                 _show_only(body, feature)
+
+        self._transaction("Roll history tip", apply)
+
+    def _on_playback(self, action):
+        """To start / back / forward / to end: Set tip on the step's solid."""
+        body, _source = active_body()
+        if body is None or self._drag is not None:
+            return
+        changed, target = model.playback_target(body, action)
+        if not changed:
+            return
+
+        def apply(_doc, _body):
+            model.set_tip(body, target)
+            if FreeCAD.GuiUp:
+                _show_only(body, target)
 
         self._transaction("Roll history tip", apply)
 
