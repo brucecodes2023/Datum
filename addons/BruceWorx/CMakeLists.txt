@@ -44,9 +44,11 @@ SET(BruceWorxHooks_SRCS
     bruceworx/bom.py
     bruceworx/vault_dashboard.py
     bruceworx/vault_trees.py
+    bruceworx/hardware.py
     config/document_types.json
     config/numbering.example.json
     config/part_properties.json
+    config/hole_presets.json
     macros/PartNumber.FCMacro
 )
 
@@ -96,10 +98,12 @@ INSTALL(
         bruceworx/bom.py
         bruceworx/vault_dashboard.py
         bruceworx/vault_trees.py
+        bruceworx/hardware.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )
 INSTALL(
     FILES config/document_types.json config/numbering.example.json config/part_properties.json
+          config/hole_presets.json
     DESTINATION Mod/BruceWorxHooks/config
 )
 INSTALL(FILES macros/PartNumber.FCMacro DESTINATION Mod/BruceWorxHooks/macros)
