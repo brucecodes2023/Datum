@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Browser row extras: badges, component text and feature summaries. No GUI."""
+"""Browser row extras: badges, component text and feature summaries, and the text halo.
+
+HaloInWindowTests needs a GUI FreeCAD; the rest run headless.
+"""
 
 import os
 import sys
@@ -177,6 +180,57 @@ class RowInfoTests(unittest.TestCase):
                 raise RuntimeError("deleted")
 
         self.assertEqual(bb._Hook(True, True)(Broken()), ("", ()))
+
+
+
+class HaloTests(unittest.TestCase):
+    """UAT 25 Oct #7: the transparent Browser's text halo must stand out from the text."""
+
+    def test_missing_token_default_is_replaced(self):
+        # Qt keeps the overlay's own 30 % black when the sheet's token does not resolve.
+        self.assertEqual(bb.halo_color((29, 29, 31, 255), (0, 0, 0, 80)), bb.HALO_LIGHT)
+
+    def test_sheet_colour_kept_when_it_stands_out(self):
+        self.assertEqual(bb.halo_color((29, 29, 31, 255), (255, 255, 255, 255)), (255, 255, 255, 255))
+        self.assertEqual(bb.halo_color((245, 245, 247, 255), (44, 44, 47, 255)), (44, 44, 47, 255))
+
+    def test_light_text_gets_a_dark_halo(self):
+        self.assertEqual(bb.halo_color((245, 245, 247, 255), (255, 255, 255, 255)), bb.HALO_DARK)
+        self.assertEqual(bb.halo_color((245, 245, 247, 255), None), bb.HALO_DARK)
+
+
+def _settle(seconds=0.5):
+    import time
+
+    import FreeCADGui
+
+    end = time.time() + seconds
+    while time.time() < end:
+        FreeCADGui.updateGui()
+        time.sleep(0.02)
+
+
+@unittest.skipUnless(getattr(sys.modules.get("FreeCAD"), "GuiUp", False), "needs a GUI FreeCAD")
+class HaloInWindowTests(unittest.TestCase):
+    def test_dark_default_halo_is_put_right(self):
+        from PySide import QtCore, QtGui, QtWidgets
+
+        panel = bb._overlay_left()
+        if panel is None:
+            self.skipTest("no floating Browser")
+        old = panel.property("effectColor")
+        try:
+            panel.setProperty("effectColor", QtGui.QColor(0, 0, 0, 80))
+            # The sheet is applied again on every overlay refresh: the Browser follows (StyleChange).
+            QtWidgets.QApplication.sendEvent(panel, QtCore.QEvent(QtCore.QEvent.StyleChange))
+            _settle()
+            trees = [t for t in bb._trees() if panel.isAncestorOf(t)] or [panel]
+            text = trees[0].palette().color(trees[0].foregroundRole())
+            halo = panel.property("effectColor")
+            self.assertEqual(halo.alpha(), 255)
+            self.assertGreaterEqual(abs(halo.lightness() - text.lightness()), bb.HALO_CONTRAST)
+        finally:
+            panel.setProperty("effectColor", old)
 
 
 if __name__ == "__main__":

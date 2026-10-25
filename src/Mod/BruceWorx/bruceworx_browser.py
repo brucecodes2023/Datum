@@ -14,6 +14,12 @@
 * BrowserIconPlates: a faint plate behind tree icons in dark mode.
 * BrowserGroupCaptions: property groups as quiet small-caps captions (drawn in
   C++, Gui/propertyeditor; this module only owns the switch).
+* The transparent Browser's text halo (BruceWorxModelTree.qss) always stands
+  out from the text. The sheet colours it with a theme token; in a theme
+  without that token Qt kept the overlay's built-in 30 % black, so the text
+  got a dark smudge around it (UAT 25 Oct, #7). halo_color puts a light halo
+  behind dark text and a dark one behind light text whenever the sheet's
+  colour does not do that.
 
 The tree draws the extras itself ([BW] in Gui/Tree.cpp). It asks
 ``FreeCADGui.BrowserRowInfo(obj)`` for (summary, [(text, kind), ...]) after
@@ -255,6 +261,28 @@ def _row_info(obj, badges, summary):
     return "", []
 
 
+def _lightness(rgb):
+    # HSL lightness, as QColor.lightness().
+    return (max(rgb[:3]) + min(rgb[:3])) // 2
+
+
+# Below this much lightness apart, a halo does not lift the text off the model.
+HALO_CONTRAST = 100
+HALO_LIGHT = (255, 255, 255, 255)
+HALO_DARK = (28, 28, 30, 255)
+
+
+def halo_color(text, sheet):
+    """The halo behind the Browser text: (r, g, b, a) for text and the sheet's halo colour.
+
+    The sheet's colour when it is solid and stands out from the text; otherwise
+    white behind dark text and near-black behind light text.
+    """
+    if sheet is not None and sheet[3] >= 200 and abs(_lightness(sheet) - _lightness(text)) >= HALO_CONTRAST:
+        return tuple(sheet)
+    return HALO_LIGHT if _lightness(text) < 128 else HALO_DARK
+
+
 # ----- FreeCAD side --------------------------------------------------------------------
 
 
@@ -347,10 +375,38 @@ def apply_header():
     return True
 
 
+def _overlay_left():
+    import FreeCADGui
+    from PySide import QtWidgets
+
+    return FreeCADGui.getMainWindow().findChild(QtWidgets.QTabWidget, "OverlayLeft")
+
+
+def apply_halo():
+    """Give the floating Browser's text halo a colour that stands out from the text (halo_color)."""
+    from PySide import QtGui, QtWidgets
+
+    panel = _overlay_left()
+    if panel is None:
+        return
+    trees = [t for t in _trees() if panel.isAncestorOf(t)]
+    widget = trees[0] if trees else panel
+    text = widget.palette().color(widget.foregroundRole()).getRgb()
+    current = panel.property("effectColor")
+    sheet = current.getRgb() if isinstance(current, QtGui.QColor) and current.isValid() else None
+    want = halo_color(text, sheet)
+    if sheet != want:
+        panel.setProperty("effectColor", QtGui.QColor(*want))
+        # The halo is drawn by the splitter's graphics effect.
+        for splitter in panel.findChildren(QtWidgets.QSplitter):
+            splitter.update()
+
+
 def apply_all():
     try:
         apply_rows()
         apply_header()
+        apply_halo()
     except Exception:
         import traceback
 
@@ -438,7 +494,9 @@ def install():
                 return False
 
         _filter = _Filter()
-        _watched.extend([dock] + _trees())
+        # The overlay panel too: its sheet is set again (StyleChange) each time it refreshes.
+        panel = _overlay_left()
+        _watched.extend([dock] + _trees() + ([panel] if panel is not None else []))
         for widget in _watched:
             widget.installEventFilter(_filter)
         apply_all()
