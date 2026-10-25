@@ -259,6 +259,21 @@ class TestImportJob(unittest.TestCase):
         frame = ws.Workspace(vault).get_latest(numbers["a-frame.FCStd"])
         self.assertEqual(ws.linked_files(frame), [numbers["z-plate.FCStd"] + ".FCStd"])
 
+        # A later assembly built against the plate's work copy: its link is rewritten to the number too.
+        plate = numbers["z-plate.FCStd"]
+        work_copy = ws.Workspace(vault).get_latest(plate)
+        os.makedirs(os.path.join(tmp, "src2"))
+        later = fcstd("b-stand.FCStd", "Assembly::AssemblyObject", (work_copy,))
+        os.replace(later, os.path.join(tmp, "src2", "b-stand.FCStd"))
+        candidates = vs.plan_numbers(vs.scan_for_import(os.path.join(tmp, "src2")), vault.root, "BW")
+        job = wiz.ImportJob(vs, vault, candidates, "BW")
+        while job.step() is not None:
+            pass
+        self.assertEqual(len(job.report.imported), 1, job.report.failed)
+        vault.refresh()
+        stand = ws.Workspace(vault).get_latest(job.report.imported[0][1])
+        self.assertEqual(ws.linked_files(stand), [plate + ".FCStd"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -222,6 +222,37 @@ def row_status(code, state, lock, me, versions=(), fetched="", now=None):
     return f"Checked in · {actor_name(last.actor, me)}, {relative_time(last.at, now)}", "secondary"
 
 
+# Search words that filter on a field (PDM-10: the Start page dashboard's tiles and rows open the panel
+# with them): state:wip, type:part, lock:me, status:newer, change:open. Values are matched loosely.
+QUERY_STATES = {"wip": WIP, "review": IN_REVIEW, "inreview": IN_REVIEW, "in_review": IN_REVIEW,
+                "released": STATE_RELEASED, "obsolete": OBSOLETE}
+QUERY_LOCKS = {"me": WRITABLE, "mine": WRITABLE, "other": (CHECKED_OUT_OTHER,), "others": (CHECKED_OUT_OTHER,),
+               "any": WRITABLE + (CHECKED_OUT_OTHER,)}
+
+
+def query_word_matches(row, key, value):
+    """Whether a row passes one ``key:value`` search word; None when key is not a field word."""
+    value = value.lower()
+    if key == "state":
+        wanted = QUERY_STATES.get(value.replace(" ", ""))
+        if row.get("item_type") == "change":
+            return str(row.get("state", "")).lower() == value
+        return row.get("state") == wanted
+    if key == "type":
+        return str(row.get("item_type", "")).lower() == {"parts": "part", "assemblies": "assembly",
+                                                         "drawings": "drawing", "bought": "cots"}.get(value, value)
+    if key == "lock":
+        if value == "none":
+            return row.get("code") not in QUERY_LOCKS["any"]
+        return row.get("code") in QUERY_LOCKS.get(value, ())
+    if key == "status":
+        return row.get("code") == value
+    if key == "change":
+        return row.get("item_type") == "change" and value in (str(row.get("state", "")).lower(),
+                                                              str(row.get("kind", "")).lower())
+    return None
+
+
 def matches(row, kind="all", query=""):
     """Whether a Vault panel row (dict) passes the filter chip and the search text."""
     if (row.get("item_type") == "change") != (kind == "changes"):
@@ -233,7 +264,14 @@ def matches(row, kind="all", query=""):
         return False
     words = (query or "").lower().split()
     text = " ".join(str(row.get(k, "")) for k in ("part_number", "display", "description")).lower()
-    return all(word in text for word in words)
+    for word in words:
+        key, sep, value = word.partition(":")
+        found = query_word_matches(row, key, value) if sep and value else None
+        if found is None:
+            found = word in text
+        if not found:
+            return False
+    return True
 
 
 class BackupSwitch:
@@ -1221,6 +1259,13 @@ def _offer_save_checkout(s, pn, filename):
     return False
 
 
+def offers_first_edit(doc_name, active_name):
+    """Whether a transaction opening in doc_name is your first edit of it. Only one in the active document
+    is: a part opened to be linked gets transactions from the assembly's command (the vault writing its
+    LifecycleState), which are not edits of the part. Saving any vault file still asks for its check-out."""
+    return active_name is None or active_name == doc_name
+
+
 class _DocumentObserver:
     """Save prompt, no backups for vault files, the first-edit offer, lifecycle-state writes."""
 
@@ -1253,6 +1298,11 @@ class _DocumentObserver:
     def slotOpenTransaction(self, doc, name):
         """The first edit of a read-only vault file offers a check-out (once per document)."""
         if doc.Name in self.asked or getattr(doc, "Restoring", False):
+            return
+        import FreeCAD
+
+        active = FreeCAD.ActiveDocument
+        if not offers_first_edit(doc.Name, active.Name if active is not None else None):
             return
         s = _state["session"]
         pn = pn_for_document(doc, s) if s is not None else ""
@@ -2113,9 +2163,12 @@ def _make_classes():
                     self.list.setCurrentIndex(index)
                     self.list.scrollTo(index)
                     return True
-            if self.kind != "all" or self.search.text():
-                self.chips["all"].setChecked(True)
-                self.kind = "all"
+            # Not shown: clear the search and take the chip it lives under (ECR/ECO rows: Changes).
+            row = self.rows.get(pn)
+            want = "changes" if row is not None and row.get("item_type") == "change" else "all"
+            if self.kind != want or self.search.text():
+                self.chips[want].setChecked(True)
+                self.kind = want
                 self.search.clear()
                 self.fill()
                 return self.select(pn)
@@ -2138,6 +2191,14 @@ def _make_classes():
 
         def fill_more(self):
             self.more_menu.clear()
+            try:  # the vault's dashboard is the Start page (PDM-10)
+                import bruceworx_start
+
+                act = self.more_menu.addAction("Dashboard")
+                act.triggered.connect(lambda _c=False: bruceworx_start.show_dashboard())
+                self.more_menu.addSeparator()
+            except ImportError:
+                pass
             entries = (("Vault Settings…", "BruceWorx_VaultSettings"),
                        ("Import Files into Vault…", "BruceWorx_ImportIntoVault"))
             for text, name in entries:
@@ -2586,6 +2647,26 @@ def show_in_panel(pn=None):
     return True
 
 
+def show_filtered(kind="all", query="", select=None):
+    """Bring the Vault panel forward on a filter chip and search words (``type:part state:wip``), and
+    select ``select`` (a P/N or change number) in it. The Start page dashboard's tiles and rows use it."""
+    from PySide import QtCore
+
+    if not show_panel(True):
+        return False
+    panel = _dock().widget()
+    kind = kind if kind in panel.chips else "all"
+    panel.chips[kind].setChecked(True)
+    panel.kind = kind
+    panel.search.blockSignals(True)
+    panel.search.setText(query or "")
+    panel.search.blockSignals(False)
+    panel.fill()
+    if select:
+        QtCore.QTimer.singleShot(250, lambda: _alive(panel) and panel.select(select))
+    return True
+
+
 def _sync_panel_action():
     try:
         import FreeCADGui
@@ -2614,9 +2695,10 @@ def browser_extra(obj, meta, marks):
         return meta, marks
     own = browser.part_values(obj)
     target = obj if own else browser.linked_part(obj)
-    if target is None or browser.part_values(target) is None:
-        return meta, marks
-    pn = pn_for_document(target.Document, s)
+    doc = getattr(target, "Document", None) if target is not None else None
+    if doc is None or browser.part_values(target) is None:
+        return meta, marks  # nothing to look up: a link whose part has gone, or not a document object
+    pn = pn_for_document(doc, s)
     if not pn:
         return meta, marks
     st = s.status(pn)

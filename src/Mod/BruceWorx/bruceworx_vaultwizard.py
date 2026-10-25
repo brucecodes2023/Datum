@@ -420,6 +420,23 @@ def _vault_open():
     return ok
 
 
+def previously_imported(vs, vault):
+    """{real path: vault number} for files the vault holds already: originals earlier imports took in
+    (from their check-in notes) and this user's work copies (an assembly built against them)."""
+    try:
+        done = vs._already_imported(vault)
+    except Exception:  # noqa: BLE001 -- an older engine: no mapping, as before
+        return {}
+    found = {os.path.realpath(k): v for k, v in done.items() if isinstance(k, str) and os.path.isabs(k)}
+    try:
+        from bruceworx.pdm_workspace import Workspace  # noqa: PLC0415
+
+        found.update(Workspace(vault, read_only=True).known_files())
+    except Exception:  # noqa: BLE001 -- no work folder yet: the originals are enough
+        pass
+    return found
+
+
 class ImportJob:
     """vault_setup.run_import one file at a time, so the GUI thread can run it
     from a timer: step() imports the next file, stop() ends the import.
@@ -460,7 +477,9 @@ class ImportJob:
         self.ordered = vs._children_first([c for c in included if c.kind != "drawing"]) + [
             c for c in included if c.kind == "drawing"]
         self.staging = os.path.join(vault.root, vs.STAGING_DIR)
-        self.numbered = {}
+        # Files imported by an earlier run are vault items already: links to them are rewritten too
+        # (a part importing after the assembly file it references).
+        self.numbered = previously_imported(vs, vault)
         self.done = 0
         self.finished = False
 

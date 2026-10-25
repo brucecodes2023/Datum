@@ -371,5 +371,14 @@ class ComputedTests(unittest.TestCase):
         self.assertEqual(partprops._WATCHED["MaterialName"][1], schema.group)
 
 
+class DensityTests(unittest.TestCase):
+    def test_material_without_density_gives_no_mass(self):
+        class Appearance:  # the Appearance library's "Steel": no physical properties
+            def getPhysicalValue(self, name):
+                return None
+
+        self.assertIsNone(partprops._density_kg_per_mm3(Appearance()))
+
+
 if __name__ == "__main__":
     unittest.main()

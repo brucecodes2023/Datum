@@ -341,5 +341,13 @@ class TestICloudDownload(unittest.TestCase):
         self.assertFalse(vc.request_download(_fcstd(os.path.join(self.tmp, "c.FCStd"))))
 
 
+class TestFirstEditOffer(unittest.TestCase):
+    def test_only_the_active_document_offers_a_check_out(self):
+        self.assertTrue(vc.offers_first_edit("LE_01_01003_001", "LE_01_01003_001"))
+        self.assertTrue(vc.offers_first_edit("LE_01_01003_001", None))
+        # an assembly being built links the housing: the housing's transaction is not an edit of it
+        self.assertFalse(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001"))
+
+
 if __name__ == "__main__":
     unittest.main()

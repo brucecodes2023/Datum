@@ -392,9 +392,14 @@ def _density_kg_per_mm3(material) -> float | None:
         text = material.getPhysicalValue("Density")
     except Exception:  # noqa: BLE001 -- no density on this material
         return None
+    if text is None or str(text).strip() in ("", "None"):
+        return None  # an appearance-only material (e.g. the Appearance library's "Steel") has no density
     import FreeCAD  # noqa: PLC0415
 
-    return FreeCAD.Units.Quantity(str(text)).getValueAs("kg/mm^3").Value
+    try:
+        return FreeCAD.Units.Quantity(str(text)).getValueAs("kg/mm^3").Value
+    except (ValueError, RuntimeError):  # a density FreeCAD cannot read: no mass, not a failed save
+        return None
 
 
 def _chosen(material) -> bool:
