@@ -17,10 +17,14 @@ Merged (\#6): unified title bar and native window buttons behind a preference.
 Prefs/QSS version merged (\#6). The free-floating panel (any inset, free height) needs a small
 \code{OverlayManager} patch (FCB-P1F-11). Also fix it not showing on first run (\eref{FND-06}).
 \end{epic}
-\begin{epic}{UIX-04}{History timeline}{UI}{\stProg}{FCB-P1F-15..25, P1F-28}
-Spike and mock merged (\#7). Remaining: the full bar with marker drag, edit, suppress and reorder (where
-feasible), one-row layout, playback buttons, and a path into core.
+\begin{epic}{UIX-04}{History timeline}{UI}{\stDone}{FCB-P1F-15..25, P1F-28}
+Spike and mock merged (\#7); the full bar built 26 Oct (\S\ref{sec:uix04-built}): marker drag with live rollback,
+playback buttons, the chip menu (edit, rename, suppress, roll, delete, move earlier/later with a dependency check
+and dress-ups rebound by geometry), error badges, hover highlight, sketches folded under their features, and the
+path into core in \file{docs/CORE.md}. Accepted on a copy of the gearbox carrier, light and dark.
 \end{epic}
+
+\input{chapters/97-uix04-built}
 \begin{epic}{UIX-05}{Workspaces \& tabs (Fusion naming)}{UI}{\stProg}{(new, from the UI plan)}
 Design / Simulation / Manufacture / Drawing workspaces; Design tabs Solid, Surface, Mesh, Sheet Metal and
 Utilities, plus a contextual Sketch tab. Extra workbenches are toggled in Preferences. Built in step C
