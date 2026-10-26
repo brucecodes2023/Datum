@@ -581,6 +581,12 @@ class TimelineBar(QtWidgets.QWidget):
             item = self._row.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # deleteLater alone is not enough: a deferred delete waits for the
+                # event loop to come back, and until then the old chip would stay
+                # parented to the row at its old place and keep painting (a script
+                # or a nested loop never returns there). Hide and detach it now.
+                widget.hide()
+                widget.setParent(None)
                 widget.deleteLater()
 
         self._title.setText(body_label or "History")
@@ -761,6 +767,7 @@ class TimelineBar(QtWidgets.QWidget):
             except (RuntimeError, TypeError):
                 pass
             edit.hide()
+            edit.setParent(None)
             edit.deleteLater()
 
     def _finish_rename(self):
