@@ -189,6 +189,10 @@ Next & \eref{PDM-09} (New Project, units, structure) and \eref{UIX-04} (timeline
   \item \file{bruceworx\_vaultclient.py}, \file{bruceworx\_vaultwizard.py}, \file{bruceworx\_drawing.py} and
         \file{bruceworx\_project.py} still connect widget signals to bound methods of plain classes (the PySide
         bug below); they are on the lint's known list until their owners switch to \code{slot()}.
+  \item New Project (\eref{PDM-09}): one GUI run in three crashed (SIGSEGV, no crash report) while the writer's
+        verify step reopened the staged files, right after FreeCAD's ``Time stamp changed on link'' notice, with
+        \file{TestBruceWorxRightPanel} and \file{TestBruceWorxSection} run before it in the same FreeCAD. The same
+        order passed twice afterwards; the module alone passes. Not reproduced yet.
 \end{itemize}
 (The gaps closed on 26 October --- iso pictures, the configuration texts, the interference cache and release
 line, section planes cutting the Inspect maps --- are recorded below.)
