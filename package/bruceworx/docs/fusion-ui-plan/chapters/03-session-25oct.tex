@@ -178,14 +178,90 @@ Next & \eref{PDM-09} (New Project, units, structure) and \eref{UIX-04} (timeline
 
 \subsection{Known gaps}
 \begin{itemize}
-  \item Iso pictures: an assembly whose work copies are older than the vault is drawn from the stored file, where its
-        parts may not be found.
-  \item Configurations: the Browser does not show an instance's configuration; a configured parameter shows as
-        \code{Configurations.length} text in the Parameters tab.
-  \item Interference: no cache yet (a re-check measures every pair); not yet wired into the release check.
   \item Ribbon: in a sketch edit at half-screen width the View toolbar collapses to ``$\gg$''; the squeezed
         workspace tab bar of UAT screenshot 2 did not reproduce.
   \item Trackpad: tested with synthetic swipes only; a real swipe takes one more path through Qt.
-  \item Inspect maps: bridges are flagged as needing support; islands are not detected; section planes do not cut
-        the map.
+  \item Inspect maps: bridges are flagged as needing support; islands are not detected.
+  \item Right panel: the OK/Cancel of a task dialog opened from the Start page could not be made to disappear
+        in three set-ups (see the bug round below); it needs your screenshot or a live look.
+  \item Release check: whether the interference line should block (clashes that are not fits) is still the open
+        question of the ASM-06 plan; it warns for now.
+  \item \file{bruceworx\_vaultclient.py}, \file{bruceworx\_vaultwizard.py}, \file{bruceworx\_drawing.py} and
+        \file{bruceworx\_project.py} still connect widget signals to bound methods of plain classes (the PySide
+        bug below); they are on the lint's known list until their owners switch to \code{slot()}.
 \end{itemize}
+(The gaps closed on 26 October --- iso pictures, the configuration texts, the interference cache and release
+line, section planes cutting the Inspect maps --- are recorded below.)
+
+\subsection{Bug round, 26 October}
+
+A dedicated session ran the whole BruceWorx GUI suite after the 25 October commits (37 modules plus the
+Assembly joint and BOM tests: 611 tests), chased every failure to its cause, closed the self-contained gaps
+above, and ran an exploratory smoke on a copy of the Vector vault.
+
+\paragraph{Baseline.} 4 problems in 611 tests, all order-dependent (every module passed on its own):
+TestBruceWorxStudio failed twice after TestBruceWorxHardware; TestBruceWorxGaps and TestBWJoints failed only
+in the GUI run; the Report view held fifteen ``Cannot access attribute 'Objects' of deleted object'' from the
+configuration observer. A probe that created a part after every module showed the studio shading's timer still
+``active'' but never firing after the Hardware GUI command tests: its \code{timeout} had no receivers left.
+
+\paragraph{PySide drops every function connection (the big one).} In PySide 6.8.3, a plain Python object (not a
+QObject) that connects two or more widget signals to its own bound methods takes, when it is garbage collected,
+\emph{every} connection in the application whose receiver is a plain function or lambda with it: menu actions,
+timers, the studio's observer timer, the bridge's server. Reproduced in isolation: two bound-method connections
+and a \code{del} are enough; one connection, a QObject subclass, a lambda or a \code{functools.partial} as the
+receiver are fine. Hole Preset's dialog helper was the first to die in the suite; in Keystone one Hole Preset would
+have left the studio shading, the bridge and the menu lambdas dead for the session. Fix:
+\file{bruceworx\_slots.py} --- \code{slot(self.method)} returns a closure PySide keeps (same lifetime as before:
+the object lives while a sender does), applied at 57 sites in eleven modules; the hardware dialogs are now
+deleted once answered; \code{TestBruceWorx} lints the folder for the pattern and \code{TestBruceWorxHardware}
+checks a dialog's teardown leaves a reference connection alone.
+
+\paragraph{FreeCADCmd crashed at exit (the two crash reports of 25 October, 18:30 and 18:51).} Making or changing a
+section plane headless queued \code{QTimer.singleShot} for the view refresh; FreeCADCmd never runs it, and the
+functor was released after Python had finalised (SIGSEGV in \code{PyGILState\_Ensure} from Shiboken). Found by
+spying on \code{singleShot} while the interference tests ran headless: one call, from
+\code{bruceworx\_section.schedule()}. It now returns when the GUI is not up; the headless run exits 0 and a test
+keeps it so.
+
+\paragraph{Smaller fixes.} The configuration observer's queued calls look their document up by name (closed
+meanwhile: nothing to do). \code{JointObject.undoPreSolve} survives a joint without a view provider (TestBWJoints
+in the GUI). The Gaps test tolerates a sub-window on its way out and a module before it leaving no active
+sub-window (scaffolding, not behaviour).
+
+\paragraph{Right panel (your screenshot).} (1) Two ``Sel\ldots ent'' tabs: your profile has the Report view in the
+right panel, and the strip gave every dock that is not ours the open command's word. Only the Tasks dock does now
+(by its title, which the task card sets); another dock keeps its own name, open command or not. (2) The dialog's
+OK/Cancel not visible: not reproduced with a fresh profile, with your widget list (Report view) and window height
+1191, nor with the suite's profile, Start page active each time --- the buttons sat inside the panel and the
+window. A GUI test now holds that. If it still happens for you, a screenshot with the window size, or a live look
+at \code{TaskEditControl}'s geometry, is the next step. (Someone edited \file{OverlayWidgets.cpp} and the strip's
+layout in the tree during the afternoon; that work is theirs and is not in these commits.)
+
+\paragraph{Gaps closed.} \emph{Configurations:} a link's Browser row reads ``BW-1001-S $\cdot$ Short'' (also while
+it follows its part's active row); a cell the Configuration Table drives shows ``per configuration'' in the
+Parameters tab with the row value beside it and a tip naming the row, and its value stays editable (the edit goes to
+the active row). \emph{Interference:} every occurrence carries a signature (part, its own shape's hash, the placed
+solids' box and volume) and a measured pair is kept by the two signatures, the gap and the contacts switch (4000
+entries, oldest out); an unchanged assembly answers every pair from the cache, after moving or editing one part only
+its pairs are measured again, fit marks are applied afresh on a hit, and the summary reports ``cached''. The release
+check's line 7 calls \code{check\_file} on the work copy (the stored file without one) and says clashes, marked fits
+and the worst pairs; WARN, so shown and recorded but never a blocker; skipped for parts and in the CLI.
+\emph{Inspect maps:} the map hangs in the viewer's ObjectGroup, which the section passes clip, found by a search
+action because a section on moves that group under its passes; the picture changes when a section cuts a mapped
+part. \emph{Iso pictures:} an assembly is drawn from its work copy whenever there is one, even an older version
+(its links find the work copies; the stored file's do not); a part still needs its work copy to be the latest.
+
+\paragraph{Smoke on the Vector vault copy.} The gearbox (LE-02-01002-001) opened from its work copy; Interference:
+24 parts, 69 pairs, 5.7\,s, 8 clashes (the four Motor/M3x6 and the four Adapter plate/M3x40 screw-in-hole
+overlaps, 0.3\,mm deep, to be marked as fits), 29 contacts; a section on a face and Sections Off; the
+Configuration Table (no configurations in that file); Mass Properties; every Inspect map (thinnest wall
+0.51\,mm, smallest radius 0.38\,mm, draft needed on 1073 faces); Insert Fastener (dialog cancelled); the Start
+page's Files tab; close everything. The Report view stayed empty. One thing to look at live: in the off-screen
+grab of the gearbox session the Browser's tree drew above its panel frame, with an empty frame below (fifteen
+documents open at once); a grab cannot tell a capture artefact from a layout fault.
+
+\paragraph{After the round.} The affected modules pass (Studio, Hardware, Inspector, Gaps, Trackpad, Workspaces,
+OnCanvas, Section, Interference, Inspect, Configs, Browser, Parameters, Preview, RightPanel, Start, Analysis,
+TestBWJoints); the headless interference run exits cleanly. Failures seen in the full run that belong to the
+other sessions' in-flight work (Timeline, Drawing units, the Changes ``warn'' mark) were left to them.
