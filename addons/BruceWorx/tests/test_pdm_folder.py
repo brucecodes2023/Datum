@@ -614,7 +614,9 @@ class CliTests(_TempDir, unittest.TestCase):
         args = self._journal()[-1]["args"]
         self.assertEqual((args["note"], args["attachments"][0]["filename"]), ("First release", "report.pdf"))
         checklist = args["checklist"]
-        self.assertEqual(sorted(checklist), ["checked_in", "components", "drawing", "drawing_current", "drawing_reviewed", "version"])  # drawing_current: PDM-09
+        self.assertEqual(sorted(checklist), ["checked_in", "components", "drawing", "drawing_current", "drawing_reviewed",
+                                             "interference", "version"])  # drawing_current: PDM-09; interference: ASM-06
+        self.assertEqual(checklist["interference"], {"skipped": True, "detail": "not an assembly"})
         self.assertEqual(checklist["drawing_reviewed"], {"ok": True, "by_hand": True})
         self.assertEqual(checklist["drawing"]["detail"], f"{self.DWG}: title block shows {PART}")
         self.assertEqual(checklist["components"], {"skipped": True, "detail": "not an assembly"})
