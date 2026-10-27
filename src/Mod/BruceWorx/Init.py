@@ -33,6 +33,7 @@ FreeCAD.__unit_test__.append("TestBruceWorxInterference")
 FreeCAD.__unit_test__.append("TestBruceWorxStudio")
 FreeCAD.__unit_test__.append("TestBruceWorxAnalysis")
 FreeCAD.__unit_test__.append("TestBruceWorxHardware")
+FreeCAD.__unit_test__.append("TestBruceWorxSimCore")
 
 # BruceWorx's own material library (FR-4, PCB copper, ...), also used headless.
 try:
@@ -41,3 +42,11 @@ try:
     bruceworx_board.register_materials()
 except Exception as exc:
     FreeCAD.Console.PrintWarning(f"BruceWorx materials were not registered: {exc}\n")
+
+# Simulation (SIM-01): a fresh profile finds the bundled CalculiX (Keystone: Contents/bin/ccx).
+try:
+    import bruceworx_sim
+
+    bruceworx_sim.ensure_ccx_pref()
+except Exception as exc:
+    FreeCAD.Console.PrintWarning(f"BruceWorx could not look for CalculiX: {exc}\n")

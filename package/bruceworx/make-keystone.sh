@@ -5,7 +5,7 @@
 # Keystone is this FreeCAD fork, fully renamed: window title, menu bar, Dock, About box, and its own
 # settings folders (~/Library/Preferences/Keystone, ~/Library/Application Support/Keystone), so it runs
 # beside the development build (build/release) without sharing or touching its settings. The bundle is
-# self-contained: the Python, Qt, OCCT and other libraries it needs are copied from the pixi environment
+# self-contained: the Python, Qt, OCCT, CalculiX and other libraries it needs are copied from the pixi environment
 # and every path into the environment or the build tree is rewritten, so it keeps working after a
 # rebuild or `pixi clean`. Built from whatever is checked out, uncommitted changes included; the version
 # shows the commit and "-dirty". Ad-hoc signed, not notarized: for this Mac.
@@ -90,6 +90,15 @@ rsync -a "$env/lib/qt6/qml" "$C/lib/qt6/"
 cp -p "$env/bin/python3.11" "$C/bin/python3.11"
 ln -sf python3.11 "$C/bin/python3"
 ln -sf python3.11 "$C/bin/python"
+
+# CalculiX for the Simulation workspace (SIM-01): ccx and, through the relocation step below, its
+# ARPACK, LAPACK, BLAS, gfortran and OpenMP dylibs. BruceWorx's Init.py points the FEM preference
+# Mod/Fem/Ccx/ccxBinaryPath at Contents/bin/ccx on a profile that has none set.
+if [[ -x "$env/bin/ccx" ]]; then
+    cp -p "$env/bin/ccx" "$C/bin/ccx"
+else
+    say "warning: no ccx in the environment (pixi.toml lists calculix): the Simulation workspace cannot solve"
+fi
 
 # The real executable sits in Contents/MacOS, so macOS sees Keystone.app (menu bar, Dock, icon); FreeCAD
 # takes its home from the executable's parent folder, Contents.
@@ -211,6 +220,10 @@ FREECAD_USER_HOME="$stage/home" PYTHONHOME="$C" PYTHONNOUSERSITE=1 "$C/bin/FreeC
     >"$stage/check.log" 2>&1 || { cat "$stage/check.log"; fail "the staged FreeCADCmd does not start"; }
 grep -q "^ok" "$stage/check.log" || { cat "$stage/check.log"; fail "the staged FreeCADCmd did not import Part"; }
 say "$(grep '^ok' "$stage/check.log")"
+if [[ -x "$C/bin/ccx" ]]; then
+    "$C/bin/ccx" -v 2>/dev/null | grep -q "Version" || fail "the bundled CalculiX does not start (its dylibs were not relocated?)"
+    say "CalculiX $("$C/bin/ccx" -v 2>/dev/null | grep -o 'Version [0-9.]*')"
+fi
 
 target="$dest/$app_name.app"
 if [[ -e "$target" ]]; then

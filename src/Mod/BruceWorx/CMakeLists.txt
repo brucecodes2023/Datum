@@ -125,6 +125,7 @@ SET(BruceWorx_SRCS
     BruceWorx_HoleCallouts.svg
     BruceWorx_InsertFastener.svg
     BruceWorx_MarkCots.svg
+    bruceworx_sim.py
 )
 
 # [BW] BruceWorx's own material library (KiCad boards, ECD-06), registered with
