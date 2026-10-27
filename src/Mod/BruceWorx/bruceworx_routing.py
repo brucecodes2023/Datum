@@ -7,7 +7,7 @@ tangent arcs, the LRA bend table, gauges, tube sizes, the CSV reports) is FreeCA
 ``bruceworx_routing_gui.py``.
 
 * **RoutePath** is the centreline: ``Points`` in the document frame, optionally attached to
-  geometry (``Attachments`` + ``AttachedIndices``: a vertex, a circular edge's centre, a face's
+  geometry (``Attachments`` + ``AttachedTo``: a vertex, a circular edge's centre, a face's
   centre or an object's origin, re-read on every recompute so a routed point follows its part).
   ``Mode`` Spline (an interpolating B-spline through the points) or Polyline (straight segments
   joined by tangent arcs of ``BendRadius``). Read-only results: ``Length``, ``MinRadius`` (the
@@ -129,12 +129,8 @@ def attachment_point(obj, sub=""):
 def resolve_points(obj):
     """``obj.Points`` with every attached point re-read from its geometry."""
     points = [App.Vector(p) for p in obj.Points]
-    indices = list(obj.AttachedIndices)
-    for k, (link, subs) in enumerate(obj.Attachments):
-        if k >= len(indices):
-            break
-        idx = indices[k]
-        point = attachment_point(link, subs[0] if subs else "")
+    for idx, link, sub in attachments_of(obj):
+        point = attachment_point(link, sub)
         if point is not None and 0 <= idx < len(points):
             points[idx] = point
     return points
@@ -246,7 +242,7 @@ class RoutePath:
         _add(obj, "App::PropertyVectorList", "Points", "Route points in the document frame")
         _add(obj, "App::PropertyLinkSubList", "Attachments",
              "Geometry a point follows: a vertex, a circular edge (its centre), a face (its centre) or an object (its origin)")
-        _add(obj, "App::PropertyIntegerList", "AttachedIndices", "The point index each attachment moves", hidden=True)
+        _add(obj, "App::PropertyStringList", "AttachedTo", "Per attachment: point index, object name, sub-element", hidden=True)
         _add(obj, "App::PropertyEnumeration", "Mode", "Spline through the points, or straight segments with tangent arcs")
         obj.Mode = MODES
         _add(obj, "App::PropertyLength", "BendRadius", "Centreline bend radius of the arcs in Polyline mode", 10.0)
@@ -333,24 +329,31 @@ def make_path(points, doc=None, mode="Spline", radius=10.0, attachments=None, co
 
 
 def set_attachments(obj, attachments):
-    """``attachments``: ``[(index, obj, sub)]``; stored as the two parallel properties."""
-    links, indices = [], []
+    """``attachments``: ``[(index, obj, sub)]``. ``Attachments`` holds the links (so the path
+    recomputes when a part moves; FreeCAD groups a PropertyLinkSubList by object, so the order
+    is not kept there) and ``AttachedTo`` the ``index|object|sub`` triples in order."""
+    links, text = [], []
     for index, target, sub in attachments:
         if target is None:
             continue
         links.append((target, [sub or ""]))
-        indices.append(int(index))
+        text.append(f"{int(index)}|{target.Name}|{sub or ''}")
     obj.Attachments = links
-    obj.AttachedIndices = indices
+    obj.AttachedTo = text
 
 
 def attachments_of(obj):
     """``[(index, obj, sub)]`` of a path (``set_attachments`` reversed)."""
     out = []
-    indices = list(obj.AttachedIndices)
-    for k, (link, subs) in enumerate(obj.Attachments):
-        if k < len(indices):
-            out.append((indices[k], link, subs[0] if subs else ""))
+    doc = obj.Document
+    for entry in obj.AttachedTo:
+        try:
+            index, name, sub = entry.split("|", 2)
+        except ValueError:
+            continue
+        target = doc.getObject(name)
+        if target is not None:
+            out.append((int(index), target, sub))
     return out
 
 

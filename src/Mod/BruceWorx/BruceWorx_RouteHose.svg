@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a flexible hose with a braid pattern -->
+  <path d="M8 48 C 20 48, 22 18, 36 18 S 50 40, 58 16" fill="none" stroke="#2b2f36" stroke-width="13" stroke-linecap="round"/>
+  <path d="M8 48 C 20 48, 22 18, 36 18 S 50 40, 58 16" fill="none" stroke="#3b4048" stroke-width="9" stroke-linecap="round"/>
+  <path d="M8 48 C 20 48, 22 18, 36 18 S 50 40, 58 16" fill="none" stroke="#8f9bab" stroke-width="2" stroke-dasharray="3 4"/>
+</svg>

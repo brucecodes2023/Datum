@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a cut list: a straight tube with the cut mark and a table -->
+  <rect x="6" y="10" width="52" height="44" rx="4" fill="#ffffff" stroke="#2b2f36" stroke-width="2.5"/>
+  <path d="M12 22 H52" stroke="#aeb6c0" stroke-width="7" stroke-linecap="round"/>
+  <path d="M40 14 L36 30" stroke="#c0392b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M14 36 H44 M14 44 H36" stroke="#8f9bab" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

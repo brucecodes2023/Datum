@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a bent tube with an open end -->
+  <path d="M8 52 H34 a16 16 0 0 0 16 -16 V12" fill="none" stroke="#2b2f36" stroke-width="16" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M8 52 H34 a16 16 0 0 0 16 -16 V12" fill="none" stroke="#aeb6c0" stroke-width="12" stroke-linecap="butt" stroke-linejoin="round"/>
+  <ellipse cx="50" cy="12" rx="6" ry="2.5" fill="#5c6670" stroke="#2b2f36" stroke-width="1.5"/>
+</svg>

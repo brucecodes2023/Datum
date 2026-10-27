@@ -354,6 +354,35 @@
           ]
         },
         {
+          "name": "Routing",
+          "groups": [
+            {
+              "caption": "Path",
+              "commands": [
+                "BruceWorx_RoutePath",
+                "BruceWorx_RouteAddPoint",
+                "BruceWorx_RouteClip"
+              ]
+            },
+            {
+              "caption": "Items",
+              "commands": [
+                "BruceWorx_RouteWire",
+                "BruceWorx_RoutePipe",
+                "BruceWorx_RouteHose",
+                "BruceWorx_RouteBundle"
+              ]
+            },
+            {
+              "caption": "Reports",
+              "commands": [
+                "BruceWorx_RouteFromTo",
+                "BruceWorx_RouteCutList"
+              ]
+            }
+          ]
+        },
+        {
           "name": "Utilities",
           "groups": [
             {

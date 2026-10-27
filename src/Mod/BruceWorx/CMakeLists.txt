@@ -34,7 +34,18 @@ SET(BruceWorx_SRCS
     bruceworx_section.py
     bruceworx_slots.py
     bruceworx_routing.py
+    bruceworx_routing_gui.py
     TestBruceWorxRoutingCore.py
+    TestBruceWorxRouting.py
+    BruceWorx_RoutePath.svg
+    BruceWorx_RouteAddPoint.svg
+    BruceWorx_RouteClip.svg
+    BruceWorx_RouteWire.svg
+    BruceWorx_RoutePipe.svg
+    BruceWorx_RouteHose.svg
+    BruceWorx_RouteBundle.svg
+    BruceWorx_RouteFromTo.svg
+    BruceWorx_RouteCutList.svg
     bruceworx_studio.py
     bruceworx_toolbars.py
     bruceworx_groups.py

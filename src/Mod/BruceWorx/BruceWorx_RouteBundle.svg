@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- three wires tied into one bundle -->
+  <path d="M6 20 C 20 20, 24 32, 36 32 H58" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>
+  <path d="M6 32 H58" fill="none" stroke="#1f6feb" stroke-width="5" stroke-linecap="round"/>
+  <path d="M6 44 C 20 44, 24 32, 36 32 H58" fill="none" stroke="#2e8b57" stroke-width="5" stroke-linecap="round"/>
+  <rect x="40" y="22" width="8" height="20" rx="2" fill="#ffffff" stroke="#2b2f36" stroke-width="2.5"/>
+</svg>
