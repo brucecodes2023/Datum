@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- two links pinned together: a joint -->
+  <path d="M8 44 L30 22" stroke="#6b7685" stroke-width="10" stroke-linecap="round"/>
+  <path d="M30 22 L54 36" stroke="#8f9bab" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="30" cy="22" r="8" fill="#c2cad5" stroke="#2b2f36" stroke-width="2"/>
+  <circle cx="30" cy="22" r="3" fill="#2b2f36"/>
+  <path d="M44 50 L56 50 M50 44 L50 56" stroke="#2b2f36" stroke-width="3" stroke-linecap="round"/>
+</svg>

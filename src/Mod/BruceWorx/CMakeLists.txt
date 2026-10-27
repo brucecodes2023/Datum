@@ -128,6 +128,12 @@ SET(BruceWorx_SRCS
     BruceWorx_InsertFastener.svg
     BruceWorx_MarkCots.svg
     bruceworx_sim.py
+    bruceworx_motion.py
+    TestBruceWorxMotion.py
+    BruceWorx_Joint.svg
+    BruceWorx_DriveJoint.svg
+    BruceWorx_MotionStudy.svg
+    BruceWorx_MotionLink.svg
 )
 
 # [BW] BruceWorx's own material library (KiCad boards, ECD-06), registered with

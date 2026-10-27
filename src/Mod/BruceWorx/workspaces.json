@@ -112,7 +112,7 @@
                 "Assembly_CreateAssembly",
                 "Assembly_InsertLink",
                 "BruceWorx_InsertFastener",
-                "Assembly_CreateJointFixed",
+                "BruceWorx_Joint",
                 "Assembly_CreateJointRevolute",
                 "Assembly_CreateJointSlider"
               ],
@@ -131,8 +131,18 @@
                 "Assembly_CreateJointGearBelt",
                 "Assembly_SolveAssembly",
                 "Assembly_CreateView",
-                "Assembly_CreateSimulation",
                 "Assembly_CreateBom"
+              ]
+            },
+            {
+              "caption": "Motion",
+              "commands": [
+                "BruceWorx_DriveJoint",
+                "BruceWorx_MotionStudy",
+                "BruceWorx_MotionLink"
+              ],
+              "more": [
+                "Assembly_CreateSimulation"
               ]
             },
             {

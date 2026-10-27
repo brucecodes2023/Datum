@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- two gears meshing: motion link -->
+  <g stroke="#2b2f36" stroke-width="2" fill="#c2cad5">
+    <circle cx="22" cy="32" r="14"/>
+    <circle cx="46" cy="32" r="9"/>
+  </g>
+  <g stroke="#2b2f36" stroke-width="3" stroke-linecap="round">
+    <path d="M22 14 L22 10 M22 50 L22 54 M4 32 L8 32 M8 18 L11 21 M8 46 L11 43 M33 21 L36 18 M33 43 L36 46"/>
+    <path d="M46 19 L46 16 M46 45 L46 48 M59 32 L62 32 M55 23 L57 21 M55 41 L57 43"/>
+  </g>
+  <circle cx="22" cy="32" r="4" fill="#2b2f36"/>
+  <circle cx="46" cy="32" r="3" fill="#2b2f36"/>
+</svg>

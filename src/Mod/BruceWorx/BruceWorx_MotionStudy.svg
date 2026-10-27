@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- keyframes on a timeline with a play mark: motion study -->
+  <path d="M8 46 L56 46" stroke="#2b2f36" stroke-width="3" stroke-linecap="round"/>
+  <path d="M12 46 L12 28 L26 20 L40 34 L52 24" fill="none" stroke="#6b7685" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="7" y="23" width="10" height="10" transform="rotate(45 12 28)" fill="#e8a33d" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="21" y="15" width="10" height="10" transform="rotate(45 26 20)" fill="#e8a33d" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="35" y="29" width="10" height="10" transform="rotate(45 40 34)" fill="#e8a33d" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="47" y="19" width="10" height="10" transform="rotate(45 52 24)" fill="#e8a33d" stroke="#2b2f36" stroke-width="2"/>
+  <path d="M26 52 L26 62 L36 57 Z" fill="#2b2f36"/>
+</svg>

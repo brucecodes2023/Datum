@@ -372,3 +372,10 @@ try:
     bruceworx_hardware.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx hole presets, cosmetic threads and fasteners were not installed: {exc}")
+
+try:
+    import bruceworx_motion
+
+    bruceworx_motion.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx motion commands (ROB-05) were not installed: {exc}")
