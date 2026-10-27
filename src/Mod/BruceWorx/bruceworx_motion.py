@@ -262,9 +262,14 @@ def _add(obj, kind, name, group, doc=""):
         obj.addProperty(kind, name, group, doc)
 
 
-def simulation_group(assembly):
+def simulation_group(assembly, create=True):
     import UtilsAssembly
 
+    if not create:
+        for obj in assembly.OutList:
+            if obj.TypeId == "Assembly::SimulationGroup":
+                return obj
+        return None
     return UtilsAssembly.getSimulationGroup(assembly)
 
 
@@ -332,7 +337,8 @@ def is_study(obj):
 
 
 def studies(assembly):
-    return [o for o in simulation_group(assembly).Group if is_study(o)]
+    group = simulation_group(assembly, create=False)
+    return [o for o in group.Group if is_study(o)] if group is not None else []
 
 
 def motions_of(sim):
@@ -424,6 +430,54 @@ def compile_study(sim):
             motion.Formula = ""
 
 
+MAX_STEP = {"Angular": 60.0, "Linear": 1.0e9}
+
+
+def _solve_constants(assembly, sim, values, free):
+    """One solver run with every channel at a constant (values[(joint, kind)] or its reading);
+    channels in `free` get no motion. Puts the assembly at the result. Returns rc."""
+    for motion, joint, kind in study_rows(sim):
+        if (joint, kind) in free:
+            motion.Formula = ""
+        else:
+            motion.Formula = constant_formula(joint, kind, values.get((joint, kind), reading(joint, kind)))
+    rc = assembly.generateSimulation(sim)
+    if rc == 0 and assembly.numberOfFrames() > 1:
+        assembly.updateForFrame(1)
+    return rc
+
+
+def step_to(assembly, sim, targets, free=()):
+    """Move the channels in `targets` ({(joint, kind): value}) to their values in steps of at most
+    60 degrees: the solver's rotational motion has a solution 180 degrees away too, and a jump past
+    90 degrees lands on it. The other channels hold (or are free). The sim's time span and formulas
+    are put back afterwards. Returns the last rc."""
+    import JointObject
+
+    rows = study_rows(sim)
+    saved = (sim.bTimeEnd.Value, sim.cTimeStepOutput.Value, [(m, m.Formula) for m, _j, _k in rows])
+    sim.bTimeEnd = 0.01
+    sim.cTimeStepOutput = 0.01
+    current = {ch: reading(*ch) for ch in targets}
+    delta = {}
+    for ch, target in targets.items():
+        d = float(target) - current[ch]
+        delta[ch] = JointObject.wrapAngle(d) if ch[1] == "Angular" else d
+    steps = max([1] + [int(math.ceil(abs(delta[ch]) / MAX_STEP[ch[1]])) for ch in targets])
+    rc = 0
+    try:
+        for k in range(1, steps + 1):
+            values = {ch: (targets[ch] if k == steps else current[ch] + delta[ch] * k / steps) for ch in targets}
+            rc = _solve_constants(assembly, sim, values, set(free))
+            if rc != 0:
+                break
+    finally:
+        sim.bTimeEnd, sim.cTimeStepOutput = saved[0], saved[1]
+        for motion, text in saved[2]:
+            motion.Formula = text
+    return rc
+
+
 def run_study(assembly, sim, start=None):
     """Compile and solve from the start pose (placements saved with
     UtilsAssembly.saveAssemblyPartsPlacements; the pose now when None). Returns (rc, frames): rc 0
@@ -434,6 +488,16 @@ def run_study(assembly, sim, start=None):
         import UtilsAssembly
 
         UtilsAssembly.restoreAssemblyPartsPlacements(assembly, start)
+        # Settle on the first keyframes first: the study then begins where its formulas do.
+        targets, free = {}, set()
+        for motion, joint, kind in study_rows(sim):
+            frames = keyframes_of(motion)
+            if frames:
+                targets[(joint, kind)] = interpolate(frames, float(sim.aTimeStart.Value))
+            elif not motion.BWHold:
+                free.add((joint, kind))
+        if targets:
+            step_to(assembly, sim, targets, free)
     compile_study(sim)
     rc = assembly.generateSimulation(sim)
     frames = assembly.numberOfFrames() - 1 if rc == 0 else 0
@@ -480,18 +544,10 @@ class Driver:
         self.last_rc = 0
 
     def drive(self, joint, kind, value):
-        """Put the channel at value; the others stay. Returns the solver's rc."""
-        for (j, k), motion in self.motions.items():
-            if (j, k) == (joint, kind):
-                motion.Formula = constant_formula(j, k, value)
-            elif is_linked(j, self.parts):
-                motion.Formula = ""
-            else:
-                motion.Formula = constant_formula(j, k, reading(j, k))
-        rc = self.assembly.generateSimulation(self.sim)
+        """Put the channel at value; the others stay (a linked one follows). Returns the rc."""
+        free = {(j, k) for (j, k) in self.motions if (j, k) != (joint, kind) and is_linked(j, self.parts)}
+        rc = step_to(self.assembly, self.sim, {(joint, kind): float(value)}, free)
         self.last_rc = rc
-        if rc == 0 and self.assembly.numberOfFrames() > 1:
-            self.assembly.updateForFrame(1)
         return rc
 
     def restore(self):
@@ -948,8 +1004,11 @@ class MotionStudyPanel:
         self.initial = UtilsAssembly.saveAssemblyPartsPlacements(assembly)
         self.created = sim is None
         self.doc.openTransaction("Motion study" if self.created else f"Edit {sim.Label}")
+        self.group = None
         if sim is None:
+            had_group = simulation_group(assembly, create=False) is not None
             sim = make_study(assembly, f"Motion study {len(studies(assembly)) + 1}")
+            self.group = None if had_group else simulation_group(assembly)
         else:
             sync_channels(assembly, sim)
         self.sim = sim
@@ -1153,8 +1212,15 @@ class MotionStudyPanel:
         from PySide import QtGui
 
         row = self.row
-        if row is None:
+        if row is None or self.filling:
             return
+        self.filling = True  # setBackground emits itemChanged
+        try:
+            self._highlight(row, QtGui)
+        finally:
+            self.filling = False
+
+    def _highlight(self, row, QtGui):
         t = self.current_time()
         step = float(self.sim.cTimeStepOutput.Value) or 0.04
         frames = keyframes_of(row[0])
@@ -1375,6 +1441,12 @@ class MotionStudyPanel:
             self.rename()
             self.doc.commitTransaction()
         else:
+            if self.created:  # leave nothing behind, whatever the undo setting
+                for motion in motions_of(self.sim):
+                    self.doc.removeObject(motion.Name)
+                self.doc.removeObject(self.sim.Name)
+                if self.group is not None and not self.group.Group:
+                    self.doc.removeObject(self.group.Name)
             self.doc.abortTransaction()
         self.doc.recompute()
         _state["study"] = None

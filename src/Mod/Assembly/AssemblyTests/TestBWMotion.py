@@ -172,6 +172,10 @@ class TestStudy(ArmCase):
         self.assertEqual(driver.drive(self.j2, "Angular", -30), 0)
         self.assertAlmostEqual(self.angle(self.j1), 45, places=3)
         self.assertAlmostEqual(self.angle(self.j2), -30, places=3)
+        self.assertEqual(driver.drive(self.j1, "Angular", -170), 0)  # a 215 degree jump, in steps
+        self.assertAlmostEqual(self.angle(self.j1), -170, places=3)
+        self.assertEqual(driver.drive(self.j1, "Angular", 170), 0)  # 20 degrees the short way round
+        self.assertAlmostEqual(self.angle(self.j1), 170, places=3)
         driver.restore()
         driver.finish(keep=False)
         self.assertEqual(len(self.doc.Objects), count)
