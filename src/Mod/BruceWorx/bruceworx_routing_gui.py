@@ -517,6 +517,8 @@ class ItemPanel:
             except Exception as exc:
                 self.status.setText(RED.format(_html(exc)))
                 return
+        if self.kind == br.PIPE:
+            br.sync_clr(obj)
         try:
             self.doc.recompute()
         except Exception as exc:

@@ -619,9 +619,20 @@ def make_pipe(path, size="Custom", od=None, wall=None, material="", bend_radius=
         obj.WallThickness = float(wall)
     obj.BendRadius = float(bend_radius) if bend_radius else 2.0 * float(obj.OD.Value)
     obj.MinBendRadius = float(min_bend_radius) if min_bend_radius is not None else 1.5 * float(obj.OD.Value)
-    if is_path(path) and path.Mode == "Polyline" and abs(float(path.BendRadius.Value) - float(obj.BendRadius.Value)) > 1e-9:
-        path.BendRadius = float(obj.BendRadius.Value)  # the geometry follows the pipe's CLR
+    sync_clr(obj)
     return obj
+
+
+def sync_clr(pipe):
+    """The path's arcs follow the pipe's CLR (Polyline mode): one bend radius for the geometry, the
+    cut length and the bend table. Returns True when the path changed."""
+    path = pipe.Path
+    if not is_path(path) or path.Mode != "Polyline" or pipe.BendRadius.Value <= 0:
+        return False
+    if abs(float(path.BendRadius.Value) - float(pipe.BendRadius.Value)) <= 1e-9:
+        return False
+    path.BendRadius = float(pipe.BendRadius.Value)
+    return True
 
 
 def make_hose(path, inner=6.0, od=10.0, min_bend_radius=None, slack=5, name="Hose"):
