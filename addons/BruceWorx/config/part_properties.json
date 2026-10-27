@@ -24,7 +24,11 @@
     {"name": "Vendor", "type": "string",
      "doc": "Supplier, for COTS and purchased parts"},
     {"name": "VendorPartNumber", "type": "string",
-     "doc": "Supplier's part number"}
+     "doc": "Supplier's part number"},
+    {"name": "QuantityUnit", "type": "string", "bom": true,
+     "doc": "Unit the BOM counts this item in: empty for a count (each), m for wires, pipes and hoses (ROU-04)"},
+    {"name": "QuantityPer", "type": "float", "bom": true, "default": 1.0,
+     "doc": "Quantity of the unit per occurrence: 1 for a counted part, the length in metres of a routed item"}
   ],
   "renamed": {}
 }

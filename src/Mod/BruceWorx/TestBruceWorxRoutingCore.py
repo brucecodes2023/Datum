@@ -103,6 +103,15 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertAlmostEqual(centre.y, 0.0)
         self.assertIn(round(centre.z, 6), (30.0, 40.0))
         self.assertAlmostEqual((br.attachment_point(cyl) - V(0, 0, 30)).Length, 0.0)
+        # Several attachments on one object, out of order, keep their point indices.
+        path2 = br.make_path([(0, 0, 0), (1, 1, 1), (2, 2, 2)], self.doc,
+                             attachments=[(2, box, "Vertex1"), (0, cyl, circle), (1, box, "Vertex7")])
+        self.doc.recompute()
+        self.assertEqual([(i, o.Name, s) for i, o, s in br.attachments_of(path2)],
+                         [(2, box.Name, "Vertex1"), (0, cyl.Name, circle), (1, box.Name, "Vertex7")])
+        self.assertAlmostEqual((path2.Points[2] - box.Shape.Vertexes[0].Point).Length, 0.0)
+        self.assertAlmostEqual((path2.Points[1] - box.Shape.Vertexes[6].Point).Length, 0.0)
+        self.assertAlmostEqual((path2.Points[0] - centre).Length, 0.0)
 
     # ----- items -----
 
@@ -232,6 +241,30 @@ class RoutingCoreTests(unittest.TestCase):
             self.assertEqual(len(br.routed(doc)), 2)
         finally:
             shutil.rmtree(folder, ignore_errors=True)
+
+    def test_bom_walker_lists_routed_items_by_length(self):
+        """ROU-04: the vault's BOM walker meters a hose in metres and skips the path itself."""
+        import bruceworx_bom as bb
+
+        asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0, container=asm)
+        hose = br.make_hose(path, inner=6.0, od=10.0, slack=0)
+        bolt = self.doc.addObject("Part::Box", "Bolt")
+        asm.addObject(bolt)
+        self.doc.recompute()
+        rows = {r["name"]: r for r in bb.walk(self.doc)}
+        self.assertEqual(sorted(rows), sorted([f"{hose.Label} (in this file)", f"{bolt.Label} (in this file)"]))
+        metered = rows[f"{hose.Label} (in this file)"]
+        self.assertEqual(metered["unit"], "m")
+        self.assertAlmostEqual(metered["qty"], (160.0 + 10.0 * math.pi) / 1000.0, places=9)
+        self.assertNotIn("unit", rows[f"{bolt.Label} (in this file)"])
+        self.assertEqual(rows[f"{bolt.Label} (in this file)"]["qty"], 1)
+        from bruceworx import bom
+
+        lines, missing = bom.lines_from_walk(bb.walk(self.doc), set())
+        self.assertEqual(lines, [])
+        self.assertEqual([(m["name"].split(" ")[0], m.get("unit", "")) for m in missing],
+                         sorted([(hose.Label, "m"), (bolt.Label, "")], key=lambda t: [m["name"] for m in missing].index(t[0] + " (in this file)")))
 
     def test_items_follow_their_path_into_a_part(self):
         part = self.doc.addObject("App::Part", "Harness")

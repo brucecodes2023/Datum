@@ -94,6 +94,8 @@ def _target(obj):
 
 
 def _is_line(obj):
+    if getattr(getattr(obj, "Proxy", None), "Type", "") == "BruceWorx::RoutePath":
+        return False  # [BW] ROU-04: a route centreline is construction, not an item
     return (_type(obj, "Assembly::AssemblyObject") or _type(obj, "App::Part") or _type(obj, "Part::Feature"))
 
 
@@ -120,6 +122,16 @@ def _keys(target, imported, shown=None):
     if pn:
         keys = [pn] + [k for k in keys if k != pn]
     return keys
+
+
+def _metered(row, target):
+    """[BW] ROU-04: a routed item (QuantityUnit "m", QuantityPer its metres) is listed by length:
+    the row's qty becomes count x QuantityPer and carries the unit."""
+    unit = str(getattr(target, "QuantityUnit", "") or "").strip()
+    if unit:
+        row["qty"] = row["qty"] * float(getattr(target, "QuantityPer", 1.0) or 0.0)
+        row["unit"] = unit
+    return row
 
 
 def walk(doc, imported=None) -> list:
@@ -162,10 +174,10 @@ def walk(doc, imported=None) -> list:
                     continue
                 if target is top:
                     continue
-                rows.append({"keys": [], "name": f"{target.Label} (in this file)", "qty": mult * count})
+                rows.append(_metered({"keys": [], "name": f"{target.Label} (in this file)", "qty": mult * count}, target))
                 continue
             name = os.path.basename(getattr(target.Document, "FileName", "") or "") or target.Document.Label
-            rows.append({"keys": _keys(target, imported), "name": name, "qty": mult * count})
+            rows.append(_metered({"keys": _keys(target, imported), "name": name, "qty": mult * count}, target))
 
     visit(objects, 1, {top.Name} if top is not None else set())
     return rows

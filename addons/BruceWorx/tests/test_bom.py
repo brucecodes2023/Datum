@@ -32,6 +32,19 @@ class WalkTests(unittest.TestCase):
         self.assertEqual([(l.child, l.qty, l.find) for l in lines], [(PLATE, 1, 1), (BOLT, 6, 2)])
         self.assertEqual(missing, [{"name": "washer.FCStd", "qty": 3}])
 
+    def test_metered_rows_keep_their_unit(self):
+        # ROU-04: two wires of the same part number add up in metres; an unlisted hose too.
+        found = [{"keys": [PLATE], "name": "plate", "qty": 1},
+                 {"keys": [BOLT], "name": "wire.FCStd", "qty": 0.25, "unit": "m"},
+                 {"keys": [BOLT], "name": "wire.FCStd", "qty": 0.5, "unit": "m"},
+                 {"keys": [], "name": "Hose (in this file)", "qty": 1.2, "unit": "m"}]
+        lines, missing = bom.lines_from_walk(found, {PLATE, BOLT})
+        self.assertEqual([(l.child, l.qty, l.unit) for l in lines], [(PLATE, 1, ""), (BOLT, 0.75, "m")])
+        self.assertEqual(missing, [{"name": "Hose (in this file)", "qty": 1.2, "unit": "m"}])
+        self.assertEqual(lines[1].as_dict(), {"child": BOLT, "qty": 0.75, "find": 2, "unit": "m"})
+        self.assertEqual(bom.qty_text(4), "4")
+        self.assertEqual(bom.qty_text(2.5, "m"), "2.5 m")
+
 
 class ViewTests(unittest.TestCase):
     def setUp(self):
@@ -43,6 +56,24 @@ class ViewTests(unittest.TestCase):
             v.create_item(pn, kind, text)
         v.set_bom(BRK, [(PLATE, 1, 1), (BOLT, 4, 2)])
         v.set_bom(TOP, [(BRK, 2, 1), (BOLT, 2, 2)], missing=[{"name": "shim.FCStd", "qty": 1}])
+
+    def test_metered_line_in_the_vault_bom(self):
+        # ROU-04: a harness recorded with 1.25 m of the "bolt" item (standing in for a wire spool).
+        self.v.set_bom(BRK, [(PLATE, 1, 1), {"child": BOLT, "qty": 1.25, "find": 2, "unit": "m"}],
+                       missing=[{"name": "Hose (in this file)", "qty": 0.4, "unit": "m"}])
+        rows = bom.bom_rows(self.v, BRK)
+        self.assertEqual([(r["part_number"], r["qty"], r.get("unit")) for r in rows],
+                         [(PLATE, 1, ""), (BOLT, 1.25, "m"), ("Hose (in this file)", 0.4, "m")])
+        text = bom.bom_csv(self.v, BRK)
+        self.assertIn(f",{BOLT},", text)
+        self.assertIn(",1.25 m,1.25 m,", text)
+        self.assertIn(",0.4 m,0.4 m,", text)
+        self.v.set_bom(TOP, [(BRK, 2, 1)])
+        flat = bom.bom_csv(self.v, TOP, flattened=True)  # the top uses two brackets: 2.5 m
+        self.assertIn(",2.5 m,", flat)
+        self.assertEqual(bom.bom_rows(self.v, BRK)[1]["total"], 1.25)
+        with self.assertRaises(ValueError):
+            self.v.set_bom(BRK, [(PLATE, 1.5, 1)])  # a count stays whole
 
     def test_indented_and_flattened_csv(self):
         text = bom.bom_csv(self.v, TOP)

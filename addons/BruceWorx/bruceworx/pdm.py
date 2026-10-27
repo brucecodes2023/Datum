@@ -326,9 +326,10 @@ class BomLine:
     number, and the child revision it resolves to (seen at check-in, pinned at release)."""
 
     child: str
-    qty: int = 1
+    qty: int | float = 1
     find: int | None = None
     rev: str | None = None
+    unit: str = ""  # [BW] ROU-04: "" counts each; "m" and the like meter the quantity
 
     def as_dict(self) -> dict:
         out = {"child": self.child, "qty": self.qty}
@@ -336,6 +337,8 @@ class BomLine:
             out["find"] = self.find
         if self.rev:
             out["rev"] = self.rev
+        if self.unit:
+            out["unit"] = self.unit
         return out
 
 
@@ -343,19 +346,23 @@ def bom_line(raw) -> BomLine:
     """A BomLine from a BomLine, a dict ({"child", "qty", "find", "rev"}) or a tuple
     ``(child, qty[, find[, rev]])``, as older journals and callers write them."""
     if isinstance(raw, BomLine):
-        return BomLine(raw.child, raw.qty, raw.find, raw.rev)
+        return BomLine(raw.child, raw.qty, raw.find, raw.rev, raw.unit)
     if isinstance(raw, dict):
         find = raw.get("find")
-        return BomLine(str(raw["child"]), _count(raw.get("qty", 1)), None if find in (None, "") else int(find),
-                       raw.get("rev") or None)
+        unit = str(raw.get("unit") or "")
+        return BomLine(str(raw["child"]), _count(raw.get("qty", 1), unit), None if find in (None, "") else int(find),
+                       raw.get("rev") or None, unit)
     raw = list(raw)
     find = raw[2] if len(raw) > 2 else None
     return BomLine(str(raw[0]), _count(raw[1] if len(raw) > 1 else 1),
                    None if find in (None, "") else int(find), (raw[3] if len(raw) > 3 else None) or None)
 
 
-def _count(qty) -> int:
-    """Quantities are counts (PDM-06: units come later)."""
+def _count(qty, unit: str = ""):
+    """Quantities are counts (PDM-06), unless a unit meters them (ROU-04: a wire's metres), when a
+    fraction is fine."""
+    if unit:
+        return float(qty)
     if isinstance(qty, bool) or (isinstance(qty, float) and not qty.is_integer()):
         raise ValueError(f"quantity must be a whole number, not {qty!r}")
     return int(qty)
@@ -782,8 +789,12 @@ class Vault:
             new.append(line)
         gaps = []
         for entry in missing or ():
-            name, qty = (entry.get("name"), entry.get("qty", 1)) if isinstance(entry, dict) else (entry, 1)
-            gaps.append({"name": str(name), "qty": _count(qty)})
+            name, qty, unit = ((entry.get("name"), entry.get("qty", 1), str(entry.get("unit") or ""))
+                               if isinstance(entry, dict) else (entry, 1, ""))
+            gap = {"name": str(name), "qty": _count(qty, unit)}
+            if unit:
+                gap["unit"] = unit  # [BW] ROU-04
+            gaps.append(gap)
         previous = (rev.bom, rev.bom_version, rev.bom_missing)
         rev.bom, rev.bom_version, rev.bom_missing = new, sha256 or "", gaps
         # A replay (strict off) skips the whole-graph check: each line was checked when it was
@@ -852,12 +863,13 @@ class Vault:
                 deeper = bool(child.bom) and id(child) not in seen
                 rows.append({"level": level, "find": line.find, "part_number": line.child,
                              "revision": child.code, "qty": line.qty, "total": total,
-                             "leaf": not deeper, "missing": False})
+                             "leaf": not deeper, "missing": False, "unit": line.unit})
                 if deeper:
                     walk(child, level + 1, total, seen | {id(child)})
             for gap in rev.bom_missing:
                 rows.append({"level": level, "find": None, "part_number": gap["name"], "revision": "",
-                             "qty": gap["qty"], "total": mult * gap["qty"], "leaf": True, "missing": True})
+                             "qty": gap["qty"], "total": mult * gap["qty"], "leaf": True, "missing": True,
+                             "unit": gap.get("unit", "")})
 
         walk(start, 1, 1, {id(start)})
         return rows

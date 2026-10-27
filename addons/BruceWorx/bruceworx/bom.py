@@ -6,7 +6,9 @@ assembly, bruceworx_bom.py) and kept per revision by :mod:`bruceworx.pdm`. This 
 what the walker found into BOM lines, and a revision's BOM, its where-used and the outbox into
 rows and CSV text. No FreeCAD import.
 
-Quantities are counts (the user's answer: units later).
+Quantities are counts, except a routed item (a wire, pipe or hose, ROU-04) whose row carries a
+``unit`` ("m") and a metered, possibly fractional, ``qty``: the Qty and Total cells then read
+``2.5 m``.
 """
 
 from __future__ import annotations
@@ -30,7 +32,8 @@ def lines_from_walk(found, items) -> tuple:
     the first one's find number (1, 2, ... in order). ``items``: the vault's part numbers."""
     lines, missing, by_pn, by_name = [], [], {}, {}
     for row in found:
-        qty = int(row.get("qty", 1))
+        unit = str(row.get("unit") or "")  # [BW] ROU-04
+        qty = float(row.get("qty", 1)) if unit else int(row.get("qty", 1))
         pn = next((k for k in row.get("keys", ()) if k and k in items), None)
         if pn is None:
             name = row.get("name") or "?"
@@ -38,14 +41,23 @@ def lines_from_walk(found, items) -> tuple:
                 by_name[name]["qty"] += qty
             else:
                 by_name[name] = {"name": name, "qty": qty}
+                if unit:
+                    by_name[name]["unit"] = unit
                 missing.append(by_name[name])
             continue
         if pn in by_pn:
             by_pn[pn].qty += qty
         else:
-            by_pn[pn] = pdm.BomLine(pn, qty, len(by_pn) + 1)
+            by_pn[pn] = pdm.BomLine(pn, qty, len(by_pn) + 1, unit=unit)
             lines.append(by_pn[pn])
     return lines, missing
+
+
+def qty_text(qty, unit="") -> str:
+    """``4`` for a count, ``2.5 m`` for a metered quantity."""
+    if unit:
+        return f"{float(qty):g} {unit}"
+    return str(qty)
 
 
 def _describe(vault, pn):
@@ -64,10 +76,15 @@ def bom_rows(vault, pn, revision=None, flattened=False) -> list:
         for row in model.indented(pn, start.code):
             if row["leaf"] and not row["missing"]:
                 resolved.setdefault(row["part_number"], set()).add(row["revision"])
+        units = {}
+        for row in model.indented(pn, start.code):
+            if row.get("unit"):
+                units[row["part_number"]] = row["unit"]
         for child in sorted(totals):
             item = vault.items[child]
             rows.append({"part_number": child, "revision": "/".join(sorted(resolved.get(child, ()))),
-                         "description": item.description, "total": totals[child], "state": item.state})
+                         "description": item.description, "total": totals[child], "state": item.state,
+                         "unit": units.get(child, "")})
         return rows
     newer = {child: released for child, _pinned, released in model.newer_children(pn, revision)}
     rows = []
@@ -92,10 +109,11 @@ def _csv(columns, rows) -> str:
 def bom_csv(vault, pn, revision=None, flattened=False) -> str:
     rows = bom_rows(vault, pn, revision, flattened)
     if flattened:
-        return _csv(FLAT_COLUMNS, [(r["part_number"], r["revision"], r["description"], r["total"], r["state"])
-                                   for r in rows])
+        return _csv(FLAT_COLUMNS, [(r["part_number"], r["revision"], r["description"],
+                                    qty_text(r["total"], r.get("unit", "")), r["state"]) for r in rows])
     return _csv(BOM_COLUMNS, [(r["level"], r["find"] or "", r["part_number"], r["revision"], r["description"],
-                               r["qty"], r["total"], r["state"], r["note"]) for r in rows])
+                               qty_text(r["qty"], r.get("unit", "")), qty_text(r["total"], r.get("unit", "")),
+                               r["state"], r["note"]) for r in rows])
 
 
 def where_used_csv(rows) -> str:

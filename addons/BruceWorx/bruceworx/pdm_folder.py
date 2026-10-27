@@ -571,8 +571,7 @@ class FolderVault:
             if line.rev is None and child is not None:
                 line.rev = child.latest.code
             resolved.append(line.as_dict())
-        gaps = [{"name": str(m["name"]), "qty": int(m.get("qty", 1))} if isinstance(m, dict)
-                else {"name": str(m), "qty": 1} for m in (missing or ())]
+        gaps = [_gap(m) for m in (missing or ())]
         return self._record("set_bom", _optional(dict(parent=parent, lines=resolved, revision=revision),
                                                  sha256=sha256, missing=gaps))
 
@@ -896,6 +895,17 @@ def _write_once(path: str, data: bytes) -> None:
         os.fsync(handle.fileno())
     os.replace(tmp, path)
 
+
+
+def _gap(entry) -> dict:
+    """A missing-line record; a metered one ([BW] ROU-04) keeps its unit and a fractional qty."""
+    if not isinstance(entry, dict):
+        return {"name": str(entry), "qty": 1}
+    unit = str(entry.get("unit") or "")
+    gap = {"name": str(entry["name"]), "qty": float(entry.get("qty", 1)) if unit else int(entry.get("qty", 1))}
+    if unit:
+        gap["unit"] = unit
+    return gap
 
 def _optional(args: dict, **extra) -> dict:
     """``args`` plus the optional fields that are set; unset ones stay out of the journal."""
