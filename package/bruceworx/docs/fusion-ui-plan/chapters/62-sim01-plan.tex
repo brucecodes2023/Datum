@@ -1,0 +1,139 @@
+%======================================================================
+\subsection{BW-SIM-01 plan: static stress end to end (27 Oct 2026)}\label{sec:sim01-plan}
+%======================================================================
+
+You chose on 27 Oct to take one study type through the whole workflow first (\S\ref{sec:session-27oct}), so
+that the Simulation workspace, the study wizard, the mesh defaults, the solver run, the results and the report
+exist once and the other study types of \eref{SIM-01} (modal, buckling, thermal, thermal stress) drop into the
+same frame. The theory of the track is in \S\ref{sec:sim}; this section is the design the \emph{sim} agent
+builds to, and the questions it raises.
+
+\paragraph{What exists.} FreeCAD's FEM workbench has every piece of a static study, used by hand: an
+\emph{Analysis} container, a \emph{CalculiX} solver object, materials from the material cards (ABS, PLA, PET,
+PA6, aluminium, steels), constraints (fixed, displacement, force, pressure, contact, \dots), a Netgen or gmsh
+mesh, the \code{ccx} run and a result object with von Mises, principal stresses and displacement, shown through
+the result pipeline. What is missing is what Fusion's Simulation workspace gives a designer: a study that sets
+itself up from the part (material, mesh size), a pre-check before the solve, a \textbf{safety factor}, and a
+report. Two gaps in this build were found on 27 Oct: \textbf{Keystone.app ships no \code{ccx}} (the development
+environment has CalculiX 2.23 from \file{pixi.toml}), and gmsh is absent, so Netgen (built in) is the mesher.
+
+\paragraph{The workspace.} The Simulation workspace (Ctrl+2) gets its own groups instead of the stock FEM
+toolbars:
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Group & Commands\\
+\midrule
+Study & New Study\\
+Setup & Material, Fixed, Force, Pressure, Displacement; \emph{more:} the other constraints\\
+Mesh & Mesh, Refine\\
+Solve & Pre-check, Solve\\
+Results & Stress, Displacement, Safety Factor, Probe, Report; \emph{more:} the stock result tools\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{New Study.} One panel (figure~\ref{fig:sim01-mock}): the study type (Static stress now; Modal,
+Buckling, Thermal and Thermal stress listed and marked \emph{planned}), the model (the active body or part, or an
+assembly), the material pre-filled from the part's \code{Material} property (\eref{PDM-11}) with the FEM library as
+the fallback, and the mesh size with a default from the model: maximum element size $h=\text{diag}/30$ where diag
+is the bounding-box diagonal, Netgen fineness \emph{Moderate}, second-order elements on. \emph{Create} makes the
+Analysis (``Study: \emph{name}''), the solver (CalculiX, static), the material and the mesh object, then shows
+the \emph{Loads \& constraints} list with Add Fixed / Force / Pressure (the stock constraint panels) and a
+\emph{Pre-check} that lists what is missing before a solve: no material, no constraint, no load, no mesh, or
+a body that can still move as a rigid body (a fixed constraint on at least one face, or three non-collinear
+points held).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,font=\sffamily\scriptsize]
+  \draw[rounded corners=2mm, fill=white, draw=black!25] (0,0) rectangle (78,96);
+  \node[anchor=west, font=\sffamily\small\bfseries] at (3,91.5) {New Study};
+  \draw[black!15] (0,88) -- (78,88);
+  \node[anchor=west, text=black!55] at (3,84) {Type};
+  \draw[rounded corners=0.8mm, draw=black!30] (22,81.5) rectangle (75,86.5);
+  \node[anchor=west] at (24,84) {Static stress}; \node[anchor=east, text=black!45] at (73,84) {$\blacktriangledown$};
+  \node[anchor=west, text=black!45] at (24,78) {Modal, Buckling, Thermal, Thermal stress: planned};
+  \node[anchor=west, text=black!55] at (3,72) {Model};
+  \draw[rounded corners=0.8mm, draw=black!30] (22,69.5) rectangle (75,74.5); \node[anchor=west] at (24,72) {Arm bracket (Body)};
+  \node[anchor=west, text=black!55] at (3,65) {Material};
+  \draw[rounded corners=0.8mm, draw=black!30] (22,62.5) rectangle (75,67.5); \node[anchor=west] at (24,65) {PETG (from the part)};
+  \node[anchor=west, text=black!45] at (24,59) {E 2.1 GPa, $\nu$ 0.38, yield 50 MPa};
+  \node[anchor=west, text=black!55] at (3,53) {Mesh};
+  \draw[rounded corners=0.8mm, draw=black!30] (22,50.5) rectangle (48,55.5); \node[anchor=east] at (46,53) {2.4 mm};
+  \node[anchor=west, text=black!45] at (50,53) {= diag / 30};
+  \node[anchor=west, text=black!45] at (24,47) {second order \ $\blacksquare$ \quad fineness Moderate};
+  \draw[black!15] (0,43) -- (78,43);
+  \node[anchor=west, font=\sffamily\scriptsize\bfseries] at (3,39.5) {Loads \& constraints};
+  \node[anchor=west] at (5,35) {\textcolor{bwblue}{$\blacksquare$} Fixed \quad Face7 (mounting face)};
+  \node[anchor=west] at (5,31) {\textcolor{bwblue}{$\blacksquare$} Force \quad Face12 \quad 120 N $-Z$};
+  \foreach \x/\t in {3/Fixed,20/Force,37/Pressure}{
+    \draw[rounded corners=0.8mm, draw=black!30] (\x,24) rectangle (\x+15,29); \node at (\x+7.5,26.5) {+ \t};}
+  \draw[black!15] (0,20) -- (78,20);
+  \node[anchor=west, font=\sffamily\scriptsize\bfseries] at (3,16.5) {Pre-check};
+  \node[anchor=west, text=bwgreen] at (5,12.5) {$\checkmark$ material, constraint, load};
+  \node[anchor=west, text=bworange] at (5,8.5) {$\triangle$ not meshed yet: Solve will mesh first};
+  \draw[rounded corners=1mm, fill=bwblue, draw=bwblue] (58,2.5) rectangle (75,8.5);
+  \node[text=white, font=\sffamily\scriptsize\bfseries] at (66.5,5.5) {Solve};
+\end{tikzpicture}
+\caption{The New Study panel as planned: type, model, material from the part, a mesh size derived from the
+model, the loads and constraints list, and the pre-check that says what a solve still needs.}
+\label{fig:sim01-mock}
+\end{figure}
+
+\paragraph{Solve and results.} \emph{Solve} meshes when needed and runs \code{ccx} off the GUI thread with a
+progress line, loads the result and adds the \textbf{safety factor} field,
+$SF_i=\sigma_{\text{allow}}/\sigma_{vM,i}$ per node, $\sigma_{\text{allow}}=\eta\,\sigma_y$ with $\eta=1$ until
+\eref{SIM-03}'s FDM knockdown sets it per material and orientation (the hook is there from the start). It is
+stored on the result object as a \code{[BW]} property, shown by the Results group with a red-below-one legend,
+and summarised in the panel: minimum SF, maximum von Mises, maximum displacement. \emph{Probe} reads the fields at a
+clicked point.
+
+\paragraph{Report.} HTML, and PDF through Qt's document printer (no extra library): study name and date, model
+and material (E, $\nu$, $\sigma_y$), mesh (nodes, elements, order, size), loads and constraints, the three results
+with their locations, three off-screen renders (stress, displacement, safety factor), and a line saying whether
+the mesh-convergence study of \eref{SIM-04} was run (it is not, yet). It is saved beside the document, or in the
+vault item's folder when the file is a vault file, so a release package (\eref{PDM-05}) can carry it.
+
+\paragraph{Theory: the choices behind the defaults.}
+\begin{itemize}
+  \item \textbf{Element order.} Linear tetrahedra (C3D4) lock in bending and over-stiffen; second-order
+        tetrahedra (C3D10) converge as $O(h^3)$ in displacement and are the default everywhere in Fusion and
+        SolidWorks Simulation. The cost is about $8\times$ the degrees of freedom per element, acceptable on a part.
+  \item \textbf{Mesh size.} $h=\text{diag}/30$ gives roughly $30$ elements along the longest dimension and three
+        or more across a thin wall of a printed part; Netgen's curvature refinement adds elements at fillets and
+        holes, where the stress concentrations are. Fusion's default ``10\,\% of model size'' is coarser, and its
+        adaptive refinement then fixes it; ours leaves adaptivity to \eref{SIM-04}.
+  \item \textbf{Safety factor.} $SF=\sigma_{\text{allow}}/\sigma_{vM}$ with von Mises is right for ductile
+        metals (Al 6061, steel). Printed thermoplastics are closer to brittle across layers; until \eref{SIM-03}
+        brings the orthotropic model, $\eta$ is the knob, and Q3 below asks which stress measure to show.
+  \item \textbf{Verification.} The cantilever benchmark of \eref{SIM-05}: $100\times10\times10$\,mm steel,
+        $P=100$\,N at the tip, $\delta=PL^3/3EI=0.0952$\,mm with $E=210$\,GPa, $I=bh^3/12$; the test accepts
+        $\pm5$\,\% with the default mesh and checks $\min SF=\sigma_y/\max\sigma_{vM}$ against the result's own
+        fields.
+\end{itemize}
+
+\paragraph{Packaging.} \file{make-keystone.sh} copies \code{ccx} and the libraries it links
+(\code{otool -L}: gfortran, quadmath, OpenBLAS/Accelerate, SPOOLES/ARPACK as built by conda-forge) into the
+bundle and sets the FEM preference \code{Mod/Fem/Ccx/ccxBinaryPath} for a fresh profile, so a study solves on a
+Mac without a developer environment.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=S\arabic*.]
+  \item \textbf{Yield or ultimate.} When a material card has no yield strength (several plastics in the FEM
+        library), use the ultimate tensile strength with a note, or refuse to compute the safety factor?\\
+        \emph{Recommendation:} ultimate with a note in the panel and the report.
+  \item \textbf{Legend thresholds.} Red below $SF=1$, amber below $2$, green above (Fusion uses 1 and 3 for its
+        bands)?\\
+        \emph{Recommendation:} 1 and 2, settable in the study.
+  \item \textbf{Stress measure for plastics.} Von Mises for all, or maximum principal stress for printed and
+        brittle materials (Rankine), chosen by the material's class?\\
+        \emph{Recommendation:} von Mises for all now; the choice by class comes with \eref{SIM-03}.
+  \item \textbf{Report format.} HTML plus PDF beside the file (and in the vault item folder), or only when asked?\\
+        \emph{Recommendation:} written on demand by \emph{Report}, both formats.
+  \item \textbf{CalculiX in Keystone.} Bundle \code{ccx} (GPL-2, a separate executable, about 15\,MB with its
+        libraries) in the app, or ask the user to install it once (Homebrew) with a hint in the panel?\\
+        \emph{Recommendation:} bundle it, as decided for the solvers in \S\ref{sec:sim}; the notice goes in
+        \eref{FND-04}.
+\end{enumerate}

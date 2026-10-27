@@ -1,0 +1,180 @@
+%======================================================================
+\section{Track ROU --- Routing: wires, pipes, hoses (planned 27 Oct 2026)}\label{sec:rou}
+%======================================================================
+
+A new track, asked for on 27 Oct (\S\ref{sec:session-27oct}). Fusion has no routing at all; SolidWorks Routing
+(electrical, piping, tubing) sets the bar: a route sub-assembly, a 3D route sketch through connection points on
+the fittings, wires with a from-to list, pipes with bends, elbows and cut lengths, and the BOM by length.
+FreeCAD core has nothing of it. You chose to build our own Routing workspace rather than bundle the Cables
+add-on (LGPL v3, alpha, built for BIM installations on Draft's Wire and BIM's Pipe), so the routing objects share
+Keystone's panels, the part-properties schema, the vault BOM and the section and interference checks. The
+objects are plain \code{Part::FeaturePython} with Python proxies in \file{bruceworx\_routing.py}; the geometry
+and the tables are FreeCAD-free in \file{bruceworx/routing.py} with unit tests.
+
+\paragraph{The model.} One path, several things on it.
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l>{\hsize=1.15\hsize}X>{\hsize=0.85\hsize}X@{}}
+\toprule
+Object & Properties & Shape\\
+\midrule
+RoutePath & points in the document frame, each optionally \emph{attached} to a vertex, hole centre, LCS or face of a
+  part (it follows the part); mode Spline or Polyline-with-arcs; bend radius; minimum bend radius; read-only
+  Length, Bends, BendOK & a wire: B-spline through the points, or straight runs joined by tangent arcs\\
+Wire & path, gauge (AWG or mm$^2$), insulation OD, colour, signal, from/to connector and pin, slack \%, read-only
+  Length and Mass & a circle swept along the path\\
+Bundle & path, the wires in it, read-only OD and Length & the wires, drawn together\\
+Pipe (tube) & path, OD and wall or a nominal size, material, centreline bend radius (default $2\,\text{OD}$),
+  read-only CutLength and BendTable & an annulus swept along the path\\
+Hose & path, ID, OD, minimum bend radius (default $6\,\text{OD}$), slack \%, read-only Length, BendOK & the same\\
+\bottomrule
+\end{tabularx}
+\end{center}
+The \emph{Routing} tab of the Design workspace has three groups: Path (Route Path, Add Point, Clip), Items
+(Wire, Pipe, Hose, Bundle), Reports (From-to list, Cut list). The Route Path panel (figure~\ref{fig:routing-mock})
+takes points by clicking in the 3D view, keeps them in an ordered list, shows the length and the bend check live,
+and previews the wire.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,font=\sffamily\scriptsize]
+  % panel
+  \draw[rounded corners=2mm, fill=white, draw=black!25] (0,0) rectangle (70,78);
+  \node[anchor=west, font=\sffamily\small\bfseries] at (3,73.5) {Route Path};
+  \node[anchor=east, text=black!55] at (67,73.5) {Motor harness};
+  \draw[black!15] (0,70) -- (70,70);
+  \node[anchor=west, text=black!55] at (3,66) {Mode};
+  \draw[rounded corners=0.8mm, draw=black!30] (20,63.5) rectangle (67,68.5);
+  \node[anchor=west] at (22,66) {Polyline with bends}; \node[anchor=east, text=black!45] at (65,66) {$\blacktriangledown$};
+  \node[anchor=west, text=black!55] at (3,59) {Bend radius};
+  \draw[rounded corners=0.8mm, draw=black!30] (36,56.5) rectangle (67,61.5); \node[anchor=east] at (65,59) {12.0 mm};
+  \node[anchor=west, text=black!55] at (3,52) {Minimum};
+  \draw[rounded corners=0.8mm, draw=black!30] (36,49.5) rectangle (67,54.5); \node[anchor=east] at (65,52) {8.0 mm};
+  \draw[black!15] (0,46) -- (70,46);
+  \node[anchor=west, font=\sffamily\scriptsize\bfseries] at (3,42.5) {Points (click in the view)};
+  \node[anchor=west] at (5,38) {1 \ Motor connector J1 \ \textcolor{black!50}{(face centre)}};
+  \node[anchor=west] at (5,34) {2 \ Clip A \ \textcolor{black!50}{(LCS)}};
+  \node[anchor=west] at (5,30) {3 \ Clip B \ \textcolor{black!50}{(LCS)}};
+  \fill[bwblue!14, rounded corners=0.6mm] (3,24.2) rectangle (67,28.2);
+  \node[anchor=west] at (5,26.2) {4 \ Board J3 pin 1 \ \textcolor{black!50}{(hole centre)}};
+  \node[anchor=west, text=black!45] at (5,21) {$\uparrow\ \downarrow$ reorder \quad $\times$ remove};
+  \draw[black!15] (0,18) -- (70,18);
+  \node[anchor=west] at (3,14) {Length}; \node[anchor=east] at (67,14) {\textbf{186.4 mm}};
+  \node[anchor=west] at (3,10) {Bends}; \node[anchor=east] at (67,10) {2, smallest 12.0 mm};
+  \node[anchor=west] at (3,6) {Check}; \node[anchor=east, text=bwgreen] at (67,6) {\textbf{OK}};
+  % the route
+  \begin{scope}[xshift=80mm]
+    \draw[black!20, fill=black!4] (0,10) rectangle (50,16);   % bracket
+    \draw[black!20, fill=black!4] (2,16) rectangle (14,30);   % motor
+    \node[text=black!50] at (8,23) {motor};
+    \draw[black!20, fill=black!4] (36,16) rectangle (50,24);  % board
+    \node[text=black!50] at (43,20) {board};
+    % path: P1 (14,24) -> P2 (24,24) -> corner -> (24,34) -> P3 (34,34)-> corner -> (44,24)? simplified L-shapes
+    \fill[bwblue] (14,24) circle (0.9); \node[anchor=south, text=bwblue] at (14,25) {1};
+    \fill[bwblue] (24,24) circle (0.9); \node[anchor=south, text=bwblue] at (24,25) {2};
+    \fill[bwblue] (24,36) circle (0.9); \node[anchor=south, text=bwblue] at (24,37) {3};
+    \fill[bwblue] (43,36) circle (0.9); \node[anchor=south, text=bwblue] at (43,37) {4};
+    \draw[bwred, very thick] (14,24) -- (20,24) arc[start angle=270, end angle=360, radius=4] -- (24,32)
+         arc[start angle=180, end angle=90, radius=4] -- (43,36);
+    \draw[black!40, dashed] (20,24) -- (24,24) -- (24,28);
+    \node[anchor=west, text=black!55] at (25,29) {$R$};
+    \draw[black!40, dashed] (24,32) -- (24,36) -- (28,36);
+    \node[anchor=north west, text=black!55] at (25,33.5) {$t=R\tan\frac{\theta}{2}$};
+    \node[anchor=west, text=black!55] at (2,4) {red: the centreline, two $90^\circ$ bends of radius $R$ at points 2 and 3};
+  \end{scope}
+\end{tikzpicture}
+\caption{The Route Path panel (left) and the path it makes (right): four picked points, straight runs joined by
+tangent arcs. The corner points stay the design intent; the arcs are derived, so changing the bend radius or
+moving the motor re-routes the wire.}
+\label{fig:routing-mock}
+\end{figure}
+
+\paragraph{Theory: the centreline.} A route is a space curve $\mathbf r(s)$ through the picked points
+$\mathbf p_0,\dots,\mathbf p_n$.
+\begin{enumerate}
+  \item \textbf{Spline mode} (wires, hoses): a cubic B-spline interpolating the points with centripetal
+        parametrisation ($\Delta u_i=\|\mathbf p_{i+1}-\mathbf p_i\|^{1/2}$), which avoids the loops and overshoot of
+        uniform parametrisation on unevenly spaced points. Its curvature
+        $\kappa=\|\mathbf r'\times\mathbf r''\|/\|\mathbf r'\|^3$ is sampled along the curve; the tightest bend
+        is $R_{\min}=1/\kappa_{\max}$ and the check is $R_{\min}\ge R_{\text{allowed}}$. Length is
+        $L=\int\|\mathbf r'\|\,du$ by Gauss quadrature per span (OCC's \code{GCPnts\_AbscissaPoint} gives the same).
+  \item \textbf{Polyline with bends} (tubes, pipes, stiff cable): straight runs $\mathbf p_{i-1}\mathbf p_i$ with a
+        tangent arc of radius $R$ at each interior point. With the turn angle $\theta_i$ between consecutive runs,
+        the arc starts and ends a \emph{tangent length} $t_i=R\tan(\theta_i/2)$ before and after the corner,
+        and has length $R\,\theta_i$. The straight between two bends is $\ell_i-t_i-t_{i+1}$ and must be
+        $\ge0$ (else the two bends overlap and the path is flagged). The developed, or cut, length is
+        \[
+          L_{\text{cut}}=\sum_i \ell_i-\sum_i 2t_i+\sum_i R\,\theta_i ,
+        \]
+        which is what a tube bender needs (a straight tube of $L_{\text{cut}}$ becomes the routed shape without
+        stretch, neglecting the small bend elongation that bender tables absorb).
+  \item \textbf{The bend table (LRA).} For a bender the route is described bend by bend: \emph{L}, the length fed
+        from the previous bend's end tangent to this bend's start tangent (the straight above); \emph{R}, the rotation
+        of the tube about its own axis between the two bend planes, the signed dihedral angle between the planes
+        $(\mathbf d_{i-1},\mathbf d_i)$ and $(\mathbf d_i,\mathbf d_{i+1})$ where $\mathbf d$ are the run directions,
+        $R_i=\operatorname{atan2}\big((\mathbf n_{i-1}\times\mathbf n_i)\cdot\mathbf d_i,\ \mathbf n_{i-1}\cdot\mathbf n_i\big)$
+        with $\mathbf n_i=\mathbf d_i\times\mathbf d_{i+1}$ normalised; and \emph{A}, the bend angle $\theta_i$.
+        A planar route has $R=0$ or $180^\circ$ throughout.
+\end{enumerate}
+
+\paragraph{Theory: wires.} The AWG gauge $n$ gives the conductor diameter
+$d=0.127\cdot92^{(36-n)/39}$\,mm (so 22\,AWG is 0.644\,mm, 18\,AWG 1.024\,mm) and area $A=\pi d^2/4$; metric wire
+is given by area directly (0.34, 0.5, 0.75, 1.0, 1.5, 2.5\,mm$^2$). A wire's length is the path length plus slack
+(5\,\% by default, for service loops and termination), its mass $m=\rho_{\text{Cu}}\,A\,L+m'_{\text{ins}}L$
+with $\rho_{\text{Cu}}=8.96$\,g/cm$^3$ and an insulation estimate from the OD. Bundles add their wires' areas
+with a packing factor: $\text{OD}_{\text{bundle}}\approx1.15\sqrt{\sum \text{OD}_k^2}$ for a few wires.
+Hoses are checked like spline wires against a minimum bend radius (manufacturer's figure; $6\,\text{OD}$ as the
+default for a braided hydraulic hose, $3\,\text{OD}$ for silicone tubing), with slack added the same way.
+
+\begin{epic}{ROU-01}{Route path \& bend check}{M5}{\stProg}{(new, 27 Oct)}
+The RoutePath object and panel above, both modes, attachments that follow their parts, the length and the bend
+check, the LRA table. \emph{Acceptance:} a path through four picked points reports its length within 0.1\,mm of
+the hand calculation and flags a bend under the minimum radius; a tube bender's LRA table for a three-bend tube
+matches the hand calculation.
+\end{epic}
+
+\begin{epic}{ROU-02}{Electrical wires \& harness}{M5}{\stProg}{(new, 27 Oct)}
+Wires and bundles on a path with gauge, colour, signal, from-to, slack, length and mass, and the \textbf{from-to
+list} (CSV: wire, signal, gauge, colour, from, to, length). \emph{Acceptance:} a three-wire motor harness lists each
+wire's length and from-to in the CSV; the BOM shows it by length.
+\end{epic}
+
+\begin{epic}{ROU-03}{Pipes, tubes \& hoses}{M5}{\stProg}{(new, 27 Oct)}
+Pipe/tube with OD and wall or nominal size, centreline bend radius, cut length and bend table; hose with ID/OD,
+minimum bend radius, slack and the warning; the \textbf{cut list} (CSV: item, size, cut length, bend table).
+\emph{Acceptance:} a three-bend tube's cut length and LRA table match the hand calculation; a hose bent under its
+minimum radius is flagged.
+\end{epic}
+
+\begin{epic}{ROU-04}{Routed items in the BOM \& drawings}{M5}{\stTodo}{(new, 27 Oct)}
+\code{QuantityUnit} and \code{QuantityPer} in the part-properties schema (m for wires and tubes), read by the
+assembly BOM and the vault BOM, which was deferred in \S\ref{sec:pdm06-plan} ``until the first harness needs it''.
+Later: a flattened harness drawing (nail board) and a tube drawing with the bend table (\eref{DRW-02}).
+\emph{Acceptance:} the gearbox-plus-harness BOM shows ``Wire 22\,AWG red, 0.42\,m'' as one line.
+\end{epic}
+
+\paragraph{Out of scope for now.} Auto-routing (shortest path avoiding parts), fittings libraries (elbows,
+tees, flanges placed automatically), connector libraries with pin maps, and harness flattening. They come back as
+epics when the first real harness or plumbing job asks for them.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=R\arabic*.]
+  \item \textbf{Gauge default.} AWG (your motors and boards) or mm$^2$ (metric suppliers) as the default in the
+        Wire panel?\\
+        \emph{Recommendation:} AWG, with mm$^2$ one click away and both printed in the from-to list.
+  \item \textbf{Bend radius defaults.} Tube $2\times$OD (a typical mandrel bender), hose $6\times$OD, wire
+        $4\times$OD. Keep these, or add a per-vault table (materials settings, \S\ref{sec:pdm11-plan})?\\
+        \emph{Recommendation:} keep the defaults now; a per-material minimum bend radius joins the materials table
+        when \eref{PDM-11} gets stock forms.
+  \item \textbf{Clips.} A Clip is just an LCS on a part today. Should it be its own object with an inner diameter
+        that checks the bundle fits through it?\\
+        \emph{Recommendation:} yes, in \eref{ROU-04}'s second half; the LCS is enough to route with.
+  \item \textbf{Wires in the BOM.} One line per wire, or one line per gauge and colour with the total length
+        (what a purchasing BOM wants)?\\
+        \emph{Recommendation:} per wire in the indented BOM, per gauge and colour in the flattened one.
+  \item \textbf{Where routes live.} Inside the assembly file (SolidWorks makes a route sub-assembly), or as its own
+        vault item linked to the assembly (a harness part number, class \emph{harness} from \S\ref{sec:pdm08-plan})?\\
+        \emph{Recommendation:} its own item with a harness P/N, since it is bought and built separately.
+\end{enumerate}
+
+\InputIfFileExists{chapters/73-routing-built}{}{}

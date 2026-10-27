@@ -51,8 +51,14 @@ In-context editing & \pfull & \pfull & \phalf & \code{SubShapeBinder} & ASM-07\\
 Large-assembly mode & \phalf & \pfull & \pnone & no lightweight mode found & ASM-08\\
 Smart fasteners & \phalf† & \pfull & \pnone & --- & ASM-09\\
 Standard-parts library & \pfull & \pfull & \padd & Fasteners add-on & MOD-05\\
-Kinematic motion & \pfull & \pfull & \pfull & \code{Assembly\_CreateSimulation} (1.1) & ROB-05\\
+Kinematic motion & \pfull & \pfull & \phalf & \code{Assembly\_CreateSimulation} (1.1); no keyframe study, drive or link UI (building, 27 Oct) & ROB-05\\
 Dynamic motion & \phalf & \pfull & \pnone & solver dynamics not exposed & ASM-10\\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Routing}}\\
+Route path with bend radius & \pnone & \pfull & \pnone & none in core; Cables add-on (alpha) for BIM & ROU-01\\
+Electrical wires \& harness & \pnone & \pfull & \padd & Cables add-on (LGPL, alpha, BIM-based) & ROU-02\\
+Pipes, tubes \& hoses & \pnone & \pfull & \padd & Dodo/Flamingo add-ons (old) & ROU-03\\
+Routed items by length in BOM & \pnone & \pfull & \pnone & BOM counts only & ROU-04\\
 \midrule
 \multicolumn{6}{@{}l}{\textbf{Simulation}}\\
 Linear static & \pfull & \pfull & \pfull & CalculiX \code{static} & SIM-01\\

@@ -1,0 +1,59 @@
+%======================================================================
+\section{Session of 27 October 2026: motion, routing, simulation}\label{sec:session-27oct}
+%======================================================================
+
+You asked for three things at once: ``motion joints in assemblies, wire routing for electrical wires and
+pipes/hoses, and lets start working through the simulation module and interface'', with the roadmap updated as
+the work goes and questions asked first. One question round settled the scope; the answers are below. Three
+agents build in parallel while the plan sections are written, so each epic has a \emph{plan} subsection (the
+design, the theory and the open questions) and a \emph{Built} subsection that the agent appends when it finishes.
+
+\paragraph{What was found before asking.}
+\begin{itemize}
+  \item \textbf{Motion.} FreeCAD 1.1.4's Assembly already has 13 joint types, four of which are motion links
+        (Gears, Belt, Rack and pinion, Screw), and a kinematic \emph{Simulation} (\code{Assembly\_CreateSimulation}):
+        one Motion per joint with a formula in \code{time}, solved by the Ondsel solver, scrubbed with a slider.
+        Keystone's ribbon showed six joint commands; the other seven and the simulation were in the Assemble
+        group's \emph{more} list. What Fusion adds is the user-facing layer: the Motion Study timeline with
+        keyframes, Drive Joints, Motion Links by ratio, contact sets.
+  \item \textbf{Routing.} Nothing in the roadmap and nothing in FreeCAD core. Fusion has no routing; SolidWorks
+        Routing (electrical, piping, tubing) is the parity target. The \emph{Cables} add-on (sargo-devel, LGPL v3,
+        0.4.0 of 26 Oct 2026, FreeCAD 1.0+) models wires, connectors and bundles on BIM's Pipe and Draft's Wire,
+        and calls itself alpha. Pipes and hoses have only the old Dodo/Flamingo tools.
+  \item \textbf{Simulation.} CalculiX 2.23 is in the development environment (\file{pixi.toml}) but
+        \textbf{not in Keystone.app}; Netgen is built in; gmsh is absent. The ribbon's Simulation workspace was the
+        stock FEM toolbars. \eref{SIM-01}--\eref{SIM-05} had the theory of \S\ref{sec:sim} and no plan or code.
+\end{itemize}
+
+\paragraph{Your decisions (27 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Motion & \textbf{Kinematic first}: Motion Study timeline (keyframes per joint, play, loop, ping-pong, speed,
+  frame export), Drive Joint, Motion Link by ratio, all 13 joint types on the ribbon, built on the existing
+  kinematic Simulation. Dynamics (gravity, forces, contact) stays \eref{ASM-10}, planned after. Epic \eref{ROB-05};
+  plan \S\ref{sec:motion-plan}.\\
+Routing & \textbf{Our own Routing workspace}, not the Cables add-on: a route path through picked points with a
+  bend-radius check, feeding wire, pipe and hose objects; lengths flow to the BOM; from-to list and cut list.
+  SolidWorks-Routing scope with the Fusion-style UI. New track \textbf{ROU} (\eref{ROU-01}--\eref{ROU-04});
+  plan \S\ref{sec:rou}.\\
+Simulation & \textbf{Static stress end to end} first: study wizard, Netgen mesh, CalculiX bundled in Keystone,
+  safety-factor field, report, cantilever benchmark. Modal, buckling and thermal follow on the same frame.
+  Epic \eref{SIM-01}; plan \S\ref{sec:sim01-plan}.\\
+Process & \textbf{Build while you review}: the plan sections are written in parallel with the agents, which
+  start on the parts that need no decision. Your answers to the question tables steer the rest.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Who builds what.} Agent \emph{motion}: \eref{ROB-05} (Built: \S\ref{sec:motion-built} when it lands).
+Agent \emph{routing}: \eref{ROU-01}--\eref{ROU-04} (\S\ref{sec:routing-built}). Agent \emph{sim}: \eref{SIM-01}
+(\S\ref{sec:sim01-built}). The main session writes the plans, keeps the roadmap tables current and stages
+Keystone at the end. The tree still carries another session's uncommitted edits (right panel overflow, section
+viewer cut, project library vault); they are neither staged nor reverted, see \S\ref{sec:session-25oct}.
+
+\paragraph{Next.} When the three land: \eref{ASM-10} dynamics spike (the Ondsel solver's \code{ASMTSimulationParameters}
+already describes a dynamic run), \eref{SIM-02}--\eref{SIM-04} on the static frame, \eref{ROU-04} in the drawings
+(flattened harness, tube drawing with bend table), and the question tables of \S\ref{sec:motion-plan},
+\S\ref{sec:rou} and \S\ref{sec:sim01-plan}.
