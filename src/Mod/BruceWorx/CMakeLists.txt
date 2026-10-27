@@ -33,6 +33,8 @@ SET(BruceWorx_SRCS
     bruceworx_pattern_gui.py
     bruceworx_section.py
     bruceworx_slots.py
+    bruceworx_routing.py
+    TestBruceWorxRoutingCore.py
     bruceworx_studio.py
     bruceworx_toolbars.py
     bruceworx_groups.py

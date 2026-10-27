@@ -47,6 +47,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/product_tree.py
     bruceworx/project_setup.py
     bruceworx/hardware.py
+    bruceworx/routing.py
     config/document_types.json
     config/numbering.example.json
     config/part_properties.json
@@ -103,6 +104,7 @@ INSTALL(
         bruceworx/product_tree.py
         bruceworx/project_setup.py
         bruceworx/hardware.py
+        bruceworx/routing.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )
 INSTALL(
