@@ -250,5 +250,121 @@ def _synthetic_board(folder):
     return path
 
 
+@unittest.skipUnless(HAVE_KICAD, "KiCad not installed")
+class TestVaultItem(unittest.TestCase):
+    """ECD-05: a KiCad project in a Standard Libraries vault, its 3D model and Open in KiCad."""
+
+    @classmethod
+    def setUpClass(cls):
+        from bruceworx import ecad_vault as ev
+        from bruceworx import pdm_workspace as ws
+        from bruceworx import vault_setup as vs
+
+        cls.ev = ev
+        cls.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-board-item-"))
+        cls.old_cache = os.environ.get(kb.CACHE_ENV)
+        os.environ[kb.CACHE_ENV] = os.path.join(cls.tmp, "cache")
+        src = os.path.join(cls.tmp, "src", "Arduino_Mega")
+        shutil.copytree(os.path.join(kb.TEMPLATE_DIR, "Arduino_Mega"), src)
+        setup = vs.VaultSetup(name="Standard Libraries", folder=os.path.join(cls.tmp, "Vault", "Standard Libraries"))
+        setup.numbering.programs = [vs.ProgramSetup("STD", "Standard parts")]
+        cls.vault = vs.create_vault(setup, actor="bruce@mac")
+        cls.work = ws.Workspace(cls.vault)
+        cls.result = ev.import_project(cls.vault, src, "Arduino Mega template", description="Arduino Mega shield",
+                                       manufacturer="Arduino", value="Mega", workspace=cls.work)
+        cls.pn = cls.result.part_number
+        cls.folder = cls.work.path(cls.pn)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.old_cache is None:
+            os.environ.pop(kb.CACHE_ENV, None)
+        else:
+            os.environ[kb.CACHE_ENV] = cls.old_cache
+        for dirpath, dirnames, filenames in os.walk(cls.tmp):
+            for name in dirnames + filenames:
+                try:
+                    os.chmod(os.path.join(dirpath, name), 0o755)
+                except OSError:
+                    pass
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def tearDown(self):
+        for name, doc in list(App.listDocuments().items()):
+            if (doc.FileName or "").startswith(self.tmp) or name.startswith(("STD_", "ItemInsert")):
+                App.closeDocument(name)
+
+    def test_item_model(self):
+        ev = self.ev
+        values = bb.item_values(self.vault, self.pn, self.folder)
+        self.assertEqual(values["Description"], "Arduino Mega shield")
+        self.assertEqual((values["Revision"], values["ItemType"], values["Manufacturer"]), ("01", "cots", "Arduino"))
+        path = ev.derived_path(self.folder, self.pn)
+        doc = bb.build_item_model(self.folder, self.pn, values, path)
+        self.assertEqual(doc.FileName, path)
+        self.assertEqual(doc.Label, self.pn)
+        self.assertFalse(os.access(path, os.W_OK), "the 3D model is read-only on disk")
+        part = next(o for o in doc.Objects if o.TypeId == "App::Part" and "BoardSource" in o.PropertiesList)
+        self.assertEqual((part.PartNumber, part.Revision, part.Label), (self.pn, "01", "Arduino Mega shield"))
+        self.assertEqual((part.Manufacturer, part.Value, part.ItemType), ("Arduino", "Mega", "cots"))
+        self.assertEqual(part.BoardSource, os.path.join(self.folder, "Arduino_Mega.kicad_pcb"))
+        group = doc.getObject(bb.ELECTRICAL_GROUP)
+        kinds = {o.KiCadKind: o for o in group.Group}
+        self.assertEqual(sorted(kinds), ["board", "project", "schematic"])
+        self.assertEqual(bb.kicad_file_path(kinds["schematic"]), os.path.join(self.folder, "Arduino_Mega.kicad_sch"))
+        # the model is not part of the vault item: the work copy is still the version checked in
+        self.assertEqual(self.work.status(self.pn).code, "up_to_date")
+        stamp = ev.derived_stamp(self.folder, dict(values, recipe=bb.ITEM_RECIPE))
+        self.assertFalse(ev.derived_fresh(self.folder, self.pn, stamp))
+        ev.record_derived(self.folder, self.pn, stamp)
+        self.assertTrue(ev.derived_fresh(self.folder, self.pn, stamp))
+        self.assertNotEqual(ev.derived_stamp(self.folder, dict(values, Revision="02", recipe=bb.ITEM_RECIPE)), stamp)
+
+    def test_insert_board_from_the_vault_takes_the_part_number(self):
+        doc = App.newDocument("ItemInsert")
+        part = bb.insert_board(os.path.join(self.folder, "Arduino_Mega.kicad_pcb"), doc=doc, mass_table={})
+        self.assertEqual((part.PartNumber, part.Description), (self.pn, "Arduino Mega shield"))
+
+    @unittest.skipUnless(App.GuiUp, "needs the GUI")
+    def test_open_from_vault_and_in_kicad(self):
+        import bruceworx_board_gui as bg
+        import bruceworx_vaultclient as vc
+        import FreeCADGui as Gui
+
+        App.ParamGet(vc.ACTORS_PATH).SetString(self.vault.ref["vault_id"], "bruce@mac")  # the importer
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        prefs.SetString("VaultPath", self.vault.ref_path)
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+        s = vc.session()
+        self.assertEqual(s.me, "bruce@mac")
+        self.assertTrue(bg.is_kicad_item(s, self.pn))
+        self.assertTrue(vc.available(bg.OPEN_KICAD_COMMAND, self.pn))
+        self.assertIn(bg.OPEN_KICAD_COMMAND, vc.CONTEXT_COMMANDS)
+        menu = vc.build_item_menu(Gui.getMainWindow(), self.pn)
+        self.assertIn("Open in KiCad", [a.text() for a in menu.actions()])
+        # Open from Vault (the Data panel's double-click): the board in 3D
+        self.assertTrue(vc.open_from_vault(self.pn, ask=False))
+        path = self.ev.derived_path(self.folder, self.pn)
+        doc = vc.document_for(path)
+        self.assertIsNotNone(doc, "the 3D model did not open")
+        self.assertIs(App.ActiveDocument, doc)
+        sch = doc.getObject("KiCadSchematic")
+        self.assertIsNotNone(sch.ViewObject.Proxy)
+        # again: the same document, not remade
+        self.assertTrue(vc.open_from_vault(self.pn, ask=False))
+        self.assertEqual(len([d for d in App.listDocuments().values() if d.FileName == path]), 1)
+        # Open in KiCad: the project in the vault's work folder (nothing is started: dry run)
+        os.environ["BW_KICAD_LAUNCH"] = "dry"
+        self.addCleanup(os.environ.pop, "BW_KICAD_LAUNCH", None)
+        self.assertTrue(bg.open_in_kicad(self.pn, "schematic", ask=False))
+        from unittest import mock
+
+        with mock.patch.object(bg, "_ask_checkout", return_value=False) as asked:  # "Open Read-Only"
+            self.assertTrue(bg.open_kicad_file(bb.kicad_file_path(sch)))
+        asked.assert_called_once()  # a WIP item nobody holds: the check-out is offered first
+        self.assertEqual(s.status(self.pn).code, "up_to_date")
+        self.assertEqual(bg.library_for(s.root), os.path.abspath(s.root))
+
 if __name__ == "__main__":
     unittest.main()

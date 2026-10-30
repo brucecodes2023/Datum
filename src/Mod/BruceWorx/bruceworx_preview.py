@@ -294,6 +294,8 @@ def needs_picture(s, pn) -> bool:
     latest = s.vault.latest_version(pn)
     if item is None or item.item_type not in KINDS or latest is None or cached(latest.sha256):
         return False
+    if not latest.filename.lower().endswith(".fcstd"):  # a KiCad project (ECD-05): KiCad's render is its picture
+        return False
     return not is_iso(thumbnail_of(os.path.join(s.vault.root, latest.object_name)))
 
 

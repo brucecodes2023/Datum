@@ -23,6 +23,12 @@ The materials are BruceWorx's own library (``Materials/Electronics``),
 registered with the Material module as a workbench library, so FreeCAD's
 upstream material folders are untouched.
 
+KiCad vault items (ECD-05): a board whose KiCad project lives in a vault item's folder
+(``bruceworx.ecad_vault``) gets that item's part number, revision and description when it is
+inserted, and :func:`build_item_model` makes the item's own 3D model: the board as above plus an
+"Electrical design" group whose schematic, board and project entries open in KiCad
+(:class:`KiCadDocument`, double-click; bruceworx_board_gui).
+
 Off switch: Preferences > BruceWorx > "KiCad boards"
 (``BaseApp/Preferences/BruceWorx/KiCadBoards``).
 """
@@ -414,6 +420,7 @@ def insert_board(path, doc=None, assembly=None, options=None, cache=None, mass_t
         if assembly is not None:
             assembly.addObject(part)
         _apply_part_schema(part, info, stem)
+        _apply_vault_item(part, path)
         doc.recompute()
     except Exception:
         doc.abortTransaction()
@@ -480,3 +487,172 @@ def _apply_part_schema(part, info, stem):
         return
     if "Description" in part.PropertiesList and not part.Description:
         part.Description = f"PCBA {info.title or stem}"
+
+
+# ---------------------------------------------------------------------------
+# KiCad vault items (ECD-05).
+
+ITEM_RECIPE = 1  # bump when build_item_model makes the 3D model differently (old ones are remade)
+ELECTRICAL_GROUP = "ElectricalDesign"
+ITEM_PROPERTIES = (  # the part's own values from keystone-part.json, beside the schema's
+    ("Manufacturer", "Manufacturer of the part (KiCad vault item)"),
+    ("ManufacturerPartNumber", "Manufacturer's part number (KiCad vault item)"),
+    ("Value", "The part's value (KiCad vault item)"),
+)
+KINDS = {".kicad_pro": "project", ".kicad_sch": "schematic", ".kicad_pcb": "board"}
+KIND_LABELS = {"project": "Project", "schematic": "Schematic", "board": "PCB"}
+
+
+def _ecad():
+    try:
+        from bruceworx import ecad_vault
+    except ImportError as exc:
+        raise RuntimeError("the BruceWorx hooks add-on is off (Preferences > BruceWorx > Hooks add-on); "
+                           "it holds the KiCad vault items") from exc
+    return ecad_vault
+
+
+def item_values(vault, pn, folder=None):
+    """The part properties of the KiCad vault item ``pn``: number, revision, state and type from
+    the vault, description and the item's own values from its keystone-part.json."""
+    item = vault.model.items[pn]
+    props = _ecad().read_properties(folder) if folder else {}
+    values = {"PartNumber": pn, "Revision": item.latest.code, "LifecycleState": item.state,
+              "ItemType": item.item_type, "Description": props.get("Description") or item.description}
+    for name, _doc in ITEM_PROPERTIES:
+        if props.get(name):
+            values[name] = str(props[name])
+    return values
+
+
+def apply_item_values(part, values):
+    """Write ``values`` (item_values) into the part's properties; the schema's first."""
+    for name, doc in ITEM_PROPERTIES:
+        if name in values:
+            _add(part, "App::PropertyString", name, doc, group="BruceWorx")
+    for name, val in values.items():
+        if name not in part.PropertiesList:
+            continue
+        if name == "LifecycleState":
+            try:
+                from bruceworx import partprops
+
+                partprops.set_state(part, val)
+            except Exception:
+                pass
+            continue
+        try:
+            setattr(part, name, val)
+        except Exception as exc:
+            App.Console.PrintWarning(f"BruceWorx board: {name} not set: {exc}\n")
+
+
+def _apply_vault_item(part, path):
+    """A board inside a KiCad vault item's folder takes that item's part number, revision and
+    description (so an assembly's BOM lists the library part)."""
+    try:
+        ev = _ecad()
+        found = ev.item_for_path(path)
+        if found is None:
+            return
+        from bruceworx.pdm_folder import FolderVault
+
+        root, _actor, pn = found
+        vault = FolderVault(root)
+        if pn in vault.model.items and ev.is_ecad(vault, pn):
+            apply_item_values(part, item_values(vault, pn, os.path.join(root, "work", _actor, pn)))
+    except Exception as exc:
+        App.Console.PrintWarning(f"BruceWorx board: vault item not read: {exc}\n")
+
+
+class KiCadDocument:
+    """A file of the board's KiCad project (project, schematic or board) in the 3D model's tree;
+    bruceworx_board_gui opens it in KiCad on a double-click."""
+
+    def __init__(self, obj, kind, path):
+        obj.addProperty("App::PropertyString", "KiCadKind", "KiCad", "project, schematic or board")
+        obj.addProperty("App::PropertyString", "KiCadFile", "KiCad",
+                        "The file, relative to the KiCad project folder")
+        obj.addProperty("App::PropertyPath", "KiCadFolder", "KiCad",
+                        "The project folder when the model was made (used when the model is not beside it)")
+        obj.KiCadKind = kind
+        obj.KiCadFile = os.path.basename(path)
+        obj.KiCadFolder = os.path.dirname(path)
+        for name in ("KiCadKind", "KiCadFile", "KiCadFolder"):
+            obj.setEditorMode(name, ["ReadOnly"])
+        obj.Proxy = self
+
+    def execute(self, obj):
+        pass
+
+    def dumps(self):
+        return None
+
+    def loads(self, _state):
+        return None
+
+
+def kicad_file_path(obj):
+    """The file a KiCadDocument stands for: in the project folder the model sits in
+    (``<project>/.keystone/<P/N>.FCStd``), else where it was when the model was made."""
+    name = getattr(obj, "KiCadFile", "")
+    file_name = getattr(obj.Document, "FileName", "") or ""
+    folder = os.path.dirname(file_name)
+    if file_name and os.path.basename(folder) == _ecad().DERIVED_DIR:
+        candidate = os.path.join(os.path.dirname(folder), name)
+        if os.path.isfile(candidate):
+            return candidate
+    return os.path.join(getattr(obj, "KiCadFolder", ""), name)
+
+
+def add_electrical_design(doc, project):
+    """The "Electrical design" group with the project's schematic, board and project file."""
+    group = doc.addObject("App::DocumentObjectGroup", ELECTRICAL_GROUP)
+    group.Label = "Electrical design (KiCad)"
+    made = []
+    for kind, path in (("schematic", project.sch), ("board", project.pcb), ("project", project.pro)):
+        if not path:
+            continue
+        obj = doc.addObject("App::FeaturePython", "KiCad" + KIND_LABELS[kind])
+        KiCadDocument(obj, kind, path)
+        obj.Label = f"{KIND_LABELS[kind]}: {os.path.basename(path)}"
+        group.addObject(obj)
+        if _gui_up():
+            try:
+                import bruceworx_board_gui
+
+                bruceworx_board_gui.ViewProviderKiCadDocument(obj.ViewObject)
+            except Exception as exc:
+                App.Console.PrintWarning(f"BruceWorx board: {obj.Label}: no view provider: {exc}\n")
+        made.append(obj)
+    return group, made
+
+
+def build_item_model(folder, pn, values, path, cli=None, cache=None):
+    """The 3D model of the KiCad vault item ``pn`` from its work folder: a new document named by
+    the P/N with the board (insert_board), the item's values (item_values) and the Electrical
+    design group, saved at ``path`` (ecad_vault.derived_path), read-only on disk. Returns the open
+    document."""
+    ev = _ecad()
+    project = ev.find_project(folder)
+    if not project.pcb:
+        raise RuntimeError(f"{pn}: the KiCad project {project.stem} has no board ({project.stem}.kicad_pcb)")
+    found = ev.item_for_path(project.pcb)
+    doc = App.newDocument(_doc_name(pn))
+    try:
+        doc.Label = pn
+        part = insert_board(project.pcb, doc=doc, cli=cli, cache=cache, vault=found[0] if found else None)
+        apply_item_values(part, values)
+        if values.get("Description"):
+            part.Label = values["Description"]
+        add_electrical_design(doc, project)
+        doc.recompute()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path):
+            os.chmod(path, 0o644)
+        doc.saveAs(path)
+        os.chmod(path, 0o444)
+    except Exception:
+        App.closeDocument(doc.Name)
+        raise
+    return doc

@@ -972,6 +972,10 @@ def open_from_vault(pn=None, ask=True):
         import bruceworx_configs_gui
 
         return bruceworx_configs_gui.open_configuration_item(pn)
+    if s.work.is_folder(pn):  # ECD-05: a KiCad project; its board opens in 3D (Open in KiCad: the project)
+        import bruceworx_board_gui
+
+        return bruceworx_board_gui.open_board_item(pn)
     path = s.work.path(pn)
     st = s.status(pn)
     doc = document_for(path)
@@ -1323,14 +1327,16 @@ def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=Tru
         pn = row["part_number"]
         if any(f[0] == pn for f in failed):
             continue
+        kicad = s.work.is_folder(pn)  # ECD-05: a KiCad project: KiCad's render is its picture, no fingerprint
         try:  # the version's thumbnail: the model in the iso view, centred (the Files tab's tooltip)
             import bruceworx_preview
 
-            bruceworx_preview.stamp_work_file(s, pn)
+            if not kicad:
+                bruceworx_preview.stamp_work_file(s, pn)
         except Exception as exc:  # noqa: BLE001 -- the picture is never a reason not to check in
             _console(f"Vault: no iso picture for {pn} ({exc})", "warn")
         extras = {}
-        for fn in CHECKIN_EXTRAS:  # PDM-09: made_from (drawings), fingerprint (parts); never a reason not to check in
+        for fn in (() if kicad else CHECKIN_EXTRAS):  # PDM-09: made_from (drawings), fingerprint (parts); never a reason not to check in
             try:
                 extras.update(fn(s, pn) or {})
             except Exception as exc:  # noqa: BLE001
