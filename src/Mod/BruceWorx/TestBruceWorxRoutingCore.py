@@ -419,6 +419,39 @@ class RoutingCoreTests(unittest.TestCase):
         metres = (160.0 + 10.0 * math.pi) / 1000.0
         self.assertEqual(rows, {hose.Label: ("1", f"{metres:.3f} m"), bolt.Label: ("1", "")})
 
+    def test_existing_bom_gets_the_length_column_on_load(self):
+        """Your 30 Oct answer: a BOM saved before the Length column gets it when its file is opened,
+        once; one whose columns were set since (Length removed on purpose) keeps them."""
+        import UtilsAssembly
+
+        asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        path = br.make_path([(0, 0, 0), (100, 0, 0)], self.doc, container=asm)
+        br.make_hose(path, inner=6.0, od=10.0, slack=0)
+        old = UtilsAssembly.getBomGroup(asm).newObject("Assembly::BomObject", "OldBOM")
+        old.columnsNames = ["Index", "Name", "Quantity"]
+        old.lengthColumnAdded = False  # as in a file from before the column (the property is not in it)
+        kept = UtilsAssembly.getBomGroup(asm).newObject("Assembly::BomObject", "KeptBOM")
+        kept.columnsNames = ["Index", "Name", "Quantity"]
+        self.assertTrue(kept.lengthColumnAdded)  # setting the columns marks it
+        self.doc.recompute()
+        folder = tempfile.mkdtemp(prefix="bw-routing-bom-")
+        try:
+            name = os.path.join(folder, "asm.FCStd")
+            self.doc.saveAs(name)
+            App.closeDocument(self.doc.Name)
+            doc = App.openDocument(name)
+            old, kept = doc.getObject("OldBOM"), doc.getObject("KeptBOM")
+            self.assertEqual(list(old.columnsNames), ["Index", "Name", "Quantity", "Length"])
+            self.assertTrue(old.lengthColumnAdded)
+            self.assertEqual(list(kept.columnsNames), ["Index", "Name", "Quantity"])
+            old.touch()
+            doc.recompute()
+            self.assertEqual(old.getContents("D1").lstrip("'"), "Length")
+            self.assertEqual(old.getContents("D2").lstrip("'"), "0.1 m")
+            App.closeDocument(doc.Name)
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+
     def test_items_follow_their_path_into_a_part(self):
         part = self.doc.addObject("App::Part", "Harness")
         part.Placement = App.Placement(V(0, 0, 10), App.Rotation())

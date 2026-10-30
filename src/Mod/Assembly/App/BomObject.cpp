@@ -21,6 +21,7 @@
  *                                                                          *
  ***************************************************************************/
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -125,6 +126,42 @@ BomObject::BomObject()
         (App::PropertyType)(App::Prop_None),
         "Only Part containers will be added. Solids like PartDesign Bodies will be ignored."
     );
+
+    // [BW] ROU-04/05: false in a file saved before the Length column existed (the property is not
+    // in it): onDocumentRestored adds the column once. Set by any change of the columns.
+    ADD_PROPERTY_TYPE(
+        lengthColumnAdded,
+        (false),
+        "Bom",
+        (App::PropertyType)(App::Prop_Hidden),
+        "The Length column was offered to this BOM (added on load to BOMs made before it existed)."
+    );
+}
+
+void BomObject::onDocumentRestored()
+{
+    Spreadsheet::Sheet::onDocumentRestored();
+    // [BW] ROU-04/05 (your 30 Oct answer): an existing BOM gets the Length column when its
+    // document is opened, once; it is regenerated with it on the next recompute.
+    if (!lengthColumnAdded.getValue()) {
+        std::vector<std::string> columns = columnsNames.getValues();
+        if (std::find(columns.begin(), columns.end(), "Length") == columns.end()) {
+            columns.emplace_back("Length");
+            columnsNames.setValues(columns);  // onChanged sets lengthColumnAdded
+        }
+        else {
+            lengthColumnAdded.setValue(true);
+        }
+    }
+}
+
+void BomObject::onChanged(const App::Property* prop)
+{
+    // [BW] ROU-04/05: the columns were set (by the panel, a script or the migration above).
+    if (prop == &columnsNames && !isRestoring() && !lengthColumnAdded.getValue()) {
+        lengthColumnAdded.setValue(true);
+    }
+    Spreadsheet::Sheet::onChanged(prop);
 }
 BomObject::~BomObject() = default;
 

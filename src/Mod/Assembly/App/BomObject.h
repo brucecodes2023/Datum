@@ -74,6 +74,10 @@ public:
     }
 
     App::DocumentObjectExecReturn* execute() override;
+    // [BW] ROU-04/05: BOMs saved before the Length column get it once on load; a change of
+    // the columns afterwards (or the panel's own) marks the BOM so a removed Length stays removed.
+    void onDocumentRestored() override;
+    void onChanged(const App::Property* prop) override;
 
     void generateBOM();
     void addObjectToBom(App::DocumentObject* obj, size_t row, std::string index);
@@ -90,6 +94,7 @@ public:
     App::PropertyBool detailSubAssemblies;
     App::PropertyBool detailParts;
     App::PropertyBool onlyParts;
+    App::PropertyBool lengthColumnAdded;  // [BW] ROU-04/05
 
     std::vector<BomDataElement> dataElements;
     std::vector<App::DocumentObject*> obj_list;
