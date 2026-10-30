@@ -198,8 +198,6 @@ ViewProviderFemMesh::ViewProviderFemMesh()
     ADD_PROPERTY(LineWidth, (1.0f));
     LineWidth.setConstraints(&floatRange);
 
-    ShapeAppearance.setDiffuseColor(Base::Color(1.0f, 0.7f, 0.0f));
-    Transparency.setValue(0);
     ADD_PROPERTY(BackfaceCulling, (true));
     ADD_PROPERTY(ShowInner, (false));
     ADD_PROPERTY(MaxFacesShowInner, (50000));
@@ -219,6 +217,13 @@ ViewProviderFemMesh::ViewProviderFemMesh()
         App::Prop_Hidden,
         "Node diffuse color array"
     );
+
+    // [BW] Set after every ADD_PROPERTY: a property change reaches the Python document observers
+    // (DocumentObserverPython::slotChangedObject asks getPropertyName), which merges this class's
+    // static property table; an ADD_PROPERTY after that throws "Cannot add static property", so no
+    // FEM mesh could be created in the GUI while any Python observer was installed (SIM-01, 27 Oct 2026).
+    ShapeAppearance.setDiffuseColor(Base::Color(1.0f, 0.7f, 0.0f));
+    Transparency.setValue(0);
 
     suppressibleExt.initExtension(this);
 

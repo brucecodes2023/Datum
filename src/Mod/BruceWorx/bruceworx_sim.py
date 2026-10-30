@@ -415,7 +415,11 @@ def new_study(doc, plan):
 
     The study type must be available (static); a planned type raises StudyError.
     """
+    import FreeCAD
     import ObjectsFem
+
+    if FreeCAD.GuiUp:
+        import FemGui  # noqa: F401 -- registers the FEM view providers before the objects exist
 
     available = {key for key, _label, ok in STUDY_TYPES if ok}
     if plan.study_type not in available:
@@ -694,12 +698,34 @@ def prepare_solve(analysis, working_dir=None, progress=None):
     return fea
 
 
+class _no_post_pipeline:
+    """The FRD import without the VTK post pipeline it adds beside each result.
+
+    A study colours the result mesh itself (bruceworx_sim_gui); the pipeline is not needed, and
+    creating a Fem::FemPostPipeline in this GUI build crashes in SoFCColorGradient::setMarkerLabel
+    (found 27 Oct 2026, every pipeline, also FEM_PostPipelineFromResult). FEM's own commands still
+    make one for whoever asks.
+    """
+
+    def __enter__(self):
+        import feminout.importCcxFrdResults as frd
+
+        self.module, self.saved = frd, frd.setupPipeline
+        frd.setupPipeline = lambda *args, **kwargs: None
+        return self
+
+    def __exit__(self, *exc):
+        self.module.setupPipeline = self.saved
+        return False
+
+
 def finish_solve(fea, progress=None):
     """Loads the results of a finished ccx run, adds the safety factor; returns the result object."""
     analysis = fea.analysis
     if progress:
         progress("Reading the results…")
-    fea.load_results()
+    with _no_post_pipeline():
+        fea.load_results()
     results = members(analysis)["results"]
     if not results:
         raise StudyError("CalculiX wrote no results (see the Report view)")

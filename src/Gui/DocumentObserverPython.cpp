@@ -216,6 +216,15 @@ void DocumentObserverPython::slotBeforeChangeObject(
 
 void DocumentObserverPython::slotChangedObject(const Gui::ViewProvider& Obj, const App::Property& Prop)
 {
+    // [BW] A view provider still under construction, or not attached to its document object yet,
+    // must not reach Python: getPyObject() here would cache a wrapper of the base class (a FEM mesh
+    // came back as ViewProviderGeometryObject) and getPropertyName() merges the class's static
+    // property table before the constructor's last ADD_PROPERTY ("Cannot add static property").
+    // Found 27 Oct 2026 (SIM-01): no FEM mesh could be made in the GUI with a Python observer installed.
+    auto vpd = dynamic_cast<const Gui::ViewProviderDocumentObject*>(&Obj);
+    if (!vpd || !vpd->getObject()) {
+        return;
+    }
     Base::PyGILStateLocker lock;
     try {
         Py::Tuple args(2);

@@ -388,3 +388,10 @@ try:
     bruceworx_motion.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx motion commands (ROB-05) were not installed: {exc}")
+
+try:
+    import bruceworx_sim_gui
+
+    bruceworx_sim_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx simulation studies were not installed: {exc}")

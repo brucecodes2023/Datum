@@ -139,6 +139,14 @@ SET(BruceWorx_SRCS
     BruceWorx_InsertFastener.svg
     BruceWorx_MarkCots.svg
     bruceworx_sim.py
+    TestBruceWorxSimCore.py
+    bruceworx_sim_gui.py
+    TestBruceWorxSimulation.py
+    BruceWorx_NewStudy.svg
+    BruceWorx_SafetyFactor.svg
+    BruceWorx_Probe.svg
+    BruceWorx_StudyReport.svg
+    BruceWorx_PreCheck.svg
     bruceworx_motion.py
     TestBruceWorxMotion.py
     BruceWorx_Joint.svg

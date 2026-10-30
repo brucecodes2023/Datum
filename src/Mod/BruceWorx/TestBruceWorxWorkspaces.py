@@ -72,13 +72,20 @@ class TestDefinition(unittest.TestCase):
         self.assertTrue(any("twice" in e for e in errors))
 
     def test_workbench_tab_has_no_group_toolbars(self):
+        cam = ws.workspace(self.defn, "Manufacture")
+        self.assertEqual(ws.tab_toolbars(cam, "Manufacture"), [])
+        self.assertEqual(ws.group_toolbars(cam), [])
+
+    def test_simulation_tab(self):
         sim = ws.workspace(self.defn, "Simulation")
-        self.assertEqual(ws.tab_toolbars(sim, "Simulation"), [])
-        self.assertEqual(ws.group_toolbars(sim), [])
+        self.assertEqual([g["caption"] for g in sim["tabs"][0]["groups"]], ["Study", "Setup", "Mesh", "Solve", "Results"])
+        self.assertIn("Simulation · Results", ws.tab_toolbars(sim, "Simulation"))
+        self.assertEqual(ws.place_of(self.defn, "BruceWorx_ShowSafetyFactor"), ("Simulation", "Simulation", "Results"))
+        self.assertIn("Mechanical Boundary Conditions and Loads", ws.replaced_toolbars(self.defn))
 
     def test_custom_toolbars_per_workbench(self):
         custom = ws.custom_toolbars(self.defn)
-        self.assertEqual(list(custom), ["PartDesignWorkbench"])
+        self.assertEqual(list(custom), ["PartDesignWorkbench", "FemWorkbench"])
         gid, name, commands = custom["PartDesignWorkbench"][0]
         self.assertEqual((gid, name), ("BW_Design_Solid_Create", "Solid · Create"))
         self.assertEqual(commands[0], "PartDesign_NewSketch")

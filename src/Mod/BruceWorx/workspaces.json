@@ -426,10 +426,106 @@
       "name": "Simulation",
       "workbench": "FemWorkbench",
       "shortcut": "Ctrl+2",
+      "replaces": [
+        "Model",
+        "Mechanical Boundary Conditions and Loads",
+        "Thermal Boundary Conditions and Loads",
+        "Electromagnetic Boundary Conditions",
+        "Fluid Boundary Conditions",
+        "Geometrical Analysis Features",
+        "Mesh",
+        "Solve",
+        "Results",
+        "Utilities"
+      ],
       "tabs": [
         {
           "name": "Simulation",
-          "toolbars": "workbench"
+          "groups": [
+            {
+              "caption": "Study",
+              "commands": [
+                "BruceWorx_NewStudy",
+                "BruceWorx_Study"
+              ],
+              "more": [
+                "FEM_Analysis",
+                "FEM_Examples"
+              ]
+            },
+            {
+              "caption": "Setup",
+              "commands": [
+                "FEM_MaterialSolid",
+                "FEM_ConstraintFixed",
+                "FEM_ConstraintForce",
+                "FEM_ConstraintPressure",
+                "FEM_ConstraintDisplacement"
+              ],
+              "more": [
+                "FEM_ConstraintSelfWeight",
+                "FEM_ConstraintContact",
+                "FEM_ConstraintTie",
+                "FEM_ConstraintSpring",
+                "FEM_ConstraintBearing",
+                "FEM_ConstraintGear",
+                "FEM_ConstraintPulley",
+                "FEM_ConstraintPlaneRotation",
+                "FEM_ConstraintTransform",
+                "FEM_ConstraintRigidBody",
+                "FEM_ConstraintCentrif",
+                "FEM_ConstraintTemperature",
+                "FEM_ConstraintHeatflux",
+                "FEM_ConstraintInitialTemperature",
+                "FEM_MaterialEditor"
+              ]
+            },
+            {
+              "caption": "Mesh",
+              "commands": [
+                "BruceWorx_StudyMesh",
+                "BruceWorx_StudyRefine"
+              ],
+              "more": [
+                "FEM_MeshNetgenFromShape",
+                "FEM_MeshGmshFromShape",
+                "FEM_MeshRegion",
+                "FEM_MeshBoundaryLayer",
+                "FEM_MeshDisplayInfo",
+                "FEM_MeshClear"
+              ]
+            },
+            {
+              "caption": "Solve",
+              "commands": [
+                "BruceWorx_StudyPreCheck",
+                "BruceWorx_SolveStudy"
+              ],
+              "more": [
+                "FEM_SolverCalculiXCcxTools",
+                "FEM_SolverControl",
+                "FEM_SolverRun"
+              ]
+            },
+            {
+              "caption": "Results",
+              "commands": [
+                "BruceWorx_ShowStress",
+                "BruceWorx_ShowDisplacement",
+                "BruceWorx_ShowSafetyFactor",
+                "BruceWorx_StudyProbe",
+                "BruceWorx_StudyReport"
+              ],
+              "more": [
+                "FEM_ResultShow",
+                "FEM_PostPipelineFromResult",
+                "FEM_PostFilterClipRegion",
+                "FEM_PostFilterContours",
+                "FEM_PostFilterDataAtPoint",
+                "FEM_ResultsPurge"
+              ]
+            }
+          ]
         }
       ]
     },

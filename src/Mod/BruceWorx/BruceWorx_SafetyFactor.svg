@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <path d="M32 6 L54 14 V32 C54 46 44 55 32 59 C20 55 10 46 10 32 V14 Z" fill="#3cb371" stroke="#1f7a46" stroke-width="3"/>
+  <path d="M32 6 L54 14 V32 C54 40 50 47 44 52 L32 32 Z" fill="#d9534f" opacity="0.9"/>
+  <text x="32" y="40" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" fill="#fff" text-anchor="middle">SF</text>
+</svg>
