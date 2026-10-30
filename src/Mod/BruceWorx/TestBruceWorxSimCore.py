@@ -700,5 +700,55 @@ class TestModalBenchmarks(unittest.TestCase):
                                  f"(beta L 4.7300), {100 * error:.2f} %\n")
 
 
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestBucklingBenchmarks(unittest.TestCase):
+    """SIM-05: the Euler column, reversed load, the nonlinear run."""
+
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+        self.tmp = tempfile.mkdtemp(prefix="bw-buckle-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def tip_direction(self, result):
+        """The unit displacement at the free end's corner of a mode."""
+        vectors = dict(zip(result.NodeNumbers, result.DisplacementVectors))
+        nodes = result.Mesh.FemMesh.Nodes
+        tip = max(vectors, key=lambda n: nodes[n].x + 1e-6 * vectors[n].Length)
+        v = vectors[tip]
+        return v * (1.0 / v.Length)
+
+    def test_euler_column(self):
+        doc, objs, theory = eigen.column(max_size=8.0)
+        analysis = objs["analysis"]
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.buckling_rows(analysis)
+        self.assertEqual(len(rows), 4)
+        lam1 = eigen.first_factor(analysis)
+        self.assertTrue(rows[0]["first"])
+        self.assertLess(abs(lam1 - theory["lambda1"]) / theory["lambda1"], 0.03, (lam1, theory))
+        self.assertEqual(rows[0]["status"], "amber")  # 1.73: between 1 and the target 3
+        first = self.tip_direction(rows[0]["result"])
+        same = max(rows[1:], key=lambda r: abs(first.dot(self.tip_direction(r["result"]))) * (r["factor"] > lam1 * 2))
+        ratio = same["factor"] / lam1
+        self.assertLess(abs(ratio - 9.0) / 9.0, 0.03, ratio)
+        out = sim.write_report(analysis, folder=self.tmp, compile=False)
+        with open(out["tex"], encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("non-conservative", text)
+        self.assertIn(r"$\lambda_1=$", text)
+        App.Console.PrintMessage(f"\n[Euler column] lambda1 {lam1:.4f} vs {theory['lambda1']:.4f}, "
+                                 f"same-plane ratio {ratio:.3f}\n")
+        # the load reversed: tension only, no positive factor
+        load = [o for o in analysis.Group if o.Name == "TipLoad"][0]
+        load.Reversed = False
+        doc.recompute()
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.buckling_rows(analysis)
+        self.assertTrue(rows and all(r["factor"] < 0 for r in rows), rows)
+        self.assertIsNone(eigen.first_factor(analysis))
+        self.assertTrue(all(r["status"] == "grey" and not r["first"] for r in rows))
+
+
 if __name__ == "__main__":
     unittest.main()
