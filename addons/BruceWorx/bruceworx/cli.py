@@ -142,12 +142,15 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--manufacturer", default=None, help="kicad-import, kicad-update: the part's manufacturer")
     vault.add_argument("--mpn", default=None, help="kicad-import, kicad-update: the manufacturer's part number")
     vault.add_argument("--value", default=None, help="kicad-import, kicad-update: the part's value")
+    vault.add_argument("--exclude", action="append", default=[], metavar="PATTERN",
+                       help="kicad-import, kicad-update: leave out files or folders of the project (a glob on the "
+                            "relative path, or a folder name such as build); repeat for more")
     vault.add_argument("--no-render", action="store_true",
                        help="kicad-import: no KiCad render as the thumbnail (faster; no kicad-cli needed)")
     vault.add_argument("--checkout", action="store_true", help="kicad-open: check the item out first, to edit it")
     vault.add_argument("--dry-run", action="store_true",
-                       help="import: show the plan, change nothing; settings --import: check only; "
-                            "approve, retire: show the checklist, change nothing")
+                       help="import, kicad-import: show the plan, change nothing; settings --import: check only; "
+                            "approve, retire: show the checklist, change nothing; kicad-open: do not start KiCad")
     # settings: the vault's programs, document types and company properties as one CSV file.
     vault.add_argument("--export", dest="export_csv", default="", help="settings: write the tables to this CSV")
     vault.add_argument("--import", dest="import_csv", default="",
@@ -436,11 +439,23 @@ def _vault_kicad(vault, args, payload) -> int:
     if args.action == "kicad-import":
         if not args.source_folder:
             raise ValueError("vault kicad-import needs --from <KiCad project folder>")
+        if args.dry_run:
+            plan = ecad_vault.plan_import(vault, args.source_folder, args.description, args.program,
+                                          exclude=args.exclude)
+            payload.update(plan, dry_run=True)
+            print(f"would import {plan['project']} as {plan['part_number']}: {plan['description']} "
+                  f"({len(plan['files'])} files, {plan['size'] / 1e6:.1f} MB)", file=sys.stderr)
+            for name in plan["files"]:
+                print(f"  {name}", file=sys.stderr)
+            for model in plan["missing_models"]:
+                print(f"warning: 3D model not found: {model}", file=sys.stderr)
+            emit(payload)
+            return 0
         result = ecad_vault.import_project(
             vault, args.source_folder, args.comment, description=args.description,
             manufacturer=args.manufacturer or "", mpn=args.mpn or "", value=args.value or "",
             program=args.program, item_type=args.type or ecad_vault.DEFAULT_ITEM_TYPE, workspace=work,
-            render=not args.no_render)
+            render=not args.no_render, exclude=args.exclude)
         payload.update(result.as_dict())
         for line in result.warnings:
             print(f"warning: {line}", file=sys.stderr)
@@ -456,7 +471,7 @@ def _vault_kicad(vault, args, payload) -> int:
             raise ValueError("vault kicad-update needs --from <KiCad project folder>")
         version = ecad_vault.update_project(work, args.pn, args.source_folder, args.comment,
                                             description=args.description or None, manufacturer=args.manufacturer,
-                                            mpn=args.mpn, value=args.value)
+                                            mpn=args.mpn, value=args.value, exclude=args.exclude)
         payload.update(sha256=version.sha256, revision=version.revision, work_copy=work.path(args.pn))
         emit(payload)
         return 0
@@ -472,7 +487,8 @@ def _vault_kicad(vault, args, payload) -> int:
     target = ecad_vault.editor_file(project, which) if which in project.files else os.path.join(
         project.folder, args.file)
     st = work.status(args.pn)
-    payload.update(opened=target, command=ecad_vault.launch(target), status=st.code, writable=st.writable)
+    command = ecad_vault.launch_command(target) if args.dry_run else ecad_vault.launch(target)
+    payload.update(opened=target, command=command, status=st.code, writable=st.writable)
     emit(payload)
     return 0
 

@@ -97,6 +97,12 @@ class TestFolder(Base):
         self.assertEqual(files, ["3dmodels/r.step", "Tiny.kicad_pcb", "Tiny.kicad_pro", "Tiny.kicad_sch",
                                  "scripts/gen.py"])
 
+    def test_exclude(self):
+        self.assertEqual(ev.project_files(self.src, ["scripts", "*.step"]),
+                         ["Tiny.kicad_pcb", "Tiny.kicad_pro", "Tiny.kicad_sch"])
+        self.assertTrue(ev.excluded("build/x/y.log", ["build/"]))
+        self.assertFalse(ev.excluded("buildings.txt", ["build"]))
+
     def test_find_project(self):
         project = ev.find_project(self.src)
         self.assertEqual((project.stem, os.path.basename(project.pcb), os.path.basename(project.sch)),
@@ -327,13 +333,23 @@ class TestCli(Base):
         code, out = self.run_cli("vault", "kicad-update", "--vault", self.vault.root, "--pn", pn, "--from",
                                  self.src, "--comment", "Same again", "--actor", ME)
         self.assertEqual(code, 0, out)
-        with mock.patch.dict(os.environ, {ev.LAUNCH_ENV: "dry"}):
+        with mock.patch.object(ev, "launch", side_effect=AssertionError("KiCad started")):
             code, out = self.run_cli("vault", "kicad-open", "--vault", self.vault.root, "--pn", pn, "--file",
-                                     "board", "--actor", ME)
+                                     "board", "--actor", ME, "--dry-run")
         self.assertEqual(code, 0, out)
         self.assertEqual(out["opened"], os.path.join(folder, "Tiny.kicad_pcb"))
         self.assertEqual(out["status"], ws.UP_TO_DATE)
         self.assertFalse(out["writable"])
+
+    def test_kicad_import_dry_run(self):
+        code, out = self.run_cli("vault", "kicad-import", "--vault", self.vault.root, "--from", self.src, "--dry-run",
+                                 "--actor", ME, "--exclude", "scripts")
+        self.assertEqual(code, 0, out)
+        self.assertEqual((out["part_number"], out["description"]), ("STD-01-01001-001", 'Tiny "test" board'))
+        self.assertEqual(out["files"], ev.project_files(self.src, ["scripts"]))
+        self.assertEqual(out["missing_models"], ["${KIPRJMOD}/3dmodels/missing.step"])
+        self.assertEqual(FolderVault(self.vault.root).items, {})
+        self.assertFalse(os.path.exists(os.path.join(self.vault.root, "work")))
 
     def test_kicad_import_needs_a_comment(self):
         with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):

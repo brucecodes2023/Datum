@@ -84,9 +84,20 @@ def _skip_file(name: str) -> bool:
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in SKIP_FILES)
 
 
-def project_files(folder: str) -> list[str]:
+def excluded(rel: str, patterns=()) -> bool:
+    """Whether the relative path ``rel`` matches one of ``patterns`` (a glob on the path, or a
+    folder name such as ``build`` that takes everything under it)."""
+    for pattern in patterns or ():
+        pattern = pattern.strip().strip("/")
+        if pattern and (fnmatch.fnmatchcase(rel, pattern) or rel.startswith(pattern + "/")):
+            return True
+    return False
+
+
+def project_files(folder: str, exclude=()) -> list[str]:
     """The files of a KiCad project folder that belong in the vault, as sorted POSIX paths
-    relative to ``folder``. Symbolic links are left out."""
+    relative to ``folder``, less those ``exclude`` names (:func:`excluded`). Symbolic links are
+    left out."""
     out = []
     for dirpath, dirnames, filenames in os.walk(folder):
         dirnames[:] = sorted(d for d in dirnames if not _skip_dir(d)
@@ -97,7 +108,7 @@ def project_files(folder: str) -> list[str]:
             if _skip_file(name) or os.path.islink(full) or not os.path.isfile(full):
                 continue
             out.append((name if rel == "." else os.path.join(rel, name)).replace(os.sep, "/"))
-    return sorted(out)
+    return sorted(r for r in out if not excluded(r, exclude))
 
 
 @dataclass
@@ -389,8 +400,8 @@ class ImportResult:
         return dict(self.__dict__)
 
 
-def _copy_project(source: str, dest: str) -> int:
-    files = project_files(source)
+def _copy_project(source: str, dest: str, exclude=()) -> int:
+    files = project_files(source, exclude)
     for rel in files:
         target = os.path.join(dest, *rel.split("/"))
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -408,14 +419,41 @@ def _properties(project: Project, description: str, manufacturer: str, mpn: str,
     return {k: v for k, v in values.items() if v not in (None, "")}
 
 
+def plan_import(vault, source: str, description: str = "", program: str = "", document_type: str = "",
+                project_name: str = "", exclude=()) -> dict:
+    """What :func:`import_project` would do, without writing anything: the part number it would take,
+    the description, the files it would copy and the 3D models the board names that are not found."""
+    from bruceworx import numbering, pdm, vault_setup  # noqa: PLC0415
+    from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
+
+    source = os.path.abspath(os.path.expanduser(source))
+    if os.path.isfile(source):
+        project_name = project_name or source
+        source = os.path.dirname(source)
+    project = find_project(source, project_name)
+    numbers = JsonNumberSource(vault_setup.numbering_path(vault.root))
+    programs = numbers.programs()
+    program = numbering.normalize_program(program) if program else (programs[0] if programs else "")
+    types = vault_setup._vault_document_types(numbers, numbers._load())
+    code = (numbering.normalize_document_type(document_type) if document_type
+            else vault_setup.document_type_for("part", types))
+    files = project_files(source, exclude)
+    return {"part_number": pdm.strip_revision(numbers.preview(program, code)) if program else "",
+            "description": (description or "").strip() or title_of(project) or project.stem,
+            "project": project.pro, "board": project.pcb, "schematic": project.sch, "files": files,
+            "size": sum(os.path.getsize(os.path.join(source, *f.split("/"))) for f in files),
+            "missing_models": [m["model"] for m in model_report(project) if not m["found"]]}
+
+
 def import_project(vault, source: str, comment: str, description: str = "", manufacturer: str = "",
                    mpn: str = "", value: str = "", program: str = "", document_type: str = "",
                    item_type: str = DEFAULT_ITEM_TYPE, project_name: str = "", workspace=None,
-                   render: bool = True, cli: str | None = None) -> ImportResult:
+                   render: bool = True, cli: str | None = None, exclude=()) -> ImportResult:
     """Number a new item, copy the KiCad project ``source`` into it and check it in (WIP 01).
 
     The source folder is only read. The copy leaves out KiCad's backups, caches and local view
-    settings (see the module doc). ``description`` defaults to the board's (or schematic's) title.
+    settings (see the module doc), and what ``exclude`` names (:func:`excluded`, e.g. ``build``).
+    ``description`` defaults to the board's (or schematic's) title.
     With ``workspace`` (a pdm_workspace.Workspace on ``vault``) the work copy is placed in the
     vault's work folder, read-only. The number is taken only once the archive exists, as for
     vault_setup.new_item. Returns an :class:`ImportResult`."""
@@ -463,7 +501,7 @@ def import_project(vault, source: str, comment: str, description: str = "", manu
     try:
         if os.path.isdir(staged):
             shutil.rmtree(staged)
-        result.files = _copy_project(source, staged)
+        result.files = _copy_project(source, staged, exclude)
         staged_project = find_project(staged, project.stem)
         write_properties(staged, _properties(staged_project, description, manufacturer, mpn, value))
         result.missing_models = [m["model"] for m in model_report(staged_project) if not m["found"]]
@@ -503,7 +541,7 @@ def import_project(vault, source: str, comment: str, description: str = "", manu
 
 def update_project(workspace, part_number: str, source: str, comment: str, description: str | None = None,
                    manufacturer: str | None = None, mpn: str | None = None, value: str | None = None,
-                   keep_checked_out: bool = False):
+                   keep_checked_out: bool = False, exclude=()):
     """Check a newer copy of a KiCad project in as the next version of ``part_number``: check it
     out (unless it is out to you already), replace the project files in the work copy with the
     source's (the part's properties are kept, the given ones changed), check in. An unchanged
@@ -525,7 +563,7 @@ def update_project(workspace, part_number: str, source: str, comment: str, descr
     for rel in project_files(folder):
         if rel != PROPERTIES_FILE:
             os.remove(os.path.join(folder, *rel.split("/")))
-    _copy_project(source, folder)
+    _copy_project(source, folder, exclude)
     changes = {"Description": description, "Manufacturer": manufacturer, "ManufacturerPartNumber": mpn,
                "Value": value}
     props = dict(old)
