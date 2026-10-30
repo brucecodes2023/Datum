@@ -119,3 +119,22 @@ study's deformed view does. Play, pause and the mode list sit in the results pan
         $\boldsymbol\psi_1$) as a later option for thin printed shells? \emph{Recommendation:} note it in
         \eref{SIM-04} and do not build it now.
 \end{enumerate}
+
+\paragraph{Your answers (30 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+M1, B2 & 8 modal modes (optional range) and 4 buckling modes by default, settable per study.\\
+M2 & Mode shapes play in the results panel \textbf{and} on the Motion Study timeline (\eref{ROB-05}), with frame export.\\
+M3 & Excitation check: motor rpm range $\times$ blade count, or a plain frequency band; stored on the study, off by default.\\
+M4 & \textbf{Prestressed modal now}: a static step with the study's loads, then the modes with stress stiffening.\\
+M5 & Free-free modal allowed; the six rigid-body modes are skipped and reported.\\
+B1 & Target buckling load factor 3 (red below 1, amber 1--3), configurable like the safety-factor bands.\\
+B3 & \textbf{Nonlinear buckling now} as an option: a geometrically nonlinear static run (\code{NLGEOM}) with an
+     imperfection seeded from $\boldsymbol\psi_1$ (amplitude settable, default 1\,\% of the smallest section
+     dimension), load stepped to the collapse point; the report plots load against displacement.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+

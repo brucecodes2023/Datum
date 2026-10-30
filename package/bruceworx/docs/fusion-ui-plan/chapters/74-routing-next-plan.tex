@@ -189,3 +189,26 @@ compensation depend on the bender and the material, so they are left out for now
   \item \textbf{Tube drawing.} YBC and XYZ tables; springback compensation later?
         \emph{Recommendation:} yes, springback later.
 \end{enumerate}
+
+\paragraph{Your answers (30 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+C1 & KiCad 3D models with pins from the footprint pads; parametric only where KiCad has none.\\
+C2 & All proposed families: JST XH/PH/GH/SH; XT30/60/90, MR30, 3.5\,mm bullet; Dupont 2.54\,mm and Molex
+     Micro-Fit 3.0; Deutsch DT.\\
+C3 & Terminals to the BOM automatically from the pin's terminal P/N.\\
+F1 & All four fitting families: push-to-connect, hose barbs, NPT/BSPP threaded, compression.\\
+F2 & A configurable minimum straight length at pins and ports.\\
+V1 & Harness container routed in context, then \emph{Make vault item}.\\
+V2 & Wire, tube, hose and sleeving are \emph{Stock material} vault items with their own P/N.\\
+V3 & Scrap allowance per stock item (default 10\,\%) and optional rounding to the purchase unit.\\
+D1 & Harness drawing not to scale, every segment dimensioned; the 1:1 formboard later.\\
+D2 & Add \textbf{wire markers/labels} (marker text per wire end) and a \textbf{continuity test table}
+     (pin-to-pin) to the listed content.\\
+D3 & Tube drawing with YBC and XYZ tables; springback compensation later.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
