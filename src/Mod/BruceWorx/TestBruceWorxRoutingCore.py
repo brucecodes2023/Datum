@@ -397,6 +397,28 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertEqual([(m["name"].split(" ")[0], m.get("unit", "")) for m in missing],
                          sorted([(hose.Label, "m"), (bolt.Label, "")], key=lambda t: [m["name"] for m in missing].index(t[0] + " (in this file)")))
 
+    def test_assembly_bom_length_column(self):
+        """ROU-04 (30 Oct): the Assembly BOM's Length column meters a hose; the path is not a line."""
+        import UtilsAssembly
+
+        asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0, container=asm)
+        hose = br.make_hose(path, inner=6.0, od=10.0, slack=0)
+        bolt = self.doc.addObject("Part::Box", "Bolt")
+        asm.addObject(bolt)
+        self.doc.recompute()
+        self.assertTrue(path.BomExclude)
+        bom = UtilsAssembly.getBomGroup(asm).newObject("Assembly::BomObject", "BOM")
+        bom.columnsNames = ["Index", "Name", "Quantity", "Length"]
+        self.doc.recompute()
+        rows = {}
+        for row in range(2, 10):
+            name = bom.getContents(f"B{row}").lstrip("'")
+            if name:
+                rows[name] = (bom.getContents(f"C{row}"), bom.getContents(f"D{row}").lstrip("'"))
+        metres = (160.0 + 10.0 * math.pi) / 1000.0
+        self.assertEqual(rows, {hose.Label: ("1", f"{metres:.3f} m"), bolt.Label: ("1", "")})
+
     def test_items_follow_their_path_into_a_part(self):
         part = self.doc.addObject("App::Part", "Harness")
         part.Placement = App.Placement(V(0, 0, 10), App.Rotation())

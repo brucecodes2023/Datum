@@ -346,6 +346,29 @@ class RoutingGuiTests(unittest.TestCase):
         finally:
             br.reset_prefs()
 
+    def test_assembly_bom_panel_has_the_length_column(self):
+        """ROU-04 (30 Oct): a new Bill of Materials lists Length by default; the path is left out."""
+        import CommandCreateBom
+
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0)
+        hose = br.make_hose(path, inner=6.0, od=10.0, slack=0)
+        self.doc.recompute()
+        Gui.Selection.clearSelection()
+        panel = CommandCreateBom.TaskAssemblyCreateBom()
+        try:
+            bom = panel.bomObj
+            self.assertEqual(list(bom.columnsNames)[-1], "Length")
+            items = [panel.form.columnList.item(i).text() for i in range(panel.form.columnList.count())]
+            self.assertIn("Length (auto)", items)
+            self.assertFalse(panel.isCustomColumn("Length (auto)"))
+            bom.recompute()
+            col = "ABCDEFG"[list(bom.columnsNames).index("Length")]
+            names = {bom.getContents(f"B{r}").lstrip("'"): bom.getContents(f"{col}{r}").lstrip("'") for r in range(2, 8)}
+            self.assertNotIn(path.Label, names)
+            self.assertEqual(names[hose.Label], f"{(160.0 + 10.0 * math.pi) / 1000.0:.3f} m")
+        finally:
+            panel.reject()
+
     def test_bundle_command(self):
         path = br.make_path([(0, 0, 0), (50, 10, 0), (100, 0, 0)], self.doc)
         wires = [br.make_wire(path, gauge="22 AWG", insulation_od=1.6) for _ in range(3)]

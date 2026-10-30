@@ -30,6 +30,9 @@ by hand makes it a fixed override. A bundle takes the strictest of its wires' ru
 unless set. ``BendRuleUsed`` says which rule gave the radius. Items saved before 30 Oct are
 migrated on load (``migrate``).
 
+The Assembly BOM (C++, ROU-04) skips a RoutePath (``BomExclude``) and its Length column prints a
+routed item's ``Quantity x QuantityPer`` with ``QuantityUnit`` ("0.42 m").
+
 A badge "bend too tight" shows in the Browser on any routed object whose ``BendOK`` is False
 (``row_badges``, registered by the GUI module).
 """
@@ -317,6 +320,8 @@ class RoutePath:
         _add(obj, "App::PropertyBool", "BendOK", "No bend tighter than MinBendRadius and every corner drawn", True, readonly=True)
         _add(obj, "App::PropertyString", "BendTable", "LRA bend table (Polyline mode): length, rotation, angle per bend", readonly=True)
         _add(obj, "App::PropertyString", "Problems", "Why BendOK is false", readonly=True)
+        _add(obj, "App::PropertyBool", "BomExclude", "Not a part: the Assembly BOM leaves it out (ROU-04)", True,
+             group="BruceWorx", hidden=True)
 
     def onDocumentRestored(self, obj):
         self.setup(obj)

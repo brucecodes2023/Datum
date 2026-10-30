@@ -22,6 +22,8 @@
  ***************************************************************************/
 
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <vector>
 
 
@@ -51,6 +53,39 @@
 
 
 using namespace Assembly;
+
+namespace
+{
+// [BW] ROU-04: the Length column of a routed item (a wire, pipe or hose: QuantityUnit "m",
+// QuantityPer its metres per occurrence): count x QuantityPer with the unit, e.g. "0.42 m".
+// Empty for a counted part (no unit). Text with a leading quote, so the sheet keeps it as typed.
+std::string bomLengthText(App::DocumentObject* obj, int count)
+{
+    auto* unit = freecad_cast<App::PropertyString*>(obj->getPropertyByName("QuantityUnit"));
+    if (!unit || std::string(unit->getValue()).empty()) {
+        return {};
+    }
+    double per = 1.0;
+    if (auto* qty = freecad_cast<App::PropertyFloat*>(obj->getPropertyByName("QuantityPer"))) {
+        per = qty->getValue();
+    }
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3) << per * count;
+    std::string text = out.str();
+    text.erase(text.find_last_not_of('0') + 1);
+    if (!text.empty() && text.back() == '.') {
+        text.pop_back();
+    }
+    return "'" + text + " " + unit->getValue();
+}
+
+// [BW] ROU-04: objects that are not parts (a route path) say so with BomExclude = true.
+bool bomExcluded(App::DocumentObject* obj)
+{
+    auto* exclude = freecad_cast<App::PropertyBool*>(obj->getPropertyByName("BomExclude"));
+    return exclude && exclude->getValue();
+}
+}  // namespace
 
 // ================================ Assembly Object ============================
 
@@ -125,7 +160,7 @@ void BomObject::saveCustomColumnData()
         for (size_t i = 0; i < columnsNames.getValues().size(); ++i) {
             std::string columnName = getText(0, i);
             if (columnName != "Index" && columnName != "Name" && columnName != "Quantity"
-                && columnName != "File Name") {
+                && columnName != "File Name" && columnName != "Length") {  // [BW] Length is auto
                 // Base::Console().warning("row col %d %d\n", row, col);
                 //  save custom data if any.
                 std::string text = getText(row, col);
@@ -173,6 +208,7 @@ void BomObject::addObjectChildrenToBom(
 {
     int quantityColIndex = getColumnIndex("Quantity");
     bool hasQuantityCol = hasQuantityColumn();
+    int lengthColIndex = getColumnIndex("Length");  // [BW] ROU-04
 
     // [BW] The rows added at this level. A repeated sibling is merged only into these:
     // the rows in between belong to an earlier sibling's children (another level).
@@ -221,6 +257,9 @@ void BomObject::addObjectChildrenToBom(
             && !(child->isDerivedFrom<Part::Feature>() && !onlyParts.getValue())) {
             continue;
         }
+        if (bomExcluded(child)) {  // [BW] ROU-04: a route path is not a part
+            continue;
+        }
 
         if (hasQuantityCol && !siblingRows.empty()) {
             // Check if the object is not already in (case of links). And if so just increment.
@@ -233,6 +272,9 @@ void BomObject::addObjectChildrenToBom(
 
                     int qty = std::stoi(getText(i, quantityColIndex)) + count;  // [BW]
                     setCell(App::CellAddress(i, quantityColIndex), std::to_string(qty).c_str());
+                    if (lengthColIndex >= 0) {  // [BW] ROU-04
+                        setCell(App::CellAddress(i, lengthColIndex), bomLengthText(child, qty).c_str());
+                    }
                     found = true;
                     break;
                 }
@@ -249,6 +291,9 @@ void BomObject::addObjectChildrenToBom(
         siblingRows.push_back(row);  // [BW]
         if (hasQuantityCol && count != 1) {  // [BW]
             setCell(App::CellAddress(row, quantityColIndex), std::to_string(count).c_str());
+        }
+        if (lengthColIndex >= 0 && count != 1) {  // [BW] ROU-04
+            setCell(App::CellAddress(row, lengthColIndex), bomLengthText(child, count).c_str());
         }
         ++row;
 
@@ -280,6 +325,12 @@ void BomObject::addObjectToBom(App::DocumentObject* obj, size_t row, std::string
         }
         else if (columnName == "Quantity") {
             setCell(App::CellAddress(row, col), std::to_string(1).c_str());
+        }
+        else if (columnName == "Length") {  // [BW] ROU-04: routed items by length
+            std::string text = bomLengthText(obj, 1);
+            if (!text.empty()) {
+                setCell(App::CellAddress(row, col), text.c_str());
+            }
         }
         else if (columnName.starts_with(".")) {
             // Column names that start with a dot are considered property names

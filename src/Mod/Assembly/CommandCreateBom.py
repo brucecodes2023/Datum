@@ -48,6 +48,7 @@ TranslatedColumnNames = [
     translate("Assembly", "Description"),
     translate("Assembly", "File Name (auto)"),
     translate("Assembly", "Quantity (auto)"),
+    translate("Assembly", "Length (auto)"),  # [BW] ROU-04: routed items by length
 ]
 
 ColumnNames = [
@@ -56,6 +57,7 @@ ColumnNames = [
     "Description",
     "File Name",
     "Quantity",
+    "Length",  # [BW] ROU-04
 ]
 
 
@@ -72,7 +74,7 @@ class CommandCreateBom:
                 "Assembly_CreateBom",
                 "<p>Creates a bill of materials of the current assembly. If an assembly is active, it will be a BOM of this assembly. Else it will be a BOM of the whole document.</p>"
                 "<p>The BOM object is a document object that stores the settings of your BOM. It is also a spreadsheet object so you can easily visualize the BOM. If you do not need the BOM object to be saved as a document object, you can simply export and cancel the task.</p>"
-                "<p>The columns 'Index', 'Name', 'File Name' and 'Quantity' are automatically generated on recompute. The 'Description' and custom columns are not overwritten.</p>",
+                "<p>The columns 'Index', 'Name', 'File Name', 'Quantity' and 'Length' are automatically generated on recompute. 'Length' is the quantity times the length per occurrence of a routed item (a wire, pipe or hose, e.g. '0.42 m'), blank for counted parts. The 'Description' and custom columns are not overwritten.</p>",
             ),
             "CmdType": "ForEdit",
         }
