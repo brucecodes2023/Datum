@@ -62,6 +62,23 @@ STEP_DEFAULTS = {
     "origin": "auto",  # auto | drill | grid | page | center | [x, y] (KiCad mm)
 }
 
+# The light model (ECD-05, 31 Oct: large assemblies): the board body and the components, as KiCad's
+# own default export; no tracks, pads, zones, silkscreen, solder mask or inner copper. The ESC board
+# goes from 30 MB / 19,752 faces to about 2.6 MB / 1,430 faces.
+LIGHT_OPTIONS = {"tracks": False, "pads": False, "zones": False, "silkscreen": False, "soldermask": False,
+                 "inner_copper": False}
+
+
+def light_options(options: dict | None = None) -> dict:
+    """``options`` with the copper and print layers off (:data:`LIGHT_OPTIONS`)."""
+    return dict(options or {}, **LIGHT_OPTIONS)
+
+
+def is_light(options: dict | None) -> bool:
+    """Whether STEP options leave out every copper and print layer (a light model)."""
+    opts = step_options(options) if options is not None else dict(STEP_DEFAULTS)
+    return not any(opts.get(key) for key in LIGHT_OPTIONS)
+
 
 class KiCadError(RuntimeError):
     """kicad-cli is missing or failed, or a board cannot be read."""

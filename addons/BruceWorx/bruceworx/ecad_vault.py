@@ -12,6 +12,8 @@ versions are single objects, so the project is packed into one archive per versi
                                          panel reads it from the archive like an .FCStd's)
         .keystone/<P/N>.FCStd            the board in 3D, made by Keystone from the .kicad_pcb
                                          (derived, never checked in, remade when it changes)
+        .keystone/<P/N>-light.FCStd      the light model: board and components, no copper or
+                                         print layers (for large assemblies; 31 Oct)
 
 The item is an ordinary item (type ``cots`` by default, the Standard Libraries' bought and
 library parts), so journals stay readable by every Keystone; what makes it a KiCad item is its
@@ -353,22 +355,28 @@ def item_for_path(path: str):
         current = parent
 
 
-def derived_path(folder: str, part_number: str) -> str:
-    """Where Keystone keeps the board in 3D for this work copy."""
-    return os.path.join(folder, DERIVED_DIR, part_number + ".FCStd")
+LIGHT_SUFFIX = "-light"
 
 
-def derived_stamp(folder: str, extra: dict | None = None) -> str:
-    """What the 3D model is made from: the board's content, the part's properties and ``extra``
-    (the item's revision, description, the recipe version). A different stamp remakes it."""
+def derived_path(folder: str, part_number: str, light: bool = False) -> str:
+    """Where Keystone keeps the board in 3D for this work copy (the full or the light model)."""
+    return os.path.join(folder, DERIVED_DIR, part_number + (LIGHT_SUFFIX if light else "") + ".FCStd")
+
+
+def derived_stamp(folder: str, extra: dict | None = None, light: bool = False) -> str:
+    """What the 3D model is made from: the board's content, the part's properties, ``extra``
+    (the item's revision, description, the recipe version) and whether it is the light model.
+    A different stamp remakes it."""
     project = find_project(folder)
     data = {"board": kb.board_hash(project.pcb) if project.pcb else "", "properties": read_properties(folder),
             "extra": extra or {}}
+    if light:
+        data["light"] = True
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def derived_fresh(folder: str, part_number: str, stamp: str) -> bool:
-    path = derived_path(folder, part_number)
+def derived_fresh(folder: str, part_number: str, stamp: str, light: bool = False) -> bool:
+    path = derived_path(folder, part_number, light)
     try:
         with open(os.path.splitext(path)[0] + ".json", encoding="utf-8") as handle:
             saved = json.load(handle).get("stamp")
@@ -377,8 +385,8 @@ def derived_fresh(folder: str, part_number: str, stamp: str) -> bool:
     return saved == stamp and os.path.isfile(path)
 
 
-def record_derived(folder: str, part_number: str, stamp: str) -> None:
-    path = os.path.splitext(derived_path(folder, part_number))[0] + ".json"
+def record_derived(folder: str, part_number: str, stamp: str, light: bool = False) -> None:
+    path = os.path.splitext(derived_path(folder, part_number, light))[0] + ".json"
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         json.dump({"stamp": stamp}, handle)

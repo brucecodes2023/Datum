@@ -154,6 +154,49 @@ class TestFolder(Base):
         self.assertIsNone(ev.item_for_path(self.src))
 
 
+class TestLightModel(Base):
+    """31 Oct: a light model per KiCad part (board and components), cached beside the full one."""
+
+    def test_light_options(self):
+        light = kb.light_options()
+        self.assertTrue(kb.is_light(light))
+        self.assertFalse(kb.is_light(None))
+        self.assertFalse(kb.is_light({}))
+        self.assertTrue(kb.step_options(light)["components"])
+        self.assertFalse(any(light[k] for k in ("tracks", "pads", "zones", "silkscreen", "soldermask",
+                                                 "inner_copper")))
+        self.assertEqual(kb.step_args(kb.step_options(light), (0, 0))[:1], ["--no-dnp"])  # KiCad's default export
+        board = os.path.join(self.src, "Tiny.kicad_pcb")
+        self.assertNotEqual(kb.cache_key(board, light), kb.cache_key(board))
+
+    def test_light_model_paths_and_stamps(self):
+        pn = self.imported().part_number
+        folder = self.work.path(pn)
+        full, light = ev.derived_path(folder, pn), ev.derived_path(folder, pn, light=True)
+        self.assertEqual(os.path.basename(light), pn + "-light.FCStd")
+        self.assertEqual(os.path.dirname(light), os.path.dirname(full))
+        extra = {"Revision": "01", "recipe": 1}
+        s_full, s_light = ev.derived_stamp(folder, extra), ev.derived_stamp(folder, extra, light=True)
+        self.assertNotEqual(s_full, s_light)
+        for path in (full, light):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as handle:
+                handle.write("model")
+        ev.record_derived(folder, pn, s_light, light=True)
+        self.assertTrue(ev.derived_fresh(folder, pn, s_light, light=True))
+        self.assertFalse(ev.derived_fresh(folder, pn, s_full))  # each model has its own record
+        ev.record_derived(folder, pn, s_full)
+        self.assertTrue(ev.derived_fresh(folder, pn, s_full))
+        self.assertTrue(ev.derived_fresh(folder, pn, s_light, light=True))
+        # the same rebuild rules: a board edit makes both stale; neither is in the vault item
+        self.work.checkout(pn)
+        with open(os.path.join(folder, "Tiny.kicad_pcb"), "a", encoding="utf-8") as handle:
+            handle.write("\n")
+        self.assertNotEqual(ev.derived_stamp(folder, extra, light=True), s_light)
+        self.assertNotEqual(ev.derived_stamp(folder, extra), s_full)
+        self.assertNotIn(".keystone/" + pn + "-light.FCStd", ev.project_files(folder))
+
+
 class TestImport(Base):
     def test_import_makes_a_library_item(self):
         res = self.imported(manufacturer="Bruce", value="DevKit")
