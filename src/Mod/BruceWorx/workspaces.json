@@ -370,7 +370,8 @@
                 "BruceWorx_RouteWire",
                 "BruceWorx_RoutePipe",
                 "BruceWorx_RouteHose",
-                "BruceWorx_RouteBundle"
+                "BruceWorx_RouteBundle",
+                "BruceWorx_RouteBendRules"
               ]
             },
             {

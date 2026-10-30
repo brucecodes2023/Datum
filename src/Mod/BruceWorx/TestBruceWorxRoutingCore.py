@@ -132,6 +132,7 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertEqual(len(wire.Shape.Solids), 1)
         self.assertAlmostEqual(wire.Shape.Volume / (math.pi * od * od / 4 * path.Length.Value), 1.0, delta=0.02)
         self.assertTrue(wire.BendOK)
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 4.0 * od)  # 4 x OD by default
         wire.Slack = 10
         self.doc.recompute()
         self.assertAlmostEqual(wire.Length.Value, (160.0 + 10.0 * math.pi) * 1.10, places=5)
@@ -190,6 +191,119 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertIs(bundle.Path, path)
         self.assertAlmostEqual(bundle.OD.Value, 1.15 * math.sqrt(3 * 1.6**2), places=6)
         self.assertAlmostEqual(bundle.Length.Value, path.Length.Value)
+
+    # ----- bend rules (ROU-02, 30 Oct) -----
+
+    def test_bend_rules_per_item(self):
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0)
+        wire = br.make_wire(path, gauge="22 AWG", insulation_od=2.0)
+        self.doc.recompute()
+        self.assertEqual(wire.BendRule, "Default")
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 8.0)  # Hook-up PVC, 4 x OD
+        self.assertEqual(wire.BendRuleUsed, "Default: Hook-up PVC, 4 × OD")
+        wire.BendRule = "Coax"
+        self.doc.recompute()
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 20.0)
+        self.assertTrue(wire.BendOK)  # the path's R 20 just meets 10 x 2.0
+        wire.InsulationOD = 2.5
+        self.doc.recompute()
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 25.0)  # follows the OD
+        self.assertFalse(wire.BendOK)
+        wire.MinBendRadius = 7.0  # typed by hand: a fixed override
+        self.assertEqual(wire.BendRule, "Fixed radius")
+        self.doc.recompute()
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 7.0)
+        self.assertEqual(wire.BendRuleUsed, "7 mm")
+        self.assertTrue(wire.BendOK)
+        wire.BendFactor = 9.0  # typed by hand: a multiple of OD
+        self.assertEqual(wire.BendRule, "Multiple of OD")
+        self.doc.recompute()
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 22.5)
+        wire.BendRule = "No check"
+        self.doc.recompute()
+        self.assertEqual(wire.MinBendRadius.Value, 0.0)
+        self.assertTrue(wire.BendOK)
+        hose = br.make_hose(path, inner=6.0, od=10.0)
+        pipe = br.make_pipe(path, size="12 x 1")
+        self.doc.recompute()
+        self.assertAlmostEqual(hose.MinBendRadius.Value, 60.0)
+        self.assertEqual(hose.BendRuleUsed, "Default: General hose, 6 × OD")
+        self.assertAlmostEqual(pipe.BendRadius.Value, 24.0)  # CLR 2 x OD
+        self.assertAlmostEqual(pipe.MinBendRadius.Value, 18.0)  # 1.5 x OD
+        self.assertEqual(br.make_hose(path, od=10.0, min_bend_radius=30.0).BendRule, "Fixed radius")
+
+    def test_preferences_set_the_default(self):
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0)
+        wire = br.make_wire(path, insulation_od=2.0)
+        hose = br.make_hose(path, od=10.0)
+        try:
+            br.set_prefs({"WireRule": "Silicone", "HoseRule": "Fixed radius", "HoseRadius": 15.0, "TubeClrFactor": 3.0})
+            self.assertEqual(br.prefs()["WireRule"], "Silicone")
+            wire.touch()
+            hose.touch()
+            self.doc.recompute()
+            self.assertAlmostEqual(wire.MinBendRadius.Value, 6.0)
+            self.assertAlmostEqual(hose.MinBendRadius.Value, 15.0)
+            self.assertEqual(hose.BendRule, "Default")  # still following the preference
+            self.assertTrue(hose.BendOK)
+            pipe = br.make_pipe(br.make_path([(0, 0, 0), (100, 0, 0)], self.doc), od=10.0, wall=1.0)
+            self.assertAlmostEqual(pipe.BendRadius.Value, 30.0)
+        finally:
+            br.reset_prefs()
+        self.assertEqual(br.prefs()["WireRule"], "Hook-up PVC")
+
+    def test_bundle_takes_the_strictest_wire_rule(self):
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=40.0)
+        wires = [br.make_wire(path, insulation_od=1.6) for _ in range(3)]
+        bundle = br.make_bundle(wires)
+        self.doc.recompute()
+        od = bundle.OD.Value
+        self.assertEqual(bundle.BendRule, "From wires")
+        self.assertAlmostEqual(bundle.MinBendRadius.Value, 4.0 * od)
+        wires[1].BendRule = "Coax"
+        self.doc.recompute()
+        self.assertAlmostEqual(bundle.MinBendRadius.Value, 10.0 * od)
+        self.assertEqual(bundle.BendRuleUsed, "From wires: 10 × OD")
+        self.assertTrue(bundle.BendOK)  # 10 x 3.19 = 31.9 < R 40
+        wires[2].MinBendRadius = 50.0
+        self.doc.recompute()
+        self.assertAlmostEqual(bundle.MinBendRadius.Value, 50.0)
+        self.assertFalse(bundle.BendOK)
+        bundle.MinBendRadius = 12.0  # set on the bundle: its own
+        self.doc.recompute()
+        self.assertEqual(bundle.BendRule, "Fixed radius")
+        self.assertTrue(bundle.BendOK)
+
+    def test_items_saved_before_bend_rules_migrate(self):
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0)
+        set_wire = br.make_wire(path, insulation_od=2.0, name="SetWire")
+        bare_wire = br.make_wire(path, insulation_od=2.0, name="BareWire")
+        hose = br.make_hose(path, od=10.0, name="OldHose")
+        hose2 = br.make_hose(path, od=10.0, name="TunedHose")
+        pipe = br.make_pipe(path, size="12 x 1", name="OldPipe")
+        self.doc.recompute()
+        old = {"SetWire": 7.0, "BareWire": 0.0, "OldHose": 60.0, "TunedHose": 25.0, "OldPipe": 18.0}
+        for name, radius in old.items():  # as the 27 Oct code saved them
+            obj = self.doc.getObject(name)
+            for prop in ("BendRule", "BendFactor", "BendRuleUsed"):
+                obj.removeProperty(prop)
+            obj.MinBendRadius = radius
+        folder = tempfile.mkdtemp(prefix="bw-routing-")
+        try:
+            file = os.path.join(folder, "old.FCStd")
+            self.doc.saveAs(file)
+            App.closeDocument(self.doc.Name)
+            self.doc = doc = App.openDocument(file)
+            got = {n: (doc.getObject(n).BendRule, round(doc.getObject(n).MinBendRadius.Value, 6)) for n in old}
+            self.assertEqual(got, {"SetWire": ("Fixed radius", 7.0), "BareWire": ("Default", 0.0),
+                                   "OldHose": ("Multiple of OD", 60.0), "TunedHose": ("Fixed radius", 25.0),
+                                   "OldPipe": ("Multiple of OD", 18.0)})
+            self.assertEqual(doc.getObject("OldHose").BendFactor, 6.0)
+            doc.recompute()
+            got = {n: round(doc.getObject(n).MinBendRadius.Value, 6) for n in old}
+            self.assertEqual(got, {"SetWire": 7.0, "BareWire": 8.0, "OldHose": 60.0, "TunedHose": 25.0, "OldPipe": 18.0})
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
 
     # ----- reports, reload -----
 

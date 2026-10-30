@@ -46,6 +46,7 @@ SET(BruceWorx_SRCS
     BruceWorx_RouteBundle.svg
     BruceWorx_RouteFromTo.svg
     BruceWorx_RouteCutList.svg
+    BruceWorx_RouteBendRules.svg
     bruceworx_studio.py
     bruceworx_toolbars.py
     bruceworx_groups.py

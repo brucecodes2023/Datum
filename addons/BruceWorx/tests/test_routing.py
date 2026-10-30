@@ -132,6 +132,65 @@ class SummaryTests(unittest.TestCase):
         self.assertTrue(rt.route_summary([(0, 0, 0)], "Spline")["ok"])
 
 
+class BendRuleTests(unittest.TestCase):
+    """ROU-02 (30 Oct): minimum bend rules as a multiple of OD or a fixed radius."""
+
+    def test_rule_radius_and_text(self):
+        self.assertAlmostEqual(rt.BendRule("OD", 4.0).radius(1.15), 4.6)
+        self.assertEqual(rt.BendRule("Fixed", 25.0).radius(99.0), 25.0)
+        self.assertEqual(rt.BendRule("None").radius(5.0), 0.0)
+        self.assertEqual(rt.BendRule("OD", 1.5).text(), "1.5 × OD")
+        self.assertEqual(rt.BendRule("Fixed", 25.0).text(), "25 mm")
+        self.assertEqual(rt.BendRule("None").text(), "no check")
+
+    def test_presets(self):
+        multiples = {name: rule.value for name, (rule, _src) in rt.WIRE_PRESETS.items()}
+        self.assertEqual(multiples["Hook-up PVC"], 4.0)
+        self.assertEqual(multiples["Silicone"], 3.0)
+        self.assertEqual(multiples["Shielded"], 6.0)
+        self.assertEqual(multiples["Coax"], 10.0)
+        self.assertEqual(multiples["Polyimide (Kapton)"], 10.0)
+        self.assertTrue(all(rule.mode == "OD" and src for rule, src in rt.WIRE_PRESETS.values()))
+        self.assertEqual(rt.HOSE_PRESETS["General hose"][0], rt.BendRule("OD", 6.0))
+        self.assertEqual(rt.rule_choices("wire")[0], "Default")
+        self.assertEqual(rt.rule_choices("wire")[-3:], ["Multiple of OD", "Fixed radius", "No check"])
+        self.assertEqual(rt.rule_choices("tube"), ["Default", "Multiple of OD", "Fixed radius", "No check"])
+        self.assertEqual(rt.rule_choices("bundle")[0], "From wires")
+
+    def test_defaults_from_the_preferences(self):
+        self.assertEqual(rt.default_rule("wire"), (rt.BendRule("OD", 4.0), "Hook-up PVC"))
+        self.assertEqual(rt.default_rule("hose"), (rt.BendRule("OD", 6.0), "General hose"))
+        self.assertEqual(rt.default_rule("tube"), (rt.BendRule("OD", 1.5), "Multiple of OD"))
+        self.assertEqual(rt.PREF_DEFAULTS["TubeClrFactor"], 2.0)
+        prefs = {"WireRule": "Silicone", "HoseRule": "Fixed radius", "HoseRadius": "80", "TubeFactor": 2.5}
+        self.assertEqual(rt.default_rule("wire", prefs)[0], rt.BendRule("OD", 3.0))
+        self.assertEqual(rt.default_rule("hose", prefs)[0], rt.BendRule("Fixed", 80.0))
+        self.assertEqual(rt.default_rule("tube", prefs)[0], rt.BendRule("OD", 2.5))
+        self.assertEqual(rt.default_rule("wire", {"WireRule": "Gone"})[0], rt.BendRule("OD", 4.0))
+
+    def test_item_rules(self):
+        rule, label = rt.item_rule("wire", "Default")
+        self.assertEqual((rule, label), (rt.BendRule("OD", 4.0), "Default: Hook-up PVC, 4 × OD"))
+        self.assertEqual(rt.item_rule("wire", "Coax"), (rt.BendRule("OD", 10.0), "Coax, 10 × OD"))
+        self.assertEqual(rt.item_rule("wire", "Multiple of OD", factor=5.0), (rt.BendRule("OD", 5.0), "5 × OD"))
+        self.assertEqual(rt.item_rule("hose", "Fixed radius", radius=42.0), (rt.BendRule("Fixed", 42.0), "42 mm"))
+        self.assertEqual(rt.item_rule("tube", "No check")[0].mode, "None")
+        self.assertEqual(rt.item_rule("tube", "Default"), (rt.BendRule("OD", 1.5), "Default: 1.5 × OD"))
+
+    def test_bundle_takes_the_strictest_wire(self):
+        rules = [rt.BendRule("OD", 4.0), rt.BendRule("OD", 10.0), rt.BendRule("None")]
+        self.assertAlmostEqual(rt.bundle_min_radius(rules, 3.2), 32.0)
+        self.assertEqual(rt.bundle_min_radius(rules + [rt.BendRule("Fixed", 50.0)], 3.2), 50.0)
+        self.assertEqual(rt.bundle_min_radius([rt.BendRule("None")], 3.2), 0.0)
+        self.assertEqual(rt.bundle_min_radius([], 3.2), 0.0)
+
+    def test_migration_of_old_items(self):
+        self.assertEqual(rt.migrate_rule(60.0, 10.0, 6.0), "Multiple of OD")  # the old hose default
+        self.assertEqual(rt.migrate_rule(25.0, 10.0, 6.0), "Fixed radius")
+        self.assertEqual(rt.migrate_rule(0.0, 10.0, 6.0), "No check")
+        self.assertEqual(rt.migrate_rule(4.6, 1.15, 0.0), "Fixed radius")
+
+
 class TableTests(unittest.TestCase):
     def test_awg_diameters(self):
         self.assertAlmostEqual(rt.awg_diameter(36), 0.127, places=9)

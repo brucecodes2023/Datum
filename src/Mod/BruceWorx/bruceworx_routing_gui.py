@@ -14,6 +14,9 @@ Commands (registered by :func:`install`, listed in workspaces.json):
 * ``BruceWorx_RouteWire``, ``_RoutePipe``, ``_RouteHose``: a short form for the item on the
   selected path (or the only path). ``BruceWorx_RouteBundle``: the selected wires into a bundle.
 * ``BruceWorx_RouteFromTo``, ``BruceWorx_RouteCutList``: the CSV reports, saved where asked.
+* ``BruceWorx_RouteBendRules``: the Bend Rules dialog (ROU-02, 30 Oct), the default minimum bend
+  rule per wire, hose and tube and the tube CLR, kept in the preference group
+  ``Mod/BruceWorx/Routing``. Each item panel can override the rule for its item.
 
 Every Qt signal to a bound method goes through ``slot`` (bruceworx_slots). The selection observer
 is not a Qt signal: FreeCAD calls its methods directly.
@@ -30,7 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RED = "<span style='color:#c0392b'>{}</span>"
 COMMANDS = ("BruceWorx_RoutePath", "BruceWorx_RouteAddPoint", "BruceWorx_RouteClip", "BruceWorx_RouteWire",
             "BruceWorx_RoutePipe", "BruceWorx_RouteHose", "BruceWorx_RouteBundle", "BruceWorx_RouteFromTo",
-            "BruceWorx_RouteCutList")
+            "BruceWorx_RouteCutList", "BruceWorx_RouteBendRules")
 _state = {"installed": False, "panel": None}
 
 
@@ -432,19 +435,14 @@ class ItemPanel:
             grid.addRow("Material", self.fields["Material"])
             self.fields["BendRadius"] = self._spin(QtWidgets)
             grid.addRow("Bend radius (CLR)", self.fields["BendRadius"])
-            self.fields["MinBendRadius"] = spin = self._spin(QtWidgets)
-            spin.setSpecialValueText("no check")
-            grid.addRow("Min bend radius", spin)
         else:
             self.fields["ID"] = self._spin(QtWidgets)
             grid.addRow("ID", self.fields["ID"])
             self.fields["OD"] = self._spin(QtWidgets)
             grid.addRow("OD", self.fields["OD"])
-            self.fields["MinBendRadius"] = spin = self._spin(QtWidgets)
-            spin.setSpecialValueText("no check")
-            grid.addRow("Min bend radius", spin)
             self.fields["Slack"] = self._spin(QtWidgets, " %", 0, 100)
             grid.addRow("Slack", self.fields["Slack"])
+        self._rule_rows(QtWidgets, grid)
         layout.addLayout(grid)
         self.status = QtWidgets.QLabel("")
         self.status.setObjectName("routeItemStatus")
@@ -453,8 +451,69 @@ class ItemPanel:
         layout.addStretch(1)
         return form
 
+    def _rule_rows(self, QtWidgets, grid):
+        """Bend rule (Default, a preset, Multiple of OD, Fixed radius, No check), the multiple and
+        the radius. Typing a multiple picks Multiple of OD, typing a radius picks Fixed radius."""
+        rt = br._rt()
+        self.rule = QtWidgets.QComboBox()
+        self.rule.setObjectName("routeBendRule")
+        self.rule.addItems(rt.rule_choices(self.obj.Proxy.RULE_KIND))
+        self.rule.setToolTip("Default follows Bend Rules (the Routing tab); a preset or your own rule overrides it here")
+        self.rule.currentIndexChanged.connect(slot(self._changed))
+        grid.addRow("Bend rule", self.rule)
+        self.factor = QtWidgets.QDoubleSpinBox()
+        self.factor.setRange(0.0, 1000.0)
+        self.factor.setDecimals(2)
+        self.factor.setSuffix(" × OD")
+        self.factor.valueChanged.connect(slot(self._factor_changed))
+        grid.addRow("Multiple of OD", self.factor)
+        self.minimum = QtWidgets.QDoubleSpinBox()
+        self.minimum.setRange(0.0, 1e6)
+        self.minimum.setDecimals(2)
+        self.minimum.setSuffix(" mm")
+        self.minimum.setSpecialValueText("no check")
+        self.minimum.valueChanged.connect(slot(self._minimum_changed))
+        grid.addRow("Min bend radius", self.minimum)
+
+    def _show_rule(self):
+        """The rule widgets from the object (after a recompute the radius is the rule's)."""
+        building, self._building = self._building, True
+        try:
+            self.rule.setCurrentText(self.obj.BendRule)
+            self.factor.setValue(float(self.obj.BendFactor))
+            self.minimum.setValue(float(self.obj.MinBendRadius.Value))
+        finally:
+            self._building = building
+
+    def _factor_changed(self, *_args):
+        if self._building:
+            return
+        self._building = True
+        self.rule.setCurrentText(br._rt().RULE_OD)
+        self._building = False
+        self._apply()
+
+    def _minimum_changed(self, *_args):
+        if self._building:
+            return
+        self._building = True
+        self.rule.setCurrentText(br._rt().RULE_FIXED)
+        self._building = False
+        self._apply()
+
+    def _apply_rule(self):
+        obj = self.obj
+        choice = self.rule.currentText()
+        if abs(float(obj.BendFactor) - self.factor.value()) > 1e-9 and choice == br._rt().RULE_OD:
+            obj.BendFactor = self.factor.value()
+        if choice == br._rt().RULE_FIXED and abs(float(obj.MinBendRadius.Value) - self.minimum.value()) > 1e-9:
+            obj.MinBendRadius = self.minimum.value()
+        if obj.BendRule != choice:
+            obj.BendRule = choice
+
     def _load(self):
         _QtCore, QtGui, _QtWidgets = _qt()
+        self._show_rule()
         for name, widget in self.fields.items():
             value = getattr(self.obj, name)
             if hasattr(widget, "setCurrentText"):
@@ -517,6 +576,11 @@ class ItemPanel:
             except Exception as exc:
                 self.status.setText(RED.format(_html(exc)))
                 return
+        try:
+            self._apply_rule()
+        except Exception as exc:
+            self.status.setText(RED.format(_html(exc)))
+            return
         if self.kind == br.PIPE:
             br.sync_clr(obj)
         try:
@@ -524,6 +588,7 @@ class ItemPanel:
         except Exception as exc:
             self.status.setText(RED.format(_html(exc)))
             return
+        self._show_rule()
         self.status.setText(self.summary(obj))
 
     @staticmethod
@@ -536,6 +601,10 @@ class ItemPanel:
             text += f" · cut {obj.CutLength.Value:.1f} mm · {obj.Bends} bends"
             if obj.BendTable:
                 text += "<br><tt>" + "<br>".join(_html(line) for line in obj.BendTable.splitlines()) + "</tt>"
+        if obj.MinBendRadius.Value > 0:
+            text += f"<br>min bend R {obj.MinBendRadius.Value:.1f} mm ({_html(obj.BendRuleUsed)})"
+        else:
+            text += "<br>no bend check"
         if not obj.BendOK:
             text += "<br>" + RED.format("bend too tight for this item (see MinBendRadius)")
         return text
@@ -562,6 +631,130 @@ class ItemPanel:
         self.Gui.Control.closeDialog()
         self.doc.recompute()
         return True
+
+
+# ---------------------------------------------------------------------------------------------
+# Bend Rules: the defaults in the preference group Mod/BruceWorx/Routing.
+
+KIND_TITLES = {"wire": "Wires", "hose": "Hoses", "tube": "Tubes (pipes)"}
+
+
+class BendRulesDialog:
+    """Per kind: the default rule (a preset, a multiple of OD, a fixed radius or no check) and its
+    numbers; for tubes also the default CLR. OK writes the preferences and recomputes every open
+    item that follows them."""
+
+    def __init__(self, parent=None):
+        _QtCore, _QtGui, QtWidgets = _qt()
+        rt = br._rt()
+        self.dialog = QtWidgets.QDialog(parent)
+        self.dialog.setObjectName("routeBendRules")
+        self.dialog.setWindowTitle("Bend Rules")
+        layout = QtWidgets.QVBoxLayout(self.dialog)
+        intro = QtWidgets.QLabel("The minimum bend radius a new wire, hose or tube gets (its rule <i>Default</i>). "
+                                 "Each item's panel can pick another rule for that item. A bundle takes the strictest "
+                                 "rule of its wires, on the bundle's OD.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.widgets = {}
+        for kind in rt.RULE_KINDS:
+            box = QtWidgets.QGroupBox(KIND_TITLES[kind])
+            form = QtWidgets.QFormLayout(box)
+            combo = QtWidgets.QComboBox()
+            combo.setObjectName(f"bend{kind.capitalize()}Rule")
+            for name in rt.default_choices(kind):
+                rule = rt.PRESETS[kind].get(name, (None, ""))[0]
+                combo.addItem(f"{name} ({rule.text()})" if rule is not None else name, name)
+            factor = QtWidgets.QDoubleSpinBox()
+            factor.setRange(0.1, 1000.0)
+            factor.setDecimals(2)
+            factor.setSuffix(" × OD")
+            radius = QtWidgets.QDoubleSpinBox()
+            radius.setRange(0.0, 1e5)
+            radius.setDecimals(2)
+            radius.setSuffix(" mm")
+            form.addRow("Rule", combo)
+            form.addRow("Multiple of OD", factor)
+            form.addRow("Fixed radius", radius)
+            self.widgets[kind] = (combo, factor, radius)
+            combo.currentIndexChanged.connect(slot(self._enable))
+            if kind == "tube":
+                self.clr = QtWidgets.QDoubleSpinBox()
+                self.clr.setRange(0.1, 1000.0)
+                self.clr.setDecimals(2)
+                self.clr.setSuffix(" × OD")
+                form.addRow("Bend radius (CLR)", self.clr)
+            layout.addWidget(box)
+        sources = QtWidgets.QLabel(self.presets_html())
+        sources.setWordWrap(True)
+        sources.setObjectName("bendPresetSources")
+        layout.addWidget(sources)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.RestoreDefaults)
+        buttons.accepted.connect(slot(self.accept))
+        buttons.rejected.connect(slot(self.dialog.reject))
+        buttons.button(QtWidgets.QDialogButtonBox.RestoreDefaults).clicked.connect(slot(self.restore_defaults))
+        layout.addWidget(buttons)
+        self.load(br.prefs())
+
+    @staticmethod
+    def presets_html():
+        rt = br._rt()
+        rows = [f"<tr><td>{_html(name)}</td><td>{_html(rule.text())}</td><td>{_html(source)}</td></tr>"
+                for name, (rule, source) in list(rt.WIRE_PRESETS.items()) + list(rt.HOSE_PRESETS.items())]
+        return "<small><b>Presets</b><table>" + "".join(rows) + "</table></small>"
+
+    def load(self, values):
+        for kind, (combo, factor, radius) in self.widgets.items():
+            key = kind.capitalize()
+            index = combo.findData(values[key + "Rule"])
+            combo.setCurrentIndex(max(0, index))
+            factor.setValue(float(values[key + "Factor"]))
+            radius.setValue(float(values[key + "Radius"]))
+        self.clr.setValue(float(values["TubeClrFactor"]))
+        self._enable()
+
+    def _enable(self, *_args):
+        rt = br._rt()
+        for combo, factor, radius in self.widgets.values():
+            factor.setEnabled(combo.currentData() == rt.RULE_OD)
+            radius.setEnabled(combo.currentData() == rt.RULE_FIXED)
+
+    def values(self):
+        out = {}
+        for kind, (combo, factor, radius) in self.widgets.items():
+            key = kind.capitalize()
+            out[key + "Rule"] = combo.currentData()
+            out[key + "Factor"] = factor.value()
+            out[key + "Radius"] = radius.value()
+        out["TubeClrFactor"] = self.clr.value()
+        return out
+
+    def restore_defaults(self):
+        self.load(br._rt().prefs_with_defaults())
+
+    def accept(self):
+        br.set_prefs(self.values())
+        refresh_documents()
+        self.dialog.accept()
+
+    def exec_(self):
+        return self.dialog.exec() if hasattr(self.dialog, "exec") else self.dialog.exec_()
+
+
+def refresh_documents():
+    """Recompute every open item whose rule follows the preferences (Default; a bundle From
+    wires). Returns how many were touched."""
+    rt = br._rt()
+    touched = 0
+    for doc in App.listDocuments().values():
+        mine = [o for o in br.routed(doc) if o.BendRule in (rt.RULE_DEFAULT, rt.RULE_FROM_WIRES)]
+        for obj in mine:
+            obj.touch()
+        if mine:
+            doc.recompute()
+            touched += len(mine)
+    return touched
 
 
 # ---------------------------------------------------------------------------------------------
@@ -733,6 +926,14 @@ class CutListCommand(_Command):
         _ask_and_write(doc, f"{doc.Label}-cut-list.csv", export_cut_list)
 
 
+class BendRulesCommand(_Command):
+    def IsActive(self):
+        return True
+
+    def Activated(self):
+        BendRulesDialog(_gui().getMainWindow()).exec_()
+
+
 def install():
     if _state["installed"]:
         return
@@ -757,6 +958,9 @@ def install():
         "BruceWorx_RouteFromTo", "From-to list", "CSV: wire, signal, gauge, colour, from, to, length."))
     Gui.addCommand("BruceWorx_RouteCutList", CutListCommand(
         "BruceWorx_RouteCutList", "Cut list", "CSV: pipe or hose, size, cut length, bend table."))
+    Gui.addCommand("BruceWorx_RouteBendRules", BendRulesCommand(
+        "BruceWorx_RouteBendRules", "Bend Rules",
+        "Default minimum bend radius per wire, hose and tube (a preset, a multiple of OD or a fixed radius) and the tube CLR."))
     try:
         import bruceworx_browser
 

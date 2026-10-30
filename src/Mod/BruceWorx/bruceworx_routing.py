@@ -21,6 +21,14 @@ tangent arcs, the LRA bend table, gauges, tube sizes, the CSV reports) is FreeCA
 * **Bundle** groups wires on one path with a combined OD (sqrt of the summed squares times a
   packing factor of 1.15), drawn translucent.
 
+**Bend rules** (ROU-02, 30 Oct). Every item's ``MinBendRadius`` comes from its ``BendRule``:
+Default (the preference group ``Mod/BruceWorx/Routing``, set in the Bend Rules dialog), a preset
+by wire or hose type (Hook-up PVC 4 x OD, Silicone 3 x OD, Coax 10 x OD, ...), Multiple of OD
+(``BendFactor``), Fixed radius (``MinBendRadius`` as typed) or No check. Setting ``MinBendRadius``
+by hand makes it a fixed override. A bundle takes the strictest of its wires' rules (From wires)
+unless set. ``BendRuleUsed`` says which rule gave the radius. Items saved before 30 Oct are
+migrated on load (``migrate``).
+
 A badge "bend too tight" shows in the Browser on any routed object whose ``BendOK`` is False
 (``row_badges``, registered by the GUI module).
 """
@@ -40,6 +48,7 @@ BUNDLE = "BruceWorx::Bundle"
 MODES = ["Spline", "Polyline"]
 ITEM_KINDS = (WIRE, PIPE, HOSE, BUNDLE)
 _SAMPLES = 120  # curvature samples per edge in Spline mode
+PREFS_PATH = "User parameter:BaseApp/Preferences/Mod/BruceWorx/Routing"
 
 
 def _rt():
@@ -77,6 +86,58 @@ def paths(doc):
 
 def routed(doc, kinds=ITEM_KINDS):
     return [o for o in doc.Objects if kind_of(o) in kinds]
+
+
+def prefs():
+    """The routing preferences (bend rule defaults) over their shipped defaults."""
+    rt = _rt()
+    out = dict(rt.PREF_DEFAULTS)
+    try:
+        group = App.ParamGet(PREFS_PATH)
+        for key, default in rt.PREF_DEFAULTS.items():
+            out[key] = group.GetString(key, default) if isinstance(default, str) else group.GetFloat(key, default)
+    except Exception:
+        pass
+    return rt.prefs_with_defaults(out)
+
+
+def set_prefs(values):
+    """Write ``values`` (keys of PREF_DEFAULTS) to the preference group."""
+    rt = _rt()
+    group = App.ParamGet(PREFS_PATH)
+    for key, value in values.items():
+        if key not in rt.PREF_DEFAULTS:
+            continue
+        if isinstance(rt.PREF_DEFAULTS[key], str):
+            group.SetString(key, str(value))
+        else:
+            group.SetFloat(key, float(value))
+
+
+def reset_prefs():
+    """Back to the shipped defaults."""
+    group = App.ParamGet(PREFS_PATH)
+    for key, default in _rt().PREF_DEFAULTS.items():
+        if isinstance(default, str):
+            group.RemString(key)
+        else:
+            group.RemFloat(key)
+
+
+def _restoring(obj):
+    try:
+        return "Restore" in obj.State or bool(getattr(obj.Document, "Restoring", False))
+    except Exception:
+        return False
+
+
+def _set_enum(obj, name, choices):
+    """``choices`` on an enumeration, keeping its value when it is still one of them."""
+    current = getattr(obj, name, "")
+    if list(obj.getEnumerationsOfProperty(name) or []) != list(choices):
+        obj.__setattr__(name, list(choices))
+        if current in choices:
+            obj.__setattr__(name, current)
 
 
 def _add(obj, kind, name, doc, default=None, group=GROUP, readonly=False, hidden=False):
@@ -365,23 +426,100 @@ class _Routed:
     """Shared properties of wires, pipes, hoses and bundles."""
 
     Type = ""
+    RULE_KIND = ""  # "wire", "hose", "tube" or "bundle": which bend rules apply
+    OLD_FACTOR = 0.0  # the multiple of OD the 27 Oct code set by default (migration)
 
     def __init__(self, obj):
         obj.Proxy = self
         self.setup(obj)
 
     def setup(self, obj):
-        _add(obj, "App::PropertyLink", "Path", "The RoutePath this follows")
-        _add(obj, "App::PropertyLength", "Length", "Length to cut or order, slack included", readonly=True)
-        _add(obj, "App::PropertyLength", "MinBendRadius", "Smallest bend radius this item allows (0 = no check)", 0.0)
-        _add(obj, "App::PropertyBool", "BendOK", "The path bends no tighter than MinBendRadius", True, readonly=True)
-        _add(obj, "App::PropertyString", "QuantityUnit", "Unit the BOM counts this in", "m", group="BruceWorx")
-        _add(obj, "App::PropertyFloat", "QuantityPer", "Quantity of the unit per occurrence (metres)", 0.0,
-             group="BruceWorx", readonly=True)
-        obj.setEditorMode("QuantityUnit", 1)
+        rt = _rt()
+        self._quiet = True
+        try:
+            _add(obj, "App::PropertyLink", "Path", "The RoutePath this follows")
+            _add(obj, "App::PropertyLength", "Length", "Length to cut or order, slack included", readonly=True)
+            new_rule = "BendRule" not in obj.PropertiesList
+            _add(obj, "App::PropertyEnumeration", "BendRule",
+                 "Where MinBendRadius comes from: Default (the preferences), a preset, a multiple of OD, a fixed radius or no check")
+            choices = rt.rule_choices(self.RULE_KIND)
+            if new_rule:
+                obj.BendRule = choices
+            else:
+                _set_enum(obj, "BendRule", choices)
+            factor = prefs().get(self.RULE_KIND.capitalize() + "Factor", 4.0)
+            _add(obj, "App::PropertyFloat", "BendFactor", "Minimum bend radius as a multiple of OD (rule Multiple of OD)", factor)
+            _add(obj, "App::PropertyLength", "MinBendRadius",
+                 "Smallest bend radius this item allows (0 = no check); typing a value makes it a fixed override", 0.0)
+            _add(obj, "App::PropertyString", "BendRuleUsed", "The rule that gave MinBendRadius", readonly=True)
+            _add(obj, "App::PropertyBool", "BendOK", "The path bends no tighter than MinBendRadius", True, readonly=True)
+            _add(obj, "App::PropertyString", "QuantityUnit", "Unit the BOM counts this in", "m", group="BruceWorx")
+            _add(obj, "App::PropertyFloat", "QuantityPer", "Quantity of the unit per occurrence (metres)", 0.0,
+                 group="BruceWorx", readonly=True)
+            obj.setEditorMode("QuantityUnit", 1)
+        finally:
+            self._quiet = False
 
     def onDocumentRestored(self, obj):
+        old = "BendRule" not in obj.PropertiesList
         self.setup(obj)
+        if old:
+            self._quiet = True
+            try:
+                self.migrate(obj)
+            finally:
+                self._quiet = False
+
+    def migrate(self, obj):
+        """An item saved before bend rules: its MinBendRadius kept (see rt.migrate_rule)."""
+        rt = _rt()
+        choice = rt.migrate_rule(float(obj.MinBendRadius.Value), self.od(obj), self.OLD_FACTOR)
+        if choice == rt.RULE_OD:
+            obj.BendFactor = self.OLD_FACTOR
+        obj.BendRule = choice
+
+    def onChanged(self, obj, prop):
+        """Typing a MinBendRadius makes it a fixed override (0: no check); typing a BendFactor
+        switches to Multiple of OD. Not while loading or while execute sets them."""
+        if prop not in ("MinBendRadius", "BendFactor") or getattr(self, "_quiet", False) or _restoring(obj):
+            return
+        if "BendRule" not in obj.PropertiesList:
+            return
+        rt = _rt()
+        if prop == "MinBendRadius":
+            want = rt.RULE_FIXED if obj.MinBendRadius.Value > 0 else rt.RULE_NONE
+        else:
+            want = rt.RULE_OD
+        if obj.BendRule != want:
+            self._quiet = True
+            try:
+                obj.BendRule = want
+            finally:
+                self._quiet = False
+
+    def od(self, obj):
+        """The diameter a multiple-of-OD rule is taken of."""
+        return float(obj.OD.Value) if "OD" in obj.PropertiesList else 0.0
+
+    def rule(self, obj):
+        """(rule, label) this item's BendRule gives."""
+        return _rt().item_rule(self.RULE_KIND, obj.BendRule, obj.BendFactor, float(obj.MinBendRadius.Value), prefs())
+
+    def apply_rule(self, obj, od=None):
+        """MinBendRadius and BendRuleUsed from the rule; returns the radius (0 = no check)."""
+        rule, label = self.rule(obj)
+        radius = rule.radius(self.od(obj) if od is None else od)
+        self._set_min(obj, radius)
+        obj.BendRuleUsed = label
+        return radius
+
+    def _set_min(self, obj, radius):
+        if abs(float(obj.MinBendRadius.Value) - radius) > 1e-9:
+            self._quiet = True
+            try:
+                obj.MinBendRadius = radius
+            finally:
+                self._quiet = False
 
     def dumps(self):
         return {"Type": self.Type}
@@ -416,6 +554,7 @@ class _Routed:
 
 class Wire(_Routed):
     Type = WIRE
+    RULE_KIND = "wire"
 
     def setup(self, obj):
         super().setup(obj)
@@ -434,12 +573,22 @@ class Wire(_Routed):
         _add(obj, "App::PropertyPercent", "Slack", "Length added for service loops and tolerance", 5)
         _add(obj, "App::PropertyMass", "Mass", "Copper plus an insulation estimate", readonly=True)
 
+    def od(self, obj):
+        od = float(obj.InsulationOD.Value)
+        return od if od > 0 else _rt().default_insulation_od(obj.Gauge)
+
+    def migrate(self, obj):
+        """Before 30 Oct a wire had no default: a radius set by hand stays as a fixed override,
+        none takes the Default rule (Hook-up PVC, 4 x OD unless the preferences say otherwise)."""
+        obj.BendRule = _rt().RULE_FIXED if obj.MinBendRadius.Value > 0 else _rt().RULE_DEFAULT
+
     def execute(self, obj):
         rt = _rt()
         path = self.path_of(obj)
-        od = float(obj.InsulationOD.Value) or rt.default_insulation_od(obj.Gauge)
+        od = self.od(obj)
         if obj.InsulationOD.Value <= 0:
             obj.InsulationOD = od
+        self.apply_rule(obj, od)
         obj.Shape = sweep(path.Shape.Wires[0], od)
         length = float(path.Length.Value) * (1.0 + obj.Slack / 100.0)
         self.finish(obj, length)
@@ -449,6 +598,8 @@ class Wire(_Routed):
 
 class Pipe(_Routed):
     Type = PIPE
+    RULE_KIND = "tube"
+    OLD_FACTOR = 1.5
 
     def setup(self, obj):
         super().setup(obj)
@@ -464,6 +615,7 @@ class Pipe(_Routed):
         _add(obj, "App::PropertyString", "BendTable", "LRA table: length fed, rotation, angle per bend", readonly=True)
 
     def onChanged(self, obj, prop):
+        super().onChanged(obj, prop)
         if prop == "Size" and getattr(obj, "Size", "Custom") != "Custom":
             try:
                 od, wall = _rt().tube_size(obj.Size)
@@ -480,8 +632,9 @@ class Pipe(_Routed):
         od = float(obj.OD.Value)
         wall = float(obj.WallThickness.Value)
         if obj.BendRadius.Value <= 0:
-            obj.BendRadius = 2.0 * od
+            obj.BendRadius = prefs()["TubeClrFactor"] * od
         clr = float(obj.BendRadius.Value)
+        self.apply_rule(obj, od)
         obj.Shape = sweep(path.Shape.Wires[0], od, od - 2.0 * wall)
         pts = rt.clean_points(path.Points)
         if path.Mode == "Polyline" and len(pts) > 2:
@@ -500,6 +653,8 @@ class Pipe(_Routed):
 
 class Hose(_Routed):
     Type = HOSE
+    RULE_KIND = "hose"
+    OLD_FACTOR = 6.0
 
     def setup(self, obj):
         super().setup(obj)
@@ -510,8 +665,7 @@ class Hose(_Routed):
     def execute(self, obj):
         path = self.path_of(obj)
         od = float(obj.OD.Value)
-        if obj.MinBendRadius.Value <= 0:
-            obj.MinBendRadius = 6.0 * od
+        self.apply_rule(obj, od)
         obj.Shape = sweep(path.Shape.Wires[0], od, float(obj.ID.Value))
         self.finish(obj, float(path.Length.Value) * (1.0 + obj.Slack / 100.0))
         self.check(obj, path)
@@ -519,11 +673,29 @@ class Hose(_Routed):
 
 class Bundle(_Routed):
     Type = BUNDLE
+    RULE_KIND = "bundle"
 
     def setup(self, obj):
         super().setup(obj)
         _add(obj, "App::PropertyLinkList", "Wires", "The wires in this bundle")
         _add(obj, "App::PropertyLength", "OD", "Combined outer diameter (packing factor 1.15)", readonly=True)
+
+    def migrate(self, obj):
+        rt = _rt()
+        obj.BendRule = rt.RULE_FIXED if obj.MinBendRadius.Value > 0 else rt.RULE_FROM_WIRES
+
+    def rule(self, obj):
+        """From wires: the strictest of the wires' rules on the bundle's OD; else its own."""
+        rt = _rt()
+        if obj.BendRule != rt.RULE_FROM_WIRES:
+            rule = rt._plain("bundle", obj.BendRule, obj.BendFactor, float(obj.MinBendRadius.Value))
+            return (rule or rt.BendRule("None")), (rule or rt.BendRule("None")).text()
+        rules = [w.Proxy.rule(w)[0] for w in obj.Wires if kind_of(w) == WIRE]
+        radius = rt.bundle_min_radius(rules, float(obj.OD.Value))
+        strictest = max((r for r in rules if r.mode != "None"), key=lambda r: r.radius(float(obj.OD.Value)), default=None)
+        if strictest is None:
+            return rt.BendRule("None"), "From wires: no check"
+        return rt.BendRule("Fixed", radius), f"From wires: {strictest.text()}"
 
     def execute(self, obj):
         rt = _rt()
@@ -531,6 +703,7 @@ class Bundle(_Routed):
         diameters = [float(w.InsulationOD.Value) for w in obj.Wires if kind_of(w) == WIRE]
         od = rt.bundle_od(diameters) or 1.0
         obj.OD = od
+        self.apply_rule(obj, od)
         obj.Shape = sweep(path.Shape.Wires[0], od)
         self.finish(obj, float(path.Length.Value))
         self.check(obj, path)
@@ -617,8 +790,9 @@ def make_pipe(path, size="Custom", od=None, wall=None, material="", bend_radius=
         obj.OD = float(od)
     if wall is not None:
         obj.WallThickness = float(wall)
-    obj.BendRadius = float(bend_radius) if bend_radius else 2.0 * float(obj.OD.Value)
-    obj.MinBendRadius = float(min_bend_radius) if min_bend_radius is not None else 1.5 * float(obj.OD.Value)
+    obj.BendRadius = float(bend_radius) if bend_radius else prefs()["TubeClrFactor"] * float(obj.OD.Value)
+    if min_bend_radius is not None:
+        obj.MinBendRadius = float(min_bend_radius)  # a fixed override
     sync_clr(obj)
     return obj
 
@@ -637,7 +811,8 @@ def sync_clr(pipe):
 
 def make_hose(path, inner=6.0, od=10.0, min_bend_radius=None, slack=5, name="Hose"):
     obj = _make_item(Hose, path, name, ID=float(inner), OD=float(od), Slack=int(slack))
-    obj.MinBendRadius = float(min_bend_radius) if min_bend_radius is not None else 6.0 * float(od)
+    if min_bend_radius is not None:
+        obj.MinBendRadius = float(min_bend_radius)  # a fixed override
     return obj
 
 

@@ -394,6 +394,142 @@ def route_summary(points, mode="Spline", radius=0.0, min_radius=0.0):
 
 
 # ----------------------------------------------------------------------------------------------
+# Minimum bend rules (ROU-02, 30 Oct): per item a multiple of its OD or a fixed radius, with
+# presets by wire or hose type and defaults the user sets once (the Bend Rules dialog).
+
+
+@dataclass(frozen=True)
+class BendRule:
+    """``mode`` "OD" (``value`` x the item's OD), "Fixed" (``value`` mm) or "None" (no check)."""
+
+    mode: str
+    value: float = 0.0
+
+    def radius(self, od):
+        if self.mode == "OD":
+            return self.value * float(od)
+        if self.mode == "Fixed":
+            return float(self.value)
+        return 0.0
+
+    def text(self):
+        if self.mode == "OD":
+            return f"{self.value:g} × OD"
+        if self.mode == "Fixed":
+            return f"{self.value:g} mm"
+        return "no check"
+
+
+RULE_DEFAULT = "Default"  # follow the preferences
+RULE_OD = "Multiple of OD"
+RULE_FIXED = "Fixed radius"
+RULE_NONE = "No check"
+RULE_FROM_WIRES = "From wires"  # a bundle: the strictest of its wires' rules
+PLAIN_RULES = (RULE_OD, RULE_FIXED, RULE_NONE)
+
+# name -> (rule, where the number comes from). Minimum radii for a static (installed) bend; the
+# sources are in the ROU built chapter of 30 Oct.
+WIRE_PRESETS = {
+    "Hook-up PVC": (BendRule("OD", 4.0), "your default (R2)"),
+    "Silicone": (BendRule("OD", 3.0), "soft insulation; NASA-STD-8739.4A Table 7-1 harness minimum 3 x OD"),
+    "PTFE / ETFE": (BendRule("OD", 3.0), "NASA-STD-8739.4A Table 7-1, AWG 10 and smaller without coax: 3 x OD"),
+    "Polyimide (Kapton)": (BendRule("OD", 10.0), "NASA-STD-8739.4A Table 7-1 minimum 10 x OD"),
+    "Large (AWG 8 or larger)": (BendRule("OD", 6.0), "NASA-STD-8739.4A Table 7-1 minimum 6 x OD"),
+    "Shielded": (BendRule("OD", 6.0), "your choice; NASA-STD-8739.4A gives 6 x OD for coax"),
+    "Coax": (BendRule("OD", 10.0), "NASA-STD-8739.4A optimum 10 x OD (minimum 6 x OD)"),
+    "High-flex (moving)": (BendRule("OD", 10.0), "continuous-flex cable data, typically 7.5 to 15 x OD"),
+    "Ribbon / flat": (BendRule("OD", 3.0), "NASA workmanship: 3 x thickness short-term (OD = thickness)"),
+}
+HOSE_PRESETS = {
+    "General hose": (BendRule("OD", 6.0), "your default"),
+}
+PRESETS = {"wire": WIRE_PRESETS, "hose": HOSE_PRESETS, "tube": {}}
+RULE_KINDS = ("wire", "hose", "tube")
+
+# The preference group Mod/BruceWorx/Routing: key -> default. <Kind>Rule names a preset or a plain
+# rule; <Kind>Factor and <Kind>Radius are the numbers of Multiple of OD and Fixed radius.
+PREF_DEFAULTS = {
+    "WireRule": "Hook-up PVC", "WireFactor": 4.0, "WireRadius": 10.0,
+    "HoseRule": "General hose", "HoseFactor": 6.0, "HoseRadius": 60.0,
+    "TubeRule": RULE_OD, "TubeFactor": 1.5, "TubeRadius": 20.0, "TubeClrFactor": 2.0,
+}
+
+
+def default_choices(kind):
+    """What the preference may name for ``kind``: its presets, then the three plain rules."""
+    return list(PRESETS[kind]) + list(PLAIN_RULES)
+
+
+def rule_choices(kind):
+    """An item's ``BendRule`` choices: Default (the preference) first; a bundle's From wires."""
+    if kind == "bundle":
+        return [RULE_FROM_WIRES] + list(PLAIN_RULES)
+    return [RULE_DEFAULT] + default_choices(kind)
+
+
+def prefs_with_defaults(prefs=None):
+    """``prefs`` over PREF_DEFAULTS, numbers as floats; unknown keys and empty values ignored."""
+    out = dict(PREF_DEFAULTS)
+    for key, value in (prefs or {}).items():
+        if key in out and value not in (None, ""):
+            out[key] = type(PREF_DEFAULTS[key])(value)
+    return out
+
+
+def _plain(kind, choice, factor, radius):
+    if choice in PRESETS.get(kind, {}):
+        return PRESETS[kind][choice][0]
+    if choice == RULE_OD:
+        return BendRule("OD", float(factor))
+    if choice == RULE_FIXED:
+        return BendRule("Fixed", float(radius))
+    if choice == RULE_NONE:
+        return BendRule("None")
+    return None
+
+
+def default_rule(kind, prefs=None):
+    """(rule, name) the preferences give ``kind`` ("wire", "hose", "tube"); an unknown name in
+    the preferences falls back to the shipped default."""
+    key = kind.capitalize()
+    for p in (prefs_with_defaults(prefs), PREF_DEFAULTS):
+        rule = _plain(kind, p[key + "Rule"], p[key + "Factor"], p[key + "Radius"])
+        if rule is not None:
+            return rule, p[key + "Rule"]
+    raise ValueError(f"no default bend rule for {kind!r}")
+
+
+def item_rule(kind, choice, factor=0.0, radius=0.0, prefs=None):
+    """(rule, label) for an item's ``BendRule`` choice; ``factor`` and ``radius`` are the item's
+    own BendFactor and MinBendRadius, read by Multiple of OD and Fixed radius."""
+    rule = _plain(kind, choice, factor, radius) if choice != RULE_DEFAULT else None
+    if rule is None:
+        rule, name = default_rule(kind, prefs)
+        return rule, f"Default: {rule.text()}" if name in PLAIN_RULES else f"Default: {name}, {rule.text()}"
+    if choice in PRESETS.get(kind, {}):
+        return rule, f"{choice}, {rule.text()}"
+    return rule, rule.text()
+
+
+def bundle_min_radius(rules, bundle_od):
+    """The strictest of the wires' rules applied to the bundle: a multiple of OD is taken of the
+    bundle's OD (NASA-STD-8739.4A gives harness radii on the overall OD), a fixed radius as it is;
+    0 when no wire is checked."""
+    return max((r.radius(bundle_od) for r in rules if r.mode != "None"), default=0.0)
+
+
+def migrate_rule(old_radius, od, old_default_factor):
+    """BendRule choice for an item saved before bend rules (27 Oct) with ``MinBendRadius``
+    ``old_radius``: the old default multiple of OD keeps following OD, any other radius is a fixed
+    override, 0 is no check."""
+    if old_radius <= 0:
+        return RULE_NONE
+    if old_default_factor and od > 0 and abs(old_radius - old_default_factor * od) <= 1e-6 * max(1.0, old_radius):
+        return RULE_OD
+    return RULE_FIXED
+
+
+# ----------------------------------------------------------------------------------------------
 # Wire gauges.
 
 

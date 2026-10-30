@@ -213,6 +213,21 @@ class RoutingGuiTests(unittest.TestCase):
         panel.set_colour((0.0, 0.0, 1.0))
         self._pump()
         wire = panel.obj
+        # The bend rule: Default (Hook-up PVC, 4 x OD), a preset, a multiple typed in.
+        od = wire.InsulationOD.Value
+        self.assertAlmostEqual(panel.minimum.value(), round(4.0 * od, 2), places=2)
+        panel.rule.setCurrentText("Coax")
+        self._pump()
+        self.assertEqual(wire.BendRule, "Coax")
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 10.0 * od)
+        self.assertAlmostEqual(panel.minimum.value(), round(10.0 * od, 2), places=2)
+        self.assertIn("Coax, 10 × OD", panel.status.text())
+        panel.factor.setValue(5.0)
+        self._pump()
+        self.assertEqual(panel.rule.currentText(), "Multiple of OD")
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 5.0 * od)
+        panel.rule.setCurrentText("Default")
+        self._pump()
         self.assertEqual(wire.Gauge, "18 AWG")
         self.assertEqual(wire.Signal, "+5V")
         self.assertIn("Length", panel.status.text())
@@ -258,8 +273,12 @@ class RoutingGuiTests(unittest.TestCase):
         self._pump()
         hose = panel.obj
         self.assertIn("bend too tight", panel.status.text())  # 6 x OD = 60 > the path's 32
-        panel.fields["MinBendRadius"].setValue(25.0)
+        self.assertEqual(panel.rule.currentText(), "Default")
+        self.assertIn("General hose, 6 × OD", panel.status.text())
+        panel.minimum.setValue(25.0)  # a radius typed: a fixed override
         self._pump()
+        self.assertEqual(panel.rule.currentText(), "Fixed radius")
+        self.assertEqual(hose.BendRule, "Fixed radius")
         self.assertNotIn("bend too tight", panel.status.text())
         hose_name = hose.Name
         panel.reject()
@@ -283,6 +302,46 @@ class RoutingGuiTests(unittest.TestCase):
             self.assertTrue(lines[2].startswith(f"{hose.Label},Hose,6 / 10,"))
         finally:
             shutil.rmtree(folder, ignore_errors=True)
+
+    def test_bend_rules_dialog(self):
+        """ROU-02 (30 Oct): the defaults in the preferences, open items that follow them recomputed."""
+        path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0)
+        wire = br.make_wire(path, insulation_od=2.0)
+        fixed = br.make_wire(path, insulation_od=2.0)
+        fixed.MinBendRadius = 5.0
+        hose = br.make_hose(path, od=10.0)
+        self.doc.recompute()
+        self.assertAlmostEqual(wire.MinBendRadius.Value, 8.0)
+        try:
+            dialog = self.rg.BendRulesDialog(Gui.getMainWindow())
+            combo, factor, radius = dialog.widgets["wire"]
+            self.assertEqual(combo.currentData(), "Hook-up PVC")
+            self.assertFalse(factor.isEnabled())
+            self.assertIn("Coax", dialog.presets_html())
+            combo.setCurrentIndex(combo.findData("Multiple of OD"))
+            self.assertTrue(factor.isEnabled())
+            factor.setValue(5.0)
+            hcombo, _hf, hradius = dialog.widgets["hose"]
+            hcombo.setCurrentIndex(hcombo.findData("Fixed radius"))
+            hradius.setValue(18.0)
+            dialog.clr.setValue(2.5)
+            dialog.accept()
+            prefs = br.prefs()
+            self.assertEqual((prefs["WireRule"], prefs["WireFactor"]), ("Multiple of OD", 5.0))
+            self.assertEqual((prefs["HoseRule"], prefs["HoseRadius"]), ("Fixed radius", 18.0))
+            self.assertAlmostEqual(wire.MinBendRadius.Value, 10.0)  # follows the new default
+            self.assertAlmostEqual(fixed.MinBendRadius.Value, 5.0)  # its own rule
+            self.assertAlmostEqual(hose.MinBendRadius.Value, 18.0)
+            self.assertTrue(hose.BendOK)
+            self.assertAlmostEqual(br.make_pipe(path, od=10.0, wall=1.0).BendRadius.Value, 25.0)
+            again = self.rg.BendRulesDialog(Gui.getMainWindow())
+            self.assertEqual(again.widgets["hose"][0].currentData(), "Fixed radius")
+            again.restore_defaults()
+            self.assertEqual(again.widgets["wire"][0].currentData(), "Hook-up PVC")
+            again.accept()
+            self.assertAlmostEqual(wire.MinBendRadius.Value, 8.0)
+        finally:
+            br.reset_prefs()
 
     def test_bundle_command(self):
         path = br.make_path([(0, 0, 0), (50, 10, 0), (100, 0, 0)], self.doc)
