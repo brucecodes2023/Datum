@@ -1,0 +1,43 @@
+%======================================================================
+\section{Session of 30 October 2026: simulation and routing, continued}\label{sec:session-30oct}
+%======================================================================
+
+You asked to pick up ``the simulation part for keystone along with wire routing'' from the roadmap.
+
+\paragraph{Where things stood.} The routing track \eref{ROU-01}--\eref{ROU-04} had been built and committed
+on 27 Oct (\S\ref{sec:rou-built}), with five questions waiting. \eref{SIM-01}'s headless core and the bundled
+CalculiX were committed, but the whole Simulation GUI had been left \emph{uncommitted} when the 27 Oct agent
+stopped: the New Study and Study panels, the ribbon groups, the results views, Probe, Report, five icons and
+two C++ fixes (\file{ViewProviderFemMesh.cpp}, \file{DocumentObserverPython.cpp}: a FEM mesh could not be
+created in the GUI while a Python document observer was installed). Five of its six GUI tests passed. Its
+``Built'' section had not been written, and the five plan questions S1--S5 (\S\ref{sec:sim01-plan}) were open.
+
+\paragraph{Your decisions (30 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Materials (S1) & Build a \textbf{Keystone material library with yield strengths}, built into the app now; the
+  vault library \eref{PDM-11} starts from it later.\\
+SF bands (S2) & \textbf{Configurable}: thresholds and colours, per study, defaults in the preferences.\\
+Stress measure (S3) & \textbf{Selectable per study}: von Mises, maximum principal, Tresca.\\
+Report (S4) & \textbf{On demand, \LaTeX}, compiled by \textbf{Tectonic bundled in Keystone}.\\
+Solver (S5) & CalculiX stays bundled.\\
+Simulation next & \textbf{Modal and buckling} on the same frame: plan \S\ref{sec:sim-modal-plan}.\\
+Routing next & All four: the Assembly BOM \emph{Length} column, \textbf{connectors and fittings},
+  \textbf{drawings} (flattened harness, tube with bend table), and the \textbf{harness as a vault item} with a
+  purchasing BOM per stock item. Plan \S\ref{sec:rou-next-plan}, new epics \eref{ROU-05}--\eref{ROU-07}.\\
+Routing tweaks & Accepted: the Route Path panel clears the selection after each pick, and one spline (the
+  module's) draws the shape and drives the check. The wire minimum bend stays $4\times$OD by default, but
+  \textbf{every rule is configurable} (multiple of OD or fixed radius, presets by wire and insulation type, per
+  item and as preferences; the same for hoses and tubes).\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Who builds what.} Agent \emph{sim} finishes \eref{SIM-01} with S1--S5 and writes
+\S\ref{sec:sim01-built}. Agent \emph{materials} builds the Keystone material library
+(\S\ref{sec:materials-built}). Agent \emph{routing} builds the bend rules, the selection and spline changes
+and the BOM Length column (\S\ref{sec:rou-built-30oct}). The main session wrote the two plans above, whose
+question tables steer the next builds (modal/buckling, then \eref{ROU-05}--\eref{ROU-07}). The tree still
+carries another session's uncommitted vault and dashboard edits. They are left untouched.

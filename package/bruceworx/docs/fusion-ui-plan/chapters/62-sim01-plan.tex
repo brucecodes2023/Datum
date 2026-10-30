@@ -137,3 +137,23 @@ Mac without a developer environment.
         \emph{Recommendation:} bundle it, as decided for the solvers in \S\ref{sec:sim}; the notice goes in
         \eref{FND-04}.
 \end{enumerate}
+
+\paragraph{Your answers (30 Oct).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+S1 & \textbf{Build a material library with yield strengths}, shipped in Keystone now (a ``Keystone'' material
+     library of metals, printed and engineering plastics and composites, every card with $E$, $\nu$, $\rho$,
+     $\sigma_y$, $\sigma_u$ and a source). The vault library of \eref{PDM-11} starts from it later. Ultimate with
+     a note remains only for a card that still has no yield.\\
+S2 & The safety-factor bands are \textbf{configurable}: thresholds and colours per study, defaults in the
+     preferences.\\
+S3 & The stress measure is \textbf{selectable per study}: von Mises (default), maximum principal, Tresca.\\
+S4 & The report is written \textbf{on demand as \LaTeX}, compiled to PDF by \textbf{Tectonic bundled in
+     Keystone} (MacTeX's \code{latexmk} as a fallback; the \file{.tex} folder is kept either way).\\
+S5 & \code{ccx} stays bundled.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+

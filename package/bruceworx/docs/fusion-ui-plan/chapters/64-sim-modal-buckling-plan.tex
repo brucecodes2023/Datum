@@ -1,0 +1,121 @@
+%======================================================================
+\subsection{BW-SIM-01 next: modal and buckling studies (plan, 30 Oct 2026)}\label{sec:sim-modal-plan}
+%======================================================================
+
+On 30 Oct you chose \textbf{modal and buckling} as the next study types once static stress is finished
+(\S\ref{sec:session-30oct}). Both run on the static frame of \S\ref{sec:sim01-plan}: the same New Study panel,
+Netgen mesh, bundled CalculiX, pre-check, results panel and \LaTeX{} report. Only the solver step, the
+results and the checks differ. FreeCAD's CalculiX writer already supports both
+(\code{AnalysisType} \emph{frequency} and \emph{buckling}, \code{EigenmodesCount}, \code{EigenmodeLowLimit},
+\code{EigenmodeHighLimit}, \code{BucklingFactors}), and the FRD reader turns each mode into its own result
+object (\code{EigenMode\_\emph{n}\_Results}). What is missing is the same thing that was missing for
+static stress: a Fusion-style workflow and checks a designer can trust.
+
+\paragraph{Theory: modal frequencies.} Undamped free vibration of the meshed part solves the generalised
+eigenproblem
+\[
+  K\boldsymbol\phi_i=\omega_i^2 M\boldsymbol\phi_i,\qquad f_i=\frac{\omega_i}{2\pi},\qquad
+  \boldsymbol\phi_i^{\mathsf T}M\boldsymbol\phi_j=\delta_{ij},
+\]
+with $K$ the stiffness matrix of the static study and $M$ the consistent mass matrix, which needs the
+material's density (a new pre-check line). CalculiX's \code{*FREQUENCY} step finds the lowest $n$ pairs with
+ARPACK (Lanczos) and writes them to the \file{.frd} file. It also writes the \textbf{effective modal mass} per
+direction to the \file{.dat} file, which shows which modes matter for a given excitation direction.
+\begin{itemize}
+  \item \textbf{Supports.} With no supports the first six modes are rigid-body modes at $f\approx0$ (three
+        translations, three rotations). A \emph{free-free} study is legitimate for a drone frame or a robot
+        link on its own. The pre-check then reports ``free: the first 6 modes are rigid'' and the results
+        table skips frequencies below 1\,Hz instead of failing the solve.
+  \item \textbf{Loads} are ignored by a plain modal study: frequencies do not depend on the load. A
+        \emph{prestressed} modal (a static step first, then \code{*FREQUENCY} with the stress stiffening, as
+        for a spinning propeller) is a variant (question M4).
+  \item \textbf{Mesh.} Second-order tetrahedra (C3D10) as in static. Frequencies converge from above as the
+        mesh is refined, so the \eref{SIM-04} convergence check also applies to $f_1$.
+\end{itemize}
+
+\paragraph{Benchmark: cantilever modes (SIM-05).} Euler--Bernoulli bending of a clamped-free beam has
+\[
+  f_n=\frac{(\beta_nL)^2}{2\pi L^2}\sqrt{\frac{EI}{\rho A}},\qquad
+  \beta_nL=1.8751,\ 4.6941,\ 7.8548,\ \dots
+\]
+For the static benchmark's $100\times10\times10$\,mm steel bar ($E=210$\,GPa, $\rho=7850$\,kg/m$^3$) this
+gives $f_1\approx837$\,Hz, $f_2\approx5.25$\,kHz and $f_3\approx14.7$\,kHz in each of the two bending planes
+(a square section, so the modes come in pairs). The test accepts $\pm3$\,\% on $f_1$ and $f_2$; shear and
+rotary inertia (Timoshenko) lower the solid model's $f_3$ by a few per cent on a bar this stubby, so $f_3$ is
+checked to $\pm8$\,\%. A free-free bar checks that six near-zero modes come first and that the first elastic
+mode matches $(\beta L)=4.7300$.
+
+\paragraph{Theory: linear buckling.} Under a reference load $\mathbf P$ the static step gives a stress field
+$\boldsymbol\sigma_0$, whose geometric (stress) stiffness matrix $K_G(\boldsymbol\sigma_0)$ scales linearly
+with the load. Buckling is where the tangent stiffness becomes singular:
+\[
+  \bigl(K+\lambda_i K_G(\boldsymbol\sigma_0)\bigr)\boldsymbol\psi_i=\mathbf 0,\qquad
+  P_{\text{cr},i}=\lambda_i\,P .
+\]
+CalculiX's \code{*BUCKLE} step returns the load factors $\lambda_i$ and the buckled shapes $\boldsymbol\psi_i$.
+The reported number is the \textbf{buckling load factor} (BLF): $\lambda_1>1$ means the applied load is below
+the first critical load. Two cautions go in the panel and in the report, because they are what makes linear
+buckling misleading:
+\begin{itemize}
+  \item it is \textbf{non-conservative} for imperfection-sensitive shapes (thin shells, struts with initial
+        bow). Design codes use knock-down factors, so the study shows a target BLF (question B1) and colours
+        $\lambda_1$ against it;
+  \item a negative $\lambda$ means buckling under the \emph{reversed} load. It is listed but not counted as
+        the first mode.
+\end{itemize}
+
+\paragraph{Benchmark: Euler column (SIM-05).} A slender clamped-free steel column, $500\times10\times10$\,mm,
+$I=b^4/12$, effective length factor $K=2$:
+$P_{\text{cr}}=\pi^2EI/(KL)^2=\pi^2\cdot210\,000\cdot833.3/1000^2\approx1727$\,N. With a reference load of
+1000\,N at the tip the test expects $\lambda_1=1.727\pm3\,\%$ and the second load factor $(3\pi/2)^2/(\pi/2)^2=9$
+times higher in the same plane.
+
+\paragraph{The workflow.}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\toprule
+ & Modal frequencies & Structural buckling\\
+\midrule
+New Study & type \emph{Modal}; modes $n$ (default 8), optional range $f_{\min}$--$f_{\max}$; free-free allowed
+  & type \emph{Buckling}; modes (default 4); a load is required (it is the reference load)\\
+Pre-check & density present; supports optional (free $\Rightarrow$ 6 rigid modes skipped)
+  & supports and a load; warns when the load puts the part in tension only (no positive $\lambda$ expected)\\
+Results & frequency table (mode, $f$, effective mass \% in X/Y/Z), mode-shape view with play and scale
+  & load-factor table, buckled-shape view with play, $\lambda_1$ coloured against the target BLF\\
+Checks & excitation band (question M3): modes inside a frequency band turn amber
+  & target BLF (question B1)\\
+Report & frequency table, the first three mode shapes, mesh, supports
+  & load factors, first two buckled shapes, the non-conservative note\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Mode-shape playback.} A mode shape has no amplitude. The view scales it so the largest
+displacement is 10\,\% of the bounding-box diagonal (settable). It animates
+$\mathbf u(t)=\boldsymbol\phi_i\sin2\pi t$ by moving the result mesh's nodes, the same way the static
+study's deformed view does. Play, pause and the mode list sit in the results panel.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=M\arabic*.]
+  \item \textbf{Default number of modes.} 8, with an optional range? \emph{Recommendation:} 8, settable;
+        the range fields are empty by default.
+  \item \textbf{Mode-shape playback.} In the results panel (play, scale, mode list) as above, or on the
+        Motion Study timeline (\eref{ROB-05}) so a mode can be exported as frames? \emph{Recommendation:} the
+        panel now, frame export later through the timeline.
+  \item \textbf{Excitation check.} Add a band for drones and robots: motor speed range in rpm $\times$ blade
+        count (blade-pass frequency), or a plain frequency band, with modes inside it shown amber in the table
+        and the report? \emph{Recommendation:} yes, both inputs, stored on the study, off by default.
+  \item \textbf{Prestressed modal} (static step first, e.g. a spinning propeller or a tensioned belt
+        span) now, or later with \eref{SIM-02}? \emph{Recommendation:} later. Plain modal first.
+  \item \textbf{Free-free.} Allow a modal study with no supports (rigid modes skipped and reported), or require
+        a support as static does? \emph{Recommendation:} allow it.
+\end{enumerate}
+\begin{enumerate}[label=B\arabic*.]
+  \item \textbf{Target buckling load factor.} Default target $\lambda_1\ge3$ (amber between 1 and 3, red
+        below 1), settable like the safety-factor bands? \emph{Recommendation:} yes, 3, configurable.
+  \item \textbf{Default number of buckling modes.} 4? \emph{Recommendation:} 4.
+  \item \textbf{Nonlinear buckling} (a geometrically nonlinear static run with an imperfection seeded from
+        $\boldsymbol\psi_1$) as a later option for thin printed shells? \emph{Recommendation:} note it in
+        \eref{SIM-04} and do not build it now.
+\end{enumerate}

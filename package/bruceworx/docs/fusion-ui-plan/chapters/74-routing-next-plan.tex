@@ -1,0 +1,191 @@
+%======================================================================
+\subsection{BW-ROU next: connectors, fittings, drawings, the harness as a vault item (plan, 30 Oct 2026)}\label{sec:rou-next-plan}
+%======================================================================
+
+On 30 Oct you asked for all four follow-ups to the routing track (\S\ref{sec:session-30oct}). Two of them, the
+Assembly BOM \emph{Length} column and the configurable bend rules, need no design and are being built now
+(\S\ref{sec:rou-built-30oct}). The other three change the data model, so they come here first with their
+questions. They build in this order, because each one needs the one before it:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Step & What & Needs\\
+\midrule
+1 & Connectors (pins) and fittings (ports): \eref{ROU-05} & ROU-01..04\\
+2 & The harness as a vault item, the purchasing BOM by length: \eref{ROU-06} & step 1, PDM-04 vault\\
+3 & Drawings: flattened harness, tube with bend table: \eref{ROU-07} & steps 1--2, DRW-01\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{Step 1: connectors and fittings}
+
+\paragraph{The idea.} A connector or fitting is an ordinary part (a vault item, often COTS) with
+\textbf{named attachment frames} in it: \code{Pin1}, \code{Pin2}, \dots{} on a connector and \code{Port1},
+\dots{} on a fitting. Each frame is an LCS whose origin is where the conductor or tube enters and whose $+Z$
+points out along the entry direction. The frames carry a few properties:
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Pin & name (``1'', ``A3'', ``VBAT''), accepted gauge range (e.g.\ 28--22\,AWG), terminal P/N (crimp contact),
+      seal P/N, default signal\\
+Port & port type (push-to-connect, barb, compression, NPT/BSPP thread), tube or hose size it takes, minimum
+      straight length before the first bend\\
+\bottomrule
+\end{tabularx}
+\end{center}
+Routing then gets three behaviours: (1) a route path's first or last point picked on a pin or port
+\emph{attaches} to that frame (ROU-01 already attaches to LCS origins); (2) the path \emph{leaves along the
+frame's $+Z$} for the minimum straight length, so a wire does not bend at the crimp and a tube enters a fitting
+straight; (3) a wire on that path fills its \code{From}/\code{FromPin} (\code{To}/\code{ToPin}) from the
+connector's label and the pin's name, and the from-to list stops being typed by hand. Mating pairs (a plug and
+its receptacle) record each other's P/N, so the from-to list can show a connection through a mated pair.
+
+\paragraph{Where the geometry comes from.} Most robotics and drone connectors (JST-XH/PH/GH/SH, Molex
+Micro-Fit, XT30/XT60, Dupont 2.54\,mm headers) already have STEP models in KiCad's 3D library. The KiCad
+bridge (\eref{ECD-05}) already brings KiCad parts into the Standard Libraries vault, and the footprint's pads
+give the pin positions and names. A connector made this way is a KiCad-library item plus the pin frames
+generated from its pads (question C1). Fittings (push-to-connect, barbs, NPT elbows) have no such library.
+They are made as parametric parts from a size table, as the tube sizes are in ROU-03.
+
+\paragraph{Terminals, seals and sleeving.} A crimped wire end needs a terminal (and in sealed connectors a
+seal). When a wire attaches to a pin with a terminal P/N, the terminal appears in the BOM as a counted line
+under the harness (question C3). Heat-shrink and braided sleeving are cut-to-length items on a bundle and go
+to the BOM by length, like wire.
+
+%----------------------------------------------------------------------
+\subsubsection*{Step 2: the harness as a vault item}
+
+\paragraph{The problem.} You chose in R5 (\S\ref{sec:rou}) that a harness is its own vault item with a harness
+P/N, because it is bought or built as one thing, with one P/N and one drawing. But it is
+routed \emph{in context}: its paths attach to the motor, the board and the frame in the parent assembly. In
+FreeCAD the cleanest way to keep both is the SolidWorks pattern of a \emph{virtual} component that is saved out
+later:
+\begin{enumerate}[nosep]
+  \item a \textbf{Harness} container (an \code{App::Part} with a \code{HarnessType} marker) holds the paths,
+        wires, bundles, sleeving and the connector instances, inside the assembly file, while you route;
+  \item \textbf{Make vault item} saves it out as its own file under a new P/N (document type \emph{Cable
+        assembly} / \emph{Tube assembly}). The parent links to it, and the path points keep their attachments
+        as cross-document links (\code{App::PropertyXLink}, which FreeCAD resolves when both files are
+        open, as in-context editing \eref{ASM-07} does);
+  \item opened on its own, the harness keeps the last-solved point positions, so its drawing and BOM do not
+        need the parent.
+\end{enumerate}
+
+\paragraph{The purchasing BOM.} Wire, tube, hose and sleeving become \textbf{stock items}: one vault item per
+kind, e.g.\ ``Wire, 22\,AWG, red, PVC hook-up'', with \code{QuantityUnit}\,=\,m (question V2). Every routed
+item references its stock item. The harness's own BOM then lists its connectors and terminals by count and
+its stock items by length. The flattened vault BOM \emph{sums} the lengths per stock item across all harnesses
+and adds a scrap allowance, the rounding to a purchase unit (a 30\,m spool) being optional:
+\[
+  L_{\text{buy}}=\Bigl\lceil \frac{(1+s)\sum_k n_k L_k}{L_{\text{unit}}}\Bigr\rceil L_{\text{unit}},
+\]
+with $n_k$ the number of harnesses of kind $k$ in the product and $L_k$ the length of that stock item in one
+of them.
+
+%----------------------------------------------------------------------
+\subsubsection*{Step 3: drawings}
+
+\paragraph{Flattened harness drawing.} The harness is a tree: connectors are leaves, breakouts are inner
+nodes and bundle segments are edges with lengths. The drawing lays that tree out flat in the sheet's plane
+(figure~\ref{fig:rou-flat}). It keeps the topology and labels every segment with its true length, but it is
+\emph{not to scale}, as most harness drawings are (question D1). The layout is a straightforward tree drawing:
+the longest path (trunk) runs horizontally, branches leave at $\pm45^\circ$ alternating sides, and a
+force-directed pass separates labels that overlap. The sheet carries a connector table (connector, P/N,
+mating P/N, a pin-out table per connector), the from-to wire list, the stock-item list with lengths, and
+notes (lengths $\pm$ tolerance, labels, sleeving).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,font=\sffamily\scriptsize]
+  \draw[line width=1.6pt, black!70] (0,20) -- (40,20) -- (85,20);
+  \draw[line width=1.2pt, black!70] (40,20) -- (55,35);
+  \draw[line width=1.2pt, black!70] (40,20) -- (55,5);
+  \foreach \p/\n in {{(0,20)}/J1, {(85,20)}/J2, {(55,35)}/M1, {(55,5)}/S1}{
+    \fill[bwblue] \p ++(-2.5,-2.5) rectangle ++(5,5);
+    \node[above=2.2mm] at \p {\n};}
+  \fill[black] (40,20) circle (0.9);
+  \node[below=1.2mm] at (20,20) {180 $\pm$5};
+  \node[below=1.2mm] at (63,20) {220 $\pm$5};
+  \node[anchor=east] at (47,30) {90};
+  \node[anchor=east] at (47,10) {120};
+  \node[anchor=west, text=black!55] at (90,30) {J1 board, J2 battery};
+  \node[anchor=west, text=black!55] at (90,25) {M1 motor, S1 sensor};
+  \node[anchor=west, text=black!55] at (90,18) {segment lengths true, drawing not to scale};
+  \node[anchor=west, text=black!55] at (90,13) {breakout ($\bullet$) dimensioned from J1};
+\end{tikzpicture}
+\caption{A flattened harness: the routed 3D tree laid out flat, trunk horizontal, branches at $45^\circ$,
+every segment labelled with its routed length. Connector, pin-out and wire tables sit beside it.}
+\label{fig:rou-flat}
+\end{figure}
+
+\paragraph{Tube drawing with bend table.} A tube bender works from the \textbf{YBC} (also called LRA) table:
+feed length $Y$, rotation $B$ and bend angle $C$ per bend. ROU-03 already computes it. With the intersection
+points $\mathbf P_0\dots\mathbf P_{n+1}$ of the polyline, the unit legs
+$\mathbf d_i=(\mathbf P_{i+1}-\mathbf P_i)/\lVert\cdot\rVert$, the bend radius $R$ and $t_i=R\tan(C_i/2)$:
+\[
+  C_i=\arccos(\mathbf d_{i-1}\cdot\mathbf d_i),\qquad
+  Y_i=\lVert\mathbf P_{i}-\mathbf P_{i-1}\rVert-t_{i-1}-t_i,\qquad
+  B_i=\angle\bigl(\mathbf d_{i-2}\times\mathbf d_{i-1},\ \mathbf d_{i-1}\times\mathbf d_i\bigr),
+\]
+where $B_i$ is the signed dihedral angle between successive bend planes about $\mathbf d_{i-1}$ (with $t_0=0$
+at the start). The developed (cut) length is $\sum Y_i+\sum R\,C_i$ plus the last straight. The drawing has an
+isometric and a top view of the tube, the YBC table, the XYZ intersection-point table (what CNC benders also
+accept), and the tube size, material, CLR and cut length in the title block notes. Springback and elongation
+compensation depend on the bender and the material, so they are left out for now (question D3).
+
+%----------------------------------------------------------------------
+\subsubsection*{New epics}
+\begin{itemize}[nosep]
+  \item \eref{ROU-05} Connectors and fittings: pin and port frames, attach and leave straight, auto from-to,
+        terminals in the BOM, starter library.
+  \item \eref{ROU-06} Harness as a vault item: harness container, Make vault item, stock items, purchasing BOM
+        by length with scrap and rounding.
+  \item \eref{ROU-07} Routing drawings: flattened harness drawing with tables, tube drawing with YBC and XYZ
+        tables.
+\end{itemize}
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=C\arabic*.]
+  \item \textbf{Connector geometry.} KiCad 3D models with pins generated from the footprint pads (through
+        the ECD-05 bridge), parametric outlines we draw ourselves, or manufacturer STEP files you download?
+        \emph{Recommendation:} KiCad models and pads; parametric only where KiCad has none.
+  \item \textbf{Starter library.} Which families first? Proposed: JST-XH, JST-PH, JST-GH, JST-SH, Dupont
+        2.54\,mm, Molex Micro-Fit 3.0, XT30, XT60, XT90, MR30, 3.5\,mm bullet (motor leads), Deutsch DT.
+  \item \textbf{Terminals in the BOM} automatically from the pin's terminal P/N (one per attached wire end)?
+        \emph{Recommendation:} yes.
+\end{enumerate}
+\begin{enumerate}[label=F\arabic*.]
+  \item \textbf{Fitting families first.} Push-to-connect (4/6/8\,mm pneumatic), hose barbs, NPT/BSPP threaded
+        elbows and tees, compression? \emph{Recommendation:} push-to-connect, barbs and NPT/BSPP; compression
+        later.
+  \item \textbf{Straight length at a pin or port.} A minimum straight length before the first bend, set on the
+        pin or port (defaults: wire $2\times$OD past the terminal, tube $2\times$OD or the bender's clamp
+        length), configurable like the bend rules? \emph{Recommendation:} yes.
+\end{enumerate}
+\begin{enumerate}[label=V\arabic*.]
+  \item \textbf{Harness model.} How to reach R5's own vault item: route in context as a harness container,
+        then \emph{Make vault item} saves it out (above), or each harness is its own file from the start and is
+        edited in context?
+        \emph{Recommendation:} the container first, saved out later.
+  \item \textbf{Stock items.} Wire, tube, hose and sleeving as vault items with their own P/N per gauge,
+        colour and insulation (the purchasing BOM sums by P/N), or grouped by properties without a P/N?
+        \emph{Recommendation:} vault items with P/N, document type \emph{Stock material}, shared with
+        \eref{PDM-11}'s stock forms.
+  \item \textbf{Scrap and rounding.} A scrap allowance (default 10\,\%) and optional rounding to the purchase
+        unit (spool length) per stock item? \emph{Recommendation:} yes, both per stock item, scrap default
+        10\,\%.
+\end{enumerate}
+\begin{enumerate}[label=D\arabic*.]
+  \item \textbf{Harness drawing scale.} Not to scale with every segment dimensioned (the usual practice), or
+        a 1:1 formboard print (tiled PDF) as well? \emph{Recommendation:} not to scale now; the 1:1 formboard
+        is a later option.
+  \item \textbf{Harness drawing content.} Connector table with pin-outs, from-to list, stock-item lengths,
+        labels and notes as above? Anything your builds need beyond that (wire labels/markers, test table)?
+  \item \textbf{Tube drawing.} YBC and XYZ tables; springback compensation later?
+        \emph{Recommendation:} yes, springback later.
+\end{enumerate}

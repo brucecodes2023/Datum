@@ -79,7 +79,8 @@ and previews the wire.
     \draw[black!40, dashed] (20,24) -- (24,24) -- (24,28);
     \node[anchor=west, text=black!55] at (25,29) {$R$};
     \draw[black!40, dashed] (24,32) -- (24,36) -- (28,36);
-    \node[anchor=north west, text=black!55] at (25,33.5) {$t=R\tan\frac{\theta}{2}$};
+    \node[anchor=west, text=black!55] at (30,30) {$t=R\tan\frac{\theta}{2}$};
+    \draw[black!40] (29.5,30) -- (25.5,32.5);
     \node[anchor=west, text=black!55] at (2,4) {red: the centreline, two $90^\circ$ bends of radius $R$ at points 2 and 3};
   \end{scope}
 \end{tikzpicture}
@@ -126,36 +127,36 @@ with a packing factor: $\text{OD}_{\text{bundle}}\approx1.15\sqrt{\sum \text{OD}
 Hoses are checked like spline wires against a minimum bend radius (manufacturer's figure; $6\,\text{OD}$ as the
 default for a braided hydraulic hose, $3\,\text{OD}$ for silicone tubing), with slack added the same way.
 
-\begin{epic}{ROU-01}{Route path \& bend check}{M5}{\stProg}{(new, 27 Oct)}
+\begin{epic}{ROU-01}{Route path \& bend check}{M5}{\stDone}{(new, 27 Oct)}
 The RoutePath object and panel above, both modes, attachments that follow their parts, the length and the bend
 check, the LRA table. \emph{Acceptance:} a path through four picked points reports its length within 0.1\,mm of
 the hand calculation and flags a bend under the minimum radius; a tube bender's LRA table for a three-bend tube
 matches the hand calculation.
 \end{epic}
 
-\begin{epic}{ROU-02}{Electrical wires \& harness}{M5}{\stProg}{(new, 27 Oct)}
+\begin{epic}{ROU-02}{Electrical wires \& harness}{M5}{\stDone}{(new, 27 Oct)}
 Wires and bundles on a path with gauge, colour, signal, from-to, slack, length and mass, and the \textbf{from-to
 list} (CSV: wire, signal, gauge, colour, from, to, length). \emph{Acceptance:} a three-wire motor harness lists each
 wire's length and from-to in the CSV; the BOM shows it by length.
 \end{epic}
 
-\begin{epic}{ROU-03}{Pipes, tubes \& hoses}{M5}{\stProg}{(new, 27 Oct)}
+\begin{epic}{ROU-03}{Pipes, tubes \& hoses}{M5}{\stDone}{(new, 27 Oct)}
 Pipe/tube with OD and wall or nominal size, centreline bend radius, cut length and bend table; hose with ID/OD,
 minimum bend radius, slack and the warning; the \textbf{cut list} (CSV: item, size, cut length, bend table).
 \emph{Acceptance:} a three-bend tube's cut length and LRA table match the hand calculation; a hose bent under its
 minimum radius is flagged.
 \end{epic}
 
-\begin{epic}{ROU-04}{Routed items in the BOM \& drawings}{M5}{\stTodo}{(new, 27 Oct)}
+\begin{epic}{ROU-04}{Routed items in the BOM \& drawings}{M5}{\stProg}{(new, 27 Oct)}
 \code{QuantityUnit} and \code{QuantityPer} in the part-properties schema (m for wires and tubes), read by the
 assembly BOM and the vault BOM, which was deferred in \S\ref{sec:pdm06-plan} ``until the first harness needs it''.
 Later: a flattened harness drawing (nail board) and a tube drawing with the bend table (\eref{DRW-02}).
 \emph{Acceptance:} the gearbox-plus-harness BOM shows ``Wire 22\,AWG red, 0.42\,m'' as one line.
 \end{epic}
 
-\paragraph{Out of scope for now.} Auto-routing (shortest path avoiding parts), fittings libraries (elbows,
-tees, flanges placed automatically), connector libraries with pin maps, and harness flattening. They come back as
-epics when the first real harness or plumbing job asks for them.
+\paragraph{Out of scope for now.} Auto-routing (shortest path avoiding parts). Connectors with pin maps,
+fittings, harness flattening and the tube drawing were out of scope on 27 Oct; you asked for them on 30 Oct, and
+they are planned in \S\ref{sec:rou-next-plan} as \eref{ROU-05}--\eref{ROU-07}.
 
 \paragraph{Questions for you.}
 \begin{enumerate}[label=R\arabic*.]
@@ -178,3 +179,5 @@ epics when the first real harness or plumbing job asks for them.
 \end{enumerate}
 
 \InputIfFileExists{chapters/73-routing-built}{}{}
+\InputIfFileExists{chapters/73b-routing-built-30oct}{}{}
+\input{chapters/74-routing-next-plan}
