@@ -78,6 +78,8 @@ class TestStudy(unittest.TestCase):
     def test_model_candidates(self):
         self.assertEqual(sim.model_candidates(self.doc), [self.box])
         self.assertEqual(sim.model_candidates(self.doc, [self.box]), [self.box])
+        sim.new_study(self.doc, sim.StudyPlan(model=self.box))  # the mesh takes the box as a child
+        self.assertEqual(sim.model_candidates(self.doc), [self.box])
 
     def test_new_study_creates_the_objects_with_defaults(self):
         steel = [c for c in sim.material_cards() if c["name"] == "CalculiX-Steel"][0]

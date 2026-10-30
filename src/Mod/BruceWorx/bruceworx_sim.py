@@ -381,11 +381,17 @@ def model_candidates(doc, selection=None):
         pass
     if found:
         return found
-    for obj in getattr(doc, "RootObjects", []) or []:
+    # top-level objects: no parent but FEM objects (a study's mesh takes its model as a child), visible
+    # ones first (an earlier study's results hide the model)
+    tops = [obj for obj in getattr(doc, "Objects", []) or []
+            if not [p for p in getattr(obj, "InList", []) or [] if not p.TypeId.startswith("Fem::")]]
+    for obj in tops:
         vobj = getattr(obj, "ViewObject", None)
-        if vobj is not None and not vobj.Visibility:
-            continue
-        add(obj)
+        if vobj is None or vobj.Visibility:
+            add(obj)
+    if not found:
+        for obj in tops:
+            add(obj)
     return found
 
 
