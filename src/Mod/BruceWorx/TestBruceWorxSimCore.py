@@ -772,6 +772,30 @@ class TestBucklingBenchmarks(unittest.TestCase):
         self.assertIsNone(eigen.first_factor(analysis))
         self.assertTrue(all(r["status"] == "grey" and not r["first"] for r in rows))
 
+    def test_nonlinear_buckling_below_linear(self):
+        doc, objs, theory = eigen.column(max_size=8.0, options={"Nonlinear": True})
+        analysis = objs["analysis"]
+        lines = []
+        sim.solve(analysis, working_dir=self.tmp, progress=lines.append)
+        lam1 = eigen.first_factor(analysis)
+        curve = eigen.nonlinear_data(eigen.first_buckling_result(analysis))
+        self.assertIsNotNone(curve, lines)
+        self.assertGreater(len(curve["factors"]), 10)
+        self.assertEqual(curve["factors"], sorted(curve["factors"]))
+        self.assertAlmostEqual(curve["amplitude"], 0.01 * 4 * 50000 / 20200, places=4)  # 1 % of 4V/S
+        collapse = curve["collapse"]
+        self.assertIsNotNone(collapse)
+        self.assertLess(collapse, lam1)  # a small imperfection: near and below the linear factor
+        self.assertGreater(collapse, 0.8 * lam1)
+        out = sim.write_report(analysis, folder=self.tmp, compile=bool(sim.find_tex()[0]))
+        with open(out["tex"], encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn(r"\usepackage{pgfplots}", text)
+        self.assertIn("Collapse load factor", text)
+        if sim.find_tex()[0]:
+            self.assertTrue(out["pdf"] and os.path.isfile(out["pdf"]), out["message"])
+        App.Console.PrintMessage(f"\n[nonlinear buckling] collapse {collapse:.4f} = {collapse / lam1:.3f} lambda1 "
+                                 f"({curve['basis']}), {len(curve['factors'])} increments\n")
 
 if __name__ == "__main__":
     unittest.main()
