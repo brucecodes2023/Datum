@@ -427,11 +427,13 @@ class RoutingGuiTests(unittest.TestCase):
         panel.gauge_min.setValue(28)
         panel.gauge_max.setValue(22)
         panel.terminal.setText("SXH-001T-P0.6")
+        panel.terminal_mfr.setText("JST")
         panel.terminal.editingFinished.emit()
         panel.family.setText("JST-XH")
         panel.family.editingFinished.emit()
         self.assertEqual((pins[0].PinName, pins[0].Label, pins[0].GaugeMin, pins[0].GaugeMax, pins[0].TerminalPN),
                          ("VBAT", "Pin VBAT", 28, 22, "SXH-001T-P0.6"))
+        self.assertEqual(pins[0].TerminalMfr, "JST")
         self.assertEqual(part.ConnectorFamily, "JST-XH")
         self.assertIn("Pin VBAT", panel.status.text())
         # The same frame as a port.

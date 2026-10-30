@@ -396,8 +396,11 @@ def place_fitting(fitting, point, direction, port=None):
     z = V(direction) * -1.0
     if z.Length < 1e-12:
         z = App.Vector(0, 0, -1)
-    target = App.Placement(V(point), App.Rotation(App.Vector(0, 0, 1), z))
-    world = target.multiply(port.Placement.inverse())  # port.Placement is in the fitting's frame
+    # The smallest rotation taking the port's +Z (in the fitting's frame) to -direction, so a
+    # fitting placed on a top face stands as drawn and its tube port keeps its heading.
+    local = port.Placement
+    rotation = App.Rotation(local.Rotation.multVec(App.Vector(0, 0, 1)), z)
+    world = App.Placement(V(point) - rotation.multVec(local.Base), rotation)
     try:
         parent = fitting.getParentGeoFeatureGroup()
     except Exception:

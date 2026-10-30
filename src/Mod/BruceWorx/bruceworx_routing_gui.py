@@ -1028,11 +1028,19 @@ class FramePanel:
             box.setSpecialValueText("not stated")
             box.valueChanged.connect(slot(self._changed))
         self.terminal, self.seal, self.signal = edit(), edit(), edit()
+        self.terminal_mfr, self.terminal_item, self.seal_mfr, self.seal_item = edit(), edit(), edit(), edit()
+        self.terminal.setToolTip("The terminal's manufacturer P/N: what is ordered")
+        self.terminal_item.setPlaceholderText("Standard Library P/N (optional)")
+        self.seal_item.setPlaceholderText("Standard Library P/N (optional)")
         self.pin_straight = spin(special="default rule")
         pin.addRow("Thinnest wire", self.gauge_min)
         pin.addRow("Thickest wire", self.gauge_max)
-        pin.addRow("Terminal P/N", self.terminal)
-        pin.addRow("Seal P/N", self.seal)
+        pin.addRow("Terminal MPN", self.terminal)
+        pin.addRow("Terminal maker", self.terminal_mfr)
+        pin.addRow("Terminal item", self.terminal_item)
+        pin.addRow("Seal MPN", self.seal)
+        pin.addRow("Seal maker", self.seal_mfr)
+        pin.addRow("Seal item", self.seal_item)
         pin.addRow("Default signal", self.signal)
         pin.addRow("Straight before bend", self.pin_straight)
         layout.addWidget(self.pin_box)
@@ -1079,6 +1087,9 @@ class FramePanel:
             self.gauge_max.setValue(int(f.GaugeMax))
             self.terminal.setText(f.TerminalPN)
             self.seal.setText(f.SealPN)
+            for widget, name in ((self.terminal_mfr, "TerminalMfr"), (self.terminal_item, "TerminalItem"),
+                                 (self.seal_mfr, "SealMfr"), (self.seal_item, "SealItem")):
+                widget.setText(str(getattr(f, name, "")))
             self.signal.setText(f.DefaultSignal)
             self.pin_straight.setValue(float(f.StraightLength.Value))
         else:
@@ -1131,6 +1142,11 @@ class FramePanel:
                 self._set("GaugeMax", int(self.gauge_max.value()))
                 self._set("TerminalPN", self.terminal.text().strip())
                 self._set("SealPN", self.seal.text().strip())
+                for widget, prop in ((self.terminal_mfr, "TerminalMfr"), (self.terminal_item, "TerminalItem"),
+                                     (self.seal_mfr, "SealMfr"), (self.seal_item, "SealItem")):
+                    if prop not in f.PropertiesList:
+                        bp.add_frame_props(f, bp.PIN)  # a pin made before 30 Oct's v1.2 fields
+                    self._set(prop, widget.text().strip())
                 self._set("DefaultSignal", self.signal.text().strip())
                 self._set("StraightLength", self.pin_straight.value())
             else:
