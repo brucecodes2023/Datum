@@ -42,6 +42,7 @@ import tempfile
 import time
 
 import bruceworx_sim as sim
+import bruceworx_sim_eigen as eigen
 from bruceworx_slots import slot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,8 +54,16 @@ CONSTRAINT_COMMANDS = (
     ("Displacement", "FEM_ConstraintDisplacement"),
 )
 RENDER_SIZE = (900, 600)
+TYPE_HINTS = {
+    "static": "Static stress: linear elastic, small displacements (CalculiX).",
+    "modal": "Modal frequencies: K φ = ω² M φ (CalculiX *FREQUENCY). Needs a density; no supports = free-free "
+             "(the six rigid-body modes are skipped). Loads count only when Prestressed.",
+    "buckling": "Structural buckling: load factors λ under the study's loads (CalculiX *BUCKLE). Linear buckling is "
+                "non-conservative; the nonlinear run seeds an imperfection from mode 1.",
+}
 
-_state = {"installed": False, "panel": None, "reopen": None, "probe": None, "shown": {}, "classes": None}
+_state = {"installed": False, "panel": None, "reopen": None, "probe": None, "shown": {}, "classes": None, "mode": {}}
+MODE_FPS = 25  # mode playback: frames per second, one cycle per second
 
 
 # ----- small helpers ---------------------------------------------------------------------------------
@@ -279,6 +288,133 @@ def shown_field(analysis):
     return _state["shown"].get(analysis.Name)
 
 
+# ----- mode shapes (modal and buckling) ------------------------------------------------------------
+
+
+def _hide_other_results(analysis, result):
+    for other in sim.members(analysis)["results"]:
+        mesh = getattr(other, "Mesh", None)
+        if other is not result and mesh is not None and mesh is not result.Mesh and mesh.ViewObject is not None:
+            mesh.ViewObject.Visibility = False
+
+
+def show_mode(analysis, result, factor=None):
+    """Shows a mode shape: the result mesh deformed by factor x the mode (the study's scale, 10 % of the
+    bounding-box diagonal, when None), coloured by the mode's displacement. Returns the factor."""
+    nodes = list(result.NodeNumbers)
+    vectors = list(result.DisplacementVectors)
+    _hide_for_result(analysis, result)
+    _hide_other_results(analysis, result)
+    vobj = result.Mesh.ViewObject
+    if not nodes or len(vectors) != len(nodes):
+        _warn("The mode has no shape")
+        return 0.0
+    vobj.setNodeDisplacementByVectors(nodes, vectors)
+    _color_mode(vobj, "Overall")
+    vobj.setNodeColorByScalars(nodes, list(result.DisplacementLengths))
+    factor = eigen.mode_scale(analysis, result) if factor is None else float(factor)
+    vobj.applyDisplacement(factor)
+    _state["shown"][analysis.Name] = "mode"
+    _state["mode"][analysis.Name] = result.Name
+    return factor
+
+
+def shown_mode(analysis):
+    name = _state["mode"].get(analysis.Name)
+    return analysis.Document.getObject(name) if name else None
+
+
+def show_study_mesh(analysis):
+    """The study's own mesh (with the supports' symbols) for the report: no result shown."""
+    m = sim.members(analysis)
+    for result in m["results"]:
+        mesh = getattr(result, "Mesh", None)
+        if mesh is not None and mesh.ViewObject is not None:
+            mesh.ViewObject.Visibility = False
+    for obj in _model_objects(analysis):
+        if obj.ViewObject is not None:
+            obj.ViewObject.Visibility = obj is m["mesh"]
+    if m["mesh"] is not None and m["mesh"].ViewObject is not None:
+        try:
+            m["mesh"].ViewObject.DisplayMode = "Faces & Wireframe"
+        except Exception:
+            pass
+    for obj in m["supports"] + m["loads"]:
+        if obj.ViewObject is not None:
+            obj.ViewObject.Visibility = True
+    _state["shown"][analysis.Name] = "mesh"
+
+
+class ModePlayer:
+    """Plays a mode in the 3D view: u(t) = s phi sin(2 pi t), one cycle per second (a QTimer moving the
+    result mesh's nodes, as the static study's deformed view does)."""
+
+    def __init__(self, fps=MODE_FPS, period=1.0):
+        self.fps, self.period = fps, period
+        self.timer = None
+        self.analysis = self.result = None
+        self.scale = 0.0
+        self.frame = 0
+
+    def start(self, analysis, result, scale=None):
+        from PySide import QtCore
+
+        self.stop()
+        self.analysis, self.result = analysis, result
+        self.scale = show_mode(analysis, result, scale)
+        self.frame = 0
+        if self.timer is None:
+            self.timer = QtCore.QTimer()
+            self.timer.timeout.connect(slot(self.tick))
+        self.timer.setInterval(max(5, int(round(1000.0 / self.fps))))
+        self.timer.start()
+
+    def tick(self):
+        result = self.result
+        try:
+            vobj = result.Mesh.ViewObject if result is not None else None
+        except Exception:  # the result was deleted (a new solve)
+            vobj = None
+        if vobj is None:
+            self.stop()
+            return
+        self.frame += 1
+        vobj.applyDisplacement(self.scale * eigen.phase_factor(self.frame, self.fps * self.period))
+
+    def playing(self):
+        return self.timer is not None and _alive(self.timer) and self.timer.isActive()
+
+    def stop(self):
+        if self.timer is not None and _alive(self.timer):
+            self.timer.stop()
+        try:
+            if self.result is not None and self.result.Mesh.ViewObject is not None:
+                self.result.Mesh.ViewObject.applyDisplacement(self.scale)  # rest at the peak
+        except Exception:
+            pass
+
+
+def _mode_of_selection(selection):
+    """The mode result a selection points at (a mode result or its mesh, of a modal or buckling study)."""
+    for obj in selection or []:
+        candidates = [obj] + [o for o in getattr(obj, "InList", []) or [] if o.isDerivedFrom("Fem::FemResultObject")]
+        for cand in candidates:
+            if cand.isDerivedFrom("Fem::FemResultObject") and int(getattr(cand, "Eigenmode", 0) or 0) > 0:
+                study = sim.study_of(cand)
+                if study is not None and eigen.is_eigen(study):
+                    return cand
+    return None
+
+
+def open_mode_timeline(result, return_to_study=False):
+    """A mode shape on the Motion Study timeline (play, scrub, Save frames to PNG and MP4); with
+    return_to_study the study panel comes back when it closes."""
+    analysis = sim.study_of(result)
+    if analysis is None:
+        return None
+    return show_panel(classes()["ModeTimelinePanel"](analysis, result, return_to_study))
+
+
 # ----- the probe ----------------------------------------------------------------------------------------
 
 
@@ -374,6 +510,8 @@ def render_fields(analysis, folder, size=RENDER_SIZE):
     view = _view(analysis.Document)
     if result is None or view is None:
         return {}
+    if eigen.is_eigen(analysis):
+        return render_modes(analysis, folder, view, size)
     images = {}
     before = shown_field(analysis)
     try:
@@ -398,6 +536,43 @@ def render_fields(analysis, folder, size=RENDER_SIZE):
             view.setAnimationEnabled(animated)
         if before and before != "safety":
             show_field(analysis, before, result)
+    return images
+
+
+def render_modes(analysis, folder, view, size=RENDER_SIZE):
+    """Off-screen renders of a modal or buckling study: the mesh (modal) and the report's modes, each at
+    its scaled peak: {"mesh": path, "mode1": path, ...}."""
+    import FreeCADGui as Gui
+
+    part = eigen.summary_part(analysis)
+    results = eigen.mode_results(analysis)
+    before = shown_mode(analysis)
+    images = {}
+    try:
+        animated = view.isAnimationEnabled()
+        view.setAnimationEnabled(False)
+    except Exception:
+        animated = None
+    try:
+        for kind, _caption in eigen.figures_for(part):
+            if kind == "mesh":
+                show_study_mesh(analysis)
+            else:
+                row = dict(eigen.figure_rows(part))[kind]
+                show_mode(analysis, results[row["index"] - 1])
+            Gui.updateGui()
+            view.viewIsometric()
+            view.fitAll()
+            Gui.updateGui()
+            path = os.path.join(folder, f"{analysis.Name}_{kind}.png")
+            view.saveImage(path, size[0], size[1], "Current")
+            if os.path.isfile(path):
+                images[kind] = path
+    finally:
+        if animated is not None:
+            view.setAnimationEnabled(animated)
+        if before is not None:
+            show_mode(analysis, before)
     return images
 
 
@@ -535,6 +710,30 @@ def _make_classes():
                          "principal max(|s1|, |s3|) (Rankine, brittle), Tresca s1 - s3 (conservative)")
         return combo
 
+    def count_spin(value, maximum=200):
+        spin = QtWidgets.QSpinBox()
+        spin.setRange(1, maximum)
+        spin.setValue(int(value))
+        return spin
+
+    def hz_spin(value=0.0):
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(0.0, 1.0e7)
+        spin.setDecimals(1)
+        spin.setSuffix(" Hz")
+        spin.setSpecialValueText("none")
+        spin.setValue(float(value))
+        return spin
+
+    def target_spin(value):
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(0.1, 1000.0)
+        spin.setDecimals(2)
+        spin.setSingleStep(0.5)
+        spin.setValue(float(value))
+        spin.setToolTip("Target buckling load factor: lambda_1 red below 1, amber below the target, green above")
+        return spin
+
     def button(text, handler, tip=""):
         b = QtWidgets.QPushButton(text)
         if tip:
@@ -595,6 +794,7 @@ def _make_classes():
             self.candidates = sim.model_candidates(self.doc, selection if selection is not None else _selection())
             self.form = [self._build_study(), self._build_model(), self._build_material(), self._build_mesh()]
             self._model_changed()
+            self._type_changed()
 
         # --- boxes
         def _build_study(self):
@@ -610,9 +810,54 @@ def _make_classes():
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
             lay.addRow("Type", self.type_combo)
             w.layout().addLayout(lay)
-            w.layout().addWidget(hint("Static stress: linear elastic, small displacements (CalculiX). "
-                                      "Modal, buckling, thermal and thermal stress follow on this frame."))
+            # modal: modes, range, prestressed; buckling: modes, target, nonlinear (shown by type)
+            self.modal_box = QtWidgets.QWidget()
+            mlay = form_layout()
+            self.modal_box.setLayout(mlay)
+            self.modal_count = count_spin(eigen.MODAL_MODES)
+            mlay.addRow("Modes", self.modal_count)
+            self.fmin_spin, self.fmax_spin = hz_spin(), hz_spin()
+            rng = QtWidgets.QHBoxLayout()
+            rng.addWidget(self.fmin_spin)
+            rng.addWidget(QtWidgets.QLabel("to"))
+            rng.addWidget(self.fmax_spin)
+            mlay.addRow("Range", rng)
+            self.prestressed_check = QtWidgets.QCheckBox("Prestressed (a static step with the loads first)")
+            mlay.addRow("", self.prestressed_check)
+            w.layout().addWidget(self.modal_box)
+            self.buckling_box = QtWidgets.QWidget()
+            blay = form_layout()
+            self.buckling_box.setLayout(blay)
+            self.buckling_count = count_spin(eigen.BUCKLING_MODES)
+            blay.addRow("Load factors", self.buckling_count)
+            self.target_spin = target_spin(eigen.default_target())
+            blay.addRow("Target factor", self.target_spin)
+            self.nonlinear_check = QtWidgets.QCheckBox("Nonlinear run too (imperfection from mode 1)")
+            blay.addRow("", self.nonlinear_check)
+            w.layout().addWidget(self.buckling_box)
+            self.type_hint = hint()
+            w.layout().addWidget(self.type_hint)
+            self.type_combo.currentIndexChanged.connect(slot(self._type_changed))
             return w
+
+        def _type_changed(self, *_a):
+            kind = self.type_combo.currentData() or "static"
+            self.modal_box.setVisible(kind == "modal")
+            self.buckling_box.setVisible(kind == "buckling")
+            for widget in (self.measure_label, self.measure_combo):
+                widget.setVisible(kind == "static")
+            self.type_hint.setText(TYPE_HINTS.get(kind, ""))
+
+        def options(self):
+            """The study's modal or buckling settings from the panel."""
+            kind = self.type_combo.currentData() or "static"
+            if kind == "modal":
+                return {"ModeCount": self.modal_count.value(), "FrequencyMin": self.fmin_spin.value(),
+                        "FrequencyMax": self.fmax_spin.value(), "Prestressed": self.prestressed_check.isChecked()}
+            if kind == "buckling":
+                return {"ModeCount": self.buckling_count.value(), "TargetLoadFactor": self.target_spin.value(),
+                        "Nonlinear": self.nonlinear_check.isChecked()}
+            return {}
 
         def _build_model(self):
             w = box("Model", ":/icons/PartDesign_Body.svg")
@@ -646,7 +891,8 @@ def _make_classes():
             self.material_combo.currentIndexChanged.connect(slot(self._material_changed))
             lay.addRow("Card", self.material_combo)
             self.measure_combo = measure_combo(sim.default_measure())
-            lay.addRow("Safety factor from", self.measure_combo)
+            self.measure_label = QtWidgets.QLabel("Safety factor from")
+            lay.addRow(self.measure_label, self.measure_combo)
             w.layout().addLayout(lay)
             self.material_warn = hint()
             w.layout().addWidget(self.material_warn)
@@ -737,6 +983,7 @@ def _make_classes():
                 fineness=self.fineness_combo.currentData(),
                 second_order=self.second_order.isChecked(),
                 stress_measure=self.measure_combo.currentData(),
+                options=self.options(),
             )
 
         def setup_buttons(self):
@@ -785,8 +1032,14 @@ def _make_classes():
             self.doc = analysis.Document
             self.fea = None
             self.process = None
+            self.nl_process = None
+            self.nl_info = None
             self.started = 0.0
-            self.form = [self._build_setup(), self._build_mesh(), self._build_solve(), self._build_results()]
+            self.kind = sim.study_kind(analysis)
+            self.player = ModePlayer()
+            eigen.ensure_properties(analysis)
+            results = self._build_results() if self.kind == "static" else self._build_modes()
+            self.form = [self._build_setup(), self._build_mesh(), self._build_solve(), results]
             self.refresh()
 
         # --- boxes
@@ -836,9 +1089,334 @@ def _make_classes():
             row.addWidget(self.solve_button)
             row.addStretch(1)
             w.layout().addLayout(row)
+            if self.kind in ("modal", "buckling"):
+                w.layout().addWidget(self._build_eigen_options())
             self.progress = hint()
             w.layout().addWidget(self.progress)
             return w
+
+        def _build_eigen_options(self):
+            """The modal or buckling settings of the study (they apply at the next Solve)."""
+            a = self.analysis
+            box_ = QtWidgets.QWidget()
+            lay = form_layout()
+            box_.setLayout(lay)
+            self.count_spin = count_spin(a.ModeCount)
+            self.count_spin.valueChanged.connect(slot(self._options_changed))
+            if self.kind == "modal":
+                lay.addRow("Modes", self.count_spin)
+                self.fmin_spin, self.fmax_spin = hz_spin(a.FrequencyMin), hz_spin(a.FrequencyMax)
+                rng = QtWidgets.QHBoxLayout()
+                rng.addWidget(self.fmin_spin)
+                rng.addWidget(QtWidgets.QLabel("to"))
+                rng.addWidget(self.fmax_spin)
+                lay.addRow("Range", rng)
+                self.prestressed_check = QtWidgets.QCheckBox("Prestressed (a static step with the loads first)")
+                self.prestressed_check.setChecked(bool(a.Prestressed))
+                lay.addRow("", self.prestressed_check)
+                for widget in (self.fmin_spin, self.fmax_spin):
+                    widget.valueChanged.connect(slot(self._options_changed))
+                self.prestressed_check.toggled.connect(slot(self._options_changed))
+            else:
+                lay.addRow("Load factors", self.count_spin)
+                self.nonlinear_check = QtWidgets.QCheckBox("Nonlinear run (imperfection from mode 1, NLGEOM)")
+                self.nonlinear_check.setChecked(bool(a.Nonlinear))
+                lay.addRow("", self.nonlinear_check)
+                self.imperfection_spin = QtWidgets.QDoubleSpinBox()
+                self.imperfection_spin.setRange(0.0, 1000.0)
+                self.imperfection_spin.setDecimals(4)
+                self.imperfection_spin.setSuffix(" mm")
+                self.imperfection_spin.setSpecialValueText("auto (1 % of the section)")
+                self.imperfection_spin.setValue(float(a.ImperfectionAmplitude))
+                lay.addRow("Imperfection", self.imperfection_spin)
+                self.limit_spin = QtWidgets.QDoubleSpinBox()
+                self.limit_spin.setRange(0.1, 10.0)
+                self.limit_spin.setDecimals(2)
+                self.limit_spin.setSingleStep(0.1)
+                self.limit_spin.setSuffix(" × λ1")
+                self.limit_spin.setValue(float(a.NonlinearLoadLimit))
+                lay.addRow("Load up to", self.limit_spin)
+                self.nonlinear_check.toggled.connect(slot(self._options_changed))
+                for widget in (self.imperfection_spin, self.limit_spin):
+                    widget.valueChanged.connect(slot(self._options_changed))
+                for widget in (self.imperfection_spin, self.limit_spin):
+                    widget.setEnabled(bool(a.Nonlinear))
+            return box_
+
+        def _options_changed(self, *_a):
+            a = self.analysis
+            a.ModeCount = self.count_spin.value()
+            if self.kind == "modal":
+                a.FrequencyMin, a.FrequencyMax = self.fmin_spin.value(), self.fmax_spin.value()
+                a.Prestressed = self.prestressed_check.isChecked()
+            else:
+                a.Nonlinear = self.nonlinear_check.isChecked()
+                a.ImperfectionAmplitude = self.imperfection_spin.value()
+                a.NonlinearLoadLimit = self.limit_spin.value()
+                for widget in (self.imperfection_spin, self.limit_spin):
+                    widget.setEnabled(bool(a.Nonlinear))
+
+        def _build_modes(self):
+            """The modal or buckling results: the table, play and scale, the timeline, the checks, the report."""
+            a = self.analysis
+            title = "Modes" if self.kind == "modal" else "Buckling load factors"
+            w = box(title, os.path.join(HERE, "BruceWorx_MotionStudy.svg"))
+            self.summary = hint("Not solved yet.")
+            w.layout().addWidget(self.summary)
+            headers = (["Mode", "f (Hz)", "X %", "Y %", "Z %"] if self.kind == "modal" else ["Mode", "λ", ""])
+            self.modes_table = QtWidgets.QTableWidget(0, len(headers))
+            self.modes_table.setHorizontalHeaderLabels(headers)
+            self.modes_table.verticalHeader().setVisible(False)
+            self.modes_table.horizontalHeader().setStretchLastSection(True)
+            self.modes_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+            self.modes_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+            self.modes_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            self.modes_table.setMaximumHeight(200)
+            self.modes_table.itemSelectionChanged.connect(slot(self._mode_selected))
+            w.layout().addWidget(self.modes_table)
+            row = QtWidgets.QHBoxLayout()
+            self.play_button = QtWidgets.QPushButton("Play")
+            self.play_button.setCheckable(True)
+            self.play_button.setToolTip("Animate the selected mode: u = s φ sin 2πt, one cycle per second")
+            self.play_button.toggled.connect(slot(self.toggle_play))
+            row.addWidget(self.play_button)
+            self.scale_spin = QtWidgets.QDoubleSpinBox()
+            self.scale_spin.setRange(0.1, 100.0)
+            self.scale_spin.setDecimals(1)
+            self.scale_spin.setSuffix(" % of diagonal")
+            self.scale_spin.setToolTip("The played mode's largest displacement as a share of the bounding-box diagonal")
+            self.scale_spin.setValue(100.0 * float(a.ModeScale))
+            self.scale_spin.valueChanged.connect(slot(self._scale_changed))
+            row.addWidget(self.scale_spin)
+            row.addWidget(button("Motion Study…", self.open_timeline,
+                                 "The selected mode on the Motion Study timeline: scrub, loop, Save frames (PNG, MP4)"))
+            row.addStretch(1)
+            w.layout().addLayout(row)
+            if self.kind == "modal":
+                w.layout().addWidget(self._build_excitation())
+            else:
+                w.layout().addWidget(self._build_target())
+            row2 = QtWidgets.QHBoxLayout()
+            self.probe_button = QtWidgets.QPushButton("Probe")  # the static panel's; unused for modes
+            self.probe_button.setVisible(False)
+            row2.addWidget(button("Report", self.report, "LaTeX report with the renders, compiled to a PDF beside the document"))
+            row2.addStretch(1)
+            w.layout().addLayout(row2)
+            self.legend = hint()
+            w.layout().addWidget(self.legend)
+            self.probe_label = hint()
+            w.layout().addWidget(self.probe_label)
+            return w
+
+        def _build_excitation(self):
+            a = self.analysis
+            wbox = QtWidgets.QWidget()
+            lay = form_layout()
+            wbox.setLayout(lay)
+            self.excite_check = QtWidgets.QCheckBox("Excitation check: modes inside a band turn amber")
+            self.excite_check.setChecked(bool(a.ExcitationCheck))
+            lay.addRow("", self.excite_check)
+            self.source_combo = QtWidgets.QComboBox()
+            self.source_combo.addItem("Motor speed × blades", "MotorSpeed")
+            self.source_combo.addItem("Frequency band", "FrequencyBand")
+            self.source_combo.setCurrentIndex(max(0, self.source_combo.findData(str(a.ExcitationSource))))
+            lay.addRow("Source", self.source_combo)
+            self.rpm_min, self.rpm_max = QtWidgets.QDoubleSpinBox(), QtWidgets.QDoubleSpinBox()
+            for spin, value in ((self.rpm_min, a.MotorRpmMin), (self.rpm_max, a.MotorRpmMax)):
+                spin.setRange(0.0, 1.0e6)
+                spin.setDecimals(0)
+                spin.setSingleStep(500)
+                spin.setSuffix(" rpm")
+                spin.setValue(float(value))
+            rpm = QtWidgets.QHBoxLayout()
+            rpm.addWidget(self.rpm_min)
+            rpm.addWidget(QtWidgets.QLabel("to"))
+            rpm.addWidget(self.rpm_max)
+            lay.addRow("Motor", rpm)
+            self.blades_spin = count_spin(a.BladeCount, 64)
+            lay.addRow("Blades", self.blades_spin)
+            self.band_min, self.band_max = hz_spin(a.BandMin), hz_spin(a.BandMax)
+            band = QtWidgets.QHBoxLayout()
+            band.addWidget(self.band_min)
+            band.addWidget(QtWidgets.QLabel("to"))
+            band.addWidget(self.band_max)
+            lay.addRow("Band", band)
+            self.excite_check.toggled.connect(slot(self._excitation_changed))
+            self.source_combo.currentIndexChanged.connect(slot(self._excitation_changed))
+            for spin in (self.rpm_min, self.rpm_max, self.blades_spin, self.band_min, self.band_max):
+                spin.valueChanged.connect(slot(self._excitation_changed))
+            self.bands_note = hint()
+            lay.addRow("", self.bands_note)
+            return wbox
+
+        def _excitation_changed(self, *_a):
+            a = self.analysis
+            a.ExcitationCheck = self.excite_check.isChecked()
+            a.ExcitationSource = self.source_combo.currentData()
+            a.MotorRpmMin, a.MotorRpmMax = self.rpm_min.value(), self.rpm_max.value()
+            a.BladeCount = self.blades_spin.value()
+            a.BandMin, a.BandMax = self.band_min.value(), self.band_max.value()
+            self._refresh_summary()
+
+        def _build_target(self):
+            a = self.analysis
+            wbox = QtWidgets.QWidget()
+            lay = form_layout()
+            wbox.setLayout(lay)
+            row = QtWidgets.QHBoxLayout()
+            self.target_spin = target_spin(eigen.target_factor(a))
+            self.target_spin.valueChanged.connect(slot(self._target_changed))
+            row.addWidget(self.target_spin)
+            self.target_default_button = button("Save as default", self.save_target_default,
+                                                "New buckling studies start with this target (Mod/BruceWorx/Sim)")
+            row.addWidget(self.target_default_button)
+            lay.addRow("Target λ1", row)
+            self.bands_note = hint()
+            lay.addRow("", self.bands_note)
+            return wbox
+
+        def _target_changed(self, value):
+            self.analysis.TargetLoadFactor = float(value)
+            self._refresh_summary()
+
+        def save_target_default(self):
+            eigen.save_default_target(self.target_spin.value())
+            self.bands_note.setText(f"Saved: new buckling studies start with target {self.target_spin.value():g}.")
+            return True
+
+        def _scale_changed(self, value):
+            self.analysis.ModeScale = float(value) / 100.0
+            result = shown_mode(self.analysis)
+            if result is not None:
+                playing = self.player.playing()
+                self.player.stop()
+                if playing:
+                    self.player.start(self.analysis, result)
+                else:
+                    show_mode(self.analysis, result)
+
+        def selected_mode(self):
+            row = self.modes_table.currentRow()
+            results = eigen.mode_results(self.analysis)
+            if 0 <= row < self.modes_table.rowCount():
+                item = self.modes_table.item(row, 0)
+                index = int(item.data(QtCore.Qt.UserRole)) if item is not None else row + 1
+                if 0 < index <= len(results):
+                    return results[index - 1]
+            return None
+
+        def select_mode(self, index):
+            """Selects the table row of mode `index` (1-based) and shows it."""
+            for row in range(self.modes_table.rowCount()):
+                if int(self.modes_table.item(row, 0).data(QtCore.Qt.UserRole)) == index:
+                    self.modes_table.selectRow(row)
+                    self._mode_selected()
+                    return True
+            return False
+
+        def _mode_selected(self, *_a):
+            result = self.selected_mode()
+            if result is None:
+                return
+            if self.player.playing():
+                self.player.start(self.analysis, result)
+            else:
+                show_mode(self.analysis, result)
+            self.legend.setText(f"<b>{result.Label}</b>: shape scaled to {self.scale_spin.value():g} % of the diagonal; "
+                                "colour: the mode's displacement (blue none, red most)")
+
+        def toggle_play(self, on):
+            if on:
+                result = self.selected_mode() or (eigen.mode_results(self.analysis) or [None])[0]
+                if result is None:
+                    self.play_button.setChecked(False)
+                    _warn("No modes yet: solve the study first")
+                    return
+                self.player.start(self.analysis, result)
+                self.play_button.setText("Pause")
+            else:
+                self.player.stop()
+                self.play_button.setText("Play")
+
+        def open_timeline(self):
+            result = self.selected_mode() or (eigen.mode_results(self.analysis) or [None])[0]
+            if result is None:
+                _warn("No modes yet: solve the study first")
+                return None
+            self.player.stop()
+            return open_mode_timeline(result, return_to_study=True)
+
+        def _fill_modes(self):
+            """The table from the study's results; returns the summary HTML."""
+            table = self.modes_table
+            table.setRowCount(0)
+            a = self.analysis
+            if self.kind == "modal":
+                rows = eigen.modal_rows(a)
+                shown = [r for r in rows if not r["rigid"]]
+                table.setRowCount(len(shown))
+                for i, r in enumerate(shown):
+                    mass = r["mass"] + [None] * (3 - len(r["mass"]))
+                    cells = [str(r["index"]), f"{r['frequency']:.5g}"] + [("–" if m is None else f"{m:.3g}") for m in mass[:3]]
+                    for c, text in enumerate(cells):
+                        item = QtWidgets.QTableWidgetItem(text)
+                        if r["band"]:
+                            item.setBackground(QtGui.QBrush(QtGui.QColor(eigen.STATUS_COLORS["amber"])))
+                            item.setToolTip(f"Inside the {r['band']} band")
+                        table.setItem(i, c, item)
+                    table.item(i, 0).setData(QtCore.Qt.UserRole, r["index"])
+                if not rows:
+                    return "Not solved yet."
+                parts = []
+                if eigen.free_free(a):
+                    parts.append(f"Free-free: {eigen.rigid_count(a, rows)} rigid-body modes (below {eigen.RIGID_HZ:g} Hz) skipped")
+                if bool(a.Prestressed) and eigen.prestress_result(a) is not None:
+                    parts.append("Prestressed: the modes of the loaded state")
+                if shown:
+                    parts.insert(0, f"First mode <b>{shown[0]['frequency']:.4g} Hz</b>; {len(shown)} modes")
+                bands = eigen.excitation_bands(a)
+                if bands:
+                    excited = [str(r["index"]) for r in shown if r["band"]]
+                    band_text = ", ".join(f"{label} {lo:.4g}–{hi:.4g} Hz" for label, lo, hi in bands)
+                    parts.append((f"<b style='color:#8a6d00'>Modes {', '.join(excited)} inside the excitation band</b>"
+                                  if excited else "<span style='color:#1f7a46'>No mode inside the excitation band</span>")
+                                 + f" ({band_text})")
+                return "<br>".join(parts)
+            rows = eigen.buckling_rows(a)
+            table.setRowCount(len(rows))
+            for i, r in enumerate(rows):
+                note = "λ1" if r["first"] else ("reversed load" if r["factor"] <= 0 else "")
+                for c, text in enumerate((str(r["index"]), f"{r['factor']:.5g}", note)):
+                    item = QtWidgets.QTableWidgetItem(text)
+                    if c == 1:
+                        item.setForeground(QtGui.QBrush(QtGui.QColor(eigen.STATUS_COLORS[r["status"]])))
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                    table.setItem(i, c, item)
+                table.item(i, 0).setData(QtCore.Qt.UserRole, r["index"])
+            if not rows:
+                return "Not solved yet."
+            first = eigen.first_factor(a)
+            target = eigen.target_factor(a)
+            if first is None:
+                text = ("<b style='color:#b00020'>No positive load factor</b>: the load puts the part in tension only "
+                        "(it does not buckle under it)")
+            else:
+                status = eigen.blf_status(first, target)
+                color = eigen.STATUS_COLORS[status]
+                verdict = {"red": "below 1: it buckles under the load", "amber": f"below the target {target:g}",
+                           "green": f"at or above the target {target:g}"}[status]
+                text = f"λ1 = <b style='color:{color}'>{first:.4g}</b>, {verdict}"
+            curve = eigen.nonlinear_data(eigen.first_buckling_result(a))
+            if curve:
+                if curve["collapse"]:
+                    text += f"<br>Nonlinear: collapse at <b>{curve['collapse']:.4g}</b> ({curve['basis']})"
+                else:
+                    text += f"<br>Nonlinear: {curve['basis']}"
+            text += ("<br><span style='color:#777'>Linear buckling is non-conservative: imperfect parts buckle below "
+                     "λ1. Compare λ1 with the target, or run the nonlinear option.</span>")
+            return text
 
         def _build_results(self):
             w = box("Results", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"))
@@ -1022,8 +1600,10 @@ def _make_classes():
 
         def release(self):
             stop_probe()
-            if self.process is not None and _alive(self.process) and self.process.state() != QtCore.QProcess.NotRunning:
-                self.process.kill()
+            self.player.stop()
+            for process in (self.process, self.nl_process):
+                if process is not None and _alive(process) and process.state() != QtCore.QProcess.NotRunning:
+                    process.kill()
             return super().release()
 
         # --- state
@@ -1061,6 +1641,10 @@ def _make_classes():
             self._refresh_summary()
 
         def _refresh_summary(self):
+            if self.kind in ("modal", "buckling"):
+                if _alive(self.summary):
+                    self.summary.setText(self._fill_modes())
+                return
             result = sim.latest_result(self.analysis)
             if result is None:
                 self.summary.setText("Not solved yet.")
@@ -1173,10 +1757,11 @@ def _make_classes():
                 return False
             self.refresh()
             self.started = time.time()
+            self.player.stop()
             if blocking:
                 self.say("Solving with CalculiX…")
                 code = self.fea.ccx_run()
-                return self._finished(code, QtCore.QProcess.NormalExit)
+                return self._finished(code, QtCore.QProcess.NormalExit, blocking=True)
             self.fea.setup_ccx()
             if not getattr(self.fea, "ccx_binary_present", False):
                 self._fail("CalculiX not found")
@@ -1200,7 +1785,7 @@ def _make_classes():
             self.solve_button.setEnabled(True)
             self._fail(f"CalculiX did not run ({error})")
 
-        def _finished(self, code, exit_status):
+        def _finished(self, code, exit_status, blocking=False):
             if _alive(self.solve_button):
                 self.solve_button.setEnabled(True)
             if exit_status != QtCore.QProcess.NormalExit or code:
@@ -1213,7 +1798,50 @@ def _make_classes():
                 return False
             self.say(f"Solved in {time.time() - self.started:.1f} s")
             self.refresh()
+            if self.kind in ("modal", "buckling"):
+                if self.modes_table.rowCount():
+                    self.modes_table.selectRow(0)
+                    self._mode_selected()
+                if self.kind == "buckling" and bool(self.analysis.Nonlinear):
+                    return self.solve_nonlinear(blocking)
+                return True
             self.show("safety" if getattr(result, "SafetyFactor", None) else "stress")
+            return True
+
+        def solve_nonlinear(self, blocking=False):
+            """The nonlinear buckling run after the linear one: a second ccx (a QProcess unless blocking)."""
+            try:
+                self.nl_info = eigen.prepare_nonlinear(self.analysis, self.fea.inp_file_name)
+            except eigen.EigenError as exc:
+                self._fail(f"Nonlinear buckling not run: {exc}")
+                return False
+            info = self.nl_info
+            self.say(f"Nonlinear buckling: imperfection {info['amplitude']:.3g} mm, load up to {info['limit']:g} × λ1…")
+            if blocking:
+                code, _tail = eigen.run_ccx(info["dir"], info["base"])
+                return self._nonlinear_finished(code, QtCore.QProcess.NormalExit)
+            self.nl_process = QtCore.QProcess()
+            self.nl_process.setWorkingDirectory(info["dir"])
+            self.nl_process.finished.connect(slot(self._nonlinear_finished))
+            self.nl_process.errorOccurred.connect(slot(self._process_error))
+            self.solve_button.setEnabled(False)
+            self.nl_process.start(sim.find_ccx(), ["-i", info["base"]])
+            return True
+
+        def _nonlinear_finished(self, code, exit_status=None):
+            if _alive(self.solve_button):
+                self.solve_button.setEnabled(True)
+            try:
+                curve = eigen.finish_nonlinear(self.analysis, self.nl_info, code or 0)
+            except eigen.EigenError as exc:
+                self._fail(f"Nonlinear buckling: {exc}")
+                return False
+            if curve["collapse"]:
+                self.say(f"Nonlinear buckling: collapse at load factor {curve['collapse']:.4g} "
+                         f"({len(curve['factors'])} increments, {time.time() - self.started:.0f} s in all)")
+            else:
+                self.say(f"Nonlinear buckling: {curve['basis']}")
+            self._refresh_summary()
             return True
 
         # --- results
@@ -1259,7 +1887,131 @@ def _make_classes():
                 self.probe_label.setText(f"<span style='color:#8a6d00'>{files.get('message', '')}</span><br>"
                                          f"Source: <a href='file://{files['dir']}'>{os.path.basename(files['dir'])}</a>")
 
-    return {"Panel": Panel, "NewStudyPanel": NewStudyPanel, "StudyPanel": StudyPanel}
+    import bruceworx_motion as bm
+
+    class ModeTimelinePanel(Panel, bm.TimelineMixin):
+        """A mode shape on the Motion Study timeline (ROB-05): the frames of u = s φ sin 2πt over a number
+        of cycles, played, scrubbed and saved (PNG frames and an MP4) by the same timeline as a motion study."""
+
+        title = "Motion Study"
+
+        def __init__(self, analysis, result, return_to_study=False):
+            super().__init__()
+            self.analysis, self.result = analysis, result
+            self.return_to_study = return_to_study
+            self.fps, self.cycles, self.period = MODE_FPS, 2, 1.0
+            self.frames = self.frame_count()
+            self.frame = 0
+            self.scale = eigen.mode_scale(analysis, result)
+            w = box(f"Motion Study: {result.Label}", os.path.join(HERE, "BruceWorx_MotionStudy.svg"))
+            w.setObjectName("bwModeTimeline")
+            lay = form_layout()
+            self.cycles_spin = count_spin(self.cycles, 100)
+            lay.addRow("Cycles", self.cycles_spin)
+            self.period_spin = QtWidgets.QDoubleSpinBox()
+            self.period_spin.setRange(0.1, 60.0)
+            self.period_spin.setDecimals(2)
+            self.period_spin.setSuffix(" s per cycle")
+            self.period_spin.setValue(self.period)
+            lay.addRow("Shown at", self.period_spin)
+            self.fps_spin = count_spin(self.fps, 120)
+            self.fps_spin.setSuffix(" fps")
+            lay.addRow("Frame rate", self.fps_spin)
+            w.layout().addLayout(lay)
+            self.build_timeline(w.layout(), "Loop", 1.0)
+            self.status = hint()
+            w.layout().addWidget(self.status)
+            w.layout().addWidget(hint("A mode has no amplitude: the shape is scaled so its largest displacement is "
+                                      f"{100 * float(analysis.ModeScale):g} % of the bounding-box diagonal (the study's "
+                                      "Mode scale), and shown slowed down to one cycle per period."))
+            self.form = w
+            for spin in (self.cycles_spin, self.period_spin, self.fps_spin):
+                spin.valueChanged.connect(slot(self._settings_changed))
+            show_mode(analysis, result, 0.0)
+            self._settings_changed()
+            self.show_frame(0)
+
+        def frame_count(self):
+            return max(2, int(round(self.cycles * self.period * self.fps)))
+
+        def _settings_changed(self, *_a):
+            self.cycles, self.period, self.fps = self.cycles_spin.value(), self.period_spin.value(), self.fps_spin.value()
+            self.frames = self.frame_count()
+            self.scrub.blockSignals(True)
+            self.scrub.setRange(0, self.frames - 1)
+            self.scrub.blockSignals(False)
+            self.set_speed()
+            self.status.setText(f"{self.frames} frames: {self.cycles} cycles of {self.period:g} s at {self.fps} fps")
+
+        def factor(self, index):
+            return self.scale * eigen.phase_factor(index, self.period * self.fps)
+
+        def show_frame(self, index):
+            index = max(0, min(self.frames - 1, int(index)))
+            self.frame = index
+            try:
+                self.result.Mesh.ViewObject.applyDisplacement(self.factor(index))
+            except Exception:
+                return
+            self.time_label.setText(f"{self.current_time():.2f} s")
+            if self.scrub.value() != index:
+                self.scrub.blockSignals(True)
+                self.scrub.setValue(index)
+                self.scrub.blockSignals(False)
+            try:
+                import FreeCADGui as Gui
+
+                Gui.updateGui()
+            except Exception:
+                pass
+
+        def ensure_solved(self):
+            return self.frames > 0
+
+        def current_time(self):
+            return self.frame / float(self.fps)
+
+        def timeline_fps(self):
+            return self.fps
+
+        def save_frames(self, folder=None):
+            if folder is None:
+                folder = QtWidgets.QFileDialog.getExistingDirectory(self.form, "Folder for the frames")
+                if not folder:
+                    return None
+            self.buttons["play"].setChecked(False)
+            paths, mp4 = bm.save_frames(None, None, self.frames, folder, fps=self.fps, show=self.show_frame)
+            self.status.setText(f"{len(paths)} frames saved to {folder}" + (f", and {os.path.basename(mp4)}" if mp4
+                                                                           else " (no ffmpeg on the PATH: no MP4)"))
+            return paths, mp4
+
+        def modifyStandardButtons(self, buttons):
+            self.dialog_buttons = buttons  # self.buttons are the timeline's
+
+        def getStandardButtons(self):
+            return QtWidgets.QDialogButtonBox.Close
+
+        def release(self):
+            if _alive(self.timer):
+                self.timer.stop()
+            try:
+                show_mode(self.analysis, self.result)
+            except Exception:
+                pass
+            return super().release()
+
+        def reject(self):
+            self.release()
+            close_dialog()
+            if self.return_to_study:
+                schedule_reopen(self.analysis)
+            return True
+
+        def accept(self):
+            return self.reject()
+
+    return {"Panel": Panel, "NewStudyPanel": NewStudyPanel, "StudyPanel": StudyPanel,
+            "ModeTimelinePanel": ModeTimelinePanel}
 
 
 def FreeCAD_params(path):
@@ -1403,6 +2155,22 @@ def run_bands():
     return panel
 
 
+def _with_modes():
+    study = current_study()
+    return study is not None and eigen.is_eigen(study) and bool(eigen.mode_results(study))
+
+
+def run_modes():
+    """Mode Shapes: the study panel at its mode list, playing the selected mode."""
+    panel = open_study_panel()
+    if panel is None or panel.kind not in ("modal", "buckling"):
+        return panel
+    if panel.modes_table.rowCount() and panel.modes_table.currentRow() < 0:
+        panel.modes_table.selectRow(0)
+    panel.play_button.setChecked(True)
+    return panel
+
+
 def run_report():
     study = current_study()
     if study is None:
@@ -1436,6 +2204,8 @@ COMMANDS = (
      "Read stress, displacement and safety factor at a clicked point", _with_result, run_probe),
     ("BruceWorx_SafetyFactorBands", "SF Bands", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),
      "Safety-factor bands of the study: thresholds and colours, saved as the default if you like", _with_study, run_bands),
+    ("BruceWorx_ModeShapes", "Mode Shapes", os.path.join(HERE, "BruceWorx_MotionStudy.svg"),
+     "Play the mode shapes of a modal or buckling study (Motion Study puts one on the timeline)", _with_modes, run_modes),
     ("BruceWorx_StudyReport", "Report", os.path.join(HERE, "BruceWorx_StudyReport.svg"),
      "Write the study report (LaTeX with renders, compiled to a PDF) beside the document", _with_result, run_report),
 )
@@ -1465,4 +2235,10 @@ def install():
         return
     for name, text, icon, tip, active, handler in COMMANDS:
         Gui.addCommand(name, _Command(name, text, icon, tip, active, handler))
+    try:  # a mode shape plays on the Motion Study timeline (ROB-05) when one is selected
+        import bruceworx_motion as bm
+
+        bm.register_source(_mode_of_selection, open_mode_timeline)
+    except Exception as exc:
+        _warn(f"Mode shapes are not on the Motion Study timeline: {exc}")
     _state["installed"] = True

@@ -656,16 +656,20 @@ def make_link(assembly, j1, j2, ratio=1.0, reverse=False, mm_per_turn=None):
 # ---------------------------------------------------------------------------
 
 
-def save_frames(assembly, sim, frames, folder, view=None, size=(1280, 720), fps=None, on_frame=None):
+def save_frames(assembly, sim, frames, folder, view=None, size=(1280, 720), fps=None, on_frame=None, show=None):
     """PNGs frame_0001.png ... in folder (the start pose first), and motion.mp4 when ffmpeg is on
-    the PATH. Returns (png paths, mp4 path or None)."""
+    the PATH. Returns (png paths, mp4 path or None). ``show(index)`` puts another frame source (a
+    mode shape) at a frame instead of the assembly; then sim may be None and fps is needed."""
     import FreeCADGui as Gui
 
     view = view or Gui.ActiveDocument.ActiveView
     os.makedirs(folder, exist_ok=True)
     paths = []
     for index in range(frames):
-        show_frame(assembly, index)
+        if show is not None:
+            show(index)
+        else:
+            show_frame(assembly, index)
         if on_frame:
             on_frame(index)
         path = os.path.join(folder, f"frame_{index + 1:04d}.png")
@@ -991,7 +995,133 @@ class DriveJointPanel:
         return True
 
 
-class MotionStudyPanel:
+class TimelineMixin:
+    """The Motion Study timeline: the scrub slider and the time, |< < Play Stop > >|, Once / Loop /
+    Ping-pong, the speed and Save frames. MotionStudyPanel plays an assembly's solved frames on it;
+    another frame source (a mode shape of a modal or buckling study, SIM-01) plays on the same one.
+
+    The host has ``frames`` (the count) and ``frame``, and gives show_frame(index), ensure_solved(),
+    current_time(), timeline_fps(), save_frames(folder=None); set_mode and set_speed store the
+    choice where the host keeps it (and must keep the timer interval: ``_timer_interval``)."""
+
+    def build_timeline(self, lay, loop="Once", speed=1.0):
+        from PySide import QtCore, QtWidgets
+
+        self.frames = getattr(self, "frames", 0)
+        self.frame = getattr(self, "frame", 0)
+        self.direction = 1
+        self.playing = False
+        lay.addWidget(_heading("Playback"))
+        self.scrub = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.scrub.setObjectName("bwStudyScrub")
+        self.scrub.setRange(0, max(0, self.frames - 1))
+        self.time_label = QtWidgets.QLabel("0.00 s")
+        self.time_label.setObjectName("bwStudyTime")
+        self.time_label.setMinimumWidth(70)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.scrub, 1)
+        row.addWidget(self.time_label)
+        lay.addLayout(row)
+        row = QtWidgets.QHBoxLayout()
+        self.buttons = {}
+        for key, text, tip in (("first", "|<", "To the start"), ("back", "<", "One frame back"),
+                               ("play", "Play", "Play / pause (space)"), ("stop", "Stop", "Stop, back to the start"),
+                               ("forward", ">", "One frame forward"), ("last", ">|", "To the end")):
+            b = QtWidgets.QToolButton()
+            b.setText(text)
+            b.setToolTip(tip)
+            b.setObjectName(f"bwStudy_{key}")
+            row.addWidget(b)
+            self.buttons[key] = b
+        self.buttons["play"].setCheckable(True)
+        self.mode = QtWidgets.QComboBox()
+        self.mode.setObjectName("bwStudyMode")
+        self.mode.addItems(LOOP_MODES)
+        self.mode.setCurrentText(loop if loop in LOOP_MODES else LOOP_MODES[0])
+        self.speed = QtWidgets.QComboBox()
+        self.speed.setObjectName("bwStudySpeed")
+        for s in SPEEDS:
+            self.speed.addItem(f"{s:g}x", s)
+        self.speed.setCurrentIndex(min(range(len(SPEEDS)), key=lambda i: abs(SPEEDS[i] - float(speed))))
+        row.addStretch(1)
+        row.addWidget(self.mode)
+        row.addWidget(self.speed)
+        lay.addLayout(row)
+        row = QtWidgets.QHBoxLayout()
+        self.export = QtWidgets.QPushButton("Save frames…")
+        self.export.setObjectName("bwStudyExport")
+        self.export.setToolTip("PNG frames into a folder, and an MP4 when ffmpeg is installed")
+        row.addWidget(self.export)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(_slot(self.tick))
+        self.scrub.valueChanged.connect(_slot(self.show_frame))
+        self.buttons["first"].clicked.connect(lambda _c=False: self.go(0))
+        self.buttons["last"].clicked.connect(lambda _c=False: self.go(self.frames - 1))
+        self.buttons["back"].clicked.connect(lambda _c=False: self.go(self.frame - 1))
+        self.buttons["forward"].clicked.connect(lambda _c=False: self.go(self.frame + 1))
+        self.buttons["play"].toggled.connect(_slot(self.set_playing))
+        self.buttons["stop"].clicked.connect(_slot(self.stop))
+        self.mode.currentTextChanged.connect(_slot(self.set_mode))
+        self.speed.currentIndexChanged.connect(_slot(self.set_speed))
+        self.export.clicked.connect(_slot(self.save_frames))
+
+    def _timer_interval(self, fps, speed):
+        self.timer.setInterval(max(5, int(round(1000.0 / (max(1, fps) * max(0.01, speed))))))
+
+    def set_mode(self, text):
+        pass
+
+    def set_speed(self, _index=None):
+        self._timer_interval(self.timeline_fps(), float(self.speed.currentData()))
+
+    def go(self, index):
+        if self.ensure_solved():
+            self.show_frame(index)
+
+    # --- playback
+    def set_playing(self, on):
+        if on:
+            if not self.ensure_solved():
+                self.buttons["play"].setChecked(False)
+                return
+            self.set_speed()
+            self.direction = 1
+            if self.frame >= self.frames - 1 and self.mode.currentText() == "Once":
+                self.frame = 0
+            self.timer.start()
+            self.buttons["play"].setText("Pause")
+        else:
+            self.timer.stop()
+            self.buttons["play"].setText("Play")
+        self.playing = on
+
+    def stop(self):
+        self.buttons["play"].setChecked(False)
+        if self.frames:
+            self.show_frame(0)
+
+    def tick(self):
+        if not self.frames:
+            return
+        nxt = self.frame + self.direction
+        mode = self.mode.currentText()
+        if nxt >= self.frames or nxt < 0:
+            if mode == "Once":
+                self.show_frame(self.frames - 1)
+                self.buttons["play"].setChecked(False)
+                return
+            if mode == "Loop":
+                nxt = 0 if nxt >= self.frames else self.frames - 1
+            else:  # ping-pong
+                self.direction = -self.direction
+                nxt = max(0, min(self.frames - 1, self.frame + self.direction))
+        self.show_frame(nxt)
+
+
+
+class MotionStudyPanel(TimelineMixin):
     """Motion Study: the joints with their keyframes, playback and export. The study is a
     Simulation object kept with the file; OK keeps it, Cancel undoes the edit (and a new study)."""
 
@@ -1083,57 +1213,12 @@ class MotionStudyPanel:
         self.status.setObjectName("bwStudyStatus")
         self.status.setWordWrap(True)
         lay.addWidget(self.status)
-        # playback
-        lay.addWidget(_heading("Playback"))
-        self.scrub = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.scrub.setObjectName("bwStudyScrub")
-        self.scrub.setRange(0, 0)
-        self.time_label = QtWidgets.QLabel("0.00 s")
-        self.time_label.setObjectName("bwStudyTime")
-        self.time_label.setMinimumWidth(70)
-        row = QtWidgets.QHBoxLayout()
-        row.addWidget(self.scrub, 1)
-        row.addWidget(self.time_label)
-        lay.addLayout(row)
-        row = QtWidgets.QHBoxLayout()
-        self.buttons = {}
-        for key, text, tip in (("first", "|<", "To the start"), ("back", "<", "One frame back"),
-                               ("play", "Play", "Play / pause (space)"), ("stop", "Stop", "Stop, back to the start"),
-                               ("forward", ">", "One frame forward"), ("last", ">|", "To the end")):
-            b = QtWidgets.QToolButton()
-            b.setText(text)
-            b.setToolTip(tip)
-            b.setObjectName(f"bwStudy_{key}")
-            row.addWidget(b)
-            self.buttons[key] = b
-        self.buttons["play"].setCheckable(True)
-        self.mode = QtWidgets.QComboBox()
-        self.mode.setObjectName("bwStudyMode")
-        self.mode.addItems(LOOP_MODES)
-        self.mode.setCurrentText(sim.BWLoop)
-        self.speed = QtWidgets.QComboBox()
-        self.speed.setObjectName("bwStudySpeed")
-        for s in SPEEDS:
-            self.speed.addItem(f"{s:g}x", s)
-        self.speed.setCurrentIndex(min(range(len(SPEEDS)), key=lambda i: abs(SPEEDS[i] - float(sim.BWSpeed))))
-        row.addStretch(1)
-        row.addWidget(self.mode)
-        row.addWidget(self.speed)
-        lay.addLayout(row)
-        row = QtWidgets.QHBoxLayout()
-        self.export = QtWidgets.QPushButton("Save frames…")
-        self.export.setObjectName("bwStudyExport")
-        self.export.setToolTip("PNG frames into a folder, and an MP4 when ffmpeg is installed")
-        row.addWidget(self.export)
-        row.addStretch(1)
-        lay.addLayout(row)
+        self.build_timeline(lay, sim.BWLoop, float(sim.BWSpeed))
         lay.addWidget(_hint("Values are degrees or millimetres from the joint's limit datums; between keyframes "
                             "the joint moves at constant speed, before and after it stays. A joint without "
                             "keyframes holds its position (Hold) or follows the others and any gear, belt or "
                             "rack link. OK keeps the study with the file and puts the parts back where they were."))
         lay.addStretch(1)
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(_slot(self.tick))
         self.name.editingFinished.connect(_slot(self.rename))
         self.duration.valueChanged.connect(_slot(self.set_duration))
         self.fps.valueChanged.connect(_slot(self.set_fps))
@@ -1143,16 +1228,6 @@ class MotionStudyPanel:
         self.add.clicked.connect(_slot(self.add_keyframe))
         self.remove.clicked.connect(_slot(self.remove_keyframe))
         self.solve_button.clicked.connect(_slot(self.solve))
-        self.scrub.valueChanged.connect(_slot(self.show_frame))
-        self.buttons["first"].clicked.connect(lambda _c=False: self.go(0))
-        self.buttons["last"].clicked.connect(lambda _c=False: self.go(self.frames - 1))
-        self.buttons["back"].clicked.connect(lambda _c=False: self.go(self.frame - 1))
-        self.buttons["forward"].clicked.connect(lambda _c=False: self.go(self.frame + 1))
-        self.buttons["play"].toggled.connect(_slot(self.set_playing))
-        self.buttons["stop"].clicked.connect(_slot(self.stop))
-        self.mode.currentTextChanged.connect(_slot(self.set_mode))
-        self.speed.currentIndexChanged.connect(_slot(self.set_speed))
-        self.export.clicked.connect(_slot(self.save_frames))
         if self.rows:
             self.table.selectRow(0)
         self.fill_keys()
@@ -1310,7 +1385,10 @@ class MotionStudyPanel:
 
     def set_speed(self, _index=None):
         self.sim.BWSpeed = float(self.speed.currentData())
-        self.timer.setInterval(max(5, int(round(1000.0 / (self.fps.value() * self.sim.BWSpeed)))))
+        self._timer_interval(self.fps.value(), self.sim.BWSpeed)
+
+    def timeline_fps(self):
+        return self.fps.value()
 
     # --- solve and show
     def solve(self):
@@ -1358,49 +1436,6 @@ class MotionStudyPanel:
             Gui.updateGui()
         except Exception:  # noqa: BLE001
             pass
-
-    def go(self, index):
-        if self.ensure_solved():
-            self.show_frame(index)
-
-    # --- playback
-    def set_playing(self, on):
-        if on:
-            if not self.ensure_solved():
-                self.buttons["play"].setChecked(False)
-                return
-            self.set_speed()
-            self.direction = 1
-            if self.frame >= self.frames - 1 and self.mode.currentText() == "Once":
-                self.frame = 0
-            self.timer.start()
-            self.buttons["play"].setText("Pause")
-        else:
-            self.timer.stop()
-            self.buttons["play"].setText("Play")
-        self.playing = on
-
-    def stop(self):
-        self.buttons["play"].setChecked(False)
-        if self.frames:
-            self.show_frame(0)
-
-    def tick(self):
-        if not self.frames:
-            return
-        nxt = self.frame + self.direction
-        mode = self.mode.currentText()
-        if nxt >= self.frames or nxt < 0:
-            if mode == "Once":
-                self.show_frame(self.frames - 1)
-                self.buttons["play"].setChecked(False)
-                return
-            if mode == "Loop":
-                nxt = 0 if nxt >= self.frames else self.frames - 1
-            else:  # ping-pong
-                self.direction = -self.direction
-                nxt = max(0, min(self.frames - 1, self.frame + self.direction))
-        self.show_frame(nxt)
 
     # --- export
     def save_frames(self, folder=None):
@@ -1597,10 +1632,46 @@ def drive(assembly=None, joint=None, kind=None):
     return _open(DriveJointPanel(assembly, joint, kind), "driving")
 
 
+# Frame sources other than an assembly's study play on the same timeline: a module registers
+# match(selection) -> target or None and open(target) -> panel (bruceworx_sim_gui: a mode shape).
+_sources = []
+
+
+def register_source(match, open_panel):
+    """Motion Study opens a selected object of another kind on the timeline (see TimelineMixin)."""
+    for i, (m, _o) in enumerate(_sources):
+        if getattr(m, "__qualname__", m) == getattr(match, "__qualname__", match):
+            _sources[i] = (match, open_panel)
+            return
+    _sources.append((match, open_panel))
+
+
+def _source_target(selection=None):
+    try:
+        import FreeCADGui as Gui
+
+        selection = Gui.Selection.getSelection() if selection is None else selection
+    except Exception:  # noqa: BLE001
+        selection = selection or []
+    for match, open_panel in _sources:
+        try:
+            target = match(selection)
+        except Exception:  # noqa: BLE001
+            target = None
+        if target is not None:
+            return target, open_panel
+    return None, None
+
+
 def study(assembly=None, sim=None):
-    """Open the study: the given one, the selected one, the latest, or a new one."""
+    """Open the study: the given one, the selected one, the latest, or a new one. A selected frame
+    source of another kind (a mode shape) opens on the timeline instead."""
     import FreeCADGui as Gui
 
+    if assembly is None and sim is None:
+        target, open_panel = _source_target()
+        if target is not None:
+            return open_panel(target)
     assembly = assembly or _assembly()
     if assembly is None:
         return None
@@ -1634,6 +1705,8 @@ class _Command:
 
         if Gui.Control.activeDialog() and not any(_state.get(k) for k in ("driving", "study", "link")):
             return False
+        if self.name == "BruceWorx_MotionStudy" and _source_target()[0] is not None:
+            return True
         return _app().ActiveDocument is not None and _assembly() is not None
 
     def Activated(self):

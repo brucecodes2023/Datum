@@ -900,18 +900,25 @@ def summary_part(analysis):
     return out
 
 
+def figure_rows(part):
+    """[(kind, row)] of the modes a report renders: the first three elastic modes (modal), the first two
+    buckled shapes, positive factors first (buckling)."""
+    rows = [r for r in part.get("rows") or [] if not r.get("rigid")]
+    if part["kind"] == "modal":
+        return [(f"mode{n}", row) for n, row in enumerate(rows[:3], 1)]
+    ordered = [r for r in rows if r["factor"] > 0] + [r for r in rows if r["factor"] <= 0]
+    return [(f"mode{n}", row) for n, row in enumerate(ordered[:2], 1)]
+
+
 def figures_for(part):
     """[(kind, caption)] of the renders a report shows: the mesh and the first three modes (modal), the
     first two buckled shapes (buckling)."""
-    rows = [r for r in part.get("rows") or [] if not r.get("rigid")]
-    figures = []
-    if part["kind"] == "modal":
-        figures.append(("mesh", "The mesh and the supports"))
-        for n, row in enumerate(rows[:3], 1):
-            figures.append((f"mode{n}", f"Mode {row['index']}: {row['frequency']:.4g} Hz (shape scaled; colour: displacement)"))
-    else:
-        for n, row in enumerate(rows[:2], 1):
-            figures.append((f"mode{n}", f"Buckled shape {row['index']}: load factor {row['factor']:.4g} (scaled)"))
+    figures = [("mesh", "The mesh and the supports")] if part["kind"] == "modal" else []
+    for kind, row in figure_rows(part):
+        if part["kind"] == "modal":
+            figures.append((kind, f"Mode {row['index']}: {row['frequency']:.4g} Hz (shape scaled; colour: displacement)"))
+        else:
+            figures.append((kind, f"Buckled shape {row['index']}: load factor {row['factor']:.4g} (scaled)"))
     return figures
 
 

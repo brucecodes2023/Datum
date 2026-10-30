@@ -14,6 +14,7 @@ import unittest
 import FreeCAD as App
 
 import bruceworx_sim as sim
+import bruceworx_sim_eigen as eigen
 
 
 def close_all():
@@ -65,11 +66,13 @@ class TestSimulationGui(unittest.TestCase):
         panel = self.sg.classes()["NewStudyPanel"](self.doc)
         self.assertEqual(len(panel.form), 4)
         self.assertEqual([panel.model_combo.itemData(i) for i in range(panel.model_combo.count())], ["Box"])
-        # planned study types are listed and disabled
+        # modal and buckling are available; thermal and thermal stress are listed as planned and disabled
         texts = [panel.type_combo.itemText(i) for i in range(panel.type_combo.count())]
-        self.assertEqual(texts[0], "Static stress")
-        self.assertTrue(all("(planned)" in t for t in texts[1:]))
-        self.assertFalse(panel.type_combo.model().item(1).isEnabled())
+        self.assertEqual(texts[:3], ["Static stress", "Modal frequencies", "Structural buckling"])
+        self.assertTrue(all("(planned)" in t for t in texts[3:]))
+        self.assertTrue(panel.type_combo.model().item(1).isEnabled())
+        self.assertFalse(panel.type_combo.model().item(3).isEnabled())
+        self.assertTrue(panel.modal_box.isHidden() and panel.buckling_box.isHidden())
         # a part without a material warns and the mesh size is the default
         self.assertIn("no material", panel.material_warn.text())
         self.assertAlmostEqual(panel.size_spin.value(), sim.default_mesh_size(self.box), places=3)
@@ -242,6 +245,165 @@ class TestSimulationGui(unittest.TestCase):
             self.assertIn("Report:", panel.probe_label.text())
         else:
             self.assertIn("No LaTeX compiler", files["message"])
+        panel.release()
+
+    def test_new_modal_and_buckling_studies_from_the_panel(self):
+        panel = self.sg.classes()["NewStudyPanel"](self.doc)
+        panel.type_combo.setCurrentIndex(panel.type_combo.findData("modal"))
+        self.assertFalse(panel.modal_box.isHidden())
+        self.assertTrue(panel.measure_combo.isHidden())  # the safety factor is a static matter
+        self.assertEqual(panel.modal_count.value(), 8)
+        self.assertEqual(panel.fmin_spin.text(), "none")
+        panel.modal_count.setValue(6)
+        panel.fmax_spin.setValue(2000.0)
+        panel.prestressed_check.setChecked(True)
+        panel.name_edit.setText("Vibes")
+        analysis = panel.create()
+        self.assertEqual(analysis.StudyType, "modal")
+        self.assertEqual((analysis.ModeCount, analysis.FrequencyMax, analysis.Prestressed), (6, 2000.0, True))
+        panel.release()
+        panel = self.sg.classes()["NewStudyPanel"](self.doc)
+        panel.type_combo.setCurrentIndex(panel.type_combo.findData("buckling"))
+        self.assertFalse(panel.buckling_box.isHidden())
+        self.assertEqual(panel.buckling_count.value(), 4)
+        self.assertAlmostEqual(panel.target_spin.value(), 3.0)
+        panel.nonlinear_check.setChecked(True)
+        analysis = panel.create()
+        self.assertEqual((analysis.StudyType, analysis.ModeCount, analysis.Nonlinear), ("buckling", 4, True))
+        panel.release()
+        study = self.sg.classes()["StudyPanel"](analysis)  # its results box is the mode table
+        self.assertEqual(study.modes_table.columnCount(), 3)
+        self.assertIn("Not solved", study.summary.text())
+        study.release()
+
+    @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+    def test_modal_solve_table_playback_timeline_and_report(self):
+        import FreeCADGui as Gui
+
+        import bruceworx_motion as bm
+
+        tmp = tempfile.mkdtemp(prefix="bw-simgui-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        close_all()
+        doc, objs, _theory = sim.cantilever(name="Modes", study_type="modal")
+        analysis = objs["analysis"]
+        Gui.getDocument(doc.Name).activeView().viewIsometric()
+        panel = self.sg.classes()["StudyPanel"](analysis)
+        self.assertTrue(panel.solve(blocking=True))
+        self.assertEqual(panel.modes_table.rowCount(), 8)
+        self.assertIn("First mode", panel.summary.text())
+        self.assertEqual(panel.modes_table.item(0, 0).text(), "1")
+        self.assertAlmostEqual(float(panel.modes_table.item(0, 1).text()), 833.65, delta=1.0)
+        results = eigen.mode_results(analysis)
+        self.assertIs(self.sg.shown_mode(analysis), results[0])  # the first mode is shown after a solve
+        # a row shows its mode at 10 % of the diagonal
+        self.assertTrue(panel.select_mode(3))
+        self.assertIs(self.sg.shown_mode(analysis), results[2])
+        self.assertTrue(results[2].Mesh.ViewObject.Visibility)
+        self.assertFalse(results[0].Mesh.ViewObject.Visibility)
+        panel.scale_spin.setValue(20.0)
+        self.assertAlmostEqual(analysis.ModeScale, 0.2)
+        # play and pause
+        panel.play_button.setChecked(True)
+        self.assertTrue(panel.player.playing())
+        pump(6)
+        self.assertGreater(panel.player.frame, 0)
+        panel.play_button.setChecked(False)
+        self.assertFalse(panel.player.playing())
+        # the excitation check: 25 000 rpm x 2 blades = 833 Hz, modes 1 and 2 amber
+        panel.excite_check.setChecked(True)
+        panel.rpm_min.setValue(20000)
+        panel.rpm_max.setValue(30000)
+        amber = eigen.STATUS_COLORS["amber"].lower()
+        colors = [panel.modes_table.item(r, 1).background().color().name() for r in range(3)]
+        self.assertEqual(colors[:2], [amber, amber])
+        self.assertNotEqual(colors[2], amber)
+        self.assertIn("Modes 1, 2 inside the excitation band", panel.summary.text())
+        # the selected mode on the Motion Study timeline: frames, scrub, Save frames
+        panel.select_mode(1)
+        timeline = panel.open_timeline()
+        pump()
+        self.assertIsNotNone(timeline)
+        self.assertEqual(timeline.frames, 50)  # 2 cycles of 1 s at 25 fps
+        timeline.fps_spin.setValue(5)
+        self.assertEqual(timeline.frames, 10)
+        timeline.go(2)
+        import math
+
+        self.assertAlmostEqual(timeline.factor(2), timeline.scale * math.sin(2 * math.pi * 2 / 5), places=9)
+        self.assertEqual(timeline.scrub.value(), 2)
+        self.assertIn("0.40 s", timeline.time_label.text())
+        timeline.mode.setCurrentText("Ping-pong")
+        timeline.buttons["play"].setChecked(True)
+        pump(4)
+        timeline.buttons["play"].setChecked(False)
+        frames_dir = os.path.join(tmp, "frames")
+        paths, _mp4 = timeline.save_frames(frames_dir)
+        self.assertEqual(len(paths), 10)
+        self.assertTrue(all(os.path.isfile(p) for p in paths))
+        timeline.reject()
+        pump(12)  # the study panel comes back
+        # Motion Study with a mode selected opens that mode on the timeline
+        self.sg.close_dialog()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(results[1])
+        self.assertIsNotNone(bm._source_target()[0])
+        opened = bm.study()
+        self.assertIs(opened.result, results[1])
+        opened.reject()
+        Gui.Selection.clearSelection()
+        self.sg.close_dialog()
+        pump(12)
+        self.sg.close_dialog()
+        # the report: the mesh and the first three modes, the frequency table, the excitation result
+        panel = self.sg.classes()["StudyPanel"](analysis)
+        files = panel.report(folder=tmp)
+        for kind in ("mesh", "mode1", "mode2", "mode3"):
+            self.assertTrue(os.path.isfile(os.path.join(files["dir"], f"fig_{kind}.png")), kind)
+        with open(files["tex"], encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertEqual(text.count(r"\includegraphics"), 4)
+        self.assertIn("Modes inside a band: 1, 2", text)
+        if sim.find_tex()[0]:
+            self.assertTrue(self.sg.wait_for_report(600))
+            self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
+        panel.release()
+
+    @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+    def test_buckling_solve_target_and_nonlinear(self):
+        import FreeCADGui as Gui
+
+        tmp = tempfile.mkdtemp(prefix="bw-simgui-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        self.addCleanup(eigen.reset_default_target)
+        close_all()
+        doc, objs, _theory = eigen.column(max_size=8.0, options={"Nonlinear": True})
+        analysis = objs["analysis"]
+        Gui.getDocument(doc.Name).activeView().viewIsometric()
+        panel = self.sg.classes()["StudyPanel"](analysis)
+        self.assertTrue(panel.nonlinear_check.isChecked())
+        self.assertTrue(panel.solve(blocking=True))
+        self.assertEqual(panel.modes_table.rowCount(), 4)
+        self.assertEqual(panel.modes_table.item(0, 2).text(), "λ1")
+        amber = eigen.STATUS_COLORS["amber"].lower()
+        self.assertEqual(panel.modes_table.item(0, 1).foreground().color().name(), amber)
+        self.assertIn("below the target 3", panel.summary.text())
+        self.assertIn("non-conservative", panel.summary.text())
+        self.assertIn("Nonlinear: collapse at", panel.summary.text())
+        panel.target_spin.setValue(1.5)  # lambda_1 = 1.73 passes a target of 1.5: green
+        self.assertEqual(panel.modes_table.item(0, 1).foreground().color().name(), eigen.STATUS_COLORS["green"].lower())
+        self.assertTrue(panel.save_target_default())
+        self.assertAlmostEqual(eigen.default_target(), 1.5)
+        files = panel.report(folder=tmp)
+        for kind in ("mode1", "mode2"):
+            self.assertTrue(os.path.isfile(os.path.join(files["dir"], f"fig_{kind}.png")), kind)
+        with open(files["tex"], encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertEqual(text.count(r"\includegraphics"), 2)
+        self.assertIn(r"\begin{axis}", text)
+        if sim.find_tex()[0]:
+            self.assertTrue(self.sg.wait_for_report(600))
+            self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
         panel.release()
 
     def test_ribbon_commands_in_the_fem_workbench(self):
