@@ -1,0 +1,48 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "23d6c827-c09d-4e35-958b-f60ecb5bc41e"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "PETG-CF printed"
+  Description: "Printed carbon-fibre PETG (Bambu PETG-CF), dried: stiffer and stronger in X-Y than PETG Basic, about the same in Z. Absorbs little moisture. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 38 MPa, modulus 1340 MPa, elongation 4.7 %. Thermal values are bulk-polymer estimates."
+  ReferenceSource: "Bambu Lab TDS (PETG-CF, V1.0)"
+  SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PETG-CF_Technical_Data_Sheet.pdf"
+  Tags:
+    - "Keystone"
+    - "Printed"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1250 kg/m^3"
+    YoungsModulus: "2460 MPa"
+    PoissonRatio: "0.38"
+    YieldStrength: "59 MPa"
+    UltimateTensileStrength: "59 MPa"
+    UltimateStrain: "10.4"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.25 W/m/K"
+    SpecificHeat: "1200 J/kg/K"
+    ThermalExpansionCoefficient: "40 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.0600, 0.0760, 0.0720, 1.0)"
+    DiffuseColor: "(0.1500, 0.1900, 0.1800, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Printed"
+  Basis: "typical"
+  YieldBasis: "printed X-Y tensile strength used as yield (no separate yield reported)"
+  Brittle: false
+  Elongation: "10.4 %"
+  PrintOrientation: "XY"
+  ZTensileStrength: "38 MPa"
+  ZYoungsModulus: "1340 MPa"
+  ZElongation: "4.7 %"
+  Source: "Bambu Lab TDS (PETG-CF, V1.0)"

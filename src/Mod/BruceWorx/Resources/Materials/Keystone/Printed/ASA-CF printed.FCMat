@@ -1,0 +1,48 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "6eed5199-f3b1-4c53-af4c-e2d1713f6f2d"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "ASA-CF printed"
+  Description: "Printed carbon-fibre ASA (Bambu ASA-CF), annealed and dried: outdoor and UV-exposed parts that must stay stiff and dimensionally stable. Much stiffer than ASA (4.2 against 2.45 GPa) but weaker in X-Y (34 against 52 MPa): choose it for stiffness, not strength. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 30 MPa, modulus 2290 MPa, elongation 4.4 %. Thermal values are bulk-polymer estimates."
+  ReferenceSource: "Bambu Lab TDS (ASA-CF, V1.0)"
+  SourceURL: "https://store.bblcdn.com/s7/default/44b0a48ab1d84e819647c980eb179ae9/Bambus_ASA-CF_Technical_Data_Sheet.pdf"
+  Tags:
+    - "Keystone"
+    - "Printed"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1020 kg/m^3"
+    YoungsModulus: "4200 MPa"
+    PoissonRatio: "0.35"
+    YieldStrength: "34 MPa"
+    UltimateTensileStrength: "34 MPa"
+    UltimateStrain: "9.6"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.22 W/m/K"
+    SpecificHeat: "1300 J/kg/K"
+    ThermalExpansionCoefficient: "50 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.0840, 0.0840, 0.0800, 1.0)"
+    DiffuseColor: "(0.2100, 0.2100, 0.2000, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Printed"
+  Basis: "typical"
+  YieldBasis: "printed X-Y tensile strength used as yield (no separate yield reported)"
+  Brittle: false
+  Elongation: "9.6 %"
+  PrintOrientation: "XY"
+  ZTensileStrength: "30 MPa"
+  ZYoungsModulus: "2290 MPa"
+  ZElongation: "4.4 %"
+  Source: "Bambu Lab TDS (ASA-CF, V1.0)"

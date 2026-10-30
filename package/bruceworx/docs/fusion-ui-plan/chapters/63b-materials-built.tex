@@ -144,3 +144,53 @@ Keystone, System and User with 28 Keystone materials.
   \item \textbf{More cards?} For example 6082-T6 (EU plate), S235/S355 or A36 structural steel, 17-4PH, titanium Gr 5,
         PEEK, PETG-CF, ASA-CF. Each is a few minutes: a new UUID, a row in the table, a test run.
 \end{enumerate}
+
+\paragraph{Added 30 Oct: five more cards (33 in all).} Same rules as the first 28: specification minimums for the
+metals with the typical values in the \code{BruceWorx:} block, Bambu Lab data sheets (ISO 527, 100\,\% infill, X-Y with
+Z in the block) for the two printed cards, new permanent UUIDs in \code{CARDS}.
+
+\begin{center}
+\scriptsize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.75cm}rrrrrlX@{}}
+\toprule
+Card & $E$ & $\nu$ & $\rho$ & $\sigma_y$ & $\sigma_u$ & basis & Source\\
+\midrule
+Titanium Ti-6Al-4V annealed & 113.8 & 0.342 & 4430 & 827 & 896 & min & AMS 4911 minimums (120/130 ksi; typical 880/950); ASM/MatWeb elastic and thermal values\\
+Stainless 17-4PH H1150 & 196.5 & 0.27 & 7800 & 725 & 930 & min & ASTM A564 Type 630 bar, H1150 (105/135 ksi; typical 860/1000), also AMS 5643; AK Steel elastic and thermal values\\
+Steel A36 structural & 200 & 0.26 & 7850 & 250 & 400 & min & ASTM A36 minimums (36 ksi; UTS range 400--550, lower end used)\\
+PETG-CF printed & 2.46 & 0.38 & 1250 & 59 (38) & 59 & typ & Bambu Lab TDS (PETG-CF, V1.0)\\
+ASA-CF printed & 4.2 & 0.35 & 1020 & 34 (30) & 34 & typ & Bambu Lab TDS (ASA-CF, V1.0)\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{itemize}[nosep]
+  \item \textbf{17-4PH is H1150, not H900.} Machined robot parts (shafts, pins, brackets, small gears) are usually cut
+        from bar bought already aged, and H1150 is the condition stocked for that: it machines well at 28--37\,HRC,
+        needs no ageing after machining (so no size change or scale on finished parts), and is tough (16\,\% minimum
+        elongation) where robot parts see shock loads; it is also the most resistant to stress-corrosion cracking.
+        H900 (minimum yield 1170\,MPa, UTS 1310\,MPa, 10\,\% elongation) is in the card's description; it can be a
+        sixth card if you need it.
+  \item \textbf{A36} has no typical value in the card: mill certificates vary, and much angle and channel is
+        dual-certified A36/A572-50 (yield 345\,MPa), which the description mentions for use only with the certificate.
+  \item \textbf{ASA-CF is stiffer but weaker than ASA} on Bambu's own sheet (4.2 against 2.45\,GPa, 34 against
+        52\,MPa X-Y); the card says to choose it for stiffness. PETG-CF is stronger than PETG Basic in X-Y (59 against
+        48\,MPa) and about the same in Z (38 against 39).
+  \item Thermal values of the two CF filaments are estimates like the other printed cards (CF lowers $\alpha$, as on
+        PA-CF).
+\end{itemize}
+
+\paragraph{Your answers to the open questions (30 Oct).}
+\begin{enumerate}[nosep]
+  \item \textbf{Minimum or typical:} keep the minimum strengths for metals, as built.
+  \item \textbf{Printer and default PETG:} still \emph{open} (which printer and filament brand; PETG Basic or PETG HF
+        as the default).
+  \item \textbf{Printed Z strength:} for \eref{SIM-03}, a printed part uses the Z strength when its print direction is
+        set, and the X-Y strength times a knockdown otherwise.
+  \item \textbf{Thermal values for plastics:} the handbook values are fine for now.
+  \item \textbf{More cards:} PETG-CF, ASA-CF, titanium Grade 5, 17-4PH and A36, added above.
+\end{enumerate}
+
+\paragraph{Tests.} \file{TestBruceWorxMaterials.py} now also checks the count (33) and looks up the new cards
+(Ti-6Al-4V 827/896\,MPa minimum, 17-4PH 725\,MPa, A36 250\,MPa, PETG-CF and ASA-CF Z strengths); headless, 8 tests,
+all pass.

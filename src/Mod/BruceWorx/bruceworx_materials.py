@@ -56,6 +56,12 @@ CARDS = {
     "59c6600a-84f6-411c-9803-d0f317c75d9f": "Printed/TPU 95A printed.FCMat",
     "a219f075-45f7-4963-8f78-123d102e03b3": "Composites/Carbon fibre plate QI.FCMat",
     "5b903760-2960-4bec-b622-20683a6b91e4": "Composites/G10-FR4 laminate.FCMat",
+    # Added 30 Oct (SIM-01, second batch)
+    "68fc1d8d-0c01-42ec-bd1c-7759270cb76d": "Metals/Titanium Ti-6Al-4V annealed.FCMat",
+    "6707b2ec-c050-4f03-acf2-856f4453f018": "Metals/Stainless 17-4PH H1150.FCMat",
+    "cd8cd9f3-25a1-43fa-880a-e49821b97b0e": "Metals/Steel A36 structural.FCMat",
+    "23d6c827-c09d-4e35-958b-f60ecb5bc41e": "Printed/PETG-CF printed.FCMat",
+    "6eed5199-f3b1-4c53-af4c-e2d1713f6f2d": "Printed/ASA-CF printed.FCMat",
 }
 FAMILIES = ("Metals", "Plastics", "Printed", "Composites")
 

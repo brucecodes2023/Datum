@@ -35,6 +35,7 @@ class TestKeystoneLibrary(unittest.TestCase):
                          for p in glob.glob(os.path.join(km.LIBRARY_DIR, "*", "*.FCMat")))
         self.assertEqual(on_disk, sorted(km.CARDS.values()))
         self.assertEqual(len(set(km.CARDS.values())), len(km.CARDS))
+        self.assertEqual(len(km.CARDS), 33)  # 28 (30 Oct) + PETG-CF, ASA-CF, Ti-6Al-4V, 17-4PH, A36
 
     def test_every_card_loads_from_the_keystone_library(self):
         in_library = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName == "Keystone"}
@@ -102,6 +103,12 @@ class TestKeystoneLibrary(unittest.TestCase):
         petg = km.card("b4e991ce-42af-48ad-acbc-40e7f1de3a52")
         self.assertEqual(petg["name"], "PETG printed")
         self.assertEqual(petg["z_strength"], 39.0)
+        ti = km.card("Titanium Ti-6Al-4V annealed")
+        self.assertEqual((ti["yield"], ti["uts"], ti["basis"]), (827.0, 896.0, "minimum"))
+        self.assertEqual(km.card("6707b2ec-c050-4f03-acf2-856f4453f018")["yield"], 725.0)  # 17-4PH H1150, A564
+        self.assertEqual(km.card("Steel A36 structural")["yield"], 250.0)
+        self.assertEqual(km.card("PETG-CF printed")["z_strength"], 38.0)
+        self.assertEqual(km.card("ASA-CF printed")["z_strength"], 30.0)
         self.assertIsNone(km.card("no such material"))
 
     def test_a_body_with_a_keystone_material_has_mass(self):

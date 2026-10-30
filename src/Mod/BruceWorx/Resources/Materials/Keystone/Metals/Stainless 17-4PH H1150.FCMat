@@ -1,0 +1,47 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "6707b2ec-c050-4f03-acf2-856f4453f018"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Stainless 17-4PH H1150"
+  Description: "Precipitation-hardening stainless (UNS S17400, EN 1.4542), aged H1150 (28-37 HRC): shafts, pins, brackets and gears machined from stock bought in this condition. Strengths are ASTM A564 minimums, 135 ksi UTS and 105 ksi yield, elongation 16 % (typical: yield 860 MPa, UTS 1000 MPa). H900 is much stronger (minimum yield 1170 MPa, UTS 1310 MPa) but brittle, with 10 % elongation."
+  ReferenceSource: "ASTM A564 (Type 630, H1150) bar minimums, also AMS 5643; AK Steel 17-4 PH typical elastic and thermal values"
+  SourceURL: "https://aircraftmaterials.com/data/alstst/ams5643.html"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "7800 kg/m^3"
+    YoungsModulus: "196500 MPa"
+    PoissonRatio: "0.27"
+    ShearModulus: "77200 MPa"
+    YieldStrength: "725 MPa"
+    UltimateTensileStrength: "930 MPa"
+    UltimateStrain: "16"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "18 W/m/K"
+    SpecificHeat: "460 J/kg/K"
+    ThermalExpansionCoefficient: "11 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2640, 0.2640, 0.2720, 1.0)"
+    DiffuseColor: "(0.6600, 0.6600, 0.6800, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.7000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "minimum"
+  YieldBasis: "0.2 % offset; ASTM A564 Type 630 bar minimum, condition H1150 (typical 860 MPa)"
+  Brittle: false
+  Elongation: "16 %"
+  TypicalYieldStrength: "860 MPa"
+  TypicalTensileStrength: "1000 MPa"
+  Source: "ASTM A564 (Type 630, H1150) bar minimums, also AMS 5643; AK Steel 17-4 PH typical elastic and thermal values"

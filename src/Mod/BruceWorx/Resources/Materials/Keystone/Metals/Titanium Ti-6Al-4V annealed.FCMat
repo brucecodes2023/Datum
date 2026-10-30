@@ -1,0 +1,47 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "68fc1d8d-0c01-42ec-bd1c-7759270cb76d"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Titanium Ti-6Al-4V annealed"
+  Description: "Titanium Grade 5 (Ti-6Al-4V, UNS R56400), mill annealed: light, strong CNC parts. Strengths are AMS 4911 minimums, 130 ksi UTS and 120 ksi yield, elongation 10 % (typical: yield 880 MPa, UTS 950 MPa, elongation 14 %). Poor heat conductor; galls against itself."
+  ReferenceSource: "AMS 4911 minimum strengths (annealed sheet, strip, plate); ASM/MatWeb typical elastic and thermal values"
+  SourceURL: "https://titanium.com/ams-4911/"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "4430 kg/m^3"
+    YoungsModulus: "113800 MPa"
+    PoissonRatio: "0.342"
+    ShearModulus: "44000 MPa"
+    YieldStrength: "827 MPa"
+    UltimateTensileStrength: "896 MPa"
+    UltimateStrain: "10"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "6.7 W/m/K"
+    SpecificHeat: "526 J/kg/K"
+    ThermalExpansionCoefficient: "8.6 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2400, 0.2400, 0.2480, 1.0)"
+    DiffuseColor: "(0.6000, 0.6000, 0.6200, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.5500"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "minimum"
+  YieldBasis: "0.2 % offset; AMS 4911 minimum 120 ksi, annealed plate (typical 880 MPa)"
+  Brittle: false
+  Elongation: "10 %"
+  TypicalYieldStrength: "880 MPa"
+  TypicalTensileStrength: "950 MPa"
+  Source: "AMS 4911 minimum strengths (annealed sheet, strip, plate); ASM/MatWeb typical elastic and thermal values"
