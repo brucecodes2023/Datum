@@ -12,6 +12,8 @@ in the vault (Standard Libraries) opens two ways:
 * Open from Vault (double-click in the Data panel) shows the board in 3D: the item's model,
   made from the project's .kicad_pcb (:func:`open_board_item`; remade when the board, the
   item's revision or values change).
+* Open 3D (light) (vault right-click menus): the same part as the board and its components only,
+  no copper or print layers, for large assemblies (a model of its own, kept beside the full one).
 * Open in KiCad (vault right-click menus; double-click on the Schematic, PCB or Project entry
   under "Electrical design" in the 3D model's Browser) starts KiCad on the project in the
   item's folder, after offering a check-out (:func:`open_in_kicad`). Without one the KiCad
@@ -33,6 +35,7 @@ import bruceworx_board as bb
 COMMAND = "BruceWorx_InsertBoard"
 IMPORT_COMMAND = "BruceWorx_ImportKiCadProject"
 OPEN_KICAD_COMMAND = "BruceWorx_VaultOpenKiCad"
+OPEN_LIGHT_COMMAND = "BruceWorx_VaultOpenBoardLight"
 KICAD_ICON = "BruceWorx_Vault_kicad_accent"  # the vault client's icon naming (kind kicad, role accent)
 KICAD_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24">'
              '<rect x="6" y="6" width="12" height="12" rx="1.6" fill="none" stroke="#0A84FF" stroke-width="1.9"/>'
@@ -108,18 +111,49 @@ class _InsertBoardCommand:
         if not path:
             return
         prefs.SetString(LAST_DIR_KEY, os.path.dirname(path))
-        run(path)
+        assembly = target_assembly()
+        light = ask_detail(assembly)
+        if light is None:
+            return
+        run(path, assembly, light=light)
 
 
-def run(path, assembly=None):
-    """Insert ``path`` with a wait cursor; errors go to a message box."""
+def ask_detail(assembly):
+    """Full or light model for Insert Board: True (light), False (full) or None (cancel). The
+    default is light in an assembly of bruceworx_board.LIGHT_ABOVE parts or more."""
+    import FreeCADGui as Gui
+
+    _QtCore, _QtGui, QtWidgets = _qt()
+    count = bb.assembly_part_count(assembly) if assembly is not None else 0
+    light_default = bb.default_light(assembly)
+    box = QtWidgets.QMessageBox(Gui.getMainWindow())
+    box.setIcon(QtWidgets.QMessageBox.Question)
+    box.setWindowTitle("Insert Board")
+    box.setText("Insert the full board or the light model?")
+    box.setInformativeText(
+        "Full: copper, pads, solder mask and silkscreen, as KiCad shows it. Light: the board and its components "
+        "only, many times fewer faces, for large assemblies."
+        + (f"\n\nThis assembly has {count} parts, so light is the default." if light_default else ""))
+    full = box.addButton("Full Model", QtWidgets.QMessageBox.AcceptRole)
+    light = box.addButton("Light Model (No Copper Detail)", QtWidgets.QMessageBox.AcceptRole)
+    box.addButton(QtWidgets.QMessageBox.Cancel)
+    box.setDefaultButton(light if light_default else full)
+    box.exec()
+    if box.clickedButton() is light:
+        return True
+    return False if box.clickedButton() is full else None
+
+
+def run(path, assembly=None, light=False):
+    """Insert ``path`` (the light model with ``light``) with a wait cursor; errors go to a message box."""
     import FreeCADGui as Gui
 
     _QtCore, QtGui, QtWidgets = _qt()
     assembly = assembly or target_assembly()
     QtWidgets.QApplication.setOverrideCursor(QtGui.QCursor(_QtCore.Qt.WaitCursor))
     try:
-        part = bb.insert_board(path, assembly=assembly)
+        options = bb.bridge().light_options() if light else None
+        part = bb.insert_board(path, assembly=assembly, options=options)
     except Exception as exc:
         QtWidgets.QApplication.restoreOverrideCursor()
         App.Console.PrintError(f"Insert Board: {exc}\n")
@@ -179,9 +213,10 @@ def _status_message(text, ms=12000):
     App.Console.PrintMessage(text + "\n")
 
 
-def open_board_item(pn=None):
+def open_board_item(pn=None, light=False):
     """Open from Vault for a KiCad item: its 3D model, made from the board in its work folder
-    when there is none or the board, the revision or the item's values changed."""
+    when there is none or the board, the revision or the item's values changed. ``light``: the
+    light model (board and components), a document of its own."""
     import FreeCADGui as Gui
 
     vc = _vc()
@@ -194,13 +229,13 @@ def open_board_item(pn=None):
     if not folder:
         return False
     values = bb.item_values(s.vault, pn, folder)
-    path = ev.derived_path(folder, pn)
+    path = ev.derived_path(folder, pn, light)
     try:
-        stamp = ev.derived_stamp(folder, dict(values, recipe=bb.ITEM_RECIPE))
+        stamp = ev.derived_stamp(folder, dict(values, recipe=bb.ITEM_RECIPE), light)
     except Exception as exc:
         vc._message("Open Board", f"{pn}: {exc}", "warning")
         return False
-    fresh = ev.derived_fresh(folder, pn, stamp)
+    fresh = ev.derived_fresh(folder, pn, stamp, light)
     doc = vc.document_for(path)
     if doc is not None and fresh:
         Gui.ActiveDocument = Gui.getDocument(doc.Name)
@@ -213,8 +248,8 @@ def open_board_item(pn=None):
         _QtCore, QtGui, QtWidgets = _qt()
         QtWidgets.QApplication.setOverrideCursor(QtGui.QCursor(_QtCore.Qt.WaitCursor))
         try:
-            doc = bb.build_item_model(folder, pn, values, path)
-            ev.record_derived(folder, pn, stamp)
+            doc = bb.build_item_model(folder, pn, values, path, light=light)
+            ev.record_derived(folder, pn, stamp, light)
         except Exception as exc:
             QtWidgets.QApplication.restoreOverrideCursor()
             App.Console.PrintError(f"Open Board: {pn}: {exc}\n")
@@ -226,8 +261,8 @@ def open_board_item(pn=None):
         Gui.SendMsgToActiveView("ViewFit")
     except Exception:
         pass
-    _status_message(f"{pn}: the board in 3D, made from {os.path.basename(ev.find_project(folder).pcb)}. "
-                    "Open in KiCad (right-click) edits it.")
+    _status_message(f"{pn}: the board in 3D{' (light: board and components)' if light else ''}, made from "
+                    f"{os.path.basename(ev.find_project(folder).pcb)}. Open in KiCad (right-click) edits it.")
     return True
 
 
@@ -449,6 +484,9 @@ def _active_kicad(s, pn, _st):
 
 
 ITEM_COMMANDS = (
+    (OPEN_LIGHT_COMMAND, "Open 3D (light)", "Open this electrical part's light 3D model: the board and its "
+     "components, no copper, pads, solder mask or silkscreen. Much smaller, for large assemblies.", "open",
+     "secondary", lambda pn=None: open_board_item(pn, light=True), _active_kicad, ""),
     (OPEN_KICAD_COMMAND, "Open in KiCad", "Open this electrical part's KiCad project, kept in the vault, in "
      "KiCad. Check it out to edit; Open from Vault shows the board in 3D.", "kicad", "accent",
      lambda pn=None: open_in_kicad(pn), _active_kicad, ""),
@@ -456,8 +494,14 @@ ITEM_COMMANDS = (
 
 
 class _OpenKiCadCommand:
+    """A KiCad item command from ITEM_COMMANDS (Open in KiCad, Open 3D (light))."""
+
+    def __init__(self, entry):
+        self.entry = entry
+
     def GetResources(self):
-        return {"Pixmap": KICAD_ICON, "MenuText": ITEM_COMMANDS[0][1], "ToolTip": ITEM_COMMANDS[0][2]}
+        icon = KICAD_ICON if self.entry[3] == "kicad" else f"BruceWorx_Vault_{self.entry[3]}_{self.entry[4]}"
+        return {"Pixmap": icon, "MenuText": self.entry[1], "ToolTip": self.entry[2]}
 
     def IsActive(self):
         try:
@@ -468,7 +512,7 @@ class _OpenKiCadCommand:
             return False
 
     def Activated(self):
-        open_in_kicad()
+        self.entry[5]()
 
 
 class _ImportKiCadCommand:
@@ -495,8 +539,12 @@ def _install_vault_items():
     """Open in KiCad in the vault's right-click menus; Import KiCad Project... in the BruceWorx menu."""
     import FreeCADGui as Gui
 
-    Gui.addIcon(KICAD_ICON, KICAD_SVG.encode("utf-8"), "SVG")
-    Gui.addCommand(OPEN_KICAD_COMMAND, _OpenKiCadCommand())
+    try:
+        Gui.addIcon(KICAD_ICON, KICAD_SVG.encode("utf-8"), "SVG")
+    except AssertionError:  # registered already (a reload)
+        pass
+    for entry in ITEM_COMMANDS:
+        Gui.addCommand(entry[0], _OpenKiCadCommand(entry))
     Gui.addCommand(IMPORT_COMMAND, _ImportKiCadCommand())
     try:
         _vc().add_item_commands(ITEM_COMMANDS, after="BruceWorx_VaultOpen")

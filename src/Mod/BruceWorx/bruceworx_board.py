@@ -300,6 +300,59 @@ def _mixed_mass(body, key, colours):
     return (plastic_volume * kb.DENSITY[key] + metal_volume * kb.DENSITY[kb.METAL]) / 1000.0
 
 
+def _pause_part_observer():
+    """Hold the part-properties observer (bruceworx.partprops) while a board is built: it would
+    recompute the part's mass over every body after each of the hundreds of body changes, which
+    took most of a large board's import (ESC board, 31 Oct: 51 of 53 s). Returns the observer
+    to resume, or None."""
+    try:
+        from bruceworx import partprops
+
+        observer = partprops._OBSERVER
+    except Exception:
+        return None
+    if observer is None or observer.busy:
+        return None
+    observer.busy = True
+    return observer
+
+
+def _resume_part_observer(observer, part=None):
+    """Let the observer go again and refresh ``part``'s computed values once."""
+    if observer is None:
+        return
+    observer.busy = False
+    if part is None:
+        return
+    try:
+        from bruceworx import partprops
+
+        for obj in [part] + [p for p in part.InList if part in (getattr(p, "Group", None) or [])]:
+            partprops.refresh(obj)
+    except Exception as exc:
+        App.Console.PrintWarning(f"BruceWorx board: mass and material not refreshed: {exc}\n")
+
+
+_densities = {}
+
+
+def _density_g_per_mm3(mat):
+    """The material's density in g/mm^3 (0 when it has none), read from the card's properties:
+    ``getPhysicalValue`` writes the material back to the body in FreeCAD 1.1, which touched every
+    body and woke the part-properties observer (0.2 s per body on the ESC board)."""
+    key = getattr(mat, "UUID", "") or getattr(mat, "Name", "")
+    if key in _densities:
+        return _densities[key]
+    props = getattr(mat, "PhysicalProperties", None)
+    text = props.get("Density") if isinstance(props, dict) else None
+    try:
+        density = App.Units.Quantity(str(text)).getValueAs("g/mm^3").Value if text else 0.0
+    except Exception:
+        density = 0.0
+    _densities[key] = density
+    return density
+
+
 def body_mass_g(body):
     """Grams: MassOverride, else volume x density of a chosen material."""
     if "MassOverride" in body.PropertiesList and body.MassOverride.getValueAs("g").Value > 0:
@@ -307,11 +360,7 @@ def body_mass_g(body):
     mat = body.ShapeMaterial
     if getattr(mat, "Name", "Default") == "Default" or not body.Shape.Solids:
         return 0.0
-    try:
-        density = App.Units.Quantity(str(mat.getPhysicalValue("Density"))).getValueAs("g/mm^3").Value
-    except Exception:
-        return 0.0
-    return body.Shape.Volume * density
+    return body.Shape.Volume * _density_g_per_mm3(mat)
 
 
 def mass_report(part):
@@ -394,6 +443,7 @@ def insert_board(path, doc=None, assembly=None, options=None, cache=None, mass_t
         mass_table = load_mass_table(vault)
 
     doc.openTransaction("Insert Board")
+    paused = _pause_part_observer()
     try:
         imported = import_step(result.step, doc)
         part = doc.addObject("App::Part", _doc_name(stem))
@@ -423,8 +473,10 @@ def insert_board(path, doc=None, assembly=None, options=None, cache=None, mass_t
         _apply_vault_item(part, path)
         doc.recompute()
     except Exception:
+        _resume_part_observer(paused)
         doc.abortTransaction()
         raise
+    _resume_part_observer(paused, part)
     doc.commitTransaction()
     report = mass_report(part)
     report.update(part=part.Name, frames=len(frames), holes=len(info.holes), step=result.step,
@@ -464,13 +516,16 @@ def _board_props(part, path, info, opts, result):
     _add(part, "App::PropertyString", "BoardSize", "Board outline width x height")
     _add(part, "App::PropertyInteger", "CopperLayers", "Number of copper layers")
     _add(part, "App::PropertyBool", "BomDetail", "List the board's bodies in the BOM (off: one PCBA line)")
+    _add(part, "App::PropertyString", "BoardDetail",
+         "full: copper, pads, solder mask and silkscreen; light: the board and its components only")
     part.BoardSource = path
+    part.BoardDetail = "light" if kb.is_light(opts) else "full"
     part.BoardHash = kb.board_hash(path)
     part.BoardOptions = json.dumps(opts, sort_keys=True)
     part.BoardSize = f"{info.width:g} x {info.height:g} mm"
     part.CopperLayers = info.copper_layers
     part.BomDetail = False  # the component BOM stays in KiCad
-    for name in ("BoardHash", "BoardOptions", "BoardSize", "CopperLayers"):
+    for name in ("BoardHash", "BoardOptions", "BoardSize", "CopperLayers", "BoardDetail"):
         part.setEditorMode(name, ["ReadOnly"])
 
 
@@ -628,11 +683,57 @@ def add_electrical_design(doc, project):
     return group, made
 
 
-def build_item_model(folder, pn, values, path, cli=None, cache=None):
+def is_light_part(part):
+    """Whether an inserted board is the light model (no copper or print layers)."""
+    return getattr(part, "BoardDetail", "") == "light"
+
+
+# Insert Board offers the light model by default in an assembly with at least this many parts
+# (31 Oct; Preferences parameter BruceWorx/KiCadLightAbove). The user's large assemblies (a drone
+# with ESCs and a flight controller) pass it; a small enclosure with a board and a few screws does not.
+LIGHT_ABOVE = 25
+LIGHT_ABOVE_KEY = "KiCadLightAbove"
+
+
+def assembly_part_count(assembly):
+    """How many parts an assembly holds, counting into sub-assemblies and link arrays (joints,
+    views and BOMs are not parts)."""
+    count, seen = 0, set()
+
+    def walk(container):
+        nonlocal count
+        for obj in getattr(container, "Group", []) or []:
+            if obj is None or obj.Name in seen:
+                continue
+            seen.add(obj.Name)
+            tid = obj.TypeId
+            if tid.startswith(("Assembly::JointGroup", "Assembly::ViewGroup", "Assembly::BomGroup", "App::Origin")):
+                continue
+            if tid == "App::Link":
+                count += max(1, int(getattr(obj, "ElementCount", 0) or 0))
+            elif tid in ("App::Part", "Assembly::AssemblyLink") or obj.isDerivedFrom("Part::Feature"):
+                count += 1
+            elif tid == "Assembly::AssemblyObject" or obj.isDerivedFrom("App::DocumentObjectGroup"):
+                walk(obj)
+
+    walk(assembly)
+    return count
+
+
+def default_light(assembly, threshold=None):
+    """Whether Insert Board should default to the light model for ``assembly``."""
+    if assembly is None:
+        return False
+    if threshold is None:
+        threshold = App.ParamGet(PREFS_PATH).GetInt(LIGHT_ABOVE_KEY, LIGHT_ABOVE)
+    return assembly_part_count(assembly) >= threshold
+
+
+def build_item_model(folder, pn, values, path, cli=None, cache=None, light=False):
     """The 3D model of the KiCad vault item ``pn`` from its work folder: a new document named by
     the P/N with the board (insert_board), the item's values (item_values) and the Electrical
-    design group, saved at ``path`` (ecad_vault.derived_path), read-only on disk. Returns the open
-    document."""
+    design group, saved at ``path`` (ecad_vault.derived_path), read-only on disk. ``light``: the
+    board and its components only (kicad_bridge.LIGHT_OPTIONS). Returns the open document."""
     ev = _ecad()
     project = ev.find_project(folder)
     if not project.pcb:
@@ -641,7 +742,9 @@ def build_item_model(folder, pn, values, path, cli=None, cache=None):
     doc = App.newDocument(_doc_name(pn))
     try:
         doc.Label = pn
-        part = insert_board(project.pcb, doc=doc, cli=cli, cache=cache, vault=found[0] if found else None)
+        options = bridge().light_options() if light else None
+        part = insert_board(project.pcb, doc=doc, options=options, cli=cli, cache=cache,
+                            vault=found[0] if found else None)
         apply_item_values(part, values)
         if values.get("Description"):
             part.Label = values["Description"]

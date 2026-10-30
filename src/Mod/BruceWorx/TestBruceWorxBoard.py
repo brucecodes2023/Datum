@@ -320,6 +320,49 @@ class TestVaultItem(unittest.TestCase):
         self.assertTrue(ev.derived_fresh(self.folder, self.pn, stamp))
         self.assertNotEqual(ev.derived_stamp(self.folder, dict(values, Revision="02", recipe=bb.ITEM_RECIPE)), stamp)
 
+    def test_light_item_model(self):
+        ev = self.ev
+        values = bb.item_values(self.vault, self.pn, self.folder)
+        full_path, light_path = ev.derived_path(self.folder, self.pn), ev.derived_path(self.folder, self.pn, True)
+        full = bb.build_item_model(self.folder, self.pn, values, full_path)
+        light = bb.build_item_model(self.folder, self.pn, values, light_path, light=True)
+        self.assertEqual(light.FileName, light_path)
+        self.assertEqual(light.Label, self.pn + "-light")  # saveAs names the document by its file
+
+        def board(doc):
+            return next(o for o in doc.Objects if o.TypeId == "App::Part" and "BoardSource" in o.PropertiesList)
+
+        def faces(doc):
+            return sum(len(o.Shape.Faces) for o in doc.Objects if o.isDerivedFrom("Part::Feature"))
+
+        self.assertEqual((board(full).BoardDetail, board(light).BoardDetail), ("full", "light"))
+        self.assertTrue(bb.is_light_part(board(light)))
+        self.assertEqual(board(light).PartNumber, self.pn)
+        labels = {o.Label for o in board(light).Group}
+        self.assertIn("Arduino_Mega_PCB", labels)
+        self.assertFalse(any(lbl.endswith(("_pad", "_silkscreen", "_soldermask")) for lbl in labels), labels)
+        self.assertLess(faces(light), faces(full))
+        self.assertIsNotNone(light.getObject(bb.ELECTRICAL_GROUP))
+
+    def test_light_default_by_assembly_size(self):
+        doc = App.newDocument("ItemInsertSize")
+        asm = doc.addObject("Assembly::AssemblyObject", "Assembly")
+        asm.newObject("Assembly::JointGroup", "Joints")
+        box = doc.addObject("Part::Box", "Box")
+        for i in range(3):
+            link = doc.addObject("App::Link", f"L{i}")
+            link.LinkedObject = box
+            asm.addObject(link)
+        array = doc.addObject("App::Link", "Array")
+        array.LinkedObject = box
+        array.ElementCount = 10
+        asm.addObject(array)
+        doc.recompute()
+        self.assertEqual(bb.assembly_part_count(asm), 13)
+        self.assertFalse(bb.default_light(asm, threshold=25))
+        self.assertTrue(bb.default_light(asm, threshold=13))
+        self.assertFalse(bb.default_light(None))
+
     def test_insert_board_from_the_vault_takes_the_part_number(self):
         doc = App.newDocument("ItemInsert")
         part = bb.insert_board(os.path.join(self.folder, "Arduino_Mega.kicad_pcb"), doc=doc, mass_table={})
@@ -354,6 +397,18 @@ class TestVaultItem(unittest.TestCase):
         # again: the same document, not remade
         self.assertTrue(vc.open_from_vault(self.pn, ask=False))
         self.assertEqual(len([d for d in App.listDocuments().values() if d.FileName == path]), 1)
+        # Open 3D (light): its own document beside the full one, from the vault menu
+        self.assertIn("Open 3D (light)", [a.text() for a in menu.actions()])
+        vc.run_for(bg.OPEN_LIGHT_COMMAND, self.pn)
+        light_doc = vc.document_for(self.ev.derived_path(self.folder, self.pn, light=True))
+        self.assertIsNotNone(light_doc, "the light model did not open")
+        self.assertIsNotNone(vc.document_for(path), "the full model stays open")
+        # Insert Board, light, into an assembly
+        target = App.newDocument("ItemInsertAsm")
+        asm = target.addObject("Assembly::AssemblyObject", "Assembly")
+        asm.newObject("Assembly::JointGroup", "Joints")
+        part = bg.run(os.path.join(self.folder, "Arduino_Mega.kicad_pcb"), asm, light=True)
+        self.assertEqual((part.BoardDetail, part.PartNumber), ("light", self.pn))
         # Open in KiCad: the project in the vault's work folder (nothing is started: dry run)
         os.environ["BW_KICAD_LAUNCH"] = "dry"
         self.addCleanup(os.environ.pop, "BW_KICAD_LAUNCH", None)
