@@ -43,8 +43,20 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertEqual(path.Bends, 2)
         chords = sum(rt.dist(pts[i], pts[i + 1]) for i in range(3))
         self.assertGreater(path.Length.Value, chords)
-        self.assertAlmostEqual(path.Length.Value / rt.spline_length(pts), 1.0, delta=0.01)
+        self.assertAlmostEqual(path.Length.Value / rt.spline_length(pts), 1.0, delta=1e-6)  # one curve
         self.assertGreater(path.MinRadius.Value, 0.0)
+        # The shape is the module's spline: it passes the points at their chord parameters with the
+        # module's first derivative, and its curvature is the module's.
+        spline = rt.Spline(pts)
+        edge = path.Shape.Edges[0]
+        self.assertEqual([round(k, 9) for k in edge.Curve.getKnots()], [round(t, 9) for t in spline.params])
+        for i in range(spline.segments):
+            for s in (0.0, 0.3, 0.8):
+                u = spline.params[i] + s * (spline.params[i + 1] - spline.params[i])
+                r, r1, r2 = spline.at(i, s)
+                self.assertAlmostEqual((edge.valueAt(u) - V(*r)).Length, 0.0, places=7)
+                self.assertAlmostEqual((edge.derivative1At(u) - V(*r1)).Length, 0.0, places=7)
+                self.assertAlmostEqual(edge.curvatureAt(u), rt.curvature(r1, r2), places=9)
         self.assertTrue(path.BendOK)
         self.assertEqual(path.BendTable, "")
 
@@ -71,7 +83,12 @@ class RoutingCoreTests(unittest.TestCase):
         pts = [(50 * math.cos(k * math.pi / 8), 50 * math.sin(k * math.pi / 8), 0) for k in range(9)]
         path = br.make_path(pts, self.doc)
         self.doc.recompute()
-        self.assertAlmostEqual(path.MinRadius.Value / 50.0, 1.0, delta=0.15)
+        # 30 Oct: one spline. The drawn semicircle and the check agree; the not-a-knot ends are a little
+        # rounder than the OCC interpolation drawn before.
+        self.assertAlmostEqual(path.MinRadius.Value, rt.spline_min_radius(pts), places=6)
+        self.assertAlmostEqual(br.wire_min_radius(path.Shape.Wires[0], samples=512) / path.MinRadius.Value, 1.0, delta=1e-3)
+        self.assertAlmostEqual(path.MinRadius.Value, 45.78, places=2)  # OCC interpolate gave 44.9
+        self.assertAlmostEqual(path.Length.Value / (math.pi * 50.0), 1.0, delta=0.01)
         path.MinBendRadius = 60.0
         self.doc.recompute()
         self.assertFalse(path.BendOK)

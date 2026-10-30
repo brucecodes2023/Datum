@@ -44,6 +44,23 @@ class SplineTests(unittest.TestCase):
         self.assertEqual(samples[-1], pts[-1])
         self.assertAlmostEqual(rt.dist(samples[8], (10.0, 5.0, 0.0)), 0.0)
 
+    def test_bspline_is_the_same_curve(self):
+        """30 Oct: the Part shape is built from these poles, so it must be this spline exactly."""
+        for pts in ([(0, 0, 0), (40, 10, 0), (80, -10, 5), (120, 0, 0)],  # four points
+                    [(0, 0, 0), (10, 5, 0), (20, 0, 3)],  # three: one parabola
+                    [(0, 0, 0), (30, 40, 0)],  # two: a line
+                    circle_points(50.0, 9),
+                    [(0, 0, 0), (5, 1, 0), (60, 30, 10), (61, 32, 10), (100, 0, -20), (140, 5, 0)]):  # uneven spans
+            spline = rt.Spline(pts)
+            poles, knots, mults = spline.bspline()
+            self.assertEqual(len(poles), len(spline.points) + 2)
+            self.assertEqual(knots, spline.params)
+            self.assertEqual(sum(mults), len(poles) + 4)
+            for i in range(spline.segments):
+                for s in (0.0, 0.13, 0.5, 0.77, 1.0):
+                    u = spline.params[i] + s * (spline.params[i + 1] - spline.params[i])
+                    self.assertAlmostEqual(rt.dist(rt.bspline_value(poles, knots, mults, u), spline.at(i, s)[0]), 0.0, places=9)
+
     def test_duplicates_and_vectors_are_cleaned(self):
         class V:
             def __init__(self, x, y, z):

@@ -5,7 +5,8 @@ Commands (registered by :func:`install`, listed in workspaces.json):
 
 * ``BruceWorx_RoutePath``: the Route Path panel. Pick vertices, circular edges (their centre),
   faces (their centre) or objects (LCS, datums: their origin) in the 3D view; each pick is a point
-  of the path, attached to what was picked so it follows the part. The list can be reordered and
+  of the path, attached to what was picked so it follows the part, and the selection is cleared
+  after it (as Fusion's point tools do), so the next click starts fresh. The list can be reordered and
   trimmed; mode, bend radius and minimum bend radius are live, the length and the bend check are
   shown in the panel. With a RoutePath selected the same panel edits it.
 * ``BruceWorx_RouteAddPoint``: the selected geometry appended to the open panel or to the
@@ -98,6 +99,20 @@ def target_path(doc=None):
     return found[0] if len(found) == 1 else None
 
 
+def _clear_selection():
+    try:
+        _gui().Selection.clearSelection()
+    except Exception:
+        pass
+
+
+def clear_selection_later():
+    """Clear the selection once the current selection notification is done (clearing it from
+    inside an observer call would re-enter the selection)."""
+    QtCore, _QtGui, _QtWidgets = _qt()
+    QtCore.QTimer.singleShot(0, _clear_selection)
+
+
 def _pick_label(obj, sub):
     if obj is None:
         return ""
@@ -151,6 +166,8 @@ class RoutePathPanel:
         self.Gui.Selection.addObserver(self.observer)
         _state["panel"] = self
         self._apply()
+        if picks:
+            clear_selection_later()  # they are points now
 
     def _build(self, QtWidgets):
         form = QtWidgets.QWidget()
@@ -238,6 +255,7 @@ class RoutePathPanel:
             point = App.Vector(*pnt) if pnt is not None else None
         if point is None:
             return
+        clear_selection_later()  # a pick is a point, not a growing selection
         if self.points and (self.points[-1][0] - point).Length < 1e-6:
             return
         self.points.append((point, obj, sub))
@@ -253,6 +271,7 @@ class RoutePathPanel:
         self.points.extend(picks)
         self._fill()
         self._apply()
+        clear_selection_later()
 
     def remove_current(self):
         row = self.list.currentRow()

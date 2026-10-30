@@ -108,11 +108,14 @@ class RoutingGuiTests(unittest.TestCase):
         panel = self._run("BruceWorx_RoutePath")
         self.assertEqual(panel.list.count(), 1)
         self.assertIn("Motor.Face", panel.list.item(0).text())
-        # Picks in the 3D view arrive through the selection observer.
+        self.assertEqual(Gui.Selection.getSelectionEx("", 0), [])  # the pick is a point now
+        # Picks in the 3D view arrive through the selection observer; each clears the selection.
         Gui.Selection.addSelection(box, "Vertex1")
         self._pump()
+        self.assertEqual(Gui.Selection.getSelectionEx("", 0), [])
         Gui.Selection.addSelection(box, "Vertex7")
         self._pump()
+        self.assertEqual(Gui.Selection.getSelectionEx("", 0), [])
         self.assertEqual(panel.list.count(), 3)
         self.assertEqual(len(panel.path.Points), 3)
         self.assertIn("Length", panel.status.text())

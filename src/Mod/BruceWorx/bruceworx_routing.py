@@ -9,8 +9,9 @@ tangent arcs, the LRA bend table, gauges, tube sizes, the CSV reports) is FreeCA
 * **RoutePath** is the centreline: ``Points`` in the document frame, optionally attached to
   geometry (``Attachments`` + ``AttachedTo``: a vertex, a circular edge's centre, a face's
   centre or an object's origin, re-read on every recompute so a routed point follows its part).
-  ``Mode`` Spline (an interpolating B-spline through the points) or Polyline (straight segments
-  joined by tangent arcs of ``BendRadius``). Read-only results: ``Length``, ``MinRadius`` (the
+  ``Mode`` Spline (a cubic through the points, C2, not-a-knot ends, chord-length parameters:
+  ``routing.Spline``, drawn as that same curve in B-spline form, so the shape and the bend check
+  are one curve) or Polyline (straight segments joined by tangent arcs of ``BendRadius``). Read-only results: ``Length``, ``MinRadius`` (the
   tightest bend found, 0 for straight), ``Bends``, ``BendOK`` (against ``MinBendRadius``),
   ``BendTable`` (LRA rows in Polyline mode) and ``Problems``.
 * **Wire**, **Pipe**, **Hose** sweep a section along their path (``Path``) and carry what the BOM
@@ -219,13 +220,15 @@ def path_wire(points, mode="Spline", radius=0.0):
         return Part.Wire(edges)
     if len(pts) == 2:
         return Part.Wire([Part.LineSegment(V(pts[0]), V(pts[1])).toShape()])
+    poles, knots, mults = rt.Spline(pts).bspline()  # the module's spline, exactly
     curve = Part.BSplineCurve()
-    curve.interpolate([V(p) for p in pts])
+    curve.buildFromPolesMultsKnots([V(p) for p in poles], mults, knots, False, 3)
     return Part.Wire([curve.toShape()])
 
 
 def wire_min_radius(wire, samples=_SAMPLES):
-    """The tightest radius of curvature along the wire's edges (inf when straight)."""
+    """The tightest radius of curvature along the wire's edges (inf when straight), measured on
+    the shape (the tests compare it with the module's figure for the same curve)."""
     kmax = 0.0
     for edge in wire.Edges:
         u0, u1 = edge.FirstParameter, edge.LastParameter
@@ -336,11 +339,8 @@ class RoutePath:
         summary = rt.route_summary(pts, mode, radius, minimum)
         wire = path_wire(_to_parent(obj, pts), mode, radius)
         obj.Shape = wire
-        tightest = wire_min_radius(wire) if mode == "Spline" else summary["min_radius"]
+        tightest = summary["min_radius"]  # the drawn curve: the shape is the module's spline (or arcs)
         problems = list(summary["problems"])
-        if mode == "Spline" and minimum > 0 and tightest < minimum - 1e-6:
-            problems = [p for p in problems if "tightest" not in p]
-            problems.append(f"tightest bend radius {tightest:.1f} is below the minimum {minimum:g}")
         obj.Length = wire.Length
         obj.MinRadius = 0.0 if math.isinf(tightest) else tightest
         obj.Bends = int(summary["bends"])

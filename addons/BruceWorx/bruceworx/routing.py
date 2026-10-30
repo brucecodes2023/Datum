@@ -1,18 +1,22 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Routing maths: centrelines for wires, pipes and hoses (BW-ROU-01..03, 27 Oct 2026).
 
-No FreeCAD import. Points are ``(x, y, z)`` tuples in millimetres. Three things live here:
+No FreeCAD import. Points are ``(x, y, z)`` tuples in millimetres. Four things live here:
 
 * **Splines.** A route through points as a C2 cubic spline with not-a-knot ends and chord-length
-  parameters (close to the curve OCC's interpolation gives the Part shape). Each segment is a polynomial, so position,
-  first and second derivatives are analytic; the curvature ``kappa = |r' x r''| / |r'|^3`` is
-  sampled along the curve and the tightest radius is ``1 / max(kappa)``.
+  parameters. Each segment is a polynomial, so position, first and second derivatives are
+  analytic; the curvature ``kappa = |r' x r''| / |r'|^3`` is sampled along the curve and the
+  tightest radius is ``1 / max(kappa)``. ``Spline.bspline`` gives the same curve exactly as a
+  clamped cubic B-spline (knots at the chord parameters), which is what the FreeCAD object draws
+  (one curve for the shape and the bend check, 30 Oct).
 * **Polylines with arcs.** Straight segments joined by tangent arcs of one centreline bend radius
   R: at a corner of deflection theta the tangent length is ``R tan(theta / 2)``, the arc length is
   ``R theta``. A corner whose tangent length would overlap its neighbour's (or run past an end) is
   reported, not drawn. From the same construction come the developed (cut) length and the LRA
   table a tube bender wants: L the straight length before each bend, R the rotation of the bend
   plane about the tube axis since the previous bend, A the bend angle.
+* **Bend rules** (30 Oct). A minimum bend radius as a multiple of OD or a fixed radius, presets by
+  wire and hose type, the defaults the preferences hold, a bundle's strictest rule.
 * **Tables.** AWG wire sizes (diameter ``0.127 mm * 92 ** ((36 - n) / 39)``), metric and NPS
   tube sizes, and a copper-plus-insulation mass estimate.
 """
@@ -85,8 +89,8 @@ def clean_points(points, tol=1e-6):
 
 
 # ----------------------------------------------------------------------------------------------
-# Interpolating spline: cubic, C2, not-a-knot ends, chord-length parameters (close to what
-# OCC's interpolation gives the Part shape), one small solve per coordinate.
+# Interpolating spline: cubic, C2, not-a-knot ends, chord-length parameters, one small solve per
+# coordinate; the Part shape is the same curve (Spline.bspline).
 
 
 def _gauss(rows):
@@ -188,6 +192,44 @@ class Spline:
     def min_radius(self, per_segment=64):
         kmax = max((k for k, _p in self.curvatures(per_segment)), default=0.0)
         return math.inf if kmax < EPS else 1.0 / kmax
+
+    def bspline(self):
+        """``(poles, knots, mults)`` of this spline as a clamped cubic B-spline over the chord
+        parameters: the same curve exactly. Each segment's Bezier points are ``P_i + h r'/3`` and
+        ``P_i+1 - h r'/3``; since the spline is C2 they lie on the legs of one control polygon,
+        each leg cut in the ratio of the neighbouring spans ``h_i-1 : h_i : h_i+1``, so the
+        polygon's vertices are read off by extending each segment's middle leg. n points give
+        n + 2 poles, knots at the n parameters (end multiplicity 4)."""
+        pts, t = self.points, self.params
+        n = len(pts)
+        if n < 2:
+            raise ValueError("a spline needs at least two distinct points")
+        if n == 2:
+            a, b = pts
+            return [a, add(a, mul(sub(b, a), 1 / 3)), add(a, mul(sub(b, a), 2 / 3)), b], [t[0], t[1]], [4, 4]
+        m = n - 1
+        h = [t[i + 1] - t[i] for i in range(m)] + [0.0]
+        b1 = [add(pts[i], mul(self.at(i, 0.0)[1], h[i] / 3.0)) for i in range(m)]
+        b2 = [sub(pts[i + 1], mul(self.at(i, 1.0)[1], h[i] / 3.0)) for i in range(m)]
+        inner = [b1[0]] + [add(b2[i], mul(sub(b2[i], b1[i]), h[i + 1] / h[i])) for i in range(m)]
+        return [pts[0]] + inner + [pts[-1]], list(t), [4] + [1] * (n - 2) + [4]
+
+
+def bspline_value(poles, knots, mults, u, degree=3):
+    """A point of the B-spline ``(poles, knots, mults)`` at ``u`` (de Boor); for tests and previews."""
+    flat = [k for k, m in zip(knots, mults) for _ in range(m)]
+    u = min(max(u, flat[degree]), flat[-degree - 1])
+    span = degree
+    while span < len(flat) - degree - 2 and u >= flat[span + 1]:
+        span += 1
+    d = [poles[j + span - degree] for j in range(degree + 1)]
+    for r in range(1, degree + 1):
+        for j in range(degree, r - 1, -1):
+            i = j + span - degree
+            den = flat[i + degree - r + 1] - flat[i]
+            alpha = 0.0 if den == 0 else (u - flat[i]) / den
+            d[j] = add(mul(d[j - 1], 1.0 - alpha), mul(d[j], alpha))
+    return d[degree]
 
 
 def spline_point(points, i, t):
