@@ -17,6 +17,10 @@ No FreeCAD import. Points are ``(x, y, z)`` tuples in millimetres. Four things l
   plane about the tube axis since the previous bend, A the bend angle.
 * **Bend rules** (30 Oct). A minimum bend radius as a multiple of OD or a fixed radius, presets by
   wire and hose type, the defaults the preferences hold, a bundle's strictest rule.
+* **Leads** (ROU-05, 30 Oct). A route that starts or ends on a pin or port leaves along the
+  frame's +Z for a straight length (2 x OD by default) before its first bend: a line plus a
+  spline clamped to +Z, or a polyline corner placed so its arc starts that far out
+  (``build_route``). Gauge ranges of pins (``gauge_fits``).
 * **Tables.** AWG wire sizes (diameter ``0.127 mm * 92 ** ((36 - n) / 39)``), metric and NPS
   tube sizes, and a copper-plus-insulation mass estimate.
 """
@@ -112,18 +116,33 @@ class Spline:
     """A cubic spline through ``points`` (C2, not-a-knot ends, chord-length parameters); segment
     ``i`` runs from P[i] to P[i+1]."""
 
-    def __init__(self, points):
+    def __init__(self, points, start_tangent=None, end_tangent=None):
+        """``start_tangent`` / ``end_tangent`` (ROU-05): clamp the first derivative at an end to
+        that unit vector (the spline leaves a pin or port along its +Z); else the end is
+        not-a-knot (natural for two points)."""
         self.points = clean_points(points)
         n = len(self.points)
+        self.start_tangent = unit(as_point(start_tangent)) if start_tangent is not None else None
+        self.end_tangent = unit(as_point(end_tangent)) if end_tangent is not None else None
         self.params = [0.0]
         for i in range(1, n):
             self.params.append(self.params[-1] + dist(self.points[i], self.points[i - 1]))
-        self.second = [self._solve(axis) for axis in range(3)] if n > 2 else [[0.0] * n] * 3
+        clamped = self.start_tangent is not None or self.end_tangent is not None
+        if n > 2 or (n == 2 and clamped):
+            self.second = [self._solve(axis) for axis in range(3)]
+        else:
+            self.second = [[0.0] * n] * 3
+
+    @property
+    def clamped(self):
+        return self.start_tangent is not None or self.end_tangent is not None
 
     def _solve(self, axis):
         """Second derivatives M[i] at the points: the interior continuity rows plus not-a-knot
         ends (the third derivative continuous at the second and second-last point, so a circle
-        sampled evenly comes back with its own curvature); three points make one parabola."""
+        sampled evenly comes back with its own curvature); three points make one parabola. A
+        clamped end has ``2 h M0 + h M1 = 6 ((y1 - y0) / h - y0')`` (and its mirror at the end);
+        two points with one clamped end are natural (M = 0) at the other."""
         t, y = self.params, [p[axis] for p in self.points]
         n = len(y)
         h = [t[i + 1] - t[i] for i in range(n - 1)]
@@ -131,9 +150,27 @@ class Spline:
         for i in range(1, n - 1):
             rows[i][i - 1], rows[i][i], rows[i][i + 1] = h[i - 1], 2 * (h[i - 1] + h[i]), h[i]
             rows[i][n] = 6 * ((y[i + 1] - y[i]) / h[i] - (y[i] - y[i - 1]) / h[i - 1])
-        rows[0][0], rows[0][1], rows[0][2] = h[1], -(h[0] + h[1]), h[0]
-        if n == 3:
-            rows[2][0], rows[2][2] = 1.0, -1.0
+        d0 = self.start_tangent[axis] if self.start_tangent is not None else None
+        d1 = self.end_tangent[axis] if self.end_tangent is not None else None
+        if d0 is None and d1 is None:
+            rows[0][0], rows[0][1], rows[0][2] = h[1], -(h[0] + h[1]), h[0]
+            if n == 3:
+                rows[2][0], rows[2][2] = 1.0, -1.0
+            else:
+                rows[n - 1][n - 3], rows[n - 1][n - 2], rows[n - 1][n - 1] = h[n - 2], -(h[n - 3] + h[n - 2]), h[n - 3]
+            return _gauss(rows)
+        if d0 is not None:
+            rows[0][0], rows[0][1] = 2 * h[0], h[0]
+            rows[0][n] = 6 * ((y[1] - y[0]) / h[0] - d0)
+        elif n == 2:
+            rows[0][0] = 1.0
+        else:
+            rows[0][0], rows[0][1], rows[0][2] = h[1], -(h[0] + h[1]), h[0]
+        if d1 is not None:
+            rows[n - 1][n - 2], rows[n - 1][n - 1] = h[n - 2], 2 * h[n - 2]
+            rows[n - 1][n] = 6 * (d1 - (y[n - 1] - y[n - 2]) / h[n - 2])
+        elif n == 2:
+            rows[1][1] = 1.0
         else:
             rows[n - 1][n - 3], rows[n - 1][n - 2], rows[n - 1][n - 1] = h[n - 2], -(h[n - 3] + h[n - 2]), h[n - 3]
         return _gauss(rows)
@@ -204,7 +241,7 @@ class Spline:
         n = len(pts)
         if n < 2:
             raise ValueError("a spline needs at least two distinct points")
-        if n == 2:
+        if n == 2 and not self.clamped:
             a, b = pts
             return [a, add(a, mul(sub(b, a), 1 / 3)), add(a, mul(sub(b, a), 2 / 3)), b], [t[0], t[1]], [4, 4]
         m = n - 1
@@ -421,18 +458,259 @@ def bend_table_text(rows):
 # Route-level summary used by the FreeCAD objects.
 
 
-def route_summary(points, mode="Spline", radius=0.0, min_radius=0.0):
-    """``{"length", "min_radius", "bends", "ok", "problems"}`` for a route in either mode.
-    ``ok`` is False when a bend is tighter than ``min_radius`` (0 = no check) or a corner failed."""
-    points = clean_points(points)
-    if mode == "Polyline":
-        route = polyline_with_arcs(points, radius)
-        length, tightest, bends, problems = route.length, route.min_radius, sum(b.ok for b in route.bends), list(route.problems)
-    else:
-        length, tightest, bends, problems = spline_length(points), spline_min_radius(points), max(0, len(points) - 2), []
+def route_summary(points, mode="Spline", radius=0.0, min_radius=0.0, start=None, end=None):
+    """``{"length", "min_radius", "bends", "ok", "problems", "straights", "points"}`` for a route in
+    either mode. ``ok`` is False when a bend is tighter than ``min_radius`` (0 = no check), a corner
+    failed, or a lead (``start`` / ``end``, ROU-05) is shorter than its pin or port asks."""
+    route = build_route(points, mode, radius, start, end)
+    problems = list(route.problems)
+    tightest = route.min_radius
     if min_radius > 0 and tightest < min_radius - 1e-6:
         problems.append(f"tightest bend radius {tightest:.1f} is below the minimum {min_radius:g}")
-    return {"length": length, "min_radius": tightest, "bends": bends, "ok": not problems, "problems": problems}
+    return {"length": route.length, "min_radius": tightest, "bends": route.bends, "ok": not problems,
+            "problems": problems, "straights": route.straights, "points": route.points}
+
+
+# ----------------------------------------------------------------------------------------------
+# Leads (ROU-05, 30 Oct): a route that starts or ends on a pin or port leaves along the frame's +Z
+# for a straight length before its first bend, so a wire does not bend at the crimp and a tube
+# enters its fitting straight.
+
+
+@dataclass
+class Lead:
+    """A route end on a frame: ``origin`` (the frame's origin, the route's end point),
+    ``direction`` (its +Z, out of the part: the way the route leaves) and the straight ``length``."""
+
+    origin: tuple
+    direction: tuple
+    length: float = 0.0
+    name: str = ""  # for messages: "Pin 1 of J1"
+
+
+@dataclass
+class Route:
+    """A route's geometry: ``pieces`` ``("line", a, b)``, ``("arc", start, middle, end)`` or
+    ``("spline", Spline)`` in order; ``points`` the vertices (the polyline's corners, or the
+    spline's points with the lead ends); ``straights`` the straight length found at each lead
+    (None where there is none)."""
+
+    mode: str
+    pieces: list = field(default_factory=list)
+    points: list = field(default_factory=list)
+    length: float = 0.0
+    min_radius: float = math.inf
+    bends: int = 0
+    problems: list = field(default_factory=list)
+    straights: tuple = (None, None)
+
+    @property
+    def ok(self):
+        return not self.problems
+
+    def bspline(self):
+        """A Spline-mode route (lead lines and the spline) as one clamped cubic B-spline
+        ``(poles, knots, mults)``: each line a cubic Bezier at its thirds, joined to the spline at a
+        knot of multiplicity 3. The lines run at unit speed and the spline leaves them with a unit
+        first derivative (chord-length parameters, clamped to +Z), so the joins are C1 and the
+        whole route is one edge (OCC sweeps one edge where a line-spline-line wire can fail)."""
+        poles, knots, mults = [], [], []
+        offset = 0.0
+        for piece in self.pieces:
+            if piece[0] == "line":
+                a, b = piece[1], piece[2]
+                v = sub(b, a)
+                p, k = [a, add(a, mul(v, 1 / 3)), add(a, mul(v, 2 / 3)), b], [0.0, dist(a, b)]
+                m = [4, 4]
+            elif piece[0] == "spline":
+                p, k, m = piece[1].bspline()
+            else:
+                raise ValueError("only a Spline-mode route is one B-spline")
+            k = [x - k[0] + offset for x in k]
+            if not poles:
+                poles, knots, mults = list(p), list(k), list(m)
+            else:
+                poles += list(p[1:])
+                mults[-1] = 3
+                knots += k[1:]
+                mults += list(m[1:])
+            offset = knots[-1]
+        return poles, knots, mults
+
+
+def _lead_corner(lead, extra, target, radius):
+    """The lead's end ``origin + d (L + extra)`` and the tangent length ``R tan(theta / 2)`` of the
+    corner there towards ``target`` (0 when straight on or folding back)."""
+    d = unit(as_point(lead.direction))
+    q = add(as_point(lead.origin), mul(d, lead.length + extra))
+    v = sub(target, q)
+    if norm(v) < EPS or radius <= EPS:
+        return q, 0.0
+    theta = math.acos(max(-1.0, min(1.0, dot(d, unit(v)))))
+    if theta > math.pi - math.radians(0.5):
+        return q, 0.0
+    # A target behind the lead end (more than a right angle) cannot be reached with one arc out
+    # of the straight: the end goes R past the straight (as for a right angle) and the corner,
+    # which then needs more tangent than it has, is reported rather than chased outwards.
+    return q, radius * min(1.0, math.tan(theta / 2.0))
+
+
+def _polyline_leads(pts, radius, start, end):
+    """The polyline's corners with the lead ends inserted. A lead end sits ``L + t`` out along +Z,
+    ``t`` the tangent length of the corner there, so the arc starts exactly ``L`` from the frame;
+    ``t`` depends on the corner's angle and so on the end itself (and, with two points, on the
+    other lead): a fixed-point iteration, a few steps on any route."""
+    ts, te = 0.0, 0.0
+    qs = qe = None
+    for _ in range(100):
+        if start is not None:
+            target = pts[1] if len(pts) > 2 or end is None else (qe or as_point(end.origin))
+            qs, ts_new = _lead_corner(start, ts, target, radius)
+        if end is not None:
+            target = pts[-2] if len(pts) > 2 or start is None else (qs or as_point(start.origin))
+            qe, te_new = _lead_corner(end, te, target, radius)
+        done = True
+        if start is not None:
+            done &= abs(ts_new - ts) < 1e-10
+            ts = ts_new
+        if end is not None:
+            done &= abs(te_new - te) < 1e-10
+            te = te_new
+        if done:
+            break
+    if start is not None:
+        qs, _t = _lead_corner(start, ts, pts[1] if len(pts) > 2 or end is None else qe, radius)
+    out = list(pts)
+    if end is not None:
+        out = out[:-1] + [qe, out[-1]]
+    if start is not None:
+        out = [out[0], qs] + out[1:]
+    return clean_points(out)
+
+
+def _straight_at(route_points, segments, at_start):
+    """Length of the first (last) straight of a polyline route: from the end point to where the
+    first arc starts, or to the first corner when there is no arc there."""
+    if not segments:
+        return 0.0
+    seg = segments[0] if at_start else segments[-1]
+    if seg[0] != "line":
+        return 0.0
+    return dist(seg[1], seg[2])
+
+
+def build_route(points, mode="Spline", radius=0.0, start=None, end=None):
+    """The route through ``points`` in ``mode`` with optional leads at its ends (``start`` /
+    ``end``: a :class:`Lead` whose origin is the first / last point).
+
+    * Polyline: the lead ends become corners placed so that the arc there starts exactly ``L`` out
+      (``_polyline_leads``); the rest is :func:`polyline_with_arcs`. A first or last straight
+      shorter than its lead (a corner that does not fit) is a problem.
+    * Spline: a straight line of length ``L`` along +Z, then the spline from there through the
+      other points with its first derivative clamped to +Z (G1, so the bend check sees the real
+      curvature where the spline leaves the straight); the same at the end, arriving along -Z.
+    """
+    pts = clean_points(points)
+    route = Route(mode)
+    if start is not None and pts:
+        pts[0] = as_point(start.origin)
+    if end is not None and pts:
+        pts[-1] = as_point(end.origin)
+    if len(pts) < 2:
+        route.points = pts
+        return route
+    if mode == "Polyline":
+        corners = _polyline_leads(pts, radius, start, end) if (start or end) else pts
+        poly = polyline_with_arcs(corners, radius)
+        route.pieces, route.points = list(poly.segments), list(poly.points)
+        route.length, route.min_radius = poly.length, poly.min_radius
+        route.bends, route.problems = sum(b.ok for b in poly.bends), list(poly.problems)
+        straights = [None, None]
+        for k, lead in ((0, start), (1, end)):
+            if lead is None:
+                continue
+            found = _straight_at(poly.points, poly.segments, k == 0)
+            straights[k] = found
+            if found < lead.length - 1e-6:
+                where = lead.name or ("start" if k == 0 else "end")
+                route.problems.append(f"the straight at {where} is {found:.1f}, it needs {lead.length:g}")
+        route.straights = tuple(straights)
+        return route
+    # Spline mode.
+    head, tail, inner = None, None, list(pts)
+    t0 = t1 = None
+    if start is not None:
+        d = unit(as_point(start.direction))
+        t0 = d
+        if start.length > EPS:
+            q = add(pts[0], mul(d, start.length))
+            head, inner[0] = ("line", pts[0], q), q
+    if end is not None:
+        d = unit(as_point(end.direction))
+        t1 = mul(d, -1.0)
+        if end.length > EPS:
+            q = add(pts[-1], mul(d, end.length))
+            tail, inner[-1] = ("line", q, pts[-1]), q
+    inner = clean_points(inner)
+    pieces, length = [], 0.0
+    if head is not None:
+        pieces.append(head)
+        length += dist(head[1], head[2])
+    tightest = math.inf
+    if len(inner) >= 2:
+        spline = Spline(inner, t0, t1)
+        pieces.append(("spline", spline))
+        length += spline.length()
+        tightest = spline.min_radius()
+    if tail is not None:
+        pieces.append(tail)
+        length += dist(tail[1], tail[2])
+    route.pieces, route.length, route.min_radius = pieces, length, tightest
+    route.points = ([pts[0]] if head else []) + inner + ([pts[-1]] if tail else [])
+    route.bends = max(0, len(pts) - 2)
+    route.straights = (start.length if start is not None else None, end.length if end is not None else None)
+    return route
+
+
+def straight_length(kind, od, override=0.0, prefs=None):
+    """The straight a pin or port asks before the first bend: its own ``override`` when set, else
+    the preferences: wire and hose ``<Kind>StraightFactor`` x OD (2 x OD: past the terminal, out
+    of the fitting), tube the larger of ``TubeStraightFactor`` x OD and ``TubeClampLength`` (the
+    bender's clamp needs that much straight)."""
+    if override and override > 0:
+        return float(override)
+    p = prefs_with_defaults(prefs)
+    if kind == "tube":
+        return max(p["TubeStraightFactor"] * float(od), p["TubeClampLength"])
+    return p[kind.capitalize() + "StraightFactor"] * float(od)
+
+
+def awg_number(name):
+    """The AWG number of a gauge name ("22 AWG" -> 22), None for a metric size."""
+    text = str(name).strip()
+    if text.endswith("AWG"):
+        try:
+            return int(text[:-3].strip())
+        except ValueError:
+            return None
+    return None
+
+
+def gauge_fits(name, gauge_min=0, gauge_max=0):
+    """None when the wire ``name`` fits a pin taking AWG ``gauge_min`` (thinnest, larger number)
+    to ``gauge_max`` (thickest); else why not. A metric size is compared by conductor area with the
+    AWG limits; 0 means no limit."""
+    if not gauge_min and not gauge_max:
+        return None
+    try:
+        _d, area = gauge(name)
+    except ValueError:
+        return None
+    if gauge_min and area < gauge(f"{int(gauge_min)} AWG")[1] - 1e-9:
+        return f"{name} is thinner than the pin takes ({int(gauge_min)} AWG)"
+    if gauge_max and area > gauge(f"{int(gauge_max)} AWG")[1] + 1e-9:
+        return f"{name} is thicker than the pin takes ({int(gauge_max)} AWG)"
+    return None
 
 
 # ----------------------------------------------------------------------------------------------
@@ -494,6 +772,8 @@ PREF_DEFAULTS = {
     "WireRule": "Hook-up PVC", "WireFactor": 4.0, "WireRadius": 10.0,
     "HoseRule": "General hose", "HoseFactor": 6.0, "HoseRadius": 60.0,
     "TubeRule": RULE_OD, "TubeFactor": 1.5, "TubeRadius": 20.0, "TubeClrFactor": 2.0,
+    # ROU-05: the straight at a pin or port before the first bend (F2).
+    "WireStraightFactor": 2.0, "HoseStraightFactor": 2.0, "TubeStraightFactor": 2.0, "TubeClampLength": 0.0,
 }
 
 
@@ -656,7 +936,8 @@ def tube_size(name):
 # ----------------------------------------------------------------------------------------------
 # Reports.
 
-FROM_TO_COLUMNS = ("Wire", "Signal", "Gauge", "Colour", "From", "From pin", "To", "To pin", "Length (m)")
+FROM_TO_COLUMNS = ("Wire", "Signal", "Gauge", "Colour", "From", "From pin", "From mate", "To", "To pin", "To mate",
+                   "Length (m)")
 CUT_LIST_COLUMNS = ("Item", "Kind", "Size", "Cut length (mm)", "Bend radius", "Bends", "Bend table")
 
 
@@ -669,10 +950,12 @@ def _csv(columns, rows):
 
 
 def from_to_csv(rows):
-    """``rows``: dicts with wire, signal, gauge, colour, from, from_pin, to, to_pin, length_m."""
+    """``rows``: dicts with wire, signal, gauge, colour, from, from_pin, from_mate, to, to_pin,
+    to_mate, length_m. A mate is the connector mated with that end's connector (ROU-05)."""
     return _csv(FROM_TO_COLUMNS, [
         (r.get("wire", ""), r.get("signal", ""), r.get("gauge", ""), r.get("colour", ""), r.get("from", ""),
-         r.get("from_pin", ""), r.get("to", ""), r.get("to_pin", ""), f"{float(r.get('length_m', 0)):.3f}")
+         r.get("from_pin", ""), r.get("from_mate", ""), r.get("to", ""), r.get("to_pin", ""), r.get("to_mate", ""),
+         f"{float(r.get('length_m', 0)):.3f}")
         for r in rows])
 
 

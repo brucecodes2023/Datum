@@ -14,7 +14,7 @@ import tempfile
 import unittest
 
 import FreeCAD as App
-import Part  # noqa: F401  -- Part::FeaturePython
+import Part  # Part::FeaturePython; Part.Vertex in the fitting test
 
 import bruceworx_routing as br
 from bruceworx import routing as rt
@@ -332,8 +332,8 @@ class RoutingCoreTests(unittest.TestCase):
         br.make_hose(path, inner=6.0, od=10.0, name="Return")
         self.doc.recompute()
         lines = br.from_to_csv(self.doc).splitlines()
-        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,To,To pin,Length (m)")
-        self.assertEqual(lines[1], f"W2,GND,18 AWG,black,J1,2,M1,-,{(280 + 30 * math.pi) * 1.05 / 1000:.3f}")
+        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,From mate,To,To pin,To mate,Length (m)")
+        self.assertEqual(lines[1], f"W2,GND,18 AWG,black,J1,2,,M1,-,,{(280 + 30 * math.pi) * 1.05 / 1000:.3f}")
         lines = br.cut_list_csv(self.doc).splitlines()
         self.assertEqual(lines[0], "Item,Kind,Size,Cut length (mm),Bend radius,Bends,Bend table")
         self.assertEqual(lines[1], f"Line,Pipe,12 x 1,{280 + 30 * math.pi:.1f},20,3,"
@@ -430,6 +430,384 @@ class RoutingCoreTests(unittest.TestCase):
         # The path is stored in the document frame and drawn there even inside a placed container.
         self.assertAlmostEqual(path.Shape.BoundBox.ZMin, 0.0, places=6)  # local: 10 - 10
         self.assertAlmostEqual(path.getGlobalPlacement().multVec(path.Shape.Vertexes[0].Point).z, 10.0, places=6)
+
+
+class ConnectorFittingTests(unittest.TestCase):
+    """ROU-05: pin and port frames, routes that attach to them and leave straight, wires that fill
+    their from-to from the pins, terminals in the BOM, fittings whose ports drive a tube."""
+
+    def setUp(self):
+        import bruceworx_fittings
+        import bruceworx_routing_ports
+
+        self.bp, self.bf = bruceworx_routing_ports, bruceworx_fittings
+        self.doc = App.newDocument("BWRoutingPorts")
+        br.reset_prefs()
+
+    def tearDown(self):
+        br.reset_prefs()
+        for name in list(App.listDocuments()):
+            if name.startswith("BWRoutingPorts"):
+                App.closeDocument(name)
+
+    def housing(self, name="XHP_2", pn="XHP-2", mate="B2B-XH-A; S2B-XH-A", z=(0, 0, -1), terminal="SXH-001T-P0.6",
+                seal=""):
+        """A 2-pin wire housing: a box with two pin frames on its rear face, +Z out of it."""
+        part = self.doc.addObject("App::Part", name)
+        part.Label = pn
+        box = self.doc.addObject("Part::Box", name + "_Body")
+        box.Length, box.Width, box.Height = 7.3, 5.7, 7.5
+        box.Placement.Base = V(-2.4, -2.85, 0)
+        part.addObject(box)
+        self.bp.set_connector(part, family="JST-XH", mating_pn=mate, role="Wire housing")
+        part.addProperty("App::PropertyString", "PartNumber", "BruceWorx")
+        part.PartNumber = pn
+        for k, x in enumerate((0.0, 2.5), start=1):
+            self.bp.make_pin(part, str(k), ((x, 0, 0), z, (1, 0, 0)), GaugeMin=28, GaugeMax=22, TerminalPN=terminal,
+                             SealPN=seal, DefaultSignal="+5V" if k == 1 else "")
+        return part
+
+    def link(self, target, label, base, container, rotation=None):
+        obj = self.doc.addObject("App::Link", label)
+        obj.LinkedObject = target
+        obj.Label = label
+        obj.Placement = App.Placement(V(*base), rotation or App.Rotation())
+        container.addObject(obj)
+        return obj
+
+    def harness(self, mode="Spline"):
+        """J1 and J2 (two housings) in an assembly, a path from J1 pin 1 to J2 pin 1."""
+        part = self.housing()
+        asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        j1 = self.link(part, "J1", (0, 0, 0), asm)
+        j2 = self.link(part, "J2", (100, 40, 0), asm)
+        a = self.bp.frame_ref(j1, self.bp.pin(part, "1"))
+        b = self.bp.frame_ref(j2, self.bp.pin(part, "1"))
+        path = br.make_path([(0, 0, 0), (50, 20, -30), (100, 40, 0)], self.doc, mode=mode, radius=5.0,
+                            attachments=[(0, a[0], a[1]), (2, b[0], b[1])], container=asm)
+        self.doc.recompute()
+        return part, asm, j1, j2, path
+
+    # ----- the schema -----
+
+    def test_pin_and_port_schema(self):
+        bp = self.bp
+        part = self.housing()
+        bp.make_pin(part, "+12V", ((5, 0, 0), (0, 0, -1)))
+        self.assertEqual([(f.Name, f.Label, f.PinName) for f in bp.pins(part)],
+                         [("Pin1", "Pin 1", "1"), ("Pin2", "Pin 2", "2"), ("Pin_12V", "Pin +12V", "+12V")])
+        pin = bp.pin(part, "2")
+        self.assertEqual((pin.BWFrame, pin.GaugeMin, pin.GaugeMax, pin.TerminalPN), ("Pin", 28, 22, "SXH-001T-P0.6"))
+        self.assertAlmostEqual((pin.Placement.Rotation.multVec(V(0, 0, 1)) - V(0, 0, -1)).Length, 0.0)
+        self.assertAlmostEqual((pin.Placement.Rotation.multVec(V(1, 0, 0)) - V(1, 0, 0)).Length, 0.0)
+        port = bp.make_port(part, "1", ((0, 0, 9), (0, 0, 1)), PortType="Barb", PortSize="6 mm", TubeOD=6.0)
+        self.assertTrue(bp.is_port(port) and not bp.is_pin(port))
+        self.assertEqual(bp.frames(part)[-1], port)
+        self.assertIn("NPT", port.getEnumerationsOfProperty("PortType"))
+        with self.assertRaises(ValueError):
+            bp.make_pin(part, "3", None, PortType="Barb")
+        lcs = self.doc.addObject("App::LocalCoordinateSystem", "Loose")
+        part.addObject(lcs)
+        self.assertFalse(bp.is_frame(lcs))
+        bp.add_frame_props(lcs, "Pin", PinName="9")
+        self.assertEqual(bp.pin(part, "9"), lcs)
+        # Through a link in an assembly the frame resolves with the instance as its connector.
+        asm = self.doc.addObject("App::Part", "Asm")
+        j1 = self.link(part, "J1", (10, 20, 30), asm, App.Rotation(V(0, 0, 1), 90))
+        self.doc.recompute()
+        obj, sub = bp.frame_ref(j1, bp.pin(part, "2"))
+        self.assertEqual((obj, sub), (j1, "Pin2."))
+        for o, s in ((obj, sub), (asm, "J1.Pin2."), (asm, f"J1.Pin2.{bp.pin(part, '2').OriginFeatures[0].Name}.")):
+            frame, placement, connector = bp.frame_at(o, s)
+            self.assertEqual((frame.PinName, connector.Label), ("2", "J1"))
+            self.assertAlmostEqual((placement.Base - V(10, 22.5, 30)).Length, 0.0, places=6)
+            self.assertAlmostEqual((placement.Rotation.multVec(V(0, 0, 1)) - V(0, 0, -1)).Length, 0.0, places=6)
+        self.assertIsNone(bp.frame_at(asm, "J1.XHP_2_Body.Face1"))
+        self.assertAlmostEqual((br.attachment_point(asm, "J1.Pin2.") - V(10, 22.5, 30)).Length, 0.0, places=6)
+
+    def test_mating_pairs(self):
+        bp = self.bp
+        housing = self.housing()
+        header = self.housing("B2B", pn="B2B-XH-A", mate="", z=(0, 0, 1))
+        asm = self.doc.addObject("App::Part", "Asm")
+        j1 = self.link(housing, "J1", (0, 0, 0), asm)
+        j2 = self.link(housing, "J2", (100, 0, 0), asm)
+        p1 = self.link(header, "P1", (0, 0, -10), asm)
+        p2 = self.link(header, "P2", (100, 0, -10), asm)
+        self.doc.recompute()
+        self.assertTrue(bp.mates(j1, p1))
+        self.assertFalse(bp.mates(j1, j2))
+        # Each housing pairs with the header it sits on, not with the first one found.
+        self.assertEqual(bp.mate_of(j1), p1)
+        self.assertEqual(bp.mate_of(j2), p2)
+        self.assertEqual(bp.mate_of(p2), j2)
+        header.PartNumber = "OTHER"
+        self.assertIsNone(bp.mate_of(j1))
+        header.addProperty("App::PropertyString", "ManufacturerPartNumber", "BruceWorx")
+        header.ManufacturerPartNumber = "S2B-XH-A"  # the second entry of "B2B-XH-A; S2B-XH-A"
+        self.assertEqual(bp.mate_of(j1), p1)
+
+    # ----- routes on pins -----
+
+    def test_spline_path_on_pins_leaves_straight(self):
+        part, asm, j1, j2, path = self.harness()
+        self.assertEqual((path.StartFrame, path.EndFrame), ("Pin 1 of J1", "Pin 1 of J2"))
+        straight = 2.0 * rt.default_insulation_od("22 AWG")  # no wire yet: the pin's thickest wire
+        self.assertAlmostEqual(path.StartStraight.Value, straight)
+        self.assertAlmostEqual(path.EndStraight.Value, straight)
+        self.assertEqual(len(path.Shape.Edges), 1)  # leads and spline: one B-spline edge
+        edge = path.Shape.Edges[0]
+        # The first L of the curve is the straight down -Z (J1's pin points -Z), at unit speed.
+        for u in (0.0, 0.3 * straight, straight):
+            self.assertAlmostEqual((edge.valueAt(u) - V(0, 0, -u)).Length, 0.0, places=6)
+        self.assertAlmostEqual((edge.tangentAt(0.5 * straight) - V(0, 0, -1)).Length, 0.0, places=6)
+        self.assertAlmostEqual((edge.valueAt(edge.LastParameter) - V(100, 40, 0)).Length, 0.0, places=6)
+        self.assertTrue(path.BendOK)
+        # A wire on it: the straight follows its OD (2 x 1.6), and its own StraightLength wins.
+        wire = br.make_wire(path, gauge="22 AWG", insulation_od=1.6)
+        self.doc.recompute()
+        self.assertAlmostEqual(path.StartStraight.Value, 3.2)
+        self.bp.pin(part, "1").StraightLength = 10.0
+        path.touch()
+        self.doc.recompute()
+        self.assertAlmostEqual(path.StartStraight.Value, 10.0)
+        self.assertAlmostEqual((path.Shape.Edges[0].valueAt(10.0) - V(0, 0, -10)).Length, 0.0, places=6)
+        self.assertAlmostEqual(wire.Length.Value, path.Length.Value * 1.05, places=6)
+        # The preference drives the default: 3 x OD.
+        self.bp.pin(part, "1").StraightLength = 0.0
+        br.set_prefs({"WireStraightFactor": 3.0})
+        path.touch()
+        self.doc.recompute()
+        self.assertAlmostEqual(path.StartStraight.Value, 4.8)
+        # Off: the path is drawn through its points as before.
+        path.LeaveStraight = False
+        self.doc.recompute()
+        self.assertEqual(path.StartFrame, "")
+        self.assertAlmostEqual(path.Length.Value, rt.spline_length([(0, 0, 0), (50, 20, -30), (100, 40, 0)]), places=6)
+
+    def test_polyline_path_on_pins_and_the_bend_check(self):
+        part, asm, j1, j2, path = self.harness(mode="Polyline")
+        straight = path.StartStraight.Value
+        self.assertTrue(path.BendOK, path.Problems)
+        first = path.Shape.Edges[0]
+        self.assertEqual(first.Curve.TypeId, "Part::GeomLine")
+        self.assertAlmostEqual(first.Length, straight, places=6)  # the arc starts exactly L out
+        pts = list(path.RoutePoints)
+        self.assertEqual(len(pts), 5)
+        self.assertAlmostEqual(pts[1].x, 0.0)
+        self.assertGreater(-pts[1].z, straight)  # the corner is L + R tan(theta / 2) out
+        # The bend check sees the corners at the lead ends: a minimum above the radius fails.
+        path.MinBendRadius = 6.0
+        self.doc.recompute()
+        self.assertFalse(path.BendOK)
+        path.MinBendRadius = 0.0
+        # A radius whose tangent does not fit between the lead end and the next point is reported.
+        path.BendRadius = 400.0
+        self.doc.recompute()
+        self.assertFalse(path.BendOK)
+        self.assertIn("needs", path.Problems)
+
+    def test_spline_bend_check_includes_the_lead(self):
+        """A pin facing away from the route: the spline must turn back right after the straight,
+        and the check measures that turn (it is not there without the lead)."""
+        part = self.housing(z=(0, 0, 1))
+        a = self.bp.frame_ref(part, self.bp.pin(part, "1"))
+        path = br.make_path([(0, 0, 0), (0, 0, -60), (40, 0, -80)], self.doc, attachments=[(0, a[0], a[1])])
+        path.MinBendRadius = 5.0
+        self.doc.recompute()
+        self.assertFalse(path.BendOK)
+        self.assertLess(path.MinRadius.Value, 5.0)
+        path.LeaveStraight = False
+        self.doc.recompute()
+        self.assertTrue(path.BendOK)
+
+    def test_wire_fills_from_to_from_the_pins(self):
+        part, asm, j1, j2, path = self.harness()
+        header = self.housing("B2B", pn="B2B-XH-A", mate="", z=(0, 0, 1), terminal="")
+        p1 = self.link(header, "P1", (0, 0, 8), asm)
+        wire = br.make_wire(path, gauge="22 AWG", name="W1")
+        self.doc.recompute()
+        self.assertEqual((wire.FromConnector, wire.FromPin, wire.ToConnector, wire.ToPin), ("J1", "1", "J2", "1"))
+        self.assertEqual(wire.Signal, "+5V")
+        self.assertEqual(wire.Warnings, "")
+        # A typed value stays; the others keep following the pins.
+        wire.ToPin = "B"
+        self.doc.recompute()
+        self.assertEqual(wire.ToPin, "B")
+        j2.Label = "J9"
+        path.touch()
+        self.doc.recompute()
+        self.assertEqual(wire.ToConnector, "J9")
+        # A gauge the pin does not take is a warning (and a Browser badge).
+        wire.Gauge = "18 AWG"
+        self.doc.recompute()
+        self.assertIn("Pin 1 of J1: 18 AWG is thicker", wire.Warnings)
+        self.assertIn(("gauge", "warn"), br.row_badges(wire, {}, [])[1])
+        # The from-to list names J1's mate (P1 sits on it); J9 has none.
+        lines = br.from_to_csv(self.doc).splitlines()
+        self.assertEqual(lines[1].split(",")[:10], ["W1", "+5V", "18 AWG", "red", "J1", "1", "P1", "J9", "B", ""])
+        p1.Label = "P7"
+        self.assertEqual(br.from_to_rows(self.doc)[0]["from_mate"], "P7")
+
+    def test_terminals_are_counted_in_the_bom(self):
+        import bruceworx_bom as bb
+        from bruceworx import bom
+
+        part, asm, j1, j2, path = self.harness()
+        self.bp.pin(part, "1").SealPN = "WS-1"
+        w1 = br.make_wire(path, gauge="22 AWG", name="W1")
+        a = self.bp.frame_ref(j1, self.bp.pin(part, "2"))
+        path2 = br.make_path([(2.5, 0, 0), (60, 0, -20)], self.doc, attachments=[(0, a[0], a[1])], container=asm)
+        br.make_wire(path2, gauge="24 AWG", name="W2")  # one end on a pin, the other loose
+        self.doc.recompute()
+        self.assertEqual(sorted(w1.BomExtras), ["SXH-001T-P0.6|2|Terminal", "WS-1|2|Seal"])
+        self.assertEqual(sorted(br.terminal_rows(self.doc)), [("SXH-001T-P0.6", "Terminal", 3), ("WS-1", "Seal", 2)])
+        rows = bb.walk(self.doc)
+        counted = {}
+        for r in rows:
+            if r["keys"] and r["keys"][0] in ("SXH-001T-P0.6", "WS-1"):
+                counted[r["name"]] = counted.get(r["name"], 0) + r["qty"]
+        self.assertEqual(counted, {"SXH-001T-P0.6 (terminal)": 3, "WS-1 (seal)": 2})
+        lines, missing = bom.lines_from_walk(rows, {"SXH-001T-P0.6"})
+        self.assertEqual([(l.child, l.qty) for l in lines], [("SXH-001T-P0.6", 3)])
+        self.assertIn({"name": "WS-1 (seal)", "qty": 2}, missing)
+
+    # ----- fittings -----
+
+    def test_fitting_ports_and_choices(self):
+        bf, bp = self.bf, self.bp
+        fit = bf.make_fitting(self.doc, "Push-to-connect", "Elbow", "6 mm", "1/8 BSPP")
+        self.doc.recompute()
+        body = bf.body_of(fit)
+        self.assertTrue(body.Shape.isValid())
+        self.assertEqual(len(body.Shape.Solids), 1)
+        self.assertEqual(fit.Description, "Push-to-connect male elbow, 6 mm tube x 1/8 BSPP")
+        self.assertEqual(fit.FittingCode, "PTC-ELBOW-6MM-1/8BSPP")
+        self.assertEqual(fit.ConnectorFamily, "Push-to-connect")
+        self.assertIn("PartNumber", fit.PropertiesList)
+        self.assertFalse(fit.BomDetail)
+        ports = bp.ports(fit)
+        self.assertEqual([(f.PortName, f.PortType, f.PortSize) for f in ports],
+                         [("1", "Push-to-connect", "6 mm"), ("2", "BSPP", "1/8 BSPP")])
+        self.assertAlmostEqual(ports[0].Engagement.Value, 17.0)
+        self.assertEqual(bf.mount_port(fit), ports[1])
+        # The tube port's origin is on the axis of the socket mouth: the bore wall is one tube radius
+        # away, and the collar face is the end of the body along the port's +Z.
+        self.assertAlmostEqual(body.Shape.distToShape(Part.Vertex(ports[0].Placement.Base))[0], 3.0, places=6)
+        self.assertAlmostEqual(body.Shape.BoundBox.XMax, ports[0].Placement.Base.x, places=6)
+        # A tee has three ports, then an elbow two again; a typed description stays.
+        bf.set_choice(fit, style="Tee")
+        self.doc.recompute()
+        self.assertEqual([f.PortName for f in bp.ports(fit)], ["1", "2", "3"])
+        self.assertEqual(body.Thread, "None")
+        fit.Description = "Tee for the air manifold"
+        bf.set_choice(fit, family="Compression")
+        self.doc.recompute()
+        self.assertEqual((body.Style, body.Size), ("Straight union", "6 mm"))  # the size kept where the family has it
+        self.assertEqual(len(bp.ports(fit)), 2)
+        self.assertEqual(fit.Description, "Tee for the air manifold")
+        self.assertEqual(fit.FittingCode, "CMP-STRAIGHTUNION-6MM")
+        # The property editor path: setting Size on the body moves the ports too.
+        body.Size = "12 mm"
+        self.doc.recompute()
+        self.assertEqual(bp.port(fit, "1").PortSize, "12 mm")
+        self.assertTrue(body.Shape.isValid())
+
+    def test_every_fitting_builds(self):
+        from bruceworx import fittings as ft
+
+        for family, style, size, thread in ft.all_fittings():
+            shape = self.bf.layout_shape(ft.layout(family, style, size, thread or None))
+            self.assertTrue(shape.isValid(), (family, style, size))
+            self.assertEqual(len(shape.Solids), 1, (family, style, size))
+            self.assertGreater(shape.Volume, 0.0)
+
+    def test_place_fitting_on_a_face(self):
+        bf = self.bf
+        block = self.doc.addObject("Part::Box", "Manifold")
+        block.Length = block.Width = block.Height = 40
+        self.doc.recompute()
+        top = next(f for f in block.Shape.Faces if abs(f.CenterOfMass.z - 40) < 1e-6)
+        fit = bf.make_fitting(self.doc, "Push-to-connect", "Straight", "8 mm", "1/4 NPT")
+        bf.place_fitting(fit, top.CenterOfMass, V(0, 0, 1))
+        self.doc.recompute()
+        mount = bf.mount_port(fit).getGlobalPlacement()
+        self.assertAlmostEqual((mount.Base - V(20, 20, 40)).Length, 0.0, places=6)
+        self.assertAlmostEqual((mount.Rotation.multVec(V(0, 0, 1)) - V(0, 0, -1)).Length, 0.0, places=6)
+        tube = self.bp.port(fit, "1").getGlobalPlacement()
+        self.assertGreater(tube.Base.z, 40.0)  # the socket stands up out of the face
+
+    def test_fitting_port_drives_a_tube_path(self):
+        bf, bp = self.bf, self.bp
+        f1 = bf.make_fitting(self.doc, "Push-to-connect", "Elbow", "6 mm", "1/8 BSPP")
+        f2 = bf.make_fitting(self.doc, "Push-to-connect", "Straight", "6 mm")
+        f2.Placement = App.Placement(V(200, 100, 0), App.Rotation())
+        self.doc.recompute()
+        a = bp.frame_ref(f1, bp.port(f1, "1"))
+        b = bp.frame_ref(f2, bp.port(f2, "1"))
+        path = br.make_path([(0, 0, 0), (150, 50, 60), (0, 0, 0)], self.doc, mode="Polyline", radius=12.0,
+                            attachments=[(0, a[0], a[1]), (2, b[0], b[1])])
+        pipe = br.make_pipe(path, size="6 x 1", bend_radius=12.0)
+        self.doc.recompute()
+        self.assertEqual(path.StartFrame, f"Port 1 of {f1.Label}")
+        self.assertAlmostEqual(path.StartStraight.Value, 12.0)  # tube: 2 x OD
+        self.assertAlmostEqual(path.EndStraight.Value, 12.0)
+        self.assertTrue(path.BendOK, path.Problems)
+        start = bp.port(f1, "1").getGlobalPlacement()
+        self.assertAlmostEqual((path.Points[0] - start.Base).Length, 0.0, places=6)
+        self.assertAlmostEqual(path.Shape.Edges[0].Length, 12.0, places=6)
+        # Tube inside both fittings: the cut length and the first and last feeds include it.
+        self.assertAlmostEqual(pipe.CutLength.Value, path.Length.Value + 2 * 17.0, places=6)
+        rows = br.pipe_table(pipe)
+        self.assertAlmostEqual(rows[0]["L"], 12.0 + 17.0, places=6)
+        self.assertAlmostEqual(rows[-1]["L"], 12.0 + 17.0, places=6)
+        self.assertTrue(pipe.BendTable.startswith("1  L 29.0"))
+        # The clamp length preference makes the straight longer.
+        br.set_prefs({"TubeClampLength": 25.0})
+        path.touch()
+        self.doc.recompute()
+        self.assertAlmostEqual(path.StartStraight.Value, 25.0)
+        # Moving the fitting moves the route's end with it.
+        f2.Placement = App.Placement(V(220, 100, 10), App.Rotation())
+        self.doc.recompute()
+        end = bp.port(f2, "1").getGlobalPlacement()
+        self.assertAlmostEqual((path.Points[-1] - end.Base).Length, 0.0, places=6)
+        # A hose on a barb's port: the hose over the barb is part of its length.
+        barb = bf.make_fitting(self.doc, "Hose barb", "Straight", "6 mm", "1/8 NPT")
+        c = bp.frame_ref(barb, bp.port(barb, "1"))
+        hp = br.make_path([(0, 0, 0), (0, 80, 80)], self.doc, attachments=[(0, c[0], c[1])])
+        hose = br.make_hose(hp, inner=6.0, od=10.0, slack=0)
+        self.doc.recompute()
+        self.assertAlmostEqual(hp.StartStraight.Value, 20.0)  # hose: 2 x its OD
+        self.assertAlmostEqual(hose.Length.Value, hp.Length.Value + bp.port(barb, "1").Engagement.Value, places=6)
+
+    def test_save_and_reload(self):
+        part, asm, j1, j2, path = self.harness()
+        wire = br.make_wire(path, gauge="22 AWG", name="W1")
+        fit = self.bf.make_fitting(self.doc, "Threaded", "Tee", "1/4 NPT")
+        self.doc.recompute()
+        length = path.Length.Value
+        names = (path.Name, wire.Name, fit.Name)
+        folder = tempfile.mkdtemp(prefix="bw-routing-ports-")
+        try:
+            name = os.path.join(folder, "harness.FCStd")
+            self.doc.saveAs(name)
+            App.closeDocument(self.doc.Name)
+            doc = App.openDocument(name)
+            doc.recompute()
+            path, wire, fit = (doc.getObject(n) for n in names)
+            self.assertEqual(path.StartFrame, "Pin 1 of J1")
+            self.assertAlmostEqual(path.Length.Value, length, places=6)
+            self.assertEqual((wire.FromConnector, wire.ToPin), ("J1", "1"))
+            self.assertEqual(list(wire.BomExtras), ["SXH-001T-P0.6|2|Terminal"])
+            self.assertEqual(len(self.bp.ports(fit)), 3)
+            self.bf.set_choice(fit, style="Elbow")
+            doc.recompute()
+            self.assertEqual(len(self.bp.ports(fit)), 2)
+            self.assertTrue(self.bf.body_of(fit).Shape.isValid())
+            App.closeDocument(doc.Name)
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 if __name__ == "__main__":

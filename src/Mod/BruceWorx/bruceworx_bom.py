@@ -134,6 +134,22 @@ def _metered(row, target):
     return row
 
 
+def _extras(target, qty):
+    """[BW] ROU-05: the counted lines an item brings with it (a wire's terminals and seals, one per
+    end on a pin with a TerminalPN / SealPN: ``BomExtras`` "P/N|count|kind"), keyed by that P/N so
+    a vaulted terminal is a line and the rest are listed as missing by name."""
+    rows = []
+    for entry in getattr(target, "BomExtras", None) or []:
+        try:
+            pn, count, kind = entry.split("|", 2)
+            n = int(count)
+        except ValueError:
+            continue
+        if pn and n > 0:
+            rows.append({"keys": [pn], "name": f"{pn} ({kind.lower()})", "qty": qty * n})
+    return rows
+
+
 def walk(doc, imported=None) -> list:
     """What an assembly document holds, one level of files deep, as rows for
     bruceworx.bom.lines_from_walk: [{"keys", "name", "qty"}] in tree order. A sub-assembly in
@@ -175,6 +191,7 @@ def walk(doc, imported=None) -> list:
                 if target is top:
                     continue
                 rows.append(_metered({"keys": [], "name": f"{target.Label} (in this file)", "qty": mult * count}, target))
+                rows.extend(_extras(target, mult * count))  # [BW] ROU-05: terminals
                 continue
             name = os.path.basename(getattr(target.Document, "FileName", "") or "") or target.Document.Label
             rows.append(_metered({"keys": _keys(target, imported), "name": name, "qty": mult * count}, target))

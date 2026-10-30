@@ -244,13 +244,111 @@ class TableTests(unittest.TestCase):
             rt.tube_size("Custom")
 
 
+class LeadTests(unittest.TestCase):
+    """ROU-05: a route on a pin or port leaves along +Z for its straight before the first bend."""
+
+    def test_clamped_spline_leaves_along_its_tangent(self):
+        pts = [(0, 0, 0), (40, 30, 0), (80, 0, 0)]
+        s = rt.Spline(pts, start_tangent=(0, 1, 0), end_tangent=(0, -1, 0))
+        for value, want in ((s.at(0, 0.0)[1], (0, 1, 0)), (s.at(s.segments - 1, 1.0)[1], (0, -1, 0))):
+            for a, b in zip(value, want):
+                self.assertAlmostEqual(a, b, places=9)
+        # Two points with one clamped end are a curve, not a line, and still pass both points.
+        two = rt.Spline([(0, 0, 0), (10, 10, 0)], start_tangent=(1, 0, 0))
+        self.assertLess(two.min_radius(), math.inf)
+        self.assertAlmostEqual(rt.dist(two.at(0, 1.0)[0], (10, 10, 0)), 0.0, places=9)
+        # The B-spline form is the same curve with a clamped end too.
+        poles, knots, mults = s.bspline()
+        for i in range(s.segments):
+            for t in (0.25, 0.6):
+                u = s.params[i] + t * (s.params[i + 1] - s.params[i])
+                self.assertAlmostEqual(rt.dist(rt.bspline_value(poles, knots, mults, u), s.at(i, t)[0]), 0.0, places=9)
+        # Without tangents nothing changed (not-a-knot, the 30 Oct curve).
+        self.assertEqual(rt.Spline(pts).second, rt.Spline(pts, None, None).second)
+
+    def test_spline_route_with_leads(self):
+        start = rt.Lead((0, 0, 0), (0, 0, -1), 5.0, "Pin 1 of J1")
+        end = rt.Lead((100, 40, 0), (0, 0, -1), 3.0)
+        route = rt.build_route([(0, 0, 0), (50, 20, -30), (100, 40, 0)], "Spline", 0.0, start, end)
+        self.assertEqual([p[0] for p in route.pieces], ["line", "spline", "line"])
+        self.assertEqual(route.pieces[0][1:], ((0.0, 0.0, 0.0), (0.0, 0.0, -5.0)))
+        self.assertEqual(route.pieces[2][1:], ((100.0, 40.0, -3.0), (100.0, 40.0, 0.0)))
+        self.assertEqual(route.straights, (5.0, 3.0))
+        spline = route.pieces[1][1]
+        self.assertAlmostEqual(route.length, 8.0 + spline.length(), places=9)
+        self.assertAlmostEqual(route.min_radius, spline.min_radius(), places=9)
+        # One B-spline for the whole route: the lines at unit speed, knots of multiplicity 3 at the joins.
+        poles, knots, mults = route.bspline()
+        self.assertEqual(mults, [4, 3, 1, 3, 4])
+        self.assertEqual(len(poles), sum(mults) - 4)
+        for u in (0.0, 2.5, 5.0):
+            self.assertAlmostEqual(rt.dist(rt.bspline_value(poles, knots, mults, u), (0, 0, -u)), 0.0, places=9)
+        u = 5.0 + 0.4 * spline.params[1]
+        self.assertAlmostEqual(rt.dist(rt.bspline_value(poles, knots, mults, u), spline.at(0, 0.4)[0]), 0.0, places=9)
+        self.assertAlmostEqual(rt.dist(rt.bspline_value(poles, knots, mults, knots[-1]), (100, 40, 0)), 0.0, places=9)
+
+    def test_polyline_lead_puts_the_arc_past_the_straight(self):
+        start = rt.Lead((0, 0, 0), (1, 0, 0), 10.0)
+        route = rt.build_route([(0, 0, 0), (100, 100, 0)], "Polyline", 20.0, start)
+        # The corner sits L + R tan(theta / 2) out, so the arc starts exactly 10 from the frame.
+        self.assertAlmostEqual(route.straights[0], 10.0, places=6)
+        corner = route.points[1]
+        theta = math.acos(rt.dot((1, 0, 0), rt.unit(rt.sub((100, 100, 0), corner))))
+        self.assertAlmostEqual(corner[0], 10.0 + 20.0 * math.tan(theta / 2), places=6)
+        self.assertTrue(route.ok)
+        self.assertEqual(route.bends, 1)
+        # Two ports side by side, both facing +X, 30 apart: two corners of R 20 do not fit the 30 mm
+        # between the lead ends; reported, drawn sharp, the straights still kept.
+        a = rt.Lead((0, 0, 0), (1, 0, 0), 10.0, "Port 1 of F1")
+        b = rt.Lead((0, 0, 30), (1, 0, 0), 10.0, "Port 1 of F2")
+        route = rt.build_route([(0, 0, 0), (0, 0, 30)], "Polyline", 20.0, a, b)
+        self.assertFalse(route.ok)
+        self.assertTrue(all("needs" in p for p in route.problems), route.problems)
+        self.assertGreaterEqual(min(route.straights), 10.0)
+        # A next point behind the pin: the lead end goes R past the straight, the corner is reported.
+        route = rt.build_route([(0, 0, 0), (5, 0, 20), (100, 100, 0)], "Polyline", 10.0, start)
+        self.assertAlmostEqual(route.points[1][0], 20.0, places=6)
+        self.assertFalse(route.ok)
+        # The summary carries the straights and the vertices.
+        summary = rt.route_summary([(0, 0, 0), (100, 100, 0)], "Polyline", 20.0, 0.0, start)
+        self.assertEqual(len(summary["points"]), 3)
+        self.assertAlmostEqual(summary["straights"][0], 10.0, places=6)
+
+    def test_no_lead_route_is_unchanged(self):
+        pts = [(0, 0, 0), (100, 0, 0), (100, 100, 0)]
+        self.assertAlmostEqual(rt.route_summary(pts, "Polyline", 20.0)["length"], 160.0 + 10.0 * math.pi, places=9)
+        self.assertAlmostEqual(rt.route_summary(pts, "Spline")["length"], rt.spline_length(pts), places=9)
+        self.assertEqual(rt.route_summary(pts, "Spline")["straights"], (None, None))
+
+    def test_straight_length_defaults(self):
+        self.assertAlmostEqual(rt.straight_length("wire", 1.6), 3.2)
+        self.assertAlmostEqual(rt.straight_length("hose", 10.0), 20.0)
+        self.assertAlmostEqual(rt.straight_length("tube", 6.0), 12.0)
+        self.assertAlmostEqual(rt.straight_length("tube", 6.0, prefs={"TubeClampLength": 30.0}), 30.0)
+        self.assertAlmostEqual(rt.straight_length("tube", 20.0, prefs={"TubeClampLength": 30.0}), 40.0)
+        self.assertAlmostEqual(rt.straight_length("wire", 1.6, override=7.5), 7.5)
+        self.assertAlmostEqual(rt.straight_length("wire", 1.6, prefs={"WireStraightFactor": "3"}), 4.8)
+
+    def test_gauge_ranges(self):
+        self.assertIsNone(rt.gauge_fits("24 AWG", 28, 22))
+        self.assertIn("thicker", rt.gauge_fits("20 AWG", 28, 22))
+        self.assertIn("thinner", rt.gauge_fits("30 AWG", 28, 22))
+        self.assertIsNone(rt.gauge_fits("30 AWG", 0, 0))
+        self.assertIn("thicker", rt.gauge_fits("1.5 mm²", 0, 22))  # 1.5 mm² is about 16 AWG
+        self.assertEqual(rt.awg_number("22 AWG"), 22)
+        self.assertIsNone(rt.awg_number("0.5 mm²"))
+
+
 class ReportTests(unittest.TestCase):
     def test_from_to_csv(self):
         text = rt.from_to_csv([{"wire": "W1", "signal": "+12V", "gauge": "22 AWG", "colour": "red", "from": "J1",
                                 "from_pin": "1", "to": "M1", "to_pin": "+", "length_m": 0.2345}])
         lines = text.splitlines()
-        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,To,To pin,Length (m)")
-        self.assertEqual(lines[1], "W1,+12V,22 AWG,red,J1,1,M1,+,0.234")
+        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,From mate,To,To pin,To mate,Length (m)")
+        self.assertEqual(lines[1], "W1,+12V,22 AWG,red,J1,1,,M1,+,,0.234")
+        text = rt.from_to_csv([{"wire": "W2", "from": "J1", "from_pin": "2", "from_mate": "P1", "to": "M1",
+                                "to_pin": "-", "length_m": 0.1}])
+        self.assertEqual(text.splitlines()[1], "W2,,,,J1,2,P1,M1,-,,0.100")
 
     def test_cut_list_csv(self):
         rows = rt.lra_table([(0, 0, 0), (100, 0, 0), (100, 100, 0)], 20.0)
