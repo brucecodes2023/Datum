@@ -12,7 +12,7 @@ engine. What it does:
   ``--subst-models`` needs the ``.wrl`` to exist; this KiCad ships STEP only).
 * :func:`export_step`, :func:`cached_step` -- the board as STEP with copper,
   mask and silkscreen; cached by board content and options.
-* :func:`render` -- KiCad's 3D render (the vault thumbnail).
+* :func:`render`, :func:`cached_render` -- KiCad's 3D render (the vault thumbnail).
 * :func:`drc` -- a DRC summary.
 * :func:`board_info` -- size from Edge.Cuts, copper layer count, footprints,
   mounting holes, stackup finish and colours, in KiCad and STEP coordinates.
@@ -728,6 +728,25 @@ def render(board: str, out: str, side: str = "top", rotate: str | None = None, q
             raise _failure(result, "render")
         shutil.move(tmp_out, out)
     return out
+
+
+THUMBNAIL_VIEW = {"side": "top", "rotate": "-45,0,45", "width": 512, "height": 512, "zoom": 0.9,
+                  "background": "transparent"}
+
+
+def cached_render(board: str, cache: str | None = None, cli: str | None = None, **view) -> str:
+    """KiCad's render of ``board`` (default: the iso vault thumbnail, THUMBNAIL_VIEW) from
+    ``<cache>/<key>.png``, rendered on a miss. Keyed like :func:`cached_step`: the board's bytes
+    and the view, so the same board gives the same picture (and the same vault object) again."""
+    opts = dict(THUMBNAIL_VIEW, **view)
+    text = json.dumps({"board": board_hash(board), "render": opts, "v": CACHE_VERSION}, sort_keys=True)
+    cache = cache or cache_dir()
+    path = os.path.join(cache, hashlib.sha256(text.encode()).hexdigest()[:32] + ".png")
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
+        return path
+    render(board, path + ".part.png", cli=cli, **opts)
+    os.replace(path + ".part.png", path)
+    return path
 
 
 def drc(board: str, cli: str | None = None, refill_zones: bool = False, parity: bool = False,

@@ -26,6 +26,11 @@ and the lifecycle state s. The first matching row wins:
 A check-in needs a comment (the user's rule, 23 Oct). No FreeCAD import: the FreeCAD side
 (bruceworx_vaultclient.py) drives this module.
 
+KiCad items (ECD-05, bruceworx.ecad_vault): an item whose file is a packed KiCad project
+(``<P/N>.kicad.zip``) has a folder as its work copy, ``<work>/<P/N>/``. Its local hash is the
+version it was placed from while the folder's files (their tree digest) are unchanged; check-in
+packs the folder, the other operations unpack into it, and read-only means the files in it.
+
 Links (plan section 4): work files link each other as plain ``<P/N>.FCStd``. Before a check-in,
 :meth:`Workspace.fix_links` points every other link at its vault item, and files that are not in
 the vault yet are imported first through a callback (vault_setup.import_linked_files).
@@ -294,6 +299,11 @@ def _rewrite_zip(path: str, infos, data: dict) -> None:
 
 
 def _set_writable(path: str, writable: bool) -> None:
+    if os.path.isdir(path):  # a KiCad item's work copy: the files in it
+        from bruceworx import ecad_vault  # noqa: PLC0415
+
+        ecad_vault.set_writable(path, writable)
+        return
     mode = os.stat(path).st_mode
     if writable:
         os.chmod(path, mode | stat.S_IWUSR)
@@ -343,7 +353,10 @@ class Workspace:
         os.replace(tmp, self.state_path)
 
     def _record_base(self, pn: str, sha: str) -> None:
+        old = self.state["items"].get(pn, {})
         self.state["items"][pn] = {"base": sha, "fetched": _now()}
+        if old.get("tree") and old.get("base") == sha:  # a KiCad work folder still holding that version
+            self.state["items"][pn]["tree"] = old["tree"]
         self._save_state()
 
     def _writable(self) -> None:
@@ -354,8 +367,42 @@ class Workspace:
         return self.state["items"].get(pn, {}).get("base", "")
 
     # --- paths and hashes ----------------------------------------------------
+    def is_folder(self, pn: str) -> bool:
+        """Whether pn's work copy is a folder: a KiCad project (ECD-05, bruceworx.ecad_vault)."""
+        from bruceworx import ecad_vault  # noqa: PLC0415
+
+        return ecad_vault.is_ecad(self.vault, pn)
+
     def path(self, pn: str) -> str:
+        if self.is_folder(pn):
+            return os.path.join(self.root, pn)
         return os.path.join(self.root, pn + SUFFIX)
+
+    def _folder_tree(self, path: str) -> str:
+        """The tree digest of a KiCad work folder, cached by its files' sizes and times."""
+        from bruceworx import ecad_vault  # noqa: PLC0415
+
+        key = ecad_vault.signature(path)
+        cached = self._hashes.get(path)
+        if cached and cached[0] == key and cached[1] == "tree":
+            return cached[2]
+        digest = ecad_vault.tree_digest(path)
+        self._hashes[path] = (key, "tree", digest)
+        return digest
+
+    def _folder_hash(self, path: str) -> str:
+        """A KiCad work folder's hash: the version it was placed from while its files are the ones
+        placed (the tree digest recorded then), else ``tree-<digest>`` (modified)."""
+        tree = self._folder_tree(path)
+        pn = os.path.basename(path) if os.path.dirname(os.path.abspath(path)) == self.root else ""
+        record = self.state["items"].get(pn, {}) if pn else {}
+        if record.get("base") and record.get("tree") == tree:
+            return record["base"]
+        return "tree-" + tree
+
+    def _record_tree(self, pn: str, path: str) -> None:
+        self.state["items"].setdefault(pn, {})["tree"] = self._folder_tree(path)
+        self._save_state()
 
     def local_hash(self, path: str) -> str | None:
         """SHA-256 of a work file, cached by size and modification time; None when absent.
@@ -364,6 +411,8 @@ class Workspace:
         (dataless, or only its stand-in left) keeps its status without being downloaded;
         with no cached hash it is taken to be unchanged since its base.
         """
+        if os.path.isdir(path):
+            return self._folder_hash(path)
         name = os.path.basename(path) if os.path.dirname(os.path.abspath(path)) == self.root else ""
         saved = self.state.get("hashes", {}).get(name) if name else None
         try:
@@ -489,6 +538,8 @@ class Workspace:
         self._writable()
         os.makedirs(self.root, exist_ok=True)
         self._ensure([os.path.join(self.vault.root, version.object_name)])
+        if self.is_folder(pn):
+            return self._place_folder(pn, version, writable)
         dest = self.path(pn)
         if os.path.exists(dest):
             _set_writable(dest, True)
@@ -501,6 +552,22 @@ class Workspace:
         _set_writable(dest, writable)
         self._remember(dest, version.sha256)
         self._record_base(pn, version.sha256)
+        return dest
+
+    def _place_folder(self, pn: str, version, writable: bool) -> str:
+        """A KiCad item: unpack the version into <P/N>/ and record it (and its tree) as the base."""
+        from bruceworx import ecad_vault  # noqa: PLC0415
+
+        dest = self.path(pn)
+        staging = os.path.join(self.root, STATE_DIR, "fetch")
+        fetched = self.vault.fetch(pn, staging, version)
+        try:
+            ecad_vault.unpack(fetched, dest, writable=writable)
+        finally:
+            os.remove(fetched)
+        self._hashes.pop(dest, None)
+        self._record_base(pn, version.sha256)
+        self._record_tree(pn, dest)
         return dest
 
     def checkout(self, pn: str, with_links: bool = True) -> str:
@@ -557,12 +624,47 @@ class Workspace:
         if not os.path.exists(path) and not icloud_placeholder(path):
             raise FileNotFoundError(f"{pn}: there is no work copy to check in ({path})")
         self._ensure([path])
+        if os.path.isdir(path):
+            return self._checkin_folder(pn, path, comment.strip(), keep_checked_out)
         version = self.vault.checkin(pn, path, comment=comment.strip(), keep_lock=keep_checked_out,
                                      made_from=made_from, fingerprint=fingerprint)
         latest = self.vault.latest_version(pn)
         if latest is not None:
             self._record_base(pn, latest.sha256)
         if not keep_checked_out:
+            _set_writable(path, False)
+        return version
+
+    def _checkin_folder(self, pn: str, path: str, comment: str, keep: bool):
+        """A KiCad item: refresh the thumbnail, pack the folder, store it (ECD-05). An unchanged
+        folder only releases the lock, as for a file."""
+        from bruceworx import ecad_vault  # noqa: PLC0415
+
+        vault = self.vault
+        if vault.locks.get(pn) != vault.actor:
+            raise LifecycleError(f"{pn} is not checked out by {vault.actor}")
+        latest = vault.latest_version(pn)
+        if latest is not None and self.local_hash(path) == latest.sha256:
+            if not keep:
+                vault.undo_checkout(pn)
+                _set_writable(path, False)
+            return latest
+        try:
+            ecad_vault.prepare_checkin(path)
+        except Exception:  # noqa: BLE001 -- the picture is never a reason not to check in
+            pass
+        archive = os.path.join(self.root, STATE_DIR, "pack", pn + ecad_vault.ARCHIVE_SUFFIX)
+        ecad_vault.pack(path, archive)
+        try:
+            version = vault.checkin(pn, archive, comment=comment, keep_lock=keep)
+        finally:
+            os.remove(archive)
+        latest = vault.latest_version(pn)
+        if latest is not None:
+            self._record_base(pn, latest.sha256)
+            self._hashes.pop(path, None)
+            self._record_tree(pn, path)
+        if not keep:
             _set_writable(path, False)
         return version
 
@@ -594,6 +696,16 @@ class Workspace:
             raise LifecycleError(f"{pn} has no version {sha256[:12]}")
         folder = os.path.join(self.root, REV_DIR)
         self._ensure([os.path.join(self.vault.root, version.object_name)])
+        if self.is_folder(pn):  # a KiCad item: the older project, unpacked read-only
+            from bruceworx import ecad_vault  # noqa: PLC0415
+
+            fetched = self.vault.fetch(pn, os.path.join(self.root, STATE_DIR, "fetch"), version)
+            dest = os.path.join(folder, f"{pn}-{version.revision}-{sha256[:8]}")
+            try:
+                ecad_vault.unpack(fetched, dest)
+            finally:
+                os.remove(fetched)
+            return dest
         fetched = self.vault.fetch(pn, folder, version)
         dest = os.path.join(folder, f"{pn}-{version.revision}-{sha256[:8]}{SUFFIX}")
         if os.path.exists(dest):

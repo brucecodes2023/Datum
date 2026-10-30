@@ -33,6 +33,7 @@ COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault", "p
 VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
     "submit", "approve", "reject", "retire", "fetch", "sync", "import", "settings",
+    "kicad-import", "kicad-update", "kicad-open",  # ECD-05: KiCad projects as vault items (ecad_vault)
 )
 _ENTRY_NAMES = {"hooks.py", "hooks"}
 
@@ -110,10 +111,12 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--vault", required=True, help="Vault folder or its .bwvault ref file")
     vault.add_argument("--name", default="", help="init: vault name (default: folder name)")
     vault.add_argument("--pn", default="", help="Part number, without revision")
-    vault.add_argument("--type", default="part", help="create: part, assembly, drawing or cots")
+    vault.add_argument("--type", default="", help="create: part (default), assembly, drawing or cots; "
+                       "kicad-import: cots (default) or part")
     vault.add_argument("--description", default="")
     vault.add_argument("--drawing-of", default="", help="create: the part a drawing documents")
-    vault.add_argument("--file", default="", help="checkin: the saved .FCStd; sync: the .FCStd to update")
+    vault.add_argument("--file", default="", help="checkin: the saved .FCStd; sync: the .FCStd to update; "
+                       "kicad-open: project (default), schematic or board")
     vault.add_argument("--workspace", default="", help="checkout/fetch: copy the file here")
     vault.add_argument("--comment", default="", help="checkin comment (reject: same as --note)")
     # approve, reject, retire (PDM-05): the same journal fields as FreeCAD's panels.
@@ -132,7 +135,16 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--document-types", default="", help='init: e.g. "01=Part,02=Assembly,03=Drawing"')
     vault.add_argument("--first-parent", type=int, default=None, help="init: first PPPPP (default 1001)")
     vault.add_argument("--properties-file", default="", help="init: company part properties (JSON list or layer)")
-    vault.add_argument("--from", dest="source_folder", default="", help="import: folder of .FCStd files")
+    vault.add_argument("--from", dest="source_folder", default="",
+                       help="import: folder of .FCStd files; kicad-import, kicad-update: the KiCad project "
+                            "folder (or its .kicad_pro)")
+    # kicad-import, kicad-update, kicad-open (ECD-05): a KiCad project as a vault item.
+    vault.add_argument("--manufacturer", default=None, help="kicad-import, kicad-update: the part's manufacturer")
+    vault.add_argument("--mpn", default=None, help="kicad-import, kicad-update: the manufacturer's part number")
+    vault.add_argument("--value", default=None, help="kicad-import, kicad-update: the part's value")
+    vault.add_argument("--no-render", action="store_true",
+                       help="kicad-import: no KiCad render as the thumbnail (faster; no kicad-cli needed)")
+    vault.add_argument("--checkout", action="store_true", help="kicad-open: check the item out first, to edit it")
     vault.add_argument("--dry-run", action="store_true",
                        help="import: show the plan, change nothing; settings --import: check only; "
                             "approve, retire: show the checklist, change nothing")
@@ -381,12 +393,14 @@ def _vault_command(args) -> int:
         return _vault_sync(vault, args, payload)
     if args.action == "import":
         return _vault_import(vault, args, payload)
+    if args.action.startswith("kicad-"):
+        return _vault_kicad(vault, args, payload)
     if args.action != "status":
         if not args.pn:
             raise ValueError(f"vault {args.action} needs --pn")
         payload["part_number"] = args.pn
     if args.action == "create":
-        vault.create_item(args.pn, args.type, args.description, args.drawing_of or None)
+        vault.create_item(args.pn, args.type or "part", args.description, args.drawing_of or None)
     elif args.action == "checkout":
         payload["path"] = vault.checkout(args.pn, workspace=args.workspace or None)
     elif args.action == "checkin":
@@ -408,6 +422,57 @@ def _vault_command(args) -> int:
     elif args.pn in vault.items:
         payload["revision"] = vault.items[args.pn].latest.code
         payload["state"] = vault.items[args.pn].state
+    emit(payload)
+    return 0
+
+
+def _vault_kicad(vault, args, payload) -> int:
+    """kicad-import, kicad-update, kicad-open (ECD-05, bruceworx.ecad_vault): the KiCad project lives in
+    the item's folder in the vault (work/<actor>/<P/N>/), packed into one object per version."""
+    from bruceworx import ecad_vault  # noqa: PLC0415
+    from bruceworx.pdm_workspace import Workspace  # noqa: PLC0415
+
+    work = Workspace(vault)
+    if args.action == "kicad-import":
+        if not args.source_folder:
+            raise ValueError("vault kicad-import needs --from <KiCad project folder>")
+        result = ecad_vault.import_project(
+            vault, args.source_folder, args.comment, description=args.description,
+            manufacturer=args.manufacturer or "", mpn=args.mpn or "", value=args.value or "",
+            program=args.program, item_type=args.type or ecad_vault.DEFAULT_ITEM_TYPE, workspace=work,
+            render=not args.no_render)
+        payload.update(result.as_dict())
+        for line in result.warnings:
+            print(f"warning: {line}", file=sys.stderr)
+        print(f"{result.part_number}: {result.description} ({result.files} files) -> {result.work_copy}",
+              file=sys.stderr)
+        emit(payload)
+        return 0
+    if not args.pn:
+        raise ValueError(f"vault {args.action} needs --pn")
+    payload["part_number"] = args.pn
+    if args.action == "kicad-update":
+        if not args.source_folder:
+            raise ValueError("vault kicad-update needs --from <KiCad project folder>")
+        version = ecad_vault.update_project(work, args.pn, args.source_folder, args.comment,
+                                            description=args.description or None, manufacturer=args.manufacturer,
+                                            mpn=args.mpn, value=args.value)
+        payload.update(sha256=version.sha256, revision=version.revision, work_copy=work.path(args.pn))
+        emit(payload)
+        return 0
+    # kicad-open: the work copy (fetched read-only when there is none, or checked out), then KiCad.
+    if not ecad_vault.is_ecad(vault, args.pn):
+        raise ValueError(f"{args.pn} is not a KiCad item")
+    if args.checkout and vault.locks.get(args.pn) != vault.actor:
+        work.checkout(args.pn)
+    elif not os.path.isdir(work.path(args.pn)):
+        work.get_latest(args.pn)
+    project = ecad_vault.find_project(work.path(args.pn))
+    which = (args.file or "project").lower()
+    target = ecad_vault.editor_file(project, which) if which in project.files else os.path.join(
+        project.folder, args.file)
+    st = work.status(args.pn)
+    payload.update(opened=target, command=ecad_vault.launch(target), status=st.code, writable=st.writable)
     emit(payload)
     return 0
 
