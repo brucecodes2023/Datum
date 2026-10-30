@@ -365,6 +365,21 @@ class TestVaultItem(unittest.TestCase):
         asked.assert_called_once()  # a WIP item nobody holds: the check-out is offered first
         self.assertEqual(s.status(self.pn).code, "up_to_date")
         self.assertEqual(bg.library_for(s.root), os.path.abspath(s.root))
+        # Import KiCad Project as Standard Part...: the form wants a comment, run_import makes the item
+        project = self.ev.find_project(os.path.join(self.tmp, "src", "Arduino_Mega"))
+        dialog, fields = bg._import_form(Gui.getMainWindow(), project, "Arduino Mega")
+        from PySide import QtWidgets
+
+        ok = dialog.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Ok)
+        self.assertFalse(ok.isEnabled())
+        fields["comment"].setText("Second copy")
+        self.assertTrue(ok.isEnabled())
+        dialog.deleteLater()
+        result = bg.run_import(s.root, project.pro, "Second copy", description="Arduino Mega, second", value="2")
+        self.assertEqual(result.part_number, "STD-01-01002-001")
+        s = vc.session()
+        self.assertTrue(bg.is_kicad_item(s, result.part_number))
+        self.assertEqual(s.status(result.part_number).code, "up_to_date")
 
 if __name__ == "__main__":
     unittest.main()
