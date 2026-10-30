@@ -41,7 +41,9 @@ SET(BruceWorx_SRCS
     TestBruceWorxRouting.py
     TestBruceWorxConnectorLibrary.py
     BruceWorx_RoutePath.svg
+    BruceWorx_RouteFrame.svg
     BruceWorx_RouteFitting.svg
+    BruceWorx_RouteTerminals.svg
     BruceWorx_RouteAddPoint.svg
     BruceWorx_RouteClip.svg
     BruceWorx_RouteWire.svg

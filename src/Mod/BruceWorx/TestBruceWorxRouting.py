@@ -50,9 +50,24 @@ class RoutingGuiTests(unittest.TestCase):
                 test.panels.append(self)
 
         rg.RoutePathPanel, rg.ItemPanel = RecordedPath, RecordedItem
+        self._frame_panel, self._fitting_panel = rg.FramePanel, rg.FittingPanel
+
+        class RecordedFrame(rg.FramePanel):
+            def __init__(self, *args, **kw):
+                super().__init__(*args, **kw)
+                test.panels.append(self)
+
+        class RecordedFitting(rg.FittingPanel):
+            def __init__(self, *args, **kw):
+                super().__init__(*args, **kw)
+                test.panels.append(self)
+
+        rg.FramePanel, rg.FittingPanel = RecordedFrame, RecordedFitting
 
     def tearDown(self):
         self.rg.RoutePathPanel, self.rg.ItemPanel = self._path_panel, self._item_panel
+        self.rg.FramePanel, self.rg.FittingPanel = self._frame_panel, self._fitting_panel
+        br.reset_prefs()
         if Gui.Control.activeDialog():
             Gui.Control.closeDialog()
         self.rg._state["panel"] = None
@@ -89,7 +104,7 @@ class RoutingGuiTests(unittest.TestCase):
 
         design = ws.workspace(ws.load(), "Design")
         tab = next(t for t in design["tabs"] if t["name"] == "Routing")
-        self.assertEqual([g["caption"] for g in tab["groups"]], ["Path", "Items", "Reports"])
+        self.assertEqual([g["caption"] for g in tab["groups"]], ["Path", "Parts", "Items", "Reports"])
         listed = [c for g in tab["groups"] for c in g["commands"] + g.get("more", [])]
         commands = Gui.listCommands()
         for name in self.rg.COMMANDS:
@@ -383,6 +398,166 @@ class RoutingGuiTests(unittest.TestCase):
         self.assertEqual(len(bundles), 1)
         self.assertAlmostEqual(bundles[0].OD.Value, 1.15 * math.sqrt(3 * 1.6**2), places=6)
         self.assertEqual(bundles[0].ViewObject.Transparency, 60)
+
+    # ----- ROU-05: pins, ports, fittings -----
+
+    def _connector(self):
+        """A box in an App::Part: a hand-made two-way connector."""
+        part = self.doc.addObject("App::Part", "Conn")
+        box = self.doc.addObject("Part::Box", "Housing")
+        box.Length, box.Width, box.Height = 10, 6, 8
+        part.addObject(box)
+        self.doc.recompute()
+        return part, box
+
+    def test_frame_panel_puts_a_pin_on_a_face(self):
+        import bruceworx_routing_ports as bp
+
+        part, box = self._connector()
+        top = next(f"Face{i + 1}" for i, f in enumerate(box.Shape.Faces) if abs(f.CenterOfMass.z - 8) < 1e-6)
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(self.doc.Name, part.Name, f"{box.Name}.{top}")
+        panel = self._run("BruceWorx_RouteFrame")
+        pins = bp.pins(part)
+        self.assertEqual(len(pins), 1)
+        where = pins[0].getGlobalPlacement()
+        self.assertAlmostEqual((where.Base - V(5, 3, 8)).Length, 0.0, places=6)
+        self.assertAlmostEqual((where.Rotation.multVec(V(0, 0, 1)) - V(0, 0, 1)).Length, 0.0, places=6)
+        panel.name.setText("VBAT")
+        panel.gauge_min.setValue(28)
+        panel.gauge_max.setValue(22)
+        panel.terminal.setText("SXH-001T-P0.6")
+        panel.terminal.editingFinished.emit()
+        panel.family.setText("JST-XH")
+        panel.family.editingFinished.emit()
+        self.assertEqual((pins[0].PinName, pins[0].Label, pins[0].GaugeMin, pins[0].GaugeMax, pins[0].TerminalPN),
+                         ("VBAT", "Pin VBAT", 28, 22, "SXH-001T-P0.6"))
+        self.assertEqual(part.ConnectorFamily, "JST-XH")
+        self.assertIn("Pin VBAT", panel.status.text())
+        # The same frame as a port.
+        panel.kind.setCurrentText("Port")
+        self._pump()
+        self.assertTrue(bp.is_port(pins[0]))
+        self.assertTrue(panel.port_box.isVisibleTo(panel.form))
+        panel.tube_od.setValue(6.0)
+        self.assertAlmostEqual(pins[0].TubeOD.Value, 6.0)
+        panel.accept()
+        self._pump()
+        # Selecting the LCS edits it; Cancel on a new one removes it.
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(pins[0])
+        panel = self._run("BruceWorx_RouteFrame")
+        self.assertEqual(panel.frame, pins[0])
+        panel.reject()
+        self._pump()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(self.doc.Name, part.Name, f"{box.Name}.{top}")
+        panel = self._run("BruceWorx_RouteFrame")
+        self.assertEqual(len(bp.frames(part)), 2)
+        panel.reject()
+        self._pump()
+        self.assertEqual(len(bp.frames(part)), 1)
+
+    def test_fitting_panel_places_on_a_face(self):
+        import bruceworx_fittings as bf
+        import bruceworx_routing_ports as bp
+
+        block = self.doc.addObject("Part::Box", "Manifold")
+        block.Length = block.Width = block.Height = 40
+        self.doc.recompute()
+        top = next(f"Face{i + 1}" for i, f in enumerate(block.Shape.Faces) if abs(f.CenterOfMass.z - 40) < 1e-6)
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(block, top)
+        panel = self._run("BruceWorx_RouteFitting")
+        fits = bf.fittings(self.doc)
+        self.assertEqual(len(fits), 1)
+        fit = fits[0]
+        panel.combos["Style"].setCurrentText("Elbow")
+        panel.combos["Size"].setCurrentText("8 mm")
+        panel.combos["Thread"].setCurrentText("1/4 NPT")
+        self._pump()
+        body = bf.body_of(fit)
+        self.assertEqual((body.Style, body.Size, body.Thread), ("Elbow", "8 mm", "1/4 NPT"))
+        self.assertIn("Push-to-connect male elbow, 8 mm tube x 1/4 NPT", panel.status.text())
+        mount = bf.mount_port(fit).getGlobalPlacement()
+        self.assertAlmostEqual((mount.Base - V(20, 20, 40)).Length, 0.0, places=6)
+        self.assertAlmostEqual((mount.Rotation.multVec(V(0, 0, 1)) - V(0, 0, -1)).Length, 0.0, places=6)
+        panel.combos["Family"].setCurrentText("Hose barb")
+        self._pump()
+        self.assertEqual(body.Family, "Hose barb")
+        self.assertEqual([c for c in (panel.combos["Size"].itemText(i) for i in range(panel.combos["Size"].count()))][0],
+                         "1/8 in")
+        panel.pn.setText("FIT-0001")
+        panel.pn.editingFinished.emit()
+        self.assertEqual(fit.PartNumber, "FIT-0001")
+        panel.accept()
+        self._pump()
+        self.assertEqual(len(bp.ports(fit)), 2)
+        # Cancel removes a new one.
+        Gui.Selection.clearSelection()
+        panel = self._run("BruceWorx_RouteFitting")
+        self.assertEqual(len(bf.fittings(self.doc)), 2)
+        panel.reject()
+        self._pump()
+        self.assertEqual(len(bf.fittings(self.doc)), 1)
+
+    def test_path_picked_on_pins_and_the_terminal_list(self):
+        import bruceworx_routing_ports as bp
+
+        part, box = self._connector()
+        bp.set_connector(part, family="JST-XH")
+        for k, x in enumerate((2.5, 5.0), start=1):
+            bp.make_pin(part, str(k), ((x, 3, 0), (0, 0, -1)), TerminalPN="SXH-001T-P0.6", TerminalMfr="JST")
+        asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        for label, base in (("J1", V(0, 0, 0)), ("J2", V(80, 30, 0))):
+            link = self.doc.addObject("App::Link", label)
+            link.LinkedObject = part
+            link.Label = label
+            link.Placement.Base = base
+            asm.addObject(link)
+        self.doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(self.doc.Name, asm.Name, "J1.Pin1.")
+        Gui.Selection.addSelection(self.doc.Name, asm.Name, "J2.Pin1.")
+        panel = self._run("BruceWorx_RoutePath")
+        self.assertEqual(panel.list.count(), 2)
+        panel.accept()
+        self._pump()
+        path = br.paths(self.doc)[0]
+        self.assertIn(path, asm.Group)  # the path went into the assembly its picks are in
+        self.assertEqual((path.StartFrame, path.EndFrame), ("Pin 1 of J1", "Pin 1 of J2"))
+        self.assertIn("Starts on Pin 1 of J1", self.rg.RoutePathPanel.summary(path))
+        self.assertTrue(all(t.Name != asm.Name for _i, t, _s in br.attachments_of(path)))  # no cycle
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(path)
+        wire_panel = self._run("BruceWorx_RouteWire")
+        wire_panel.accept()
+        self._pump()
+        wire = br.routed(self.doc, (br.WIRE,))[0]
+        self.assertEqual((wire.FromConnector, wire.FromPin, wire.ToConnector, wire.ToPin), ("J1", "1", "J2", "1"))
+        folder = tempfile.mkdtemp(prefix="bw-routing-gui-")
+        try:
+            out = self.rg.export_terminals(self.doc, os.path.join(folder, "terminals.csv"))
+            with open(out, encoding="utf-8") as handle:
+                self.assertEqual(handle.read().splitlines()[1], "Terminal,JST,SXH-001T-P0.6,,2")
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+
+    def test_bend_rules_dialog_straights(self):
+        try:
+            dialog = self.rg.BendRulesDialog(Gui.getMainWindow())
+            self.assertEqual(dialog.straights["WireStraightFactor"].value(), 2.0)
+            self.assertEqual(dialog.straights["TubeClampLength"].value(), 0.0)
+            dialog.straights["TubeClampLength"].setValue(30.0)
+            dialog.straights["WireStraightFactor"].setValue(3.0)
+            dialog.accept()
+            prefs = br.prefs()
+            self.assertEqual((prefs["TubeClampLength"], prefs["WireStraightFactor"]), (30.0, 3.0))
+            again = self.rg.BendRulesDialog(Gui.getMainWindow())
+            again.restore_defaults()
+            self.assertEqual(again.straights["TubeClampLength"].value(), 0.0)
+        finally:
+            br.reset_prefs()
 
 
 if __name__ == "__main__":

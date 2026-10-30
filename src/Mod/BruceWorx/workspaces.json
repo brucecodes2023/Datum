@@ -365,6 +365,13 @@
               ]
             },
             {
+              "caption": "Parts",
+              "commands": [
+                "BruceWorx_RouteFrame",
+                "BruceWorx_RouteFitting"
+              ]
+            },
+            {
               "caption": "Items",
               "commands": [
                 "BruceWorx_RouteWire",
@@ -378,7 +385,8 @@
               "caption": "Reports",
               "commands": [
                 "BruceWorx_RouteFromTo",
-                "BruceWorx_RouteCutList"
+                "BruceWorx_RouteCutList",
+                "BruceWorx_RouteTerminals"
               ]
             }
           ]

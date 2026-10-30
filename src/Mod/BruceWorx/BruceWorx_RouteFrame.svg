@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a connector housing with two pin frames, +Z out of the rear face -->
+  <rect x="8" y="30" width="34" height="26" rx="3" fill="#d9dde3" stroke="#2b2f36" stroke-width="2.5"/>
+  <circle cx="18" cy="30" r="3.5" fill="#2b2f36"/>
+  <circle cx="32" cy="30" r="3.5" fill="#2b2f36"/>
+  <path d="M18 30 V8" stroke="#1f6fd1" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M12.5 13 L18 6 L23.5 13" fill="none" stroke="#1f6fd1" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 30 C32 18 44 14 56 14" fill="none" stroke="#c0392b" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

@@ -15,9 +15,19 @@ Commands (registered by :func:`install`, listed in workspaces.json):
 * ``BruceWorx_RouteWire``, ``_RoutePipe``, ``_RouteHose``: a short form for the item on the
   selected path (or the only path). ``BruceWorx_RouteBundle``: the selected wires into a bundle.
 * ``BruceWorx_RouteFromTo``, ``BruceWorx_RouteCutList``: the CSV reports, saved where asked.
+  ``BruceWorx_RouteTerminals`` (ROU-05): the terminals, seals and connector accessories to order,
+  manufacturer and MPN in columns of their own.
 * ``BruceWorx_RouteBendRules``: the Bend Rules dialog (ROU-02, 30 Oct), the default minimum bend
   rule per wire, hose and tube and the tube CLR, kept in the preference group
-  ``Mod/BruceWorx/Routing``. Each item panel can override the rule for its item.
+  ``Mod/BruceWorx/Routing``. Each item panel can override the rule for its item. ROU-05 adds the
+  straight length at pins and ports (wire, hose and tube multiples of OD, the bender clamp).
+* ``BruceWorx_RouteFrame`` (ROU-05): the Pin / Port panel. Pick a face, a hole edge or a vertex of
+  a part to put a pin or port frame there (+Z out of the face), or select an LCS to edit it: name,
+  gauge range, terminal, seal, signal and straight length of a pin; type, size, tube OD, straight
+  and engagement of a port; the connector's family and mating P/N.
+* ``BruceWorx_RouteFitting`` (ROU-05): the Fitting panel. Family, style, size and thread from the
+  size tables, placed on the selection (a face, a hole edge or another port: the fitting's thread
+  or first port faces it), live; the P/N can be typed.
 
 Every Qt signal to a bound method goes through ``slot`` (bruceworx_slots). The selection observer
 is not a Qt signal: FreeCAD calls its methods directly.
@@ -34,7 +44,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RED = "<span style='color:#c0392b'>{}</span>"
 COMMANDS = ("BruceWorx_RoutePath", "BruceWorx_RouteAddPoint", "BruceWorx_RouteClip", "BruceWorx_RouteWire",
             "BruceWorx_RoutePipe", "BruceWorx_RouteHose", "BruceWorx_RouteBundle", "BruceWorx_RouteFromTo",
-            "BruceWorx_RouteCutList", "BruceWorx_RouteBendRules")
+            "BruceWorx_RouteCutList", "BruceWorx_RouteBendRules", "BruceWorx_RouteFrame", "BruceWorx_RouteFitting",
+            "BruceWorx_RouteTerminals")
 _state = {"installed": False, "panel": None}
 
 
@@ -210,6 +221,11 @@ class RoutePathPanel:
         grid.addWidget(QtWidgets.QLabel("Min bend radius"), 2, 0)
         grid.addWidget(self.minimum, 2, 1)
         layout.addLayout(grid)
+        self.straight = QtWidgets.QCheckBox("Leave pins and ports straight")
+        self.straight.setObjectName("routeLeaveStraight")
+        self.straight.setToolTip("An end picked on a connector pin or a fitting port leaves along its +Z for the "
+                                 "straight length (the pin's or port's own, else Bend Rules) before the first bend")
+        layout.addWidget(self.straight)
         self.status = QtWidgets.QLabel("")
         self.status.setObjectName("routeStatus")
         self.status.setWordWrap(True)
@@ -222,9 +238,11 @@ class RoutePathPanel:
         self.mode.currentIndexChanged.connect(slot(self._changed))
         self.radius.valueChanged.connect(slot(self._changed))
         self.minimum.valueChanged.connect(slot(self._changed))
+        self.straight.toggled.connect(slot(self._changed))
         return form
 
     def _load(self):
+        self.straight.setChecked(bool(getattr(self.path, "LeaveStraight", True)))
         self.mode.setCurrentText(self.path.Mode)
         self.radius.setValue(float(self.path.BendRadius.Value))
         self.minimum.setValue(float(self.path.MinBendRadius.Value))
@@ -315,8 +333,11 @@ class RoutePathPanel:
     def _apply(self):
         self._fill()
         path = self.path
+        self._adopt_container()
         path.Points = [p for p, _o, _s in self.points]
         br.set_attachments(path, [(i, o, s) for i, (_p, o, s) in enumerate(self.points) if o is not None])
+        if bool(path.LeaveStraight) != self.straight.isChecked():
+            path.LeaveStraight = self.straight.isChecked()
         path.Mode = self.mode.currentText()
         path.BendRadius = self.radius.value()
         path.MinBendRadius = self.minimum.value()
@@ -330,12 +351,29 @@ class RoutePathPanel:
             return
         self.status.setText(self.summary(path))
 
+    def _adopt_container(self):
+        """ROU-05: a new path whose first attached pick is inside an assembly (or a part) goes into
+        it, so its wires are BOM lines of that assembly and the pick is re-rooted below it."""
+        path = self.path
+        if self.editing or br._container_of(path) is not None:
+            return
+        first = next(((obj, sub) for _p, obj, sub in self.points if obj is not None), None)
+        if first is None:
+            return
+        obj, sub = first
+        if sub and "." in sub and (obj.isDerivedFrom("App::Part") or obj.TypeId == "Assembly::AssemblyObject"):
+            br._place(path, container=obj)
+
     @staticmethod
     def summary(path):
-        """One line: length, bends, tightest radius, the check."""
+        """One line: length, bends, tightest radius, the check; the pins or ports at the ends."""
         text = f"Length {path.Length.Value:.1f} mm · {path.Bends} bend{'s' if path.Bends != 1 else ''}"
         if path.MinRadius.Value > 0:
             text += f" · tightest R {path.MinRadius.Value:.1f} mm"
+        for label, frame, straight in (("Starts on", getattr(path, "StartFrame", ""), getattr(path, "StartStraight", None)),
+                                       ("Ends on", getattr(path, "EndFrame", ""), getattr(path, "EndStraight", None))):
+            if frame:
+                text += f"<br>{label} {_html(frame)}, straight {straight.Value:.1f} mm"
         if not path.BendOK:
             return text + "<br>" + RED.format(_html(path.Problems or "bend too tight"))
         return text + " · OK"
@@ -705,6 +743,25 @@ class BendRulesDialog:
                 self.clr.setSuffix(" × OD")
                 form.addRow("Bend radius (CLR)", self.clr)
             layout.addWidget(box)
+        box = QtWidgets.QGroupBox("Straight at pins and ports")
+        box.setToolTip("A route on a connector pin or a fitting port leaves along its +Z this far before the "
+                       "first bend; a pin or port with its own straight length keeps it")
+        form = QtWidgets.QFormLayout(box)
+        self.straights = {}
+        for key, label, suffix in (("WireStraightFactor", "Wire, past the terminal", " × OD"),
+                                   ("HoseStraightFactor", "Hose, out of the fitting", " × OD"),
+                                   ("TubeStraightFactor", "Tube, out of the fitting", " × OD"),
+                                   ("TubeClampLength", "Tube, bender clamp (at least)", " mm")):
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setObjectName(f"bend{key}")
+            spin.setRange(0.0, 1000.0)
+            spin.setDecimals(2)
+            spin.setSuffix(suffix)
+            if key == "TubeClampLength":
+                spin.setSpecialValueText("none")
+            form.addRow(label, spin)
+            self.straights[key] = spin
+        layout.addWidget(box)
         sources = QtWidgets.QLabel(self.presets_html())
         sources.setWordWrap(True)
         sources.setObjectName("bendPresetSources")
@@ -732,6 +789,8 @@ class BendRulesDialog:
             factor.setValue(float(values[key + "Factor"]))
             radius.setValue(float(values[key + "Radius"]))
         self.clr.setValue(float(values["TubeClrFactor"]))
+        for key, spin in self.straights.items():
+            spin.setValue(float(values[key]))
         self._enable()
 
     def _enable(self, *_args):
@@ -748,6 +807,8 @@ class BendRulesDialog:
             out[key + "Factor"] = factor.value()
             out[key + "Radius"] = radius.value()
         out["TubeClrFactor"] = self.clr.value()
+        for key, spin in self.straights.items():
+            out[key] = spin.value()
         return out
 
     def restore_defaults(self):
@@ -771,6 +832,10 @@ def refresh_documents():
         mine = [o for o in br.routed(doc) if o.BendRule in (rt.RULE_DEFAULT, rt.RULE_FROM_WIRES)]
         for obj in mine:
             obj.touch()
+        for path in br.paths(doc):  # ROU-05: the straights at pins and ports follow the defaults
+            if br.path_ends(path):
+                path.touch()
+                mine.append(path)
         if mine:
             doc.recompute()
             touched += len(mine)
@@ -794,6 +859,12 @@ def export_cut_list(doc, path):
     return out
 
 
+def export_terminals(doc, path):
+    out = br.write_text(path, br.terminal_csv(doc))
+    _console(f"wrote {out}")
+    return out
+
+
 def _ask_and_write(doc, name, writer):
     _QtCore, _QtGui, QtWidgets = _qt()
     start = os.path.join(os.path.expanduser("~/Desktop"), name)
@@ -801,6 +872,447 @@ def _ask_and_write(doc, name, writer):
     if path:
         writer(doc, path)
     return path
+
+
+# ---------------------------------------------------------------------------------------------
+# Pins, ports and fittings (ROU-05).
+
+
+def _bp():
+    import bruceworx_routing_ports
+
+    return bruceworx_routing_ports
+
+
+def _bf():
+    import bruceworx_fittings
+
+    return bruceworx_fittings
+
+
+def pick_frame(obj, sub):
+    """``(point, outward direction)`` in the document frame for a pick: a pin or port frame (its
+    origin and +Z), a face (its centre and normal), a circular edge (its centre and axis, pointing
+    out of the solid), anything else its point and +Z."""
+    found = _bp().frame_at(obj, sub)
+    if found is not None:
+        placement = found[1]
+        return App.Vector(placement.Base), placement.Rotation.multVec(App.Vector(0, 0, 1))
+    point = br.attachment_point(obj, sub)
+    if point is None:
+        return None
+    direction = App.Vector(0, 0, 1)
+    try:
+        shape = obj.getSubObject(sub) if sub else None
+        frame = br._parent_frame(obj)
+        if shape is not None and shape.ShapeType == "Face":
+            u, v = shape.Surface.parameter(shape.CenterOfMass)
+            direction = frame.Rotation.multVec(shape.normalAt(u, v))
+        elif shape is not None and shape.ShapeType == "Edge" and hasattr(shape.Curve, "Axis"):
+            axis = frame.Rotation.multVec(App.Vector(shape.Curve.Axis))
+            owner = obj.getSubObject(sub.rsplit(".", 1)[0] + ".") if "." in sub else obj.Shape
+            owner = owner if owner is not None else obj.Shape
+            probe = point + axis * 0.5
+            inside = False
+            try:
+                inside = owner.isInside(_parent_frame_inverse(obj).multVec(probe), 1e-6, True)
+            except Exception:
+                pass
+            direction = axis * -1.0 if inside else axis
+    except Exception:
+        pass
+    if direction.Length > 1e-12:
+        direction.normalize()
+    return point, direction
+
+
+def _parent_frame_inverse(obj):
+    return br._parent_frame(obj).inverse()
+
+
+def _owner_part(obj, sub):
+    """The App::Part a new frame goes in: the innermost App::Part on the pick's path (not through a
+    link: a frame belongs to the part's own file), else None."""
+    names = [n for n in (sub or "").split(".")[:-1] if n]
+    chain = list(obj.getSubObjectList(".".join(names) + ".")) if names else [obj]
+    owner = None
+    for item in chain:
+        if item.isDerivedFrom("App::Link"):
+            break
+        if item.isDerivedFrom("App::Part") and item.TypeId != "Assembly::AssemblyObject":
+            owner = item
+    return owner
+
+
+class FramePanel:
+    """A pin or port frame: placed on a pick, or an existing LCS edited; live, OK keeps it."""
+
+    def __init__(self, frame=None, pick=None):
+        _QtCore, _QtGui, QtWidgets = _qt()
+        self.Gui = _gui()
+        self.doc = App.ActiveDocument
+        self.doc.openTransaction("Pin / Port")
+        bp = _bp()
+        self.editing = frame is not None
+        self.created_part = None
+        self.note = ""
+        if frame is None:
+            obj, sub = pick
+            point, direction = pick_frame(obj, sub)
+            part = _owner_part(obj, sub)
+            if part is None:
+                target = obj if not sub or "." not in sub else obj.getSubObjectList(sub.rsplit(".", 1)[0] + ".")[-1]
+                part = self.doc.addObject("App::Part", "Connector")
+                try:
+                    part.addObject(target)
+                except Exception:
+                    pass
+                self.created_part = part
+                self.note = f"{_html(target.Label)} was put in a new part, {_html(part.Label)}."
+            local = part.getGlobalPlacement().inverse().multiply(
+                App.Placement(point, App.Rotation(App.Vector(0, 0, 1), direction)))
+            names = [bp.frame_name(f) for f in bp.pins(part)]
+            name = str(len(names) + 1)
+            while name in names:
+                name = str(int(name) + 1)
+            frame = bp.make_pin(part, name, local)
+        elif not bp.is_frame(frame):
+            bp.add_frame_props(frame, bp.PIN, PinName=frame.Label)
+        self.frame = frame
+        self.part = frame.getParentGeoFeatureGroup()
+        if self.part is not None:
+            bp.set_connector(self.part)
+        self._building = True
+        self.form = self._build(QtWidgets)
+        self._load()
+        self._building = False
+        self._apply()
+
+    def _build(self, QtWidgets):
+        bp = _bp()
+        form = QtWidgets.QWidget()
+        form.setWindowTitle("Pin / Port")
+        layout = QtWidgets.QVBoxLayout(form)
+        top = QtWidgets.QFormLayout()
+        self.kind = QtWidgets.QComboBox()
+        self.kind.setObjectName("frameKind")
+        self.kind.addItems([bp.PIN, bp.PORT])
+        self.name = QtWidgets.QLineEdit()
+        self.name.setObjectName("frameName")
+        top.addRow("Kind", self.kind)
+        top.addRow("Name", self.name)
+        layout.addLayout(top)
+
+        def spin(suffix=" mm", maximum=1000.0, special=""):
+            box = QtWidgets.QDoubleSpinBox()
+            box.setRange(0.0, maximum)
+            box.setDecimals(2)
+            box.setSuffix(suffix)
+            if special:
+                box.setSpecialValueText(special)
+            box.valueChanged.connect(slot(self._changed))
+            return box
+
+        def edit():
+            line = QtWidgets.QLineEdit()
+            line.editingFinished.connect(slot(self._changed))
+            return line
+
+        self.pin_box = QtWidgets.QGroupBox("Pin")
+        pin = QtWidgets.QFormLayout(self.pin_box)
+        self.gauge_min = QtWidgets.QSpinBox()
+        self.gauge_max = QtWidgets.QSpinBox()
+        for box in (self.gauge_min, self.gauge_max):
+            box.setRange(0, 40)
+            box.setSuffix(" AWG")
+            box.setSpecialValueText("not stated")
+            box.valueChanged.connect(slot(self._changed))
+        self.terminal, self.seal, self.signal = edit(), edit(), edit()
+        self.pin_straight = spin(special="default rule")
+        pin.addRow("Thinnest wire", self.gauge_min)
+        pin.addRow("Thickest wire", self.gauge_max)
+        pin.addRow("Terminal P/N", self.terminal)
+        pin.addRow("Seal P/N", self.seal)
+        pin.addRow("Default signal", self.signal)
+        pin.addRow("Straight before bend", self.pin_straight)
+        layout.addWidget(self.pin_box)
+
+        self.port_box = QtWidgets.QGroupBox("Port")
+        port = QtWidgets.QFormLayout(self.port_box)
+        self.port_type = QtWidgets.QComboBox()
+        self.port_type.addItems(bp.PORT_TYPES)
+        self.port_type.currentIndexChanged.connect(slot(self._changed))
+        self.port_size = edit()
+        self.tube_od = spin()
+        self.port_straight = spin(special="default rule")
+        self.engagement = spin()
+        port.addRow("Type", self.port_type)
+        port.addRow("Size", self.port_size)
+        port.addRow("Tube OD", self.tube_od)
+        port.addRow("Straight before bend", self.port_straight)
+        port.addRow("Engagement", self.engagement)
+        layout.addWidget(self.port_box)
+
+        conn = QtWidgets.QGroupBox("Connector")
+        cform = QtWidgets.QFormLayout(conn)
+        self.family, self.mating = edit(), edit()
+        self.mating.setToolTip("P/N of the mating half; several separated by ';'")
+        cform.addRow("Family", self.family)
+        cform.addRow("Mating P/N", self.mating)
+        layout.addWidget(conn)
+        self.status = QtWidgets.QLabel("")
+        self.status.setObjectName("frameStatus")
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        layout.addStretch(1)
+        self.kind.currentIndexChanged.connect(slot(self._kind_changed))
+        self.name.editingFinished.connect(slot(self._changed))
+        return form
+
+    def _load(self):
+        bp = _bp()
+        f = self.frame
+        self.kind.setCurrentText(bp.frame_kind(f))
+        self.name.setText(bp.frame_name(f))
+        if bp.is_pin(f):
+            self.gauge_min.setValue(int(f.GaugeMin))
+            self.gauge_max.setValue(int(f.GaugeMax))
+            self.terminal.setText(f.TerminalPN)
+            self.seal.setText(f.SealPN)
+            self.signal.setText(f.DefaultSignal)
+            self.pin_straight.setValue(float(f.StraightLength.Value))
+        else:
+            self.port_type.setCurrentText(f.PortType)
+            self.port_size.setText(f.PortSize)
+            self.tube_od.setValue(float(f.TubeOD.Value))
+            self.port_straight.setValue(float(f.StraightLength.Value))
+            self.engagement.setValue(float(f.Engagement.Value))
+        if self.part is not None:
+            self.family.setText(getattr(self.part, "ConnectorFamily", ""))
+            self.mating.setText(getattr(self.part, "MatingPN", ""))
+        self._show_kind()
+
+    def _show_kind(self):
+        pin = self.kind.currentText() == _bp().PIN
+        self.pin_box.setVisible(pin)
+        self.port_box.setVisible(not pin)
+
+    def _kind_changed(self, *_args):
+        if self._building:
+            return
+        bp = _bp()
+        kind = self.kind.currentText()
+        if bp.frame_kind(self.frame) != kind:
+            bp.add_frame_props(self.frame, kind)
+            key = "PinName" if kind == bp.PIN else "PortName"
+            setattr(self.frame, key, self.name.text().strip() or "1")
+        self._building = True
+        self._load()
+        self._building = False
+        self._apply()
+
+    def _changed(self, *_args):
+        if not self._building:
+            self._apply()
+
+    def _set(self, name, value):
+        current = getattr(self.frame, name)
+        if getattr(current, "Value", current) != value:
+            setattr(self.frame, name, value)
+
+    def _apply(self):
+        bp = _bp()
+        f = self.frame
+        name = self.name.text().strip() or "1"
+        try:
+            if bp.is_pin(f):
+                self._set("PinName", name)
+                self._set("GaugeMin", int(self.gauge_min.value()))
+                self._set("GaugeMax", int(self.gauge_max.value()))
+                self._set("TerminalPN", self.terminal.text().strip())
+                self._set("SealPN", self.seal.text().strip())
+                self._set("DefaultSignal", self.signal.text().strip())
+                self._set("StraightLength", self.pin_straight.value())
+            else:
+                self._set("PortName", name)
+                self._set("PortType", self.port_type.currentText())
+                self._set("PortSize", self.port_size.text().strip())
+                self._set("TubeOD", self.tube_od.value())
+                self._set("StraightLength", self.port_straight.value())
+                self._set("Engagement", self.engagement.value())
+            label = f"{bp.frame_kind(f)} {name}"
+            if f.Label != label:
+                f.Label = label
+            if self.part is not None:
+                if self.part.ConnectorFamily != self.family.text().strip():
+                    self.part.ConnectorFamily = self.family.text().strip()
+                if self.part.MatingPN != self.mating.text().strip():
+                    self.part.MatingPN = self.mating.text().strip()
+            self.doc.recompute()
+        except Exception as exc:
+            self.status.setText(RED.format(_html(exc)))
+            return
+        where = f.getGlobalPlacement()
+        z = where.Rotation.multVec(App.Vector(0, 0, 1))
+        text = (f"{_html(f.Label)} on {_html(self.part.Label if self.part else '?')} at {_fmt(where.Base)}, "
+                f"+Z ({z.x:.2f}, {z.y:.2f}, {z.z:.2f})")
+        if self.note:
+            text += "<br>" + self.note
+        self.status.setText(text)
+
+    def getStandardButtons(self):
+        _QtCore, _QtGui, QtWidgets = _qt()
+        return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+
+    def accept(self):
+        self._apply()
+        self.doc.commitTransaction()
+        self.Gui.Control.closeDialog()
+        self.doc.recompute()
+        return True
+
+    def reject(self):
+        self.doc.abortTransaction()
+        if not self.editing:
+            for obj in (self.frame, self.created_part):
+                try:
+                    if obj is not None and self.doc.getObject(obj.Name) is not None:
+                        self.doc.removeObject(obj.Name)
+                except Exception:
+                    pass
+        self.Gui.Control.closeDialog()
+        self.doc.recompute()
+        return True
+
+
+_fitting_choice = {"family": "Push-to-connect", "style": "Straight", "size": "6 mm", "thread": None}
+
+
+class FittingPanel:
+    """A fitting from the size tables, placed on the selection; live; OK keeps it."""
+
+    def __init__(self, fitting=None, pick=None):
+        _QtCore, _QtGui, QtWidgets = _qt()
+        bf = _bf()
+        self.Gui = _gui()
+        self.doc = App.ActiveDocument
+        self.doc.openTransaction("Fitting")
+        self.editing = fitting is not None
+        self.pick = None
+        if fitting is None:
+            container = None
+            if pick is not None:
+                obj, sub = pick
+                self.pick = pick_frame(obj, sub)
+                if sub and "." in sub and (obj.isDerivedFrom("App::Part") or obj.TypeId == "Assembly::AssemblyObject") \
+                        and not bf.is_fitting(obj):
+                    container = obj
+            c = _fitting_choice
+            fitting = bf.make_fitting(self.doc, c["family"], c["style"], c["size"], c["thread"], container=container)
+        self.fitting = fitting
+        self.body = bf.body_of(fitting)
+        self._building = True
+        self.form = self._build(QtWidgets)
+        self._load()
+        self._building = False
+        self._apply()
+
+    def _build(self, QtWidgets):
+        form = QtWidgets.QWidget()
+        form.setWindowTitle("Fitting")
+        layout = QtWidgets.QVBoxLayout(form)
+        grid = QtWidgets.QFormLayout()
+        self.combos = {}
+        for key, label in (("Family", "Family"), ("Style", "Style"), ("Size", "Size"), ("Thread", "Thread")):
+            combo = QtWidgets.QComboBox()
+            combo.setObjectName(f"fitting{key}")
+            combo.currentIndexChanged.connect(slot(self._changed))
+            grid.addRow(label, combo)
+            self.combos[key] = combo
+        self.pn = QtWidgets.QLineEdit()
+        self.pn.setObjectName("fittingPartNumber")
+        self.pn.setPlaceholderText("vault P/N (optional)")
+        self.pn.editingFinished.connect(slot(self._changed))
+        grid.addRow("Part number", self.pn)
+        layout.addLayout(grid)
+        self.status = QtWidgets.QLabel("")
+        self.status.setObjectName("fittingStatus")
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        layout.addStretch(1)
+        return form
+
+    def _fill(self, key, items, current):
+        combo = self.combos[key]
+        if [combo.itemText(i) for i in range(combo.count())] != list(items):
+            combo.clear()
+            combo.addItems(list(items))
+        combo.setCurrentText(current)
+        combo.setEnabled(len(items) > 1)
+
+    def _load(self):
+        ft = _bf()._ft()
+        b = self.body
+        self._fill("Family", ft.FAMILIES, b.Family)
+        self._fill("Style", ft.styles(b.Family), b.Style)
+        self._fill("Size", ft.sizes(b.Family), b.Size)
+        self._fill("Thread", ft.threads(b.Family, b.Style, b.Size) or [ft.NO_THREAD], b.Thread)
+        self.pn.setText(str(getattr(self.fitting, "PartNumber", "") or ""))
+
+    def _changed(self, *_args):
+        if self._building:
+            return
+        self._apply()
+
+    def _apply(self):
+        bf = _bf()
+        c = {k: w.currentText() for k, w in self.combos.items()}
+        try:
+            b = self.body
+            if (c["Family"], c["Style"], c["Size"], c["Thread"]) != (b.Family, b.Style, b.Size, b.Thread):
+                family_changed = c["Family"] != b.Family
+                bf.set_choice(self.fitting, c["Family"], None if family_changed else c["Style"],
+                              None if family_changed else c["Size"], None if family_changed else c["Thread"])
+            if "PartNumber" in self.fitting.PropertiesList and self.fitting.PartNumber != self.pn.text().strip():
+                self.fitting.PartNumber = self.pn.text().strip()
+            if self.pick is not None:
+                bf.place_fitting(self.fitting, self.pick[0], self.pick[1])
+            self.doc.recompute()
+        except Exception as exc:
+            self.status.setText(RED.format(_html(exc)))
+            return
+        self._building = True
+        try:
+            self._load()
+        finally:
+            self._building = False
+        _fitting_choice.update(family=b.Family, style=b.Style, size=b.Size,
+                               thread=b.Thread if b.Thread != "None" else None)
+        ports = ", ".join(f"{_html(f.Label)} {_html(f.PortType)} {_html(f.PortSize)}" for f in _bp().ports(self.fitting))
+        self.status.setText(f"<b>{_html(self.fitting.Description)}</b><br>{_html(b.FittingCode)}<br>{ports}")
+
+    def getStandardButtons(self):
+        _QtCore, _QtGui, QtWidgets = _qt()
+        return QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+
+    def accept(self):
+        self.doc.commitTransaction()
+        self.Gui.Control.closeDialog()
+        self.doc.recompute()
+        return True
+
+    def reject(self):
+        self.doc.abortTransaction()
+        if not self.editing:
+            try:
+                for obj in list(self.fitting.Group) + [self.fitting]:
+                    if self.doc.getObject(obj.Name) is not None:
+                        self.doc.removeObject(obj.Name)
+            except Exception:
+                pass
+        self.Gui.Control.closeDialog()
+        self.doc.recompute()
+        return True
 
 
 # ---------------------------------------------------------------------------------------------
@@ -946,12 +1458,63 @@ class CutListCommand(_Command):
         _ask_and_write(doc, f"{doc.Label}-cut-list.csv", export_cut_list)
 
 
+class TerminalsCommand(_Command):
+    def Activated(self):
+        doc = App.ActiveDocument
+        if not br.terminal_list(doc):
+            _message("No terminals, seals or connector accessories: route a wire to a pin with a terminal P/N first.")
+            return
+        _ask_and_write(doc, f"{doc.Label}-terminals.csv", export_terminals)
+
+
 class BendRulesCommand(_Command):
     def IsActive(self):
         return True
 
     def Activated(self):
         BendRulesDialog(_gui().getMainWindow()).exec_()
+
+
+class FrameCommand(_Command):
+    def Activated(self):
+        if self._busy():
+            return
+        bp = _bp()
+        selected = [o for o in _gui().Selection.getSelection() if o.TypeId in bp.LCS_TYPES]
+        if selected:
+            _gui().Control.showDialog(FramePanel(frame=selected[0]))
+            return
+        sel = _gui().Selection.getSelectionEx("", 0)
+        pick = next(((s.Object, sub) for s in sel for sub in (s.SubElementNames or [""])
+                     if not br.is_path(s.Object) and not br.is_routed(s.Object)), None)
+        if pick is None:
+            _message("Select a face, a hole edge or a vertex of the connector or fitting (or an LCS to edit).")
+            return
+        found = bp.frame_at(*pick)
+        if found is not None:
+            _gui().Control.showDialog(FramePanel(frame=found[0]))
+            return
+        _gui().Control.showDialog(FramePanel(pick=pick))
+
+
+class FittingCommand(_Command):
+    def Activated(self):
+        if self._busy():
+            return
+        bf = _bf()
+        chosen = [o for o in _gui().Selection.getSelection() if bf.is_fitting(o) or bf.is_body(o)]
+        sel = _gui().Selection.getSelectionEx("", 0)
+        pick = next(((s.Object, sub) for s in sel for sub in (s.SubElementNames or [""])
+                     if sub and not br.is_path(s.Object) and not br.is_routed(s.Object)), None)
+        if chosen and pick is None:
+            fitting = chosen[0] if bf.is_fitting(chosen[0]) else bf.container_of(chosen[0])
+            _gui().Control.showDialog(FittingPanel(fitting=fitting))
+            return
+        if pick is None:
+            frames = [o for o in _gui().Selection.getSelection() if _bp().is_frame(o)]
+            pick = (frames[0], "") if frames else None
+        _gui().Control.showDialog(FittingPanel(pick=pick))
+        clear_selection_later()
 
 
 def install():
@@ -978,9 +1541,20 @@ def install():
         "BruceWorx_RouteFromTo", "From-to list", "CSV: wire, signal, gauge, colour, from, to, length."))
     Gui.addCommand("BruceWorx_RouteCutList", CutListCommand(
         "BruceWorx_RouteCutList", "Cut list", "CSV: pipe or hose, size, cut length, bend table."))
+    Gui.addCommand("BruceWorx_RouteTerminals", TerminalsCommand(
+        "BruceWorx_RouteTerminals", "Terminal list",
+        "CSV: the terminals, seals and connector accessories to order, with manufacturer, MPN and Standard Library item."))
     Gui.addCommand("BruceWorx_RouteBendRules", BendRulesCommand(
         "BruceWorx_RouteBendRules", "Bend Rules",
         "Default minimum bend radius per wire, hose and tube (a preset, a multiple of OD or a fixed radius) and the tube CLR."))
+    Gui.addCommand("BruceWorx_RouteFrame", FrameCommand(
+        "BruceWorx_RouteFrame", "Pin / Port",
+        "A pin or port frame on a connector or fitting: pick a face, a hole edge or a vertex (+Z out of it), "
+        "or select an LCS to edit: name, gauge range, terminal and seal P/N, port type and size, straight length."))
+    Gui.addCommand("BruceWorx_RouteFitting", FittingCommand(
+        "BruceWorx_RouteFitting", "Fitting",
+        "A push-to-connect, barb, NPT/BSPP or compression fitting from the size tables, placed on the selected face, "
+        "hole edge or port; its ports are frames a route path attaches to."))
     try:
         import bruceworx_browser
 

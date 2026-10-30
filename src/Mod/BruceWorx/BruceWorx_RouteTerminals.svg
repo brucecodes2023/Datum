@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a list beside a crimp terminal -->
+  <rect x="6" y="8" width="30" height="48" rx="3" fill="#ffffff" stroke="#2b2f36" stroke-width="2.5"/>
+  <path d="M12 20 H30 M12 30 H30 M12 40 H30" stroke="#5c6670" stroke-width="3" stroke-linecap="round"/>
+  <path d="M42 14 h12 v14 l-3 4 v18 h-6 v-18 l-3 -4 z" fill="#d4a63a" stroke="#2b2f36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M48 50 V60" stroke="#c0392b" stroke-width="4" stroke-linecap="round"/>
+</svg>
