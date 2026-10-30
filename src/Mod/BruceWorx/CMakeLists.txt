@@ -36,10 +36,12 @@ SET(BruceWorx_SRCS
     bruceworx_routing.py
     bruceworx_routing_gui.py
     bruceworx_routing_ports.py
+    bruceworx_fittings.py
     TestBruceWorxRoutingCore.py
     TestBruceWorxRouting.py
     TestBruceWorxConnectorLibrary.py
     BruceWorx_RoutePath.svg
+    BruceWorx_RouteFitting.svg
     BruceWorx_RouteAddPoint.svg
     BruceWorx_RouteClip.svg
     BruceWorx_RouteWire.svg
