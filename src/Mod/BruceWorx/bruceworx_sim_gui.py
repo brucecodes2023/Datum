@@ -1332,7 +1332,7 @@ def _make_classes():
             else:
                 show_mode(self.analysis, result)
             self.legend.setText(f"<b>{result.Label}</b>: shape scaled to {self.scale_spin.value():g} % of the diagonal; "
-                                "colour: the mode's displacement (blue none, red most)")
+                                "colour: the mode's displacement, low to high")
 
         def toggle_play(self, on):
             if on:

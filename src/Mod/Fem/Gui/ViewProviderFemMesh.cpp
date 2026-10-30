@@ -1919,6 +1919,8 @@ void ViewProviderFEMMeshBuilder::createMesh(
         Base::TimeElapsed::diffTimeF(Start, Base::TimeElapsed())
     );
     // set the triangle face indices
+    // [BW] every triangle gets its vFaceElementIdx entry, the inner triangles of 6- and 8-node faces too: the
+    // ElementColor colours (PER_FACE binding) were shifted by one triangle per quadratic face before (30 Oct)
     faces->coordIndex.setNum(4 * triangleCount);
     vFaceElementIdx.resize(triangleCount);
     int index = 0, indexIdx = 0;
@@ -2184,6 +2186,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             // this triangle has no edge (inner triangle).
                             break;
                         }
@@ -2342,6 +2345,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             // this triangle has no edge (inner triangle)
                             // create triangle number 6
                             // ----------------------------------------------
@@ -2349,6 +2353,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             // this triangle has no edge (inner triangle)
                             break;
                         }
@@ -2518,6 +2523,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             break;
                         }
                         case 2: {  // tetra10 volume: face 2, 6-node triangle
@@ -2552,6 +2558,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 1);
                             break;
                         }
                         case 3: {  // tetra10 volume: face 3, 6-node triangle
@@ -2586,6 +2593,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 2);
                             break;
                         }
                         case 4: {  // tetra10 volume: face 4, 6-node triangle
@@ -2620,6 +2628,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         default:
@@ -2671,10 +2680,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             break;
                         }
                         case 2: {  // pyra13 volume: face 2, 6-node triangle
@@ -2709,6 +2720,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         case 3: {  // pyra13 volume: face 3, 6-node triangle
@@ -2743,6 +2755,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         case 4: {  // pyra13 volume: face 4, 6-node triangle
@@ -2777,6 +2790,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         case 5: {  // pyra13 volume: face 5, 6-node triangle
@@ -2811,6 +2825,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         default:
@@ -2853,6 +2868,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             break;
                         }
                         case 2: {  // penta15 volume: face 2, 6-node triangle
@@ -2887,6 +2903,7 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 1);
                             break;
                         }
                         case 3: {  // penta15 volume: face 3, 8-node quadrangle
@@ -2930,10 +2947,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 2);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 2);
                             break;
                         }
                         case 4: {  // penta15 volume: face 4, 8-node quadrangle
@@ -2977,10 +2996,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         case 5: {  // penta15 volume: face 5, 8-node quadrangle
@@ -3024,10 +3045,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 4);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 4);
                             break;
                         }
                         default:
@@ -3079,10 +3102,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 0);
                             break;
                         }
                         case 2: {  // hexa20 volume: face 2, 8-node quadrangle
@@ -3126,10 +3151,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 1);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 1);
                             break;
                         }
                         case 3: {  // hexa20 volume: face 3, 8-node quadrangle
@@ -3173,10 +3200,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 2);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 2);
                             break;
                         }
                         case 4: {  // hexa20 volume: face 4, 8-node quadrangle
@@ -3220,10 +3249,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 3);
                             break;
                         }
                         case 5: {  // hexa20 volume: face 5, 8-node quadrangle
@@ -3267,10 +3298,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 4);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 4);
                             break;
                         }
                         case 6: {  // hexa20 volume: face 6, 8-node quadrangle
@@ -3314,10 +3347,12 @@ void ViewProviderFEMMeshBuilder::createMesh(
                             indices[index++] = nIdx1;
                             indices[index++] = nIdx3;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 5);
                             indices[index++] = nIdx3;
                             indices[index++] = nIdx5;
                             indices[index++] = nIdx7;
                             indices[index++] = SO_END_FACE_INDEX;
+                            vFaceElementIdx[indexIdx++] = ElemFold(facesHelper[l].ElementNumber, 5);
                             break;
                         }
                         default:
