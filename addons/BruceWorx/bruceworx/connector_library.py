@@ -45,7 +45,7 @@ from dataclasses import asdict, dataclass, field
 
 from bruceworx import kicad_bridge as kb
 
-LIBRARY_VERSION = 1  # bump when the generated parts change
+LIBRARY_VERSION = 2  # bump when the generated parts change
 ITEM_TYPE = "cots"
 COMMENT_PREFIX = "Connector library: "
 KICAD_LICENSE = ("KiCad library 3D model, CC-BY-SA 4.0 with the KiCad libraries exception (designs using it are "
@@ -93,7 +93,10 @@ class Entry:
     gauge_min: int = 0  # AWG, thinnest (larger number)
     gauge_max: int = 0  # AWG, thickest (smaller number)
     seal: str = ""
-    accessory: str = ""  # e.g. DT wedgelock
+    accessory: str = ""  # MPN of a part counted once per connector (DT wedgelock)
+    terminal_mfr: str = ""  # manufacturers of the above (filled by catalog() from ACCESSORIES)
+    seal_mfr: str = ""
+    accessory_mfr: str = ""
     notes: str = ""
     footprint: str = ""  # "Lib:Name" of the KiCad footprint the pins come from
     model: str = ""  # "<lib>.3dshapes/<file>.step" relative to the KiCad 3D model dir; "" = parametric
@@ -316,10 +319,19 @@ def _header_outline(pads, width, depth, height, cx, cy) -> list:
     return [box_about(cx, cy, width, depth, 0.0, height)] + stubs(pads)
 
 
-# ----- Dupont 2.54 mm ---------------------------------------------------------------------------
+# ----- Dupont 2.54 mm: Amphenol FCI Mini-PV --------------------------------------------------------
 
-DUPONT = dict(family="Dupont 2.54", pitch=2.54, H=14.0, z0=2.54, terminal="DUPONT-F-2.54 (generic female crimp)",
-              awg="28-22", counts=[(1, n) for n in range(2, 9)] + [(2, n) for n in range(2, 9)])
+# Sources (30 Oct): FCI customer drawing 65043 rev BG (dual row: width = columns x 2.54, depth 5.08, height
+# 13.84; odd positions in one row, even in the other, as KiCad's PinHeader_2xNN pads); single-row 65039 and the
+# 48235-000LF contact (22-26 AWG) from distributor listings. The housing seats on the header's 2.54 mm spacer.
+DUPONT = dict(family="Dupont 2.54", pitch=2.54, H=13.84, z0=2.54, terminal="48235-000LF", awg="26-22",
+              manufacturer="Amphenol FCI", counts=[(1, n) for n in range(2, 9)] + [(2, n) for n in range(2, 9)],
+              suffix={2: "035", 3: "034", 4: "033", 5: "032", 6: "031", 7: "030", 8: "029"},
+              series={1: "65039", 2: "65043"})
+
+
+def dupont_mpn(rows: int, cols: int) -> str:
+    return f"{DUPONT['series'][rows]}-{DUPONT['suffix'][cols]}LF"
 
 
 def _dupont() -> list:
@@ -329,37 +341,44 @@ def _dupont() -> list:
     for rows, cols in t["counts"]:
         n = rows * cols
         tag = f"{rows}x{cols:02d}"
-        housing, header = f"DUPONT-HSG-{tag}", f"HDR254-M-{tag}"
+        housing, header = dupont_mpn(rows, cols), f"HDR254-M-{tag}"
         fp = f"Connector_PinHeader_2.54mm:PinHeader_{tag}_P2.54mm_Vertical"
         pads = footprint_pads(fp)
         cx, cy = centroid((x, y) for _n, x, y in pads)
         xs = {round(x, 3) for _n, x, _y in pads}
         ys = {round(y, 3) for _n, _x, y in pads}
-        w, d = 2.54 * len(xs), 2.54 * len(ys)
+        w, d = 2.54 * len(xs) - 0.1, 2.54 * len(ys) - 0.1
         top = t["z0"] + t["H"]
-        common = dict(family=t["family"], manufacturer="Generic (Dupont-style)", positions=n, pitch=2.54)
+        common = dict(family=t["family"], positions=n, pitch=2.54)
         out.append(Entry(
-            housing, role="Wire housing", mating=[header], footprint=fp, terminal=t["terminal"], gauge_min=gmin,
-            gauge_max=gmax, description=f"Connector, Dupont 2.54 mm wire housing, {tag} ({housing})",
+            housing, role="Wire housing", manufacturer=t["manufacturer"], mating=[header], footprint=fp,
+            terminal=t["terminal"], gauge_min=gmin, gauge_max=gmax,
+            description=f"Connector, Mini-PV (Dupont) 2.54 mm wire housing, {tag} ({housing})",
             body=[box_about(cx, cy, w, d, t["z0"], t["H"])] + cavities(pads, top, 1.2),
             pins=pins_at(pads, top), colour=BLACK,
-            notes="generic Dupont-style housing; mates a male 2.54 mm pin header", **common))
+            notes="Amphenol FCI Mini-PV housing (the original 'Dupont'); clones fit; mates a male 2.54 mm header",
+            **common))
         out.append(Entry(
-            header, role="Header", mating=[housing], footprint=fp, model=footprint_model(fp),
+            header, role="Header", manufacturer="Generic", mating=[housing], footprint=fp, model=footprint_model(fp),
             description=f"Connector, pin header 2.54 mm, male, vertical, {tag} ({header})",
             pins=pins_at(pads, top), frame_at=FRAME_MATED, colour=BLACK,
             body=[box_about(cx, cy, w, d, 0.0, 2.54)] + stubs(pads),
-            notes=f"pin frames at the rear face of the mated {housing}", **common))
+            notes=f"generic 2.54 mm header (no MPN chosen); pin frames at the rear face of the mated {housing}",
+            **common))
     return out
 
 
 # ----- Molex Micro-Fit 3.0 (dual row) -----------------------------------------------------------
 
+# Sources (30 Oct): Molex SD-43025-002 (receptacle width A = 3.00 x columns + 0.85, depth 6.86 (7.57 for 2 and 4
+# circuits), 14.00 long, latch on the row-2 side; 43020 + 43025 mated 24.77 long); Molex product pages of
+# 43045-0212 / -1415 (vertical, mated height 17.64 above the PCB); SD-43045-001 (header width 3.00 x columns +
+# 3.65). Circuit 1..n/2 in row 1, the rest in row 2 the same way (as KiCad's 43045 pads). Header body height and
+# depth, the plug's width and depth: estimates.
 MICROFIT = dict(family="Molex Micro-Fit 3.0", pitch=3.0, counts=(2, 4, 6, 8, 10, 12),
                 f_terminal="43030-0007", m_terminal="43031-0007", awg="24-20",
-                # receptacle: W = 3*cols + w0, D, H; z0: its bottom above the PCB when mated on the vertical
-                # header; header height; plug length below the receptacle's mating face.
-                w0=3.6, D=9.85, H=10.6, z0=2.0, header_h=9.6, plug=12.4)
+                w0=0.85, D=6.86, D_small=7.57, L=14.0, mated=17.64, plug=24.77 - 14.0,
+                header_w0=3.65, header_d=9.9, header_h=9.9)
 
 
 def _microfit() -> list:
@@ -373,52 +392,70 @@ def _microfit() -> list:
         pads = footprint_pads(fp)
         cx, cy = centroid((x, y) for _n, x, y in pads)
         w = 3.0 * cols + t["w0"]
-        top = t["z0"] + t["H"]
-        bottom = t["z0"] - t["plug"]
+        depth = t["D_small"] if n <= 4 else t["D"]
+        top = t["mated"]
+        z0 = top - t["L"]
+        bottom = z0 - t["plug"]
+        latch_y = cy - depth / 2 - 1.4  # on the row-2 side (KiCad's second row, part -y), 1.4 proud
         common = dict(family=t["family"], manufacturer="Molex", positions=n, pitch=3.0)
         out.append(Entry(
             rec, role="Receptacle", mating=[header, plug], footprint=fp, terminal=t["f_terminal"],
             gauge_min=gmin, gauge_max=gmax, colour=BLACK,
             description=f"Connector, Molex Micro-Fit 3.0 receptacle, dual row, {n}-pos ({rec})",
-            body=[box_about(cx, cy, w, t["D"], t["z0"], t["H"])] + cavities(pads, top, 1.9),
+            body=[box_about(cx, cy, w, depth, z0, t["L"]), ("box", (cx - 1.5, latch_y, z0 + 3.0), (3.0, 1.4, 7.0))]
+            + cavities(pads, top, 1.9),
             pins=pins_at(pads, top), notes="female terminals 43030; mates header 43045 or plug 43020", **common))
         out.append(Entry(
             plug, role="Plug", mating=[rec], footprint=fp, terminal=t["m_terminal"], gauge_min=gmin, gauge_max=gmax,
             colour=BLACK, description=f"Connector, Molex Micro-Fit 3.0 plug, dual row, {n}-pos ({plug})",
-            body=[box_about(cx, cy, w - 0.8, t["D"] - 0.8, bottom, t["plug"])],
+            body=[box_about(cx, cy, w + 0.6, depth + 0.6, bottom, t["plug"])],
             pins=pins_at(pads, bottom, (0, 0, -1)),
-            notes="male terminals 43031; wire-to-wire mate of 43025 (same placement = mated)", **common))
+            notes="male terminals 43031; wire-to-wire mate of 43025 (same placement = mated; 24.77 mm mated)", **common))
+        hw = 3.0 * cols + t["header_w0"]
         out.append(Entry(
             header, role="Header", mating=[rec], footprint=fp, model=footprint_model(fp), colour=BLACK,
             description=f"Connector, Molex Micro-Fit 3.0 header, vertical, dual row, {n}-pos ({header})",
-            body=_header_outline(pads, w + 0.6, t["D"] + 0.6, t["header_h"], cx, cy)
-            + [("cut", "box", (cx - w / 2, cy - t["D"] / 2, t["z0"]), (w, t["D"], t["header_h"]))],
+            body=_header_outline(pads, hw, t["header_d"], t["header_h"], cx, cy)
+            + [("cut", "box", (cx - w / 2 - 0.1, cy - depth / 2 - 0.1, z0), (w + 0.2, depth + 0.2, t["header_h"]))],
             pins=pins_at(pads, top), frame_at=FRAME_MATED,
-            notes=f"pin frames at the rear face of the mated {rec}", **common))
+            notes=f"pin frames at the rear face of the mated {rec} (17.64 mm mated height)", **common))
     return out
 
 
 # ----- power: AMASS XT30 / XT60 / XT90 / MR30, 3.5 mm bullets ------------------------------------
 
-# Wire connectors stand on their mating face at the top, solder cups below z=0 (as KiCad's XT60
-# vertical model does). width/depth/height of the body; cup: cup depth below z=0; pw_len: right-angle
-# PCB body length from the pad row towards the mating face; pw_h: its height; mate_len: the mated wire
-# connector's length beyond the PCB part's face, to its cup mouths.
+# Sources (30 Oct): AMASS XT catalogue (Feb 2026, china-amass.com) and the AMASS spec sheets for XT30PW-M,
+# XT60PW-M, XT90PW-M, MR30PW-M and the V1.2 compiled sheets (LCSC-hosted). Wire connectors stand on their mating
+# face at the top with the solder cups below z=0 (as KiCad's XT60 vertical model). length: body along the mating
+# axis per MPN; cup: solder cup behind the body. PCB right-angle parts: h height above the PCB, w width, face:
+# pin row -> mating face, rear: pin row -> back; mate_len: the mated wire connector's cup mouths beyond the face
+# (XT60 from the 27.60 mm mated length; the others scaled from it, estimates).
 POWER = {
-    "XT30": dict(pitch=5.0, n=2, w=10.2, d=5.2, h=11.0, cup=4.5, awg="18-16", pw_h=5.2, mate_len=15.5,
+    "XT30": dict(pitch=5.0, n=2, w=10.2, d=5.2, cup=3.0, awg="18-16",
+                 length={"XT30U-M": 13.7, "XT30U-F": 12.4},
                  wire=("XT30U-M", "XT30U-F"), pw=("XT30PW-M", "XT30PW-F"),
+                 pwdim={"XT30PW-M": dict(h=5.2, w=9.9, face=13.05, rear=0.9, mate_len=5.9),
+                        "XT30PW-F": dict(h=5.15, w=10.2, face=14.0, rear=0.9, mate_len=6.3)},
                  vfp="Connector_AMASS:AMASS_{mpn}_1x02_P5.0mm_Vertical",
-                 pwfp="Connector_AMASS:AMASS_{mpn}_1x02_P2.50mm_Horizontal"),
-    "XT60": dict(pitch=7.2, n=2, w=15.9, d=8.1, h=16.0, cup=4.5, awg="14-12", pw_h=8.2, mate_len=20.5,
+                 pwfp="Connector_AMASS:AMASS_{mpn}_1x02_P2.50mm_Horizontal", note="rated on 16 AWG"),
+    "XT60": dict(pitch=7.2, n=2, w=15.75, d=8.1, cup=4.5, awg="14-12",
+                 length={"XT60-M": 20.5, "XT60-F": 20.2},
                  wire=("XT60-M", "XT60-F"), pw=("XT60PW-M", "XT60PW-F"),
+                 pwdim={"XT60PW-M": dict(h=8.4, w=15.5, face=14.7, rear=3.5, mate_len=9.4),
+                        "XT60PW-F": dict(h=8.45, w=15.9, face=13.75, rear=3.5, mate_len=9.5)},
                  vfp="Connector_AMASS:AMASS_{mpn}_1x02_P7.20mm_Vertical",
-                 pwfp="Connector_AMASS:AMASS_{mpn}_1x02_P7.20mm_Horizontal"),
-    "XT90": dict(pitch=10.9, n=2, w=21.0, d=10.8, h=21.5, cup=6.5, awg="10-8", pw_h=10.8, mate_len=27.0,
-                 wire=("XT90-M", "XT90-F"), pw=("XT90PW-M",), vfp="",
-                 pwfp="Connector_AMASS:AMASS_{mpn}_1x02_P10.90mm_Horizontal"),
-    "MR30": dict(pitch=3.5, n=3, w=13.0, d=6.2, h=12.0, cup=4.0, awg="18-16", pw_h=6.2, mate_len=14.5,
-                 wire=("MR30-M", "MR30-F"), pw=("MR30PW-M", "MR30PW-FB"), vfp="",
-                 pwfp="Connector_AMASS:AMASS_{mpn}_1x03_P3.50mm_Horizontal"),
+                 pwfp="Connector_AMASS:AMASS_{mpn}_1x02_P7.20mm_Horizontal", note="rated on 12 AWG"),
+    "XT90": dict(pitch=11.0, n=2, w=21.0, d=10.3, cup=4.5, awg="10-8",
+                 length={"XT90H-M": 30.7, "XT90H-F": 29.7},
+                 wire=("XT90H-M", "XT90H-F"), pw=("XT90PW-M",),
+                 pwdim={"XT90PW-M": dict(h=10.2, w=20.8, face=24.6, rear=2.51, mate_len=13.0)}, vfp="",
+                 pwfp="Connector_AMASS:AMASS_{mpn}_1x02_P10.90mm_Horizontal", note="rated on 10 AWG"),
+    "MR30": dict(pitch=3.5, n=3, w=11.9, d=4.9, cup=2.0, awg="18-16",
+                 length={"MR30-M": 13.4, "MR30-F": 12.4},
+                 wire=("MR30-M", "MR30-F"), pw=("MR30PW-M", "MR30PW-FB"),
+                 pwdim={"MR30PW-M": dict(h=4.9, w=11.5, face=13.05, rear=0.9, mate_len=5.5),
+                        "MR30PW-FB": dict(h=4.9, w=11.9, face=14.0, rear=0.9, mate_len=5.9)}, vfp="",
+                 pwfp="Connector_AMASS:AMASS_{mpn}_1x03_P3.50mm_Horizontal", note="rated on 16 AWG"),
 }
 
 
@@ -429,44 +466,34 @@ def _wire_power(key: str, t: dict, mpn: str, mates: list) -> Entry:
     model = footprint_model(fp) if fp else ""
     cx, cy = centroid((x, y) for _n, x, y in pads)
     male = mpn.endswith("-M")
-    body = [box_about(cx, cy, t["w"], t["d"], 0.0, t["h"])]
-    body += [("cyl", (x, y, -t["cup"]), t["pitch"] * 0.22 if key == "MR30" else min(2.2, t["pitch"] * 0.3),
-              t["cup"], (0, 0, 1)) for _n, x, y in pads]
+    body = [box_about(cx, cy, t["w"], t["d"], 0.0, t["length"][mpn])]
+    body += [("cyl", (x, y, -t["cup"]), min(t["d"] * 0.32, t["pitch"] * 0.3), t["cup"], (0, 0, 1))
+             for _n, x, y in pads]
     return Entry(
         mpn, family=key, role="Plug" if male else "Receptacle", manufacturer="AMASS", positions=t["n"],
         pitch=t["pitch"], mating=mates, gauge_min=gmin, gauge_max=gmax, footprint=fp, model=model,
         description=f"Connector, AMASS {key} {'male' if male else 'female'}, solder cup ({mpn})",
         body=body, pins=pins_at(pads, -t["cup"], (0, 0, -1)), colour=YELLOW,
-        notes="solder cup: no crimp terminal; the frame is at the cup mouth, +Z down the wire")
+        notes=f"solder cup: no crimp terminal; the frame is at the cup mouth, +Z down the wire; {t['note']}")
 
 
 def _pcb_power(key: str, t: dict, mpn: str, mates: list) -> Entry:
     fp = t["pwfp"].format(mpn=mpn)
     pads = footprint_pads(fp)
-    # The right-angle body runs from the pads towards the board edge: +y in the part (KiCad -y),
-    # the side of the locating pegs.
-    face = 3.0 + _peg_reach(fp)
+    dim = t["pwdim"][mpn]
+    # The right-angle body runs from the pads towards the board edge: +y in the part (KiCad -y), the side of
+    # the footprint's locating pegs.
     xs = [x for _n, x, _y in pads]
     cx = (min(xs) + max(xs)) / 2
-    body = [("box", (cx - t["w"] / 2, -1.5, 0.0), (t["w"], face + 1.5, t["pw_h"]))] + stubs(pads, r=0.6)
-    exit_y = face + t["mate_len"]
+    body = ([("box", (cx - dim["w"] / 2, -dim["rear"], 0.0), (dim["w"], dim["face"] + dim["rear"], dim["h"]))]
+            + stubs(pads, r=0.6))
+    exit_y = dim["face"] + dim["mate_len"]
     return Entry(
         mpn, family=key, role="Header", manufacturer="AMASS", positions=t["n"], pitch=t["pitch"], mating=mates,
         footprint=fp, model=footprint_model(fp), colour=YELLOW,
         description=f"Connector, AMASS {key} PCB right angle {'male' if '-M' in mpn else 'female'} ({mpn})",
-        body=body, pins=[Pin(num, (x, exit_y, t["pw_h"] / 2), (0, 1, 0)) for num, x, _y in pads],
+        body=body, pins=[Pin(num, (x, exit_y, dim["h"] / 2), (0, 1, 0)) for num, x, _y in pads],
         frame_at=FRAME_MATED, notes=f"pin frames at the solder cups of the mated {mates[0]}")
-
-
-def _peg_reach(lib_id: str) -> float:
-    """How far the footprint's unnumbered pegs reach from the pad row towards the mating face (part +y)."""
-    lib, _, name = lib_id.partition(":")
-    path = os.path.join(footprints_dir(), lib + ".pretty", name + ".kicad_mod")
-    with open(path, encoding="utf-8") as handle:
-        node = kb.parse_sexpr(handle.read())
-    ys = [-kb.num(kb.find(p, "at")[2]) for p in kb.find_all(node, "pad")
-          if not (len(p) > 1 and isinstance(p[1], str) and p[1].isdigit())]
-    return max(ys + [5.0])
 
 
 def _power() -> list:
@@ -510,10 +537,24 @@ def _bullets() -> list:
 
 # ----- Deutsch DT --------------------------------------------------------------------------------
 
-DT = dict(family="Deutsch DT", counts=(2, 3, 4, 6, 8, 12), pitch=5.0, awg="20-16",
-          pin="0460-202-16141", socket="0462-201-16141", seal="114017",
-          layout={2: (2, 1), 3: (3, 1), 4: (2, 2), 6: (3, 2), 8: (4, 2), 12: (6, 2)},
-          rec_len=30.0, plug_len=27.0, overlap=10.0)
+# Sources (30 Oct): Deutsch industrial catalogue (size 16 contacts 0460-202-16141 / 0462-201-16141, 20-16 AWG;
+# wedgelocks WnP for DT04, WnS for DT06); TE drawing C-2286003 (DT06-2S: 15.0 W x 15.8 H x 28.8 L; one-piece rear
+# grommet and front seal inside the housing, so NO per-wire seal); TE part pages: contact spacing 5.46 (2-way),
+# 4.45-4.47 (4- and 12-way), 3-way triangular, 12-way two rows. The receptacle's outline, the 3-way triangle size
+# and the numbering (1..k along row 1, back along row 2) are estimates.
+DT = dict(family="Deutsch DT", counts=(2, 3, 4, 6, 8, 12), awg="20-16",
+          pin="0460-202-16141", socket="0462-201-16141", plug_seal="114017",
+          pitch={2: 5.46, 3: 5.0, 4: 4.47, 6: 4.45, 8: 4.45, 12: 4.45},
+          layout={2: (2, 1), 3: (0, 0), 4: (2, 2), 6: (3, 2), 8: (4, 2), 12: (6, 2)},
+          plug_w0=9.5, plug_h0=15.8, plug_len=28.8, rec_extra=6.0, rec_len=36.0, overlap=15.0)
+
+
+def dt_pads(n: int) -> list:
+    p = DT["pitch"][n]
+    if n == 3:  # triangular: 1 and 2 side by side, 3 below between them
+        return [("1", 0.0, 0.0), ("2", p, 0.0), ("3", p / 2, -p * math.sqrt(3) / 2)]
+    cols, rows = DT["layout"][n]
+    return grid_pads(cols, rows, p, order="u")
 
 
 def _dt() -> list:
@@ -521,27 +562,83 @@ def _dt() -> list:
     gmin, gmax = awg(t["awg"])
     out = []
     for n in t["counts"]:
-        cols, rows = t["layout"][n]
-        pads = grid_pads(cols, rows, t["pitch"], order="u")
+        pads = dt_pads(n)
         cx, cy = centroid((x, y) for _n, x, y in pads)
-        w, d = cols * t["pitch"] + 8.0, rows * t["pitch"] + 7.0
+        xs = [x for _n, x, _y in pads]
+        ys = [y for _n, _x, y in pads]
+        pw, ph = (max(xs) - min(xs)) + t["plug_w0"], (max(ys) - min(ys)) + t["plug_h0"]
         rec, plug = f"DT04-{n}P", f"DT06-{n}S"
-        common = dict(family=t["family"], manufacturer="TE Connectivity (Deutsch)", positions=n, pitch=t["pitch"],
-                      gauge_min=gmin, gauge_max=gmax, seal=t["seal"], colour=GREY)
-        note = (f"wire seal integral in the rear grommet; {t['seal']} = sealing plug for an unused cavity; "
-                "contact layout and spacing approximate")
+        common = dict(family=t["family"], manufacturer="TE Connectivity (Deutsch)", positions=n,
+                      pitch=t["pitch"][n], gauge_min=gmin, gauge_max=gmax, colour=GREY)
+        note = (f"wire seal integral (one-piece rear grommet): no per-wire seal; {t['plug_seal']} seals an unused "
+                "cavity; receptacle outline and cavity numbering estimated")
         out.append(Entry(
             rec, role="Receptacle", mating=[plug], terminal=t["pin"], accessory=f"W{n}P",
             description=f"Connector, Deutsch DT receptacle, {n}-way, pin contacts ({rec})",
-            body=[box_about(cx, cy, w, d, 0.0, t["rec_len"])] + cavities(pads, t["rec_len"], 2.2, 2.0),
+            body=[box_about(cx, cy, pw + t["rec_extra"], ph + t["rec_extra"], 0.0, t["rec_len"])]
+            + cavities(pads, t["rec_len"], 2.2, 2.0),
             pins=pins_at(pads, t["rec_len"]), notes=note + f"; wedgelock W{n}P", **common))
         out.append(Entry(
             plug, role="Plug", mating=[rec], terminal=t["socket"], accessory=f"W{n}S",
             description=f"Connector, Deutsch DT plug, {n}-way, socket contacts ({plug})",
-            body=[box_about(cx, cy, w - 2.4, d - 2.4, t["overlap"] - t["plug_len"], t["plug_len"])],
+            body=[box_about(cx, cy, pw, ph, t["overlap"] - t["plug_len"], t["plug_len"])],
             pins=pins_at(pads, t["overlap"] - t["plug_len"], (0, 0, -1)),
             notes=note + f"; wedgelock W{n}S; same placement as {rec} = mated", **common))
     return out
+
+
+# ----- terminals, seals, wedgelocks (their own library parts, ordered by manufacturer P/N) --------
+
+ACCESSORY_ROLES = ("Terminal", "Seal", "Wedgelock")
+# mpn: (manufacturer, role, family, description, AWG range or "", size (w, d, length) of the outline)
+ACCESSORIES = {
+    "SXH-001T-P0.6": ("JST", "Terminal", "JST-XH", "Crimp terminal, JST XH, female", "28-22", (1.6, 1.6, 10.9)),
+    "SPH-002T-P0.5S": ("JST", "Terminal", "JST-PH", "Crimp terminal, JST PH, female", "30-24", (1.3, 1.3, 8.6)),
+    "SSHL-002T-P0.2": ("JST", "Terminal", "JST-GH", "Crimp terminal, JST GH, female", "30-26", (0.8, 0.8, 4.8)),
+    "SSH-003T-P0.2-H": ("JST", "Terminal", "JST-SH", "Crimp terminal, JST SH, female", "32-28", (0.8, 0.8, 3.9)),
+    "48235-000LF": ("Amphenol FCI", "Terminal", "Dupont 2.54", "Crimp terminal, Mini-PV (Dupont) 2.54 mm, female",
+                    "26-22", (1.1, 1.1, 14.5)),
+    "43030-0007": ("Molex", "Terminal", "Molex Micro-Fit 3.0", "Crimp terminal, Molex Micro-Fit 3.0, female",
+                   "24-20", (1.8, 1.8, 13.0)),
+    "43031-0007": ("Molex", "Terminal", "Molex Micro-Fit 3.0", "Crimp terminal, Molex Micro-Fit 3.0, male",
+                   "24-20", (1.8, 1.8, 15.0)),
+    "0460-202-16141": ("TE Connectivity (Deutsch)", "Terminal", "Deutsch DT", "Crimp contact, Deutsch size 16, pin",
+                       "20-16", (2.4, 2.4, 25.0)),
+    "0462-201-16141": ("TE Connectivity (Deutsch)", "Terminal", "Deutsch DT", "Crimp contact, Deutsch size 16, socket",
+                       "20-16", (2.6, 2.6, 24.0)),
+    "114017": ("TE Connectivity (Deutsch)", "Seal", "Deutsch DT", "Sealing plug, Deutsch size 16 cavity", "",
+               (2.5, 2.5, 10.0)),
+}
+for _n in (2, 3, 4, 6, 8, 12):
+    ACCESSORIES[f"W{_n}P"] = ("TE Connectivity (Deutsch)", "Wedgelock", "Deutsch DT",
+                              f"Wedgelock, Deutsch DT {_n}-way receptacle", "", (6.0 + 2.5 * _n, 4.0, 3.0))
+    ACCESSORIES[f"W{_n}S"] = ("TE Connectivity (Deutsch)", "Wedgelock", "Deutsch DT",
+                              f"Wedgelock, Deutsch DT {_n}-way plug", "", (5.0 + 2.5 * _n, 3.5, 3.0))
+
+
+def _accessories() -> list:
+    out = []
+    for mpn, (mfr, role, family, text, gauge, (w, d, length)) in ACCESSORIES.items():
+        gmin, gmax = awg(gauge) if gauge else (0, 0)
+        rng = f", {gmin}-{gmax} AWG" if gauge else ""
+        body = ([("cyl", (0, 0, 0), w / 2, length, (0, 0, 1))] if role == "Seal"
+                else [("box", (-w / 2, -d / 2, 0.0), (w, d, length))])
+        out.append(Entry(mpn, family=family, role=role, manufacturer=mfr, description=f"{text}{rng} ({mpn})",
+                         positions=0, pitch=0.0, gauge_min=gmin, gauge_max=gmax, body=body,
+                         colour=GOLD if role == "Terminal" else (GREY if role == "Wedgelock" else (0.2, 0.5, 0.25)),
+                         notes="ordered by its manufacturer P/N; connector pins name it in TerminalPN/SealPN"))
+    return out
+
+
+def is_accessory(entry) -> bool:
+    return entry.role in ACCESSORY_ROLES
+
+
+def _fill_manufacturers(entries) -> None:
+    for e in entries:
+        e.terminal_mfr = ACCESSORIES[e.terminal][0] if e.terminal in ACCESSORIES else ""
+        e.seal_mfr = ACCESSORIES[e.seal][0] if e.seal in ACCESSORIES else ""
+        e.accessory_mfr = ACCESSORIES[e.accessory][0] if e.accessory in ACCESSORIES else ""
 
 
 # ----- the catalogue ----------------------------------------------------------------------------
@@ -558,10 +655,11 @@ def catalog() -> list:
     """Every connector of the starter library as :class:`Entry` records (needs KiCad's footprints)."""
     if not kicad_available():
         raise KiCadMissing(f"KiCad footprints not found in {footprints_dir()}")
-    entries = []
+    entries = _accessories()
     for key in JST:
         entries += _jst(key)
     entries += _dupont() + _microfit() + _power() + _bullets() + _dt()
+    _fill_manufacturers(entries)
     for entry in entries:
         entry.file = safe_name(entry.mpn) + ".FCStd"
     return entries
@@ -580,6 +678,13 @@ def check(entries) -> list:
     if len(set(files)) != len(files):
         problems.append("two parts share a file name")
     for e in entries:
+        for kind, mpn in (("terminal", e.terminal), ("seal", e.seal), ("accessory", e.accessory)):
+            if mpn and (mpn not in by_mpn or not is_accessory(by_mpn[mpn])):
+                problems.append(f"{e.mpn}: {kind} {mpn} is not a library part")
+        if is_accessory(e):
+            if e.pins or e.mating:
+                problems.append(f"{e.mpn}: a {e.role.lower()} has no pins or mates")
+            continue
         if len(e.pins) != e.positions:
             problems.append(f"{e.mpn}: {len(e.pins)} pins for {e.positions} positions")
         names = [p.name for p in e.pins]
@@ -608,11 +713,15 @@ def check(entries) -> list:
 
 
 def summary(entries) -> list:
-    """Per family: parts, from KiCad, parametric, pin-count range (for the Built chapter)."""
+    """Per family: connector parts, from KiCad, parametric, pin-count range, and the number of
+    terminals/seals/wedgelocks (for the Built chapter)."""
     rows = {}
     for e in entries:
         row = rows.setdefault(e.family, {"family": e.family, "parts": 0, "kicad": 0, "parametric": 0,
-                                         "positions": set()})
+                                         "positions": set(), "accessories": 0})
+        if is_accessory(e):
+            row["accessories"] += 1
+            continue
         row["parts"] += 1
         row[e.source] += 1
         row["positions"].add(e.positions)
@@ -635,7 +744,8 @@ def write_manifest(entries, folder: str) -> str:
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=1)
     columns = ("file", "mpn", "manufacturer", "description", "family", "role", "positions", "pitch", "mating",
-               "terminal", "gauge_min", "gauge_max", "seal", "accessory", "source", "model", "footprint", "frame_at")
+               "terminal_mfr", "terminal", "gauge_min", "gauge_max", "seal_mfr", "seal", "accessory_mfr", "accessory",
+               "source", "model", "footprint", "frame_at")
     with open(os.path.join(folder, "manifest.csv"), "w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(columns)
@@ -736,13 +846,28 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
             material.DiffuseColor = entry.colour
             body.ShapeAppearance = [material]
         part.addObject(body)
-        bp.set_connector(part, family=entry.family, mating_pn="; ".join(entry.mating), role=entry.role,
-                         frame_at=entry.frame_at)
-        xdir = _x_dir(entry)
-        for pin in entry.pins:
-            placement = (pin.pos, pin.dir, xdir) if xdir else (pin.pos, pin.dir)
-            bp.make_pin(part, pin.name, placement, GaugeMin=entry.gauge_min, GaugeMax=entry.gauge_max,
-                        TerminalPN=entry.terminal, SealPN=entry.seal)
+        if App.GuiUp and getattr(body, "ViewObject", None) is not None:
+            body.ViewObject.ShapeColor = tuple(entry.colour)  # saved in GuiDocument.xml (GUI builds only)
+        if is_accessory(entry):
+            _string(part, "AccessoryKind", entry.role, "Terminal, seal or wedgelock")
+            _string(part, "ConnectorFamily", entry.family, "Connector family it belongs to")
+            if entry.gauge_min:
+                _string(part, "WireGauge", f"{entry.gauge_min}-{entry.gauge_max} AWG", "Wire range")
+        else:
+            accessories = ([f"{entry.accessory}|{entry.accessory_mfr}||1|{ACCESSORIES[entry.accessory][1]}"]
+                           if entry.accessory else [])
+            try:
+                bp.set_connector(part, family=entry.family, mating_pn="; ".join(entry.mating), role=entry.role,
+                                 frame_at=entry.frame_at, accessories=accessories)
+            except TypeError:  # a ports module older than v1.2
+                bp.set_connector(part, family=entry.family, mating_pn="; ".join(entry.mating), role=entry.role,
+                                 frame_at=entry.frame_at)
+            xdir = _x_dir(entry)
+            for pin in entry.pins:
+                placement = (pin.pos, pin.dir, xdir) if xdir else (pin.pos, pin.dir)
+                bp.make_pin(part, pin.name, placement, GaugeMin=entry.gauge_min, GaugeMax=entry.gauge_max,
+                            TerminalPN=entry.terminal, TerminalMfr=entry.terminal_mfr, SealPN=entry.seal,
+                            SealMfr=entry.seal_mfr)
         try:
             from bruceworx import partprops  # noqa: PLC0415
 
@@ -762,7 +887,6 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
         _string(part, "Manufacturer", entry.manufacturer, "Manufacturer of the part")
         _string(part, "ManufacturerPartNumber", entry.mpn, "Manufacturer's part number")
         _string(part, "ConnectorPitch", f"{entry.pitch:g} mm" if entry.pitch else "", "Contact pitch")
-        _string(part, "AccessoryPN", entry.accessory, "Accessory P/N (e.g. Deutsch wedgelock)")
         _string(part, "ConnectorNotes", entry.notes, "Notes from the connector library")
         _string(part, "Footprint", entry.footprint, "KiCad footprint the pins come from")
         _string(part, "ModelSource", entry.model_source, "Where the body comes from", group="Source")
@@ -775,6 +899,44 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
     finally:
         App.closeDocument(doc.Name)
     return out_path
+
+
+def fill_items(path: str, items: dict) -> int:
+    """Write the Standard Library numbers of the terminals, seals and accessories (``items``: MPN ->
+    vault P/N) into the connector file ``path``: the pins' ``TerminalItem``/``SealItem`` and the STD
+    field of ``Accessories``. Saves when something changed; returns how many values were set. FreeCAD
+    only (the vault import's writer calls it on the staged copy)."""
+    import FreeCAD as App  # noqa: PLC0415
+
+    try:
+        doc = App.openDocument(path, hidden=True)
+    except TypeError:
+        doc = App.openDocument(path)
+    changed = 0
+    try:
+        for obj in doc.Objects:
+            if getattr(obj, "BWFrame", "") == "Pin":
+                for pn_prop, item_prop in (("TerminalPN", "TerminalItem"), ("SealPN", "SealItem")):
+                    want = items.get(getattr(obj, pn_prop, ""), "")
+                    if item_prop in obj.PropertiesList and want and getattr(obj, item_prop) != want:
+                        setattr(obj, item_prop, want)
+                        changed += 1
+            if "Accessories" in getattr(obj, "PropertiesList", []):
+                rows = []
+                for row in obj.Accessories:
+                    fields = (row.split("|") + [""] * 5)[:5]
+                    if items.get(fields[0]) and fields[2] != items[fields[0]]:
+                        fields[2] = items[fields[0]]
+                        changed += 1
+                    rows.append("|".join(fields))
+                if rows != list(obj.Accessories):
+                    obj.Accessories = rows
+        if changed:
+            doc.recompute()
+            doc.save()
+    finally:
+        App.closeDocument(doc.Name)
+    return changed
 
 
 def build_library(entries, folder: str, only=None, log=print) -> list:
@@ -806,6 +968,40 @@ def _imported_descriptions(vault) -> dict:
     return {item.description.strip().lower(): pn for pn, item in vault.model.items.items()}
 
 
+def restore_view_data(original: str, staged: str) -> bool:
+    """Put the original file's view data (GuiDocument.xml and the files it names, the thumbnail) back
+    into ``staged`` when a headless save (FreeCADCmd numbering the copy) dropped it, so the part keeps
+    its colours. The writers add no objects, so the object names GuiDocument.xml refers to still hold.
+    FreeCAD-free; returns True when something was restored."""
+    import zipfile  # noqa: PLC0415
+
+    with zipfile.ZipFile(original) as src:
+        names = set(src.namelist())
+        if "GuiDocument.xml" not in names:
+            return False
+        with zipfile.ZipFile(staged) as dst:
+            have = set(dst.namelist())
+            if "GuiDocument.xml" in have:
+                return False
+            entries = [(info, dst.read(info.filename)) for info in dst.infolist()]
+        doc_xml = src.read("Document.xml")
+        gui = [n for n in sorted(names - have) if n not in ("Document.xml",) and not n.endswith(".brp")
+               and not n.endswith(".Shape.brp") and (n == "GuiDocument.xml" or n.startswith("thumbnails/")
+               or doc_xml.find(n.encode()) < 0)]
+        tmp = staged + ".tmp"
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as out:
+            for info, data in entries:
+                out.writestr(info, data)
+            for name in gui:
+                out.writestr(name, src.read(name))
+    os.replace(tmp, staged)
+    return True
+
+
+def _accessories_first(entries) -> list:
+    return [e for e in entries if is_accessory(e)] + [e for e in entries if not is_accessory(e)]
+
+
 def plan_import(vault, entries, folder: str, program: str = "") -> list:
     """What :func:`import_library` would do, writing nothing: the vault number each part would take
     (consecutive, from the vault's numbering, as for New COTS Item), or why it is skipped (already in
@@ -821,7 +1017,7 @@ def plan_import(vault, entries, folder: str, program: str = "") -> list:
     code = vault_setup.document_type_for("part", types)
     have = _imported_descriptions(vault)
     plans = []
-    for entry in entries:
+    for entry in _accessories_first(entries):
         path = os.path.join(folder, entry.file)
         plan = ImportPlan("", entry.mpn, entry.description, path)
         if entry.description.strip().lower() in have:
@@ -834,36 +1030,64 @@ def plan_import(vault, entries, folder: str, program: str = "") -> list:
     return plans
 
 
-def import_library(vault, entries, folder: str, program: str = "", writer=None, progress=None) -> list:
+def import_library(vault, entries, folder: str, program: str = "", writer=None, progress=None,
+                   item_writer=None) -> list:
     """Check every built part into ``vault`` as a new ``cots`` item (vault_setup.new_item: the number
     is previewed, the file copied to staging, ``writer(path, part_number)`` writes the number into
     the copy under FreeCAD, then the number is taken and the item checked in as WIP 01). Parts whose
     description is already an item are skipped, so a second run adds only what is new. The library
-    folder is only read. Returns the :class:`ImportPlan` list with the numbers taken."""
+    folder is only read. Terminals, seals and wedgelocks go first; then ``item_writer(path, items)``
+    (``items``: their MPN -> STD number, also those already in the vault) writes the numbers into each
+    connector's pins (:func:`fill_items`). Returns the :class:`ImportPlan` list with the numbers taken."""
     from bruceworx import vault_setup  # noqa: PLC0415
 
     have = _imported_descriptions(vault)
+    items = {}  # accessory MPN -> its STD number
     plans = []
-    for done, entry in enumerate(entries, 1):
+    ordered = _accessories_first(entries)
+    for done, entry in enumerate(ordered, 1):
         path = os.path.join(folder, entry.file)
         plan = ImportPlan("", entry.mpn, entry.description, path)
-        if entry.description.strip().lower() in have:
-            plan.skip = f"already in the vault as {have[entry.description.strip().lower()]}"
+        key = entry.description.strip().lower()
+        if key in have:
+            plan.skip = f"already in the vault as {have[key]}"
+            if is_accessory(entry):
+                items[entry.mpn] = have[key]
         elif not os.path.isfile(path):
             plan.skip = "part file not built"
         else:
-            def make_file(staged, key, _path=path):
+            def make_file(staged, number, _path=path, _accessory=is_accessory(entry)):
                 shutil.copyfile(_path, staged)
                 os.chmod(staged, 0o644)
                 if writer is not None:
-                    writer(staged, key)
+                    writer(staged, number)
+                if item_writer is not None and not _accessory and items:
+                    item_writer(staged, dict(items))
+                restore_view_data(_path, staged)
 
             plan.part_number = vault_setup.new_item(vault, ITEM_TYPE, entry.description, make_file, program)
-            have[entry.description.strip().lower()] = plan.part_number
+            have[key] = plan.part_number
+            if is_accessory(entry):
+                items[entry.mpn] = plan.part_number
         plans.append(plan)
         if progress is not None:
-            progress(done, len(entries), plan)
+            progress(done, len(ordered), plan)
     return plans
+
+
+def write_numbers(plans, entries, path: str) -> str:
+    """The ordering list after an import (or a dry run): vault P/N, manufacturer, MPN, description,
+    role, one row per part. Ordering uses Manufacturer + MPN; the STD number is for finding it."""
+    by_mpn = {e.mpn: e for e in entries}
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(("part_number", "manufacturer", "mpn", "description", "role", "status"))
+        for plan in plans:
+            e = by_mpn[plan.mpn]
+            existing = plan.skip.rsplit(" ", 1)[-1] if plan.skip.startswith("already in the vault as ") else ""
+            writer.writerow((plan.part_number or existing, e.manufacturer, e.mpn, e.description, e.role,
+                             plan.skip or "new"))
+    return path
 
 
 # ----- command line ------------------------------------------------------------------------------
@@ -891,7 +1115,7 @@ def main(argv=None) -> int:
         entries = catalog()
         problems = check(entries)
         for row in summary(entries):
-            print(f"{row['family']:22} {row['parts']:4} parts  kicad {row['kicad']:3}  parametric {row['parametric']:3}"
+            print(f"{row['family']:22} {row['parts']:4} parts  kicad {row['kicad']:3}  parametric {row['parametric']:3}  accessories {row['accessories']:2}"
                   f"  positions {row['positions']}")
         for problem in problems:
             print("PROBLEM:", problem)
@@ -917,10 +1141,15 @@ def main(argv=None) -> int:
     else:
         from bruceworx import freecad_io  # noqa: PLC0415
 
-        writer = freecad_io.write_part_number if freecad_io.freecad_available() else None
-        plans = import_library(vault, entries, folder, args.program, writer=writer)
+        on = freecad_io.freecad_available()
+        plans = import_library(vault, entries, folder, args.program,
+                               writer=freecad_io.write_part_number if on else None,
+                               item_writer=fill_items if on else None)
+    report = write_numbers(plans, entries, os.path.join(
+        folder, "vault_numbers_plan.csv" if args.dry_run else "vault_numbers.csv"))
     for plan in plans:
         print(f"{plan.part_number or '-':22} {plan.mpn:22} {plan.skip or plan.description}")
+    print(f"ordering list (vault P/N, manufacturer, MPN): {report}")
     print(f"{sum(1 for p in plans if p.part_number)} of {len(plans)} parts "
           f"{'would be imported' if args.dry_run else 'imported'}")
     return 0

@@ -3,6 +3,7 @@
 vault import (FreeCAD-free; the KiCad cases need KiCad's footprint library and skip without it)."""
 
 import json
+import math
 import os
 import shutil
 import sys
@@ -46,8 +47,18 @@ class Tables(unittest.TestCase):
 
     def test_dt_and_power_tables(self):
         self.assertEqual(cl.DT["counts"], (2, 3, 4, 6, 8, 12))
-        for n, (cols, rows) in cl.DT["layout"].items():
-            self.assertEqual(cols * rows, n)
+        for n in cl.DT["counts"]:
+            pads = cl.dt_pads(n)
+            self.assertEqual([p[0] for p in pads], [str(k) for k in range(1, n + 1)])
+            if n != 3:
+                cols, rows = cl.DT["layout"][n]
+                self.assertEqual(cols * rows, n)
+        tri = cl.dt_pads(3)  # 3-way is triangular (TE)
+        self.assertAlmostEqual(math.dist(tri[0][1:], tri[2][1:]), math.dist(tri[0][1:], tri[1][1:]))
+        self.assertEqual(cl.DT["pitch"][2], 5.46)
+        self.assertEqual(cl.dupont_mpn(2, 4), "65043-033LF")  # FCI drawing 65043 rev BG
+        self.assertEqual(cl.DUPONT["terminal"], "48235-000LF")
+        self.assertAlmostEqual(cl.MICROFIT["mated"], 17.64)  # Molex 43045 vertical: mated height
         self.assertEqual(set(cl.POWER), {"XT30", "XT60", "XT90", "MR30"})
         self.assertEqual(cl.MICROFIT["counts"], (2, 4, 6, 8, 10, 12))
 
@@ -85,7 +96,28 @@ class Catalogue(unittest.TestCase):
         self.assertEqual(rows["JST-XH"]["positions"], [2, 3, 4, 5, 6, 7, 8])
         self.assertEqual(rows["Deutsch DT"]["positions"], [2, 3, 4, 6, 8, 12])
         self.assertEqual(rows["Molex Micro-Fit 3.0"]["positions"], [2, 4, 6, 8, 10, 12])
-        self.assertEqual(sum(r["parts"] for r in rows.values()), len(self.entries))
+        connectors = [e for e in self.entries if not cl.is_accessory(e)]
+        self.assertEqual(sum(r["parts"] for r in rows.values()), len(connectors))
+        self.assertEqual(sum(r["accessories"] for r in rows.values()), len(cl.ACCESSORIES))
+
+    def test_terminals_seals_wedgelocks_are_parts(self):
+        accessories = {e.mpn: e for e in self.entries if cl.is_accessory(e)}
+        self.assertEqual(set(accessories), set(cl.ACCESSORIES))
+        for e in self.entries:
+            if cl.is_accessory(e):
+                self.assertTrue(e.manufacturer and e.mpn, e.mpn)
+                self.assertEqual((e.pins, e.mating), ([], []))
+                continue
+            for mpn, mfr in ((e.terminal, e.terminal_mfr), (e.seal, e.seal_mfr), (e.accessory, e.accessory_mfr)):
+                if mpn:
+                    self.assertIn(mpn, accessories, e.mpn)
+                    self.assertEqual(mfr, accessories[mpn].manufacturer, e.mpn)
+        xh = self.by_mpn["XHP-3"]
+        self.assertEqual((xh.terminal, xh.terminal_mfr), ("SXH-001T-P0.6", "JST"))
+        self.assertEqual(accessories["SXH-001T-P0.6"].role, "Terminal")
+        self.assertEqual(accessories["114017"].role, "Seal")
+        self.assertEqual(self.by_mpn["DT04-4P"].accessory, "W4P")
+        self.assertEqual(accessories["W4P"].role, "Wedgelock")
 
     def test_mating_symmetric(self):
         for e in self.entries:
@@ -108,7 +140,8 @@ class Catalogue(unittest.TestCase):
         self.assertEqual(self.by_mpn["SHR-04V-S-B"].terminal, "SSH-003T-P0.2-H")
         self.assertEqual(self.by_mpn["DT04-2P"].terminal, "0460-202-16141")
         self.assertEqual(self.by_mpn["DT06-2S"].terminal, "0462-201-16141")
-        self.assertEqual(self.by_mpn["DT06-2S"].seal, "114017")
+        self.assertEqual(self.by_mpn["DT06-2S"].seal, "")  # DT seals by its one-piece grommet, no wire seal
+        self.assertIn("114017", self.by_mpn["DT06-2S"].notes)
         self.assertEqual(self.by_mpn["DT06-12S"].accessory, "W12S")
         self.assertEqual(self.by_mpn["XT60-M"].terminal, "")  # solder cup
 
@@ -220,6 +253,39 @@ class VaultImport(unittest.TestCase):
         self.assertIn("already in the vault as STD-01-01001-001", again[0].skip)
         # the dry run agrees once the parts are in
         self.assertEqual([p.part_number for p in cl.plan_import(self.vault, self.entries, self.lib)], ["", "", ""])
+
+    def test_accessories_first_and_their_numbers_reach_the_pins(self):
+        term = cl.Entry("T-1", "F", "Terminal", "Acme", "Crimp terminal T (T-1)", 0, 0.0, file="T-1.FCStd")
+        fake_fcstd(os.path.join(self.lib, term.file), "T-1")
+        self.entries[0].terminal = "T-1"
+        seen = []
+        plans = cl.import_library(self.vault, self.entries + [term], self.lib,
+                                  item_writer=lambda path, items: seen.append(dict(items)))
+        self.assertEqual([(p.mpn, p.part_number) for p in plans][:3],
+                         [("T-1", "STD-01-01001-001"), ("A-1", "STD-01-01002-001"), ("B-1", "STD-01-01003-001")])
+        self.assertEqual(seen, [{"T-1": "STD-01-01001-001"}] * 2)
+        report = cl.write_numbers(plans, self.entries + [term], os.path.join(self.tmp, "numbers.csv"))
+        with open(report, encoding="utf-8") as handle:
+            rows = handle.read().splitlines()
+        self.assertEqual(rows[0], "part_number,manufacturer,mpn,description,role,status")
+        self.assertIn("STD-01-01001-001,Acme,T-1,Crimp terminal T (T-1),Terminal,new", rows)
+        # a second run finds the terminal in the vault and still hands its number on
+        seen.clear()
+        cl.import_library(self.vault, self.entries + [term], self.lib, item_writer=lambda p, i: seen.append(i))
+        self.assertEqual(seen, [])  # nothing new to write
+
+    def test_restore_view_data(self):
+        original = os.path.join(self.lib, "A-1.FCStd")
+        with zipfile.ZipFile(original, "a") as zf:
+            zf.writestr("GuiDocument.xml", "<Document/>")
+            zf.writestr("ShapeAppearance", "x")
+        staged = os.path.join(self.tmp, "staged.FCStd")
+        fake_fcstd(staged, "A-1")
+        self.assertTrue(cl.restore_view_data(original, staged))
+        with zipfile.ZipFile(staged) as zf:
+            self.assertIn("GuiDocument.xml", zf.namelist())
+            self.assertIn("ShapeAppearance", zf.namelist())
+        self.assertFalse(cl.restore_view_data(original, staged))  # already there
 
     def test_cli_dry_run(self):
         path = cl.write_manifest(self.entries, self.lib)

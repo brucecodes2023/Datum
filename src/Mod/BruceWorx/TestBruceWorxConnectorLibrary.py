@@ -21,6 +21,7 @@ from bruceworx import connector_library as cl
 
 SAMPLES = ("XHP-4", "B4B-XH-A", "S4B-XH-A", "GHR-03V-S", "43025-0600", "43020-0600", "XT60-M", "XT30PW-M",
            "DT04-6P", "DT06-6S", "BULLET-3.5-M", "HDR254-M-2x03")
+ACCESSORY_SAMPLES = ("SXH-001T-P0.6", "114017", "W6P")
 
 
 @unittest.skipUnless(cl.kicad_available(), "KiCad's footprint library is not installed")
@@ -28,7 +29,7 @@ class ConnectorLibraryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(prefix="bw-connlib-")
-        cls.entries = {e.mpn: e for e in cl.catalog() if e.mpn in SAMPLES}
+        cls.entries = {e.mpn: e for e in cl.catalog() if e.mpn in SAMPLES + ACCESSORY_SAMPLES}
         cls.paths = {}
         for mpn, entry in cls.entries.items():
             cls.paths[mpn] = cl.build_part(entry, os.path.join(cls.tmp, entry.file))
@@ -51,7 +52,7 @@ class ConnectorLibraryTests(unittest.TestCase):
         return shapes[0].BoundBox
 
     def test_every_sample_built(self):
-        self.assertEqual(set(self.paths), set(SAMPLES))
+        self.assertEqual(set(self.paths), set(SAMPLES + ACCESSORY_SAMPLES))
 
     def test_pin_frames_and_properties(self):
         for mpn in SAMPLES:
@@ -65,8 +66,9 @@ class ConnectorLibraryTests(unittest.TestCase):
                 self.assertEqual(lcs.BWFrame, "Pin")
                 self.assertIn(lcs, part.Group)
                 self.assertEqual((lcs.GaugeMin, lcs.GaugeMax), (entry.gauge_min, entry.gauge_max), mpn)
-                self.assertEqual(lcs.TerminalPN, entry.terminal)
-                self.assertEqual(lcs.SealPN, entry.seal)
+                self.assertEqual((lcs.TerminalPN, lcs.TerminalMfr), (entry.terminal, entry.terminal_mfr))
+                self.assertEqual((lcs.SealPN, lcs.SealMfr), (entry.seal, entry.seal_mfr))
+                self.assertEqual((lcs.TerminalItem, lcs.SealItem), ("", ""))  # filled by the vault import
                 self.assertTrue(hasattr(lcs, "StraightLength"))
             self.assertEqual(part.ConnectorFamily, entry.family)
             self.assertEqual(part.ConnectorRole, entry.role)
@@ -77,6 +79,32 @@ class ConnectorLibraryTests(unittest.TestCase):
             self.assertEqual(part.Description, entry.description)
             self.assertEqual(part.ItemType, "cots")
             self.assertEqual(part.ModelLicense, entry.license)
+
+    def test_accessories(self):
+        _doc, dt = self.open("DT04-6P")
+        self.assertEqual(list(dt.Accessories), ["W6P|TE Connectivity (Deutsch)||1|Wedgelock"])
+        _doc, xh = self.open("XHP-4")
+        self.assertEqual(list(xh.Accessories), [])
+        for mpn in ACCESSORY_SAMPLES:
+            entry = self.entries[mpn]
+            _doc, part = self.open(mpn)
+            self.assertEqual(bp.pins(part), [])
+            self.assertEqual(part.AccessoryKind, entry.role)
+            self.assertEqual((part.Manufacturer, part.ManufacturerPartNumber), (entry.manufacturer, mpn))
+            self.assertEqual(part.ItemType, "cots")
+            self.assertGreater(self.body_box(part).ZLength, 0)
+
+    def test_fill_items(self):
+        path = os.path.join(self.tmp, "filled.FCStd")
+        shutil.copyfile(self.paths["DT04-6P"], path)
+        n = cl.fill_items(path, {"0460-202-16141": "STD-01-01010-001", "114017": "STD-01-01011-001",
+                                 "W6P": "STD-01-01012-001"})
+        self.assertEqual(n, 6 + 1)  # six terminals and the wedgelock; DT has no per-wire seal
+        doc = App.openDocument(path)
+        self.addCleanup(App.closeDocument, doc.Name)
+        part = [o for o in doc.Objects if o.TypeId == "App::Part"][0]
+        self.assertEqual({(p.TerminalItem, p.SealItem) for p in bp.pins(part)}, {("STD-01-01010-001", "")})
+        self.assertEqual(list(part.Accessories), ["W6P|TE Connectivity (Deutsch)|STD-01-01012-001|1|Wedgelock"])
 
     def test_pin_names_from_the_pads(self):
         pads = cl.footprint_pads("Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical")
