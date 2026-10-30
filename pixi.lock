@@ -311,6 +311,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/swig-4.3.1-h32e72b7_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tbb-2022.3.0-h8d10470_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tbb-devel-2022.3.0-h74b38a2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/tectonic-0.15.0-h69b855b_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_ha0e22de_103.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.3-py311h49ec1c0_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ukkonen-1.0.1-py311hdf67eae_6.conda
@@ -738,6 +739,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/swig-4.3.1-hb663fc2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tbb-2022.3.0-h0eac15c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tbb-devel-2022.3.0-h828ce58_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tectonic-0.15.0-h44e4b5d_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tk-8.6.13-noxft_h561c983_103.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tornado-6.5.3-py311hb9158a3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/ukkonen-1.0.1-py311hfca10b7_6.conda
@@ -1206,6 +1208,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tapi-1300.6.5-h390ca13_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tbb-2022.3.0-hf0c99ee_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tbb-devel-2022.3.0-hff8ccec_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/tectonic-0.15.0-h1e1ed68_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tk-8.6.13-hf689a15_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tornado-6.5.3-py311hf197a57_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ukkonen-1.0.1-py311hd4d69bb_6.conda
@@ -1542,6 +1545,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tapi-1300.6.5-h03f4b80_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tbb-2022.3.0-h66ce52b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tbb-devel-2022.3.0-h41f9aa9_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tectonic-0.15.0-h9b48767_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h892fb3f_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tornado-6.5.3-py311h9408147_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ukkonen-1.0.1-py311h57a9ea7_6.conda
@@ -1847,6 +1851,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/swig-4.3.1-h51fbe9b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/tbb-2022.3.0-hd094cb3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/tbb-devel-2022.3.0-h4eb897c_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/tectonic-0.15.0-h7f2d003_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/tk-8.6.13-h2c6b04d_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/tornado-6.5.3-py311h3485c13_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
@@ -5954,6 +5959,33 @@ packages:
   purls: []
   size: 1115083
   timestamp: 1762509972811
+- conda: https://conda.anaconda.org/conda-forge/linux-64/tectonic-0.15.0-h69b855b_3.conda
+  sha256: d9d2218cd62f55956d41b6bae9eabe465bc6e2162aa44320406ed5e04231d115
+  md5: f4ad6973183b25e1c96638aa502b4da4
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - fontconfig >=2.15.0,<3.0a0
+  - fonts-conda-ecosystem
+  - freetype >=2.13.3,<3.0a0
+  - graphite2
+  - harfbuzz >=11.0.0,<12.0a0
+  - icu >=75.1,<76.0a0
+  - libexpat >=2.6.4,<3.0a0
+  - libgcc >=13
+  - libglib >=2.84.0,<3.0a0
+  - libpng >=1.6.47,<1.7.0a0
+  - libstdcxx >=13
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.4.1,<4.0a0
+  - zlib
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  purls: []
+  run_exports: {}
+  size: 4799784
+  timestamp: 1743235230952
 - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_ha0e22de_103.conda
   sha256: 1544760538a40bcd8ace2b1d8ebe3eb5807ac268641f8acdc18c69c5ebfeaf64
   md5: 86bc20552bf46075e3d92b67f089172d
@@ -10367,6 +10399,32 @@ packages:
   purls: []
   size: 1115988
   timestamp: 1762511667880
+- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tectonic-0.15.0-h44e4b5d_3.conda
+  sha256: 3df3f90f654ae7a993b14a421c16edb7b7665ed0f36cda8b98dd3d7846776004
+  md5: 9cf3ab41ca70116bc4a081b3311ca635
+  depends:
+  - fontconfig >=2.15.0,<3.0a0
+  - fonts-conda-ecosystem
+  - freetype >=2.13.3,<3.0a0
+  - graphite2
+  - harfbuzz >=11.0.0,<12.0a0
+  - icu >=75.1,<76.0a0
+  - libexpat >=2.6.4,<3.0a0
+  - libgcc >=13
+  - libglib >=2.84.0,<3.0a0
+  - libpng >=1.6.47,<1.7.0a0
+  - libstdcxx >=13
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.4.1,<4.0a0
+  - zlib
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  purls: []
+  run_exports: {}
+  size: 4814603
+  timestamp: 1743246794730
 - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/tk-8.6.13-noxft_h561c983_103.conda
   sha256: 154e73f6269f92ad5257aa2039278b083998fd19d371e150f307483fb93c07ae
   md5: 631db4799bc2bfe4daccf80bb3cbc433
@@ -15902,6 +15960,29 @@ packages:
   purls: []
   size: 1115959
   timestamp: 1762510410680
+- conda: https://conda.anaconda.org/conda-forge/osx-64/tectonic-0.15.0-h1e1ed68_3.conda
+  sha256: 02dfc1ad1ff3b2abc0fe2df9820922461900ef7202a322fc66cad75bdb918f8c
+  md5: 7e779f3f028d2e9e53647651aa4820da
+  depends:
+  - __osx >=10.13
+  - freetype >=2.13.3,<3.0a0
+  - graphite2
+  - harfbuzz >=11.0.0,<12.0a0
+  - icu >=75.1,<76.0a0
+  - libcxx >=18
+  - libglib >=2.84.0,<3.0a0
+  - libpng >=1.6.47,<1.7.0a0
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.4.1,<4.0a0
+  - zlib
+  constrains:
+  - __osx >=10.13
+  license: MIT
+  license_family: MIT
+  purls: []
+  run_exports: {}
+  size: 4418971
+  timestamp: 1743235267494
 - conda: https://conda.anaconda.org/conda-forge/osx-64/tk-8.6.13-hf689a15_3.conda
   sha256: 0d0b6cef83fec41bc0eb4f3b761c4621b7adfb14378051a8177bd9bb73d26779
   md5: bd9f1de651dbd80b51281c694827f78f
@@ -19427,6 +19508,29 @@ packages:
   purls: []
   size: 1116433
   timestamp: 1762510657198
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/tectonic-0.15.0-h9b48767_3.conda
+  sha256: 4259880c58ee80f061d2fd6189b4f69263565b62f7b26af745ddefb972c9eb1c
+  md5: 8369a5fd79cbed311a894fa89917c299
+  depends:
+  - __osx >=11.0
+  - freetype >=2.13.3,<3.0a0
+  - graphite2
+  - harfbuzz >=11.0.0,<12.0a0
+  - icu >=75.1,<76.0a0
+  - libcxx >=18
+  - libglib >=2.84.0,<3.0a0
+  - libpng >=1.6.47,<1.7.0a0
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.4.1,<4.0a0
+  - zlib
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  purls: []
+  run_exports: {}
+  size: 4284629
+  timestamp: 1743235200758
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h892fb3f_3.conda
   sha256: ad0c67cb03c163a109820dc9ecf77faf6ec7150e942d1e8bb13e5d39dc058ab7
   md5: a73d54a5abba6543cb2f0af1bfbd6851
@@ -22746,6 +22850,31 @@ packages:
   purls: []
   size: 1124658
   timestamp: 1762510374993
+- conda: https://conda.anaconda.org/conda-forge/win-64/tectonic-0.15.0-h7f2d003_3.conda
+  sha256: ac7256ccd36690e1dbf1e74a34d6445073f0e6832385e9262ab4a63bad86b585
+  md5: d0f2b1596f82fbc5e4bf79fadf6344a2
+  depends:
+  - fontconfig >=2.15.0,<3.0a0
+  - fonts-conda-ecosystem
+  - freetype >=2.13.3,<3.0a0
+  - graphite2
+  - harfbuzz >=11.0.0,<12.0a0
+  - icu >=75.1,<76.0a0
+  - libexpat >=2.6.4,<3.0a0
+  - libglib >=2.84.0,<3.0a0
+  - libpng >=1.6.47,<1.7.0a0
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.4.1,<4.0a0
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - zlib
+  license: MIT
+  license_family: MIT
+  purls: []
+  run_exports: {}
+  size: 3956918
+  timestamp: 1743235905027
 - conda: https://conda.anaconda.org/conda-forge/win-64/tk-8.6.13-h2c6b04d_3.conda
   sha256: 4581f4ffb432fefa1ac4f85c5682cc27014bcd66e7beaa0ee330e927a7858790
   md5: 7cb36e506a7dba4817970f8adb6396f9

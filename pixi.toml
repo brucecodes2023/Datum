@@ -58,6 +58,7 @@ smesh = "*"
 swig = "*"
 sympy = "*"
 tbb-devel = ">=2022,<2023"
+tectonic = "*"  # [BW] SIM-01: the study report is LaTeX, compiled by Tectonic (bundled in Keystone)
 vtk = "*"
 xerces-c = "*"
 xlutils = "*"

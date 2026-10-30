@@ -5,7 +5,7 @@
 # Keystone is this FreeCAD fork, fully renamed: window title, menu bar, Dock, About box, and its own
 # settings folders (~/Library/Preferences/Keystone, ~/Library/Application Support/Keystone), so it runs
 # beside the development build (build/release) without sharing or touching its settings. The bundle is
-# self-contained: the Python, Qt, OCCT, CalculiX and other libraries it needs are copied from the pixi environment
+# self-contained: the Python, Qt, OCCT, CalculiX, Tectonic and other libraries it needs are copied from the pixi environment
 # and every path into the environment or the build tree is rewritten, so it keeps working after a
 # rebuild or `pixi clean`. Built from whatever is checked out, uncommitted changes included; the version
 # shows the commit and "-dirty". Ad-hoc signed, not notarized: for this Mac.
@@ -98,6 +98,15 @@ if [[ -x "$env/bin/ccx" ]]; then
     cp -p "$env/bin/ccx" "$C/bin/ccx"
 else
     say "warning: no ccx in the environment (pixi.toml lists calculix): the Simulation workspace cannot solve"
+fi
+# Tectonic compiles a study's LaTeX report (SIM-01, 30 Oct); its ICU, HarfBuzz, graphite2, FreeType,
+# libpng, zlib and iconv dylibs come along through the relocation step. bruceworx_sim.find_tex looks
+# for Contents/bin/tectonic. It fetches the TeX files it needs on its first run (network, ~40 MB into
+# ~/Library/Caches/Tectonic); after that it works offline.
+if [[ -x "$env/bin/tectonic" ]]; then
+    cp -p "$env/bin/tectonic" "$C/bin/tectonic"
+else
+    say "warning: no tectonic in the environment (pixi.toml lists it): study reports stay LaTeX unless MacTeX is installed"
 fi
 
 # The real executable sits in Contents/MacOS, so macOS sees Keystone.app (menu bar, Dock, icon); FreeCAD
@@ -225,6 +234,12 @@ if [[ -x "$C/bin/ccx" ]]; then
     ccx_out="$("$C/bin/ccx" -v 2>&1 || true)"
     [[ "$ccx_out" == *Version* ]] || fail "the bundled CalculiX does not start (its dylibs were not relocated?)"
     say "CalculiX $(grep -o 'Version [0-9.]*' <<<"$ccx_out")"
+fi
+if [[ -x "$C/bin/tectonic" ]]; then
+    tectonic_out="$(env -i HOME="$HOME" "$C/bin/tectonic" --version 2>&1 || true)"
+    # (0.15 prints its version twice, "tectonic 0.15.0Tectonic 0.15.0")
+    [[ "$tectonic_out" == *"Tectonic "* ]] || fail "the bundled Tectonic does not start (its dylibs were not relocated?): $tectonic_out"
+    say "$(grep -o 'Tectonic [0-9.]*' <<<"$tectonic_out")"
 fi
 
 target="$dest/$app_name.app"
