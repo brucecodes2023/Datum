@@ -699,6 +699,29 @@ class TestModalBenchmarks(unittest.TestCase):
         App.Console.PrintMessage(f"\n[free-free] f1 {elastic[0]['frequency']:.1f} Hz vs {theory['f1']:.1f} "
                                  f"(beta L 4.7300), {100 * error:.2f} %\n")
 
+    def test_prestressed_modal_tensioned_beam(self):
+        doc, objs, theory = eigen.tensioned_beam()
+        analysis = objs["analysis"]
+        self.assertTrue(sim.ready(sim.precheck(analysis)), sim.precheck(analysis))
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.modal_rows(analysis)
+        f1 = rows[0]["frequency"]
+        self.assertLess(abs(f1 - theory["f1"]) / theory["f1"], 0.03, (f1, theory))
+        self.assertLess(abs(rows[1]["frequency"] - theory["f1"]) / theory["f1"], 0.03)  # the other plane
+        self.assertLess(abs(rows[2]["frequency"] - theory["f2"]) / theory["f2"], 0.03)
+        self.assertIsNotNone(eigen.prestress_result(analysis))
+        with open(os.path.join(self.tmp, "Mesh.inp"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("*DENSITY", text)
+        self.assertIn("*STEP, PERTURBATION\n*FREQUENCY\n4\n", text)
+        # the same beam unloaded: the plain frequency
+        analysis.Prestressed = False
+        sim.solve(analysis, working_dir=self.tmp)
+        plain = eigen.modal_rows(analysis)[0]["frequency"]
+        self.assertLess(abs(plain - theory["f1_free"]) / theory["f1_free"], 0.03, (plain, theory))
+        App.Console.PrintMessage(f"\n[prestressed] f1 {f1:.2f} Hz vs {theory['f1']:.2f} under 10 kN, "
+                                 f"{plain:.2f} Hz vs {theory['f1_free']:.2f} unloaded\n")
+
 
 @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
 class TestBucklingBenchmarks(unittest.TestCase):
