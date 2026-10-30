@@ -221,8 +221,10 @@ FREECAD_USER_HOME="$stage/home" PYTHONHOME="$C" PYTHONNOUSERSITE=1 "$C/bin/FreeC
 grep -q "^ok" "$stage/check.log" || { cat "$stage/check.log"; fail "the staged FreeCADCmd did not import Part"; }
 say "$(grep '^ok' "$stage/check.log")"
 if [[ -x "$C/bin/ccx" ]]; then
-    "$C/bin/ccx" -v 2>/dev/null | grep -q "Version" || fail "the bundled CalculiX does not start (its dylibs were not relocated?)"
-    say "CalculiX $("$C/bin/ccx" -v 2>/dev/null | grep -o 'Version [0-9.]*')"
+    # ccx -v exits 201 after printing its version, so judge it by the output, not the status (pipefail).
+    ccx_out="$("$C/bin/ccx" -v 2>&1 || true)"
+    [[ "$ccx_out" == *Version* ]] || fail "the bundled CalculiX does not start (its dylibs were not relocated?)"
+    say "CalculiX $(grep -o 'Version [0-9.]*' <<<"$ccx_out")"
 fi
 
 target="$dest/$app_name.app"
