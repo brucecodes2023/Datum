@@ -38,6 +38,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/pdm_workspace.py
     bruceworx/vault_move.py
     bruceworx/kicad_bridge.py
+    bruceworx/ecad_vault.py
     bruceworx/sheetmetal_rules.py
     bruceworx/flat_dxf.py
     bruceworx/flat_export.py
@@ -95,6 +96,7 @@ INSTALL(
     bruceworx/pdm_workspace.py
     bruceworx/vault_move.py
         bruceworx/kicad_bridge.py
+        bruceworx/ecad_vault.py
         bruceworx/sheetmetal_rules.py
         bruceworx/flat_dxf.py
         bruceworx/flat_export.py
