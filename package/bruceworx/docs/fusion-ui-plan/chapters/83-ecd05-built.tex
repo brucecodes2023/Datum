@@ -127,3 +127,44 @@ external disk); several KiCad projects in one folder (the import picks one by na
 \bottomrule
 \end{tabularx}
 \end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{Built 31 Oct: the light model for large assemblies}\label{sec:ecd05-light}
+
+You asked for a second view of the same part for large assemblies. Commits \code{3bf9a070} and \code{f833bfde}.
+\begin{itemize}[nosep]
+  \item \textbf{Open 3D (light)} in the vault's right-click menu, beside Open from Vault (which still opens the full
+        model): the board body and its components, without tracks, pads, zones, solder mask, silkscreen or inner copper.
+        This is KiCad's own default export. The light model is a separate document,
+        \file{.keystone/<P/N>-light.FCStd}, cached beside the full one. It is remade by the same rules (board content,
+        revision, state, values), and its cache key carries the light flag.
+  \item \textbf{Insert Board} asks \emph{Full Model} or \emph{Light Model (No Copper Detail)}. Light is the default when
+        the assembly already holds 25 parts or more, counting sub-assemblies and link arrays (parameter
+        \code{BruceWorx/KiCadLightAbove}). The inserted part records \code{BoardDetail} (\code{full}/\code{light}).
+  \item \textbf{Faster first opens, full and light.} Most of the old wait was not geometry. The part-properties
+        observer recomputed the part's mass over every body after each body change, and the mass report woke it
+        again for every material. Insert Board now holds the observer while it builds and refreshes once at the end.
+\end{itemize}
+\begin{center}
+\small
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ESC copy (\code{STD-01-01002-001}, scratch vault) & STEP & faces & solids & first open & before & reopen\\
+\midrule
+Full model  & 31.0\,MB & 24\,396 & 1\,765 & 18.8\,s & 234\,s & 4.4\,s\\
+Light model &  2.6\,MB &  6\,074 &   130 &  5.7\,s &  71\,s & 1.5\,s\\
+\bottomrule
+\end{tabular}
+\end{center}
+The faces are counted in Keystone, with the components included. Mass: 10.58\,g full, 7.16\,g light (no copper or
+mask). The light model shows the edge-plated tab pads as bare board: \code{kicad-cli} exports all pads or none.
+\textbf{Follow-up:} switching a board already in an assembly between light and full belongs to Update Board (the rest
+of ECD-05). Until then, delete the board and insert it again.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.49\linewidth]{fig/ecd05_esc_full.png}\hfill
+\includegraphics[width=0.49\linewidth]{fig/ecd05_esc_light.png}
+\caption{The ESC copy opened from the scratch vault. Left: full model. Right: light model (board and components).}
+\label{fig:ecd05-light}
+\end{figure}
