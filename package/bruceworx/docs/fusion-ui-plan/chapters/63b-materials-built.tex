@@ -1,0 +1,146 @@
+%======================================================================
+\subsection{Keystone material library --- Built, 30 Oct: 28 cards with yield strengths}\label{sec:materials-built}
+%======================================================================
+
+On 30 Oct you answered the open question of \eref{SIM-01} (``what does the safety factor use when a card has no
+yield?'') with ``build a library with yield strengths''. It is built: a read-only material library named
+\emph{Keystone}, inside the app, with 28 cards for what you make things from --- CNC metals, sheet for bending and
+laser cutting, engineering plastics, FDM filaments and the two drone plates --- each with density, $E$, $\nu$, a yield
+strength, a tensile strength, elongation, thermal values and a colour. The vault material library (\eref{PDM-11},
+\S\ref{sec:pdm11-plan}) will start from these cards, so they follow its rules: a permanent UUID per card, a density
+on every card, the strength \emph{basis} and the source written into the card.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item Pick any Keystone card wherever FreeCAD lists materials: \emph{Set Material}, the material editor, FEM's
+        material task, and the Simulation study panel (agent ``sim'' lists Keystone first). The library is read-only,
+        so a card cannot be changed by accident; \emph{Save as} in the editor makes a User copy with a new UUID.
+  \item A study's safety factor now has a yield for every Keystone material. For metals that yield is the
+        \emph{specification minimum} (the conservative number a strength check wants); the typical value sits beside
+        it in the card. Mass uses the nominal density, as before.
+  \item Printed parts get the X-Y strength of a printed specimen, and the card records the Z (between-layer)
+        strength, modulus and elongation, ready for the FDM knockdown of \eref{SIM-03}.
+  \item From Python (headless too): \code{bruceworx\_materials.cards()}, \code{card("PETG printed")} or
+        \code{card(uuid)} return $E$, $\nu$, $G$, yield, UTS, elongation, $k$, $c_p$, $\alpha$, basis, brittle, source
+        and Z strength in plain units (MPa, kg/m$^3$); \code{material(name\_or\_uuid)} returns the
+        \code{Materials.Material} to assign to \code{ShapeMaterial}.
+\end{itemize}
+
+\paragraph{The cards.} $E$ in GPa, $\rho$ in kg/m$^3$, strengths in MPa; for printed materials the yield column shows
+X-Y (Z). Basis: \emph{min} = specification minimum, \emph{typ} = typical data-sheet value, \emph{approx} = estimate;
+\emph{brittle} = no yield, the tensile strength is used as the yield.
+
+\begin{center}
+\scriptsize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.75cm}rrrrrlX@{}}
+\toprule
+Card & $E$ & $\nu$ & $\rho$ & $\sigma_y$ & $\sigma_u$ & basis & Source\\
+\midrule
+\multicolumn{8}{@{}l}{\textit{Metals}}\\
+Aluminium 5052-H32 & 70.3 & 0.33 & 2680 & 159 & 214 & min & ASTM B209 minimum strengths; ASM/MatWeb typical elastic and thermal values\\
+Aluminium 6061-T6 & 68.9 & 0.33 & 2700 & 241 & 290 & min & ASTM B209/B221 minimum strengths; ASM/MatWeb typical elastic and thermal values\\
+Aluminium 7075-T6 & 71.7 & 0.33 & 2810 & 476 & 538 & min & ASTM B209 / MMPDS sheet minimums; ASM/MatWeb typical elastic and thermal values\\
+Brass C360 half hard & 97 & 0.31 & 8500 & 310 & 385 & typ & CDA / ASM typical (C36000 free-cutting brass, H02)\\
+Stainless 304 annealed & 193 & 0.29 & 8000 & 205 & 515 & min & ASTM A240 (sheet, plate) and A276 (bar) minimums; ASM/MatWeb elastic and thermal values\\
+Stainless 316 annealed & 193 & 0.3 & 8000 & 205 & 515 & min & ASTM A240 (sheet, plate) and A276 (bar) minimums; ASM/MatWeb elastic and thermal values\\
+Steel 1018 cold drawn & 205 & 0.29 & 7870 & 370 & 440 & min & SAE J1397 estimated minimum (cold drawn); ASM/MatWeb elastic and thermal values\\
+Steel 1045 cold drawn & 205 & 0.29 & 7870 & 530 & 625 & min & SAE J1397 estimated minimum (cold drawn, 19-32 mm); ASM/MatWeb elastic and thermal values\\
+Steel 4140 annealed & 205 & 0.29 & 7850 & 415 & 655 & typ & ASM/MatWeb typical (AISI 4140 annealed)\\
+Steel 4140 pre-hardened & 205 & 0.29 & 7850 & 720 & 860 & min & ASTM A193 Gr B7 minimum (quenched and tempered 4140); ASM/MatWeb elastic and thermal values\\
+Steel mild CR sheet & 200 & 0.29 & 7870 & 205 & 330 & typ & ASTM A1008 CS Type B typical ranges (EN DC01 equivalent); ASM/MatWeb elastic and thermal values\\
+\midrule
+\multicolumn{8}{@{}l}{\textit{Plastics}}\\
+Acrylic PMMA cast & 3.3 & 0.37 & 1190 & 80 & 80 & typ, brittle & Roehm PLEXIGLAS GS (cast) typical\\
+PA6 extruded dry & 3.3 & 0.39 & 1140 & 80 & 80 & typ & Mitsubishi Chemical Ertalon 6 SA (ISO 527, dry)\\
+PC sheet & 2.35 & 0.38 & 1200 & 62 & 65 & typ & SABIC Lexan 9030 / Covestro Makrolon GP sheet typical\\
+POM-C acetal copolymer & 2.28 & 0.35 & 1410 & 64 & 64 & typ & Ensinger TECAFORM AH natural (ASTM D638) / Boedeker typical\\
+POM-H Delrin 150 & 3.1 & 0.35 & 1420 & 72 & 72 & typ & DuPont Delrin 150 NC010 product data (ISO 527)\\
+UHMW-PE & 0.75 & 0.46 & 930 & 19 & 40 & typ & Mitsubishi Chemical TIVAR 1000 (ISO 527); tensile strength at break from ASTM D638 sheet\\
+\midrule
+\multicolumn{8}{@{}l}{\textit{Printed (Bambu Lab data sheets, ISO 527, 100\,\% infill)}}\\
+ABS printed & 2.2 & 0.35 & 1050 & 41 (32) & 41 & typ & Bambu Lab TDS (ABS)\\
+ASA printed & 2.45 & 0.35 & 1050 & 52 (35) & 52 & typ & Bambu Lab TDS (ASA)\\
+PA12-CF printed & 3.86 & 0.35 & 1060 & 88 (64) & 88 & typ & Bambu Lab TDS (PAHT-CF, dry)\\
+PA6-CF printed & 4.43 & 0.35 & 1090 & 102 (48) & 102 & typ & Bambu Lab TDS (PA6-CF, dry)\\
+PC printed & 2.11 & 0.37 & 1200 & 62 (56) & 62 & typ & Bambu Lab TDS (PC)\\
+PETG HF printed & 1.81 & 0.38 & 1280 & 34 (23) & 34 & typ & Bambu Lab TDS (PETG HF)\\
+PETG printed & 1.46 & 0.38 & 1250 & 48 (39) & 48 & typ & Bambu Lab TDS (PETG Basic)\\
+PLA printed & 2.68 & 0.36 & 1240 & 39 (35) & 39 & typ & Bambu Lab TDS (PLA Basic, V2.0)\\
+TPU 95A printed & 0.0098 & 0.48 & 1220 & 27.3 (22.3) & 27.3 & typ & Bambu Lab TDS (TPU 95A HF)\\
+\midrule
+\multicolumn{8}{@{}l}{\textit{Composites}}\\
+Carbon fibre plate QI & 45 & 0.3 & 1550 & 450 & 450 & approx, brittle & Approximate quasi-isotropic T300-class carbon/epoxy laminate (handbook values)\\
+G10-FR4 laminate & 18.6 & 0.13 & 1850 & 275 & 275 & typ, brittle & NEMA LI 1 G-10/FR-4 typical (lengthwise), e.g. Professional Plastics / Curbell data sheets\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Every card also carries $k$, $c_p$ and $\alpha$ (Thermal model; for plastics and printed parts bulk-polymer estimates)
+and a BasicRendering colour: brushed metal greys, brass, natural white acetal and nylon, clear PC and acrylic (60--70\,\%
+transparent), a distinct colour per filament, black carbon and green-yellow G10.
+
+\paragraph{How it is registered.} The cards are in \file{src/Mod/BruceWorx/Resources/Materials/Keystone/}
+(\file{Metals}, \file{Plastics}, \file{Printed}, \file{Composites}; the file name is the name FreeCAD shows). FreeCAD
+1.1 reads extra libraries from \code{Preferences/Mod/Material/Resources/Modules/<name>}
+(\file{MaterialManagerLocal.cpp}); \file{Init.py} calls \code{bruceworx\_materials.register\_library()}, which writes
+\code{ModuleDir} (rewritten on every start, so it follows the build folder or \file{Keystone.app}), the BruceWorx icon
+and \code{ModuleReadOnly = true} in the group \code{Keystone}. Being in \file{Init.py}, not \file{InitGui.py}, it works
+headless. \file{CMakeLists.txt} copies the cards into \file{build/release/Mod/BruceWorx/Resources/...} and installs
+them, so \file{make-keystone.sh}'s \code{cmake --install} puts them into \file{Keystone.app} with no change to the
+script. The existing \emph{BruceWorx} library (the 11 electronics cards of \eref{ECD-06}) is untouched and stays
+separate.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{Minimum strengths for metals.} The plan of \eref{PDM-11} says a strength check wants minimums and a
+        mass wants nominal values. Metals with a specification therefore carry the minimum yield and UTS (ASTM B209
+        for the aluminium sheet and plate, A240/A276 for the stainless, A193 B7 for pre-hard 4140, SAE J1397 for cold
+        drawn 1018 and 1045) and the typical values as \code{TypicalYieldStrength} in the card's \code{BruceWorx:}
+        block. Example: 6061-T6 reads 241\,MPa, not the handbook's 276. Annealed 4140, C360 brass and mild CR sheet
+        (A1008 CS has no specified yield) are typical values.
+  \item \textbf{Printed: Bambu Lab data sheets throughout.} They are the only filament sheets found that give X-Y
+        \emph{and} Z tensile strength, modulus and elongation from one test method (ISO 527, 100\,\% infill), so the
+        nine printed cards are comparable. Prusament values are quoted in the descriptions where they differ (PLA:
+        57\,MPa X-Y against Bambu's 39). PETG has two cards, PETG Basic (48/39\,MPa) and PETG HF (34/23\,MPa),
+        because the high-flow grade is a third weaker; PA-CF has PA12-CF (Bambu PAHT-CF) and PA6-CF.
+  \item \textbf{Brittle materials} (cast acrylic, the carbon plate, G10) have no yield; their \code{YieldStrength} is
+        the tensile strength and \code{Brittle: true} says so, so a later safety-factor rule can ask for a larger
+        margin.
+  \item \textbf{Carbon-fibre plate} is one quasi-isotropic card, marked APPROXIMATE (45\,GPa, 450\,MPa). The description
+        gives the real anisotropy of woven 0/90 plate (about 65\,GPa and 600\,MPa along the fibres, 18\,GPa and
+        150--200\,MPa at 45\textdegree).
+  \item \textbf{PA6 dry.} Nylon 6 is listed dry as moulded (80\,MPa, 3.3\,GPa), the data-sheet convention; the
+        conditioned values (45\,MPa, 1.4\,GPa at 50\,\% RH) are in the card.
+  \item \textbf{TPU} is an elastomer: its strength (27\,MPa) exceeds its modulus (9.8\,MPa), and a linear-elastic study
+        of it is only a rough guide at small strain; the card says so.
+  \item \textbf{Elongation} is written as \code{UltimateStrain} in percent, as FreeCAD's Standard cards do; the upstream
+        model declares that property in kPa, so it reads back as ``11.2 kPa''. The helper takes elongation from the
+        \code{BruceWorx:} block instead.
+  \item \textbf{Permanent UUIDs}, new for every card (none copied from FreeCAD's Standard cards, so a Keystone and a
+        Standard 6061 never collide), listed in \code{bruceworx\_materials.CARDS}; the test fails if a card is added,
+        renamed or removed without that table.
+\end{itemize}
+
+\paragraph{Tests.} \file{TestBruceWorxMaterials.py} (headless, \code{FreeCADCmd -t TestBruceWorxMaterials}), 8 tests,
+all pass: the library is registered as ``Keystone'' and read-only; the folder and the UUID table agree; all 28 cards
+load through \code{Materials.MaterialManager} from that library; UUIDs unique, also against every other library; every
+card has density, $E$, $\nu$, yield, UTS, elongation, $k$, $c_p$, $\alpha$, a basis and a source, with $0<\nu<0.5$,
+$\sigma_y \le \sigma_u$, yield equal to UTS when brittle, a Z strength no higher than X-Y for printed cards and $G$
+for metals; every card has a valid colour; lookup by name and UUID; a $100\times50\times10$\,mm block in 6061-T6
+weighs 0.135\,kg. A fresh profile, with nothing imported but FreeCAD's own start-up, lists the libraries BruceWorx,
+Keystone, System and User with 28 Keystone materials.
+
+\paragraph{Open questions.}
+\begin{enumerate}[nosep]
+  \item \textbf{Minimum or typical?} Metals carry minimums now. Should the safety factor use the minimum (as built),
+        or the typical value with the minimum as a warning line? (\eref{SIM-03} can make this a per-study choice.)
+  \item \textbf{Which printer and which PETG?} The printed cards use Bambu Lab sheets. If you print on a Prusa or with
+        Prusament, PLA in particular is stronger than its card (57 against 39\,MPa). Should the default PETG be PETG
+        Basic or PETG HF?
+  \item \textbf{Printed Z strength.} The Z values are in each card but not yet used: \eref{SIM-03} decides whether a
+        study takes $\sigma_Z$ as the allowable, or $\sigma_{XY}$ times a knockdown, when the build direction is known.
+  \item \textbf{Thermal values for plastics} are bulk-polymer handbook estimates; fine for a first thermal study, not
+        for a data-sheet comparison.
+  \item \textbf{More cards?} For example 6082-T6 (EU plate), S235/S355 or A36 structural steel, 17-4PH, titanium Gr 5,
+        PEEK, PETG-CF, ASA-CF. Each is a few minutes: a new UUID, a row in the table, a test run.
+\end{enumerate}

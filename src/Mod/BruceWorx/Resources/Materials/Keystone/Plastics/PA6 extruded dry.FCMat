@@ -1,0 +1,45 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "409524fe-7bec-47e7-bb46-580e86212f7e"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "PA6 extruded dry"
+  Description: "Nylon 6 stock shapes, dry as moulded. Conditioned at 23 C / 50 % RH (in service): yield 45 MPa, E 1425 MPa."
+  ReferenceSource: "Mitsubishi Chemical Ertalon 6 SA (ISO 527, dry)"
+  SourceURL: "https://www.materialhub.de/en/materials/mitsubishi-chemical-advanced-materials-ertalon-6-sa"
+  Tags:
+    - "Keystone"
+    - "Plastics"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1140 kg/m^3"
+    YoungsModulus: "3300 MPa"
+    PoissonRatio: "0.39"
+    YieldStrength: "80 MPa"
+    UltimateTensileStrength: "80 MPa"
+    UltimateStrain: "50"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.29 W/m/K"
+    SpecificHeat: "1700 J/kg/K"
+    ThermalExpansionCoefficient: "90 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3720, 0.3600, 0.3200, 1.0)"
+    DiffuseColor: "(0.9300, 0.9000, 0.8000, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2500"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Plastics"
+  Basis: "typical"
+  YieldBasis: "tensile stress at yield, dry as moulded, ISO 527"
+  Brittle: false
+  Elongation: "50 %"
+  Conditioned: "yield 45 MPa, E 1425 MPa (23 C / 50 % RH)"
+  Source: "Mitsubishi Chemical Ertalon 6 SA (ISO 527, dry)"

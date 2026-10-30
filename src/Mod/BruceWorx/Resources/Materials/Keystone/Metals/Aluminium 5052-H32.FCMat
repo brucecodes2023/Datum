@@ -1,0 +1,47 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "6f3c6c6f-6af1-4f66-a59f-6190e2c25cb1"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Aluminium 5052-H32"
+  Description: "Al-Mg sheet for bending and laser cutting (UNS A95052, H32 strain-hardened and stabilised). Strengths are ASTM B209 minimums (typical: yield 193 MPa, UTS 228 MPa)."
+  ReferenceSource: "ASTM B209 minimum strengths; ASM/MatWeb typical elastic and thermal values"
+  SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=MA5052H32"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "2680 kg/m^3"
+    YoungsModulus: "70300 MPa"
+    PoissonRatio: "0.33"
+    ShearModulus: "25900 MPa"
+    YieldStrength: "159 MPa"
+    UltimateTensileStrength: "214 MPa"
+    UltimateStrain: "12"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "138 W/m/K"
+    SpecificHeat: "880 J/kg/K"
+    ThermalExpansionCoefficient: "23.8 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3120, 0.3160, 0.3240, 1.0)"
+    DiffuseColor: "(0.7800, 0.7900, 0.8100, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "minimum"
+  YieldBasis: "0.2 % offset; ASTM B209 sheet minimum (typical 193 MPa)"
+  Brittle: false
+  Elongation: "12 %"
+  TypicalYieldStrength: "193 MPa"
+  TypicalTensileStrength: "228 MPa"
+  Source: "ASTM B209 minimum strengths; ASM/MatWeb typical elastic and thermal values"

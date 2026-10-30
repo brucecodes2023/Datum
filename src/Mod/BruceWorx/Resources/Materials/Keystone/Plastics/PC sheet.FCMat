@@ -1,0 +1,44 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "4f180985-c664-4d3e-9252-153d3ecb4642"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "PC sheet"
+  Description: "Polycarbonate sheet (Lexan 9030, Makrolon GP): guards, covers, windows. Tough; cold-bendable."
+  ReferenceSource: "SABIC Lexan 9030 / Covestro Makrolon GP sheet typical"
+  SourceURL: "https://www.sabic.com/en/products/specialties/sheet"
+  Tags:
+    - "Keystone"
+    - "Plastics"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1200 kg/m^3"
+    YoungsModulus: "2350 MPa"
+    PoissonRatio: "0.38"
+    YieldStrength: "62 MPa"
+    UltimateTensileStrength: "65 MPa"
+    UltimateStrain: "110"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.2 W/m/K"
+    SpecificHeat: "1200 J/kg/K"
+    ThermalExpansionCoefficient: "68 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3440, 0.3560, 0.3680, 1.0)"
+    DiffuseColor: "(0.8600, 0.8900, 0.9200, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.6000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Plastics"
+  Basis: "typical"
+  YieldBasis: "tensile stress at yield, ASTM D638"
+  Brittle: false
+  Elongation: "110 %"
+  Source: "SABIC Lexan 9030 / Covestro Makrolon GP sheet typical"

@@ -1,0 +1,48 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "aa50ed2d-8318-46ba-bb9a-5b93dd0f8b34"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "PETG HF printed"
+  Description: "Printed high-flow PETG (Bambu PETG HF, printed at 200 mm/s): weaker than PETG Basic, especially in Z. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 23 MPa, modulus 1540 MPa, elongation 5.1 %. Thermal values are bulk-polymer estimates."
+  ReferenceSource: "Bambu Lab TDS (PETG HF)"
+  SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PETG_HF_Technical_Data_Sheet.pdf"
+  Tags:
+    - "Keystone"
+    - "Printed"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1280 kg/m^3"
+    YoungsModulus: "1810 MPa"
+    PoissonRatio: "0.38"
+    YieldStrength: "34 MPa"
+    UltimateTensileStrength: "34 MPa"
+    UltimateStrain: "8.6"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.2 W/m/K"
+    SpecificHeat: "1200 J/kg/K"
+    ThermalExpansionCoefficient: "60 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.1000, 0.2320, 0.2880, 1.0)"
+    DiffuseColor: "(0.2500, 0.5800, 0.7200, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Printed"
+  Basis: "typical"
+  YieldBasis: "printed X-Y tensile strength used as yield (no separate yield reported)"
+  Brittle: false
+  Elongation: "8.6 %"
+  PrintOrientation: "XY"
+  ZTensileStrength: "23 MPa"
+  ZYoungsModulus: "1540 MPa"
+  ZElongation: "5.1 %"
+  Source: "Bambu Lab TDS (PETG HF)"

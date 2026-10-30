@@ -1,0 +1,44 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "b4724f5a-ceea-46cc-8827-bdc5b94eb37e"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "POM-C acetal copolymer"
+  Description: "Acetal copolymer stock shapes (POM-C: TECAFORM AH, Acetron GP, Hostaform). Machined gears, bushings, jigs."
+  ReferenceSource: "Ensinger TECAFORM AH natural (ASTM D638) / Boedeker typical"
+  SourceURL: "https://www.ensingerplastics.com/en-us/shapes/acetal-tecaform-ah-natural"
+  Tags:
+    - "Keystone"
+    - "Plastics"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1410 kg/m^3"
+    YoungsModulus: "2280 MPa"
+    PoissonRatio: "0.35"
+    YieldStrength: "64 MPa"
+    UltimateTensileStrength: "64 MPa"
+    UltimateStrain: "40"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.31 W/m/K"
+    SpecificHeat: "1470 J/kg/K"
+    ThermalExpansionCoefficient: "110 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3800, 0.3760, 0.3600, 1.0)"
+    DiffuseColor: "(0.9500, 0.9400, 0.9000, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2500"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Plastics"
+  Basis: "typical"
+  YieldBasis: "tensile stress at yield (= tensile strength), ASTM D638"
+  Brittle: false
+  Elongation: "40 %"
+  Source: "Ensinger TECAFORM AH natural (ASTM D638) / Boedeker typical"

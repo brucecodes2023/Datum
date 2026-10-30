@@ -1,0 +1,45 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "35847d69-da21-4b21-a13e-cd747d89f27f"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Brass C360 half hard"
+  Description: "Free-cutting brass rod (UNS C36000, CuZn36Pb3), half hard: fittings, turned parts."
+  ReferenceSource: "CDA / ASM typical (C36000 free-cutting brass, H02)"
+  SourceURL: "https://alloys.copper.org/alloy/C36000"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "8500 kg/m^3"
+    YoungsModulus: "97000 MPa"
+    PoissonRatio: "0.31"
+    ShearModulus: "37000 MPa"
+    YieldStrength: "310 MPa"
+    UltimateTensileStrength: "385 MPa"
+    UltimateStrain: "25"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "115 W/m/K"
+    SpecificHeat: "380 J/kg/K"
+    ThermalExpansionCoefficient: "20.5 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3200, 0.2520, 0.1280, 1.0)"
+    DiffuseColor: "(0.8000, 0.6300, 0.3200, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.7000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "typical"
+  YieldBasis: "0.5 % extension under load; typical, H02 half-hard rod 25 mm"
+  Brittle: false
+  Elongation: "25 %"
+  Source: "CDA / ASM typical (C36000 free-cutting brass, H02)"

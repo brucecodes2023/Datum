@@ -1,0 +1,48 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "a060657a-e531-47f0-80c9-aadd713f072a"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "PLA printed"
+  Description: "Printed PLA (Bambu PLA Basic; Prusament PLA reports about 57 MPa X-Y). Creeps and softens above 55 C. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 35 MPa, modulus 2160 MPa, elongation 7.5 %. Thermal values are bulk-polymer estimates."
+  ReferenceSource: "Bambu Lab TDS (PLA Basic, V2.0)"
+  SourceURL: "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf"
+  Tags:
+    - "Keystone"
+    - "Printed"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1240 kg/m^3"
+    YoungsModulus: "2680 MPa"
+    PoissonRatio: "0.36"
+    YieldStrength: "39 MPa"
+    UltimateTensileStrength: "39 MPa"
+    UltimateStrain: "12.2"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.13 W/m/K"
+    SpecificHeat: "1800 J/kg/K"
+    ThermalExpansionCoefficient: "68 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.1200, 0.2200, 0.3400, 1.0)"
+    DiffuseColor: "(0.3000, 0.5500, 0.8500, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Printed"
+  Basis: "typical"
+  YieldBasis: "printed X-Y tensile strength used as yield (no separate yield reported)"
+  Brittle: false
+  Elongation: "12.2 %"
+  PrintOrientation: "XY"
+  ZTensileStrength: "35 MPa"
+  ZYoungsModulus: "2160 MPa"
+  ZElongation: "7.5 %"
+  Source: "Bambu Lab TDS (PLA Basic, V2.0)"

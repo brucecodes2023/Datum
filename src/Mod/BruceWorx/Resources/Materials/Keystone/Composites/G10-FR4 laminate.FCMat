@@ -1,0 +1,44 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "5b903760-2960-4bec-b622-20683a6b91e4"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "G10-FR4 laminate"
+  Description: "Glass-epoxy laminate sheet (G10 / FR-4) for plates, spacers and insulators; in-plane, lengthwise values. Crosswise strength is about 15 % lower."
+  ReferenceSource: "NEMA LI 1 G-10/FR-4 typical (lengthwise), e.g. Professional Plastics / Curbell data sheets"
+  SourceURL: "https://www.professionalplastics.com/G10FR4GLASSEPOXYSHEET"
+  Tags:
+    - "Keystone"
+    - "Composites"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1850 kg/m^3"
+    YoungsModulus: "18600 MPa"
+    PoissonRatio: "0.13"
+    YieldStrength: "275 MPa"
+    UltimateTensileStrength: "275 MPa"
+    UltimateStrain: "2"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.29 W/m/K"
+    SpecificHeat: "1100 J/kg/K"
+    ThermalExpansionCoefficient: "10 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2640, 0.2800, 0.1840, 1.0)"
+    DiffuseColor: "(0.6600, 0.7000, 0.4600, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.3000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Composites"
+  Basis: "typical"
+  YieldBasis: "brittle, no yield: the lengthwise tensile strength is used"
+  Brittle: true
+  Elongation: "2 %"
+  Source: "NEMA LI 1 G-10/FR-4 typical (lengthwise), e.g. Professional Plastics / Curbell data sheets"

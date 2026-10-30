@@ -1,0 +1,44 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "a219f075-45f7-4963-8f78-123d102e03b3"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Carbon fibre plate QI"
+  Description: "APPROXIMATE. Carbon/epoxy plate (drone frames) treated as in-plane isotropic. Woven 0/90 plate is anisotropic: along the fibres about E 60-70 GPa, 600 MPa; at 45 degrees about E 18 GPa, 150-200 MPa. Through-thickness and interlaminar strength are far lower. Use a large safety factor."
+  ReferenceSource: "Approximate quasi-isotropic T300-class carbon/epoxy laminate (handbook values, e.g. Performance Composites, Toray T300 data)"
+  SourceURL: "https://www.performance-composites.com/carbonfibre/mechanicalproperties_2.asp"
+  Tags:
+    - "Keystone"
+    - "Composites"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1550 kg/m^3"
+    YoungsModulus: "45000 MPa"
+    PoissonRatio: "0.3"
+    YieldStrength: "450 MPa"
+    UltimateTensileStrength: "450 MPa"
+    UltimateStrain: "1"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "5 W/m/K"
+    SpecificHeat: "900 J/kg/K"
+    ThermalExpansionCoefficient: "2 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.0320, 0.0320, 0.0360, 1.0)"
+    DiffuseColor: "(0.0800, 0.0800, 0.0900, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.5500"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Composites"
+  Basis: "approximate"
+  YieldBasis: "brittle, no yield: the in-plane tensile strength is used"
+  Brittle: true
+  Elongation: "1 %"
+  Source: "Approximate quasi-isotropic T300-class carbon/epoxy laminate (handbook values, e.g. Performance Composites, Toray T300 data)"

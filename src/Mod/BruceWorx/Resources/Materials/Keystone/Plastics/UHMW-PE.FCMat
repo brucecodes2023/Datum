@@ -1,0 +1,44 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "5dab282d-d097-4a54-9c98-f86ccf188c62"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "UHMW-PE"
+  Description: "Ultra-high molecular weight polyethylene (TIVAR 1000): wear strips, guides, low friction. Creeps under load."
+  ReferenceSource: "Mitsubishi Chemical TIVAR 1000 (ISO 527); tensile strength at break from ASTM D638 sheet"
+  SourceURL: "https://www.polymershapes.com/wp-content/uploads/2020/09/Material_Data_TIVAR_1000_UHMW-PE.pdf"
+  Tags:
+    - "Keystone"
+    - "Plastics"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "930 kg/m^3"
+    YoungsModulus: "750 MPa"
+    PoissonRatio: "0.46"
+    YieldStrength: "19 MPa"
+    UltimateTensileStrength: "40 MPa"
+    UltimateStrain: "350"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.4 W/m/K"
+    SpecificHeat: "1840 J/kg/K"
+    ThermalExpansionCoefficient: "200 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3880, 0.3880, 0.3880, 1.0)"
+    DiffuseColor: "(0.9700, 0.9700, 0.9700, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2500"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Plastics"
+  Basis: "typical"
+  YieldBasis: "tensile stress at yield, ISO 527 (UHMW-PE has no sharp yield point)"
+  Brittle: false
+  Elongation: "350 %"
+  Source: "Mitsubishi Chemical TIVAR 1000 (ISO 527); tensile strength at break from ASTM D638 sheet"

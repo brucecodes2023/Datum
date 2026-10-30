@@ -1,0 +1,45 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "09615489-e7e5-4f73-9abf-02000284d99b"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Steel 1045 cold drawn"
+  Description: "Medium-carbon shaft and bar steel (UNS G10450, EN C45), cold drawn. Hot rolled or normalised: yield about 310 MPa, UTS 565 MPa."
+  ReferenceSource: "SAE J1397 estimated minimum (cold drawn, 19-32 mm); ASM/MatWeb elastic and thermal values"
+  SourceURL: "https://www.matweb.com/search/datasheettext.aspx?matid=6948"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "7870 kg/m^3"
+    YoungsModulus: "205000 MPa"
+    PoissonRatio: "0.29"
+    ShearModulus: "80000 MPa"
+    YieldStrength: "530 MPa"
+    UltimateTensileStrength: "625 MPa"
+    UltimateStrain: "12"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "49.8 W/m/K"
+    SpecificHeat: "486 J/kg/K"
+    ThermalExpansionCoefficient: "11.2 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2080, 0.2120, 0.2200, 1.0)"
+    DiffuseColor: "(0.5200, 0.5300, 0.5500, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "minimum"
+  YieldBasis: "0.2 % offset; SAE J1397 estimated minimum, cold drawn bar"
+  Brittle: false
+  Elongation: "12 %"
+  Source: "SAE J1397 estimated minimum (cold drawn, 19-32 mm); ASM/MatWeb elastic and thermal values"

@@ -1,0 +1,47 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "97bc836b-78b5-4975-b617-bcc56dd23d7c"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Aluminium 7075-T6"
+  Description: "High-strength Al-Zn aluminium for stressed CNC parts (UNS A97075, T6/T651). Strengths are sheet minimums (typical: yield 503 MPa, UTS 572 MPa, elongation 11 %)."
+  ReferenceSource: "ASTM B209 / MMPDS sheet minimums; ASM/MatWeb typical elastic and thermal values"
+  SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=MA7075T6"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "2810 kg/m^3"
+    YoungsModulus: "71700 MPa"
+    PoissonRatio: "0.33"
+    ShearModulus: "26900 MPa"
+    YieldStrength: "476 MPa"
+    UltimateTensileStrength: "538 MPa"
+    UltimateStrain: "7"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "130 W/m/K"
+    SpecificHeat: "960 J/kg/K"
+    ThermalExpansionCoefficient: "23.4 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2880, 0.2920, 0.3000, 1.0)"
+    DiffuseColor: "(0.7200, 0.7300, 0.7500, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "minimum"
+  YieldBasis: "0.2 % offset; ASTM B209 sheet minimum 69 ksi (typical 503 MPa)"
+  Brittle: false
+  Elongation: "7 %"
+  TypicalYieldStrength: "503 MPa"
+  TypicalTensileStrength: "572 MPa"
+  Source: "ASTM B209 / MMPDS sheet minimums; ASM/MatWeb typical elastic and thermal values"

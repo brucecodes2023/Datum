@@ -1,0 +1,45 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "f4544451-88ee-4470-9735-814a0d89f589"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Steel mild CR sheet"
+  Description: "Cold-rolled low-carbon sheet for bending and laser cutting (ASTM A1008 CS, EN DC01/CR4). Commercial steel has no specified yield: the lower end of the typical range is 140 MPa."
+  ReferenceSource: "ASTM A1008 CS Type B typical ranges (EN DC01 equivalent); ASM/MatWeb elastic and thermal values"
+  SourceURL: "https://steelwarehouse.com/a1008/"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "7870 kg/m^3"
+    YoungsModulus: "200000 MPa"
+    PoissonRatio: "0.29"
+    ShearModulus: "78000 MPa"
+    YieldStrength: "205 MPa"
+    UltimateTensileStrength: "330 MPa"
+    UltimateStrain: "35"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "51.9 W/m/K"
+    SpecificHeat: "481 J/kg/K"
+    ThermalExpansionCoefficient: "12.2 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.2000, 0.2000, 0.2080, 1.0)"
+    DiffuseColor: "(0.5000, 0.5000, 0.5200, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "typical"
+  YieldBasis: "0.2 % offset; typical for ASTM A1008 CS Type B (non-mandatory range 140-275 MPa)"
+  Brittle: false
+  Elongation: "35 %"
+  Source: "ASTM A1008 CS Type B typical ranges (EN DC01 equivalent); ASM/MatWeb elastic and thermal values"

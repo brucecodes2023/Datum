@@ -1,0 +1,48 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "59c6600a-84f6-411c-9803-d0f317c75d9f"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "TPU 95A printed"
+  Description: "Printed TPU 95A (Bambu TPU 95A HF): an elastomer; a linear-elastic study is only a rough guide at small strain. Elongation at break over 650 %. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 22.3 MPa, modulus 7.4 MPa, elongation 480 %. Thermal values are bulk-polymer estimates."
+  ReferenceSource: "Bambu Lab TDS (TPU 95A HF)"
+  SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_TPU_95A_HF_Technical_Data_Sheet.pdf"
+  Tags:
+    - "Keystone"
+    - "Printed"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1220 kg/m^3"
+    YoungsModulus: "9.8 MPa"
+    PoissonRatio: "0.48"
+    YieldStrength: "27.3 MPa"
+    UltimateTensileStrength: "27.3 MPa"
+    UltimateStrain: "650"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.2 W/m/K"
+    SpecificHeat: "1800 J/kg/K"
+    ThermalExpansionCoefficient: "150 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.3400, 0.1000, 0.0800, 1.0)"
+    DiffuseColor: "(0.8500, 0.2500, 0.2000, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.2000"
+    SpecularColor: "(0.2500, 0.2500, 0.2500, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Printed"
+  Basis: "typical"
+  YieldBasis: "printed X-Y tensile strength used as yield (no separate yield reported)"
+  Brittle: false
+  Elongation: "650 %"
+  PrintOrientation: "XY"
+  ZTensileStrength: "22.3 MPa"
+  ZYoungsModulus: "7.4 MPa"
+  ZElongation: "480 %"
+  Source: "Bambu Lab TDS (TPU 95A HF)"

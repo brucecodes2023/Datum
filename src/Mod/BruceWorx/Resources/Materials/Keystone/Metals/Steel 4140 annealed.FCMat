@@ -1,0 +1,45 @@
+# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
+General:
+  UUID: "42d667a8-a2e8-446a-a230-1c058f07d174"
+  Author: "BruceWorx (Keystone)"
+  License: "LGPL-2.1-or-later"
+  Name: "Steel 4140 annealed"
+  Description: "Cr-Mo alloy steel (UNS G41400, EN 42CrMo4) in the annealed, machinable state."
+  ReferenceSource: "ASM/MatWeb typical (AISI 4140 annealed)"
+  SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=m4140r"
+  Tags:
+    - "Keystone"
+    - "Metals"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "7850 kg/m^3"
+    YoungsModulus: "205000 MPa"
+    PoissonRatio: "0.29"
+    ShearModulus: "80000 MPa"
+    YieldStrength: "415 MPa"
+    UltimateTensileStrength: "655 MPa"
+    UltimateStrain: "25"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "42.6 W/m/K"
+    SpecificHeat: "473 J/kg/K"
+    ThermalExpansionCoefficient: "12.2 µm/m/K"
+AppearanceModels:
+  BasicRendering:
+    UUID: 'f006c7e4-35b7-43d5-bbf9-c5d572309e6e'
+    AmbientColor: "(0.1880, 0.1920, 0.2000, 1.0)"
+    DiffuseColor: "(0.4700, 0.4800, 0.5000, 1.0)"
+    EmissiveColor: "(0.0000, 0.0000, 0.0000, 1.0)"
+    Shininess: "0.6000"
+    SpecularColor: "(0.6000, 0.6000, 0.6000, 1.0)"
+    Transparency: "0.0000"
+# Read by BruceWorx (bruceworx_materials, later the vault library PDM-11); FreeCAD ignores this block.
+BruceWorx:
+  Family: "Metals"
+  Basis: "typical"
+  YieldBasis: "0.2 % offset; typical, annealed at 815 C"
+  Brittle: false
+  Elongation: "25 %"
+  Source: "ASM/MatWeb typical (AISI 4140 annealed)"
