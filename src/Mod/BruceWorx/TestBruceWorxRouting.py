@@ -225,6 +225,7 @@ class RoutingGuiTests(unittest.TestCase):
         self.assertAlmostEqual(wire.MinBendRadius.Value, 10.0 * od)
         self.assertAlmostEqual(panel.minimum.value(), round(10.0 * od, 2), places=2)
         self.assertIn("Coax, 10 × OD", panel.status.text())
+        self.assertEqual(panel.factor.value(), 10.0)  # the preset's multiple, not BendFactor
         panel.factor.setValue(5.0)
         self._pump()
         self.assertEqual(panel.rule.currentText(), "Multiple of OD")

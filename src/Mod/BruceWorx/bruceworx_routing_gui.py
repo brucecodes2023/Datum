@@ -499,7 +499,8 @@ class ItemPanel:
         building, self._building = self._building, True
         try:
             self.rule.setCurrentText(self.obj.BendRule)
-            self.factor.setValue(float(self.obj.BendFactor))
+            rule, _label = self.obj.Proxy.rule(self.obj)  # a preset shows its own multiple
+            self.factor.setValue(float(rule.value if rule.mode == "OD" else self.obj.BendFactor))
             self.minimum.setValue(float(self.obj.MinBendRadius.Value))
         finally:
             self._building = building
