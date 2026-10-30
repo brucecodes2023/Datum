@@ -35,6 +35,7 @@ SET(BruceWorx_SRCS
     bruceworx_slots.py
     bruceworx_routing.py
     bruceworx_routing_gui.py
+    bruceworx_routing_ports.py
     TestBruceWorxRoutingCore.py
     TestBruceWorxRouting.py
     TestBruceWorxConnectorLibrary.py
