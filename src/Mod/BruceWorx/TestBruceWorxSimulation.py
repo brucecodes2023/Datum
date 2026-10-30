@@ -76,6 +76,15 @@ class TestSimulationGui(unittest.TestCase):
         steel = [c for c in sim.material_cards() if c["name"] == "CalculiX-Steel"][0]
         self.assertTrue(panel.select_material(steel["uuid"]))
         self.assertIn("E 2.1e+05 MPa", panel.material_warn.text())
+        # S1: the Keystone library heads the picker when it is installed, the stock FEM cards after it
+        headings = [panel.material_combo.itemText(i) for i in range(panel.material_combo.count())
+                    if panel.material_combo.itemText(i).startswith("— ")]
+        self.assertIn("— FreeCAD (FEM) —", headings)
+        if any(c["library"] == sim.KEYSTONE_LIBRARY for c in sim.material_cards()):
+            self.assertEqual(headings[0], "— Keystone —")
+        # S3: the stress measure, von Mises by default
+        self.assertEqual(panel.measure_combo.currentData(), "vonMises")
+        panel.measure_combo.setCurrentIndex(panel.measure_combo.findData("MaxPrincipal"))
         panel.name_edit.setText("Beam")
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         panel.modifyStandardButtons(buttons)
@@ -88,6 +97,8 @@ class TestSimulationGui(unittest.TestCase):
         self.assertIsNotNone(m["solver"])
         self.assertIsNotNone(m["mesh"])
         self.assertEqual(m["materials"][0].Material["YoungsModulus"], "210000 MPa")
+        self.assertEqual(analysis.StressMeasure, "MaxPrincipal")
+        self.assertEqual(list(analysis.SFThresholds), [1.0, 2.0])
         import FemGui
 
         self.assertIs(FemGui.getActiveAnalysis(), analysis)
@@ -157,10 +168,46 @@ class TestSimulationGui(unittest.TestCase):
         self.assertIn("Solved in", panel.progress.text())
         self.assertEqual(self.sg.shown_field(analysis), "safety")
         # the banded colours: NodeColor has no getter (ViewProviderFemMeshPy), NodeColorArray is the per-vertex list
-        colors = {tuple(round(c, 2) for c in col[:3]) for col in result.Mesh.ViewObject.NodeColorArray}
-        self.assertIn(tuple(round(c, 2) for c in self.sg.SF_BANDS[0][1]), colors)  # red: below 1 at the root
+        def shown_colors():
+            return {tuple(round(c, 2) for c in col[:3]) for col in result.Mesh.ViewObject.NodeColorArray}
+
+        def rounded(hex_color):
+            return tuple(round(c, 2) for c in sim.rgb(hex_color))
+
+        colors = shown_colors()
+        self.assertIn(rounded(sim.DEFAULT_SF_COLORS[0]), colors)  # red: below 1 at the root
         self.assertGreater(len(colors), 1)
         self.assertIn("below 1", panel.legend.text())
+        self.assertIn("von Mises stress per node", panel.legend.text())
+        # S3: the stress measure, from the panel; the safety factor is recomputed without a solve
+        vm_sf = result.MinSafetyFactor
+        panel.measure_combo.setCurrentIndex(panel.measure_combo.findData("Tresca"))
+        self.assertEqual(analysis.StressMeasure, "Tresca")
+        self.assertEqual(result.StressMeasure, "Tresca")
+        self.assertLessEqual(result.MinSafetyFactor, vm_sf)
+        self.assertIn("Tresca stress per node", panel.legend.text())
+        # S2: the band editor: four bands, a blue top band, applied to the study and the colours on the mesh
+        panel.show_bands(True)
+        self.assertTrue(panel.bands_button.isChecked())
+        self.assertEqual(panel.bands_table.rowCount(), 3)
+        panel.add_band()
+        self.assertEqual(panel.bands_from_editor()[0], [1.0, 2.0, 4.0])
+        panel.set_band_color(3, "#1f5fbf")
+        self.assertTrue(panel.apply_bands())
+        self.assertEqual(sim.study_bands(analysis), ([1.0, 2.0, 4.0], ["#D91C1C", "#F2A007", "#3FA34D", "#1F5FBF"]))
+        self.assertIn(rounded("#1F5FBF"), shown_colors())  # the unstressed free end
+        self.assertIn("above 4", panel.legend.text())
+        panel.bands_table.cellWidget(0, 0).setValue(5.0)  # not ascending: refused with the reason
+        self.assertFalse(panel.apply_bands())
+        self.assertIn("rise", panel.bands_note.text())
+        panel.remove_band()
+        self.assertEqual(len(panel.bands_from_editor()[1]), 3)
+        prefs = App.ParamGet(sim.SIM_PREFS)
+        self.addCleanup(sim.reset_default_bands)
+        panel.load_bands([1.5, 3.0], ["#ff0000", "#ffcc00", "#00aa00"])
+        self.assertTrue(panel.save_bands_default())
+        self.assertEqual(prefs.GetString("SFThresholds"), "1.5;3")
+        self.assertEqual(sim.default_bands()[0], [1.5, 3.0])
         self.assertTrue(panel.show("stress"))
         self.assertEqual(self.sg.shown_field(analysis), "stress")
         self.assertTrue(panel.show("displacement"))
@@ -174,15 +221,27 @@ class TestSimulationGui(unittest.TestCase):
         self.assertGreater(observer.last["displacement"], 0.9 * sim.result_extrema(result)["max_disp"])
         panel.probe_button.setChecked(False)
         self.assertFalse(self.sg.probing())
-        # the report with three renders, beside the document (an unsaved one: the temp folder)
-        files = self.sg.report_study(analysis, folder=tmp)
-        self.assertTrue(os.path.isfile(files["html"]))
-        with open(files["html"], encoding="utf-8") as handle:
+        # S4: the LaTeX report with three renders, compiled in the background when a compiler is there
+        files = panel.report(folder=tmp)
+        self.assertTrue(os.path.isfile(files["tex"]))
+        for kind in ("stress", "displacement", "safety"):
+            self.assertTrue(os.path.isfile(os.path.join(files["dir"], f"fig_{kind}.png")), kind)
+        with open(files["tex"], encoding="utf-8") as handle:
             text = handle.read()
-        self.assertEqual(text.count("data:image/png;base64"), 3)
+        self.assertEqual(text.count(r"\includegraphics"), 3)
         self.assertIn("Min safety factor", text)
-        if files["pdf"]:
-            self.assertGreater(os.path.getsize(files["pdf"]), 1000)
+        self.assertIn(r"\textbf{Tresca} equivalent stress", text)
+        self.assertIn("above 4", text)
+        if sim.find_tex()[0]:
+            self.assertTrue(self.sg.wait_for_report(600))
+            pump()
+            self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
+            self.assertEqual(files["pdf"], os.path.join(tmp, os.path.basename(files["dir"]) + ".pdf"))
+            self.assertEqual(files["pdf"], files["target"])
+            self.assertGreater(os.path.getsize(files["pdf"]), 20000)  # with the three renders
+            self.assertIn("Report:", panel.probe_label.text())
+        else:
+            self.assertIn("No LaTeX compiler", files["message"])
         panel.release()
 
     def test_ribbon_commands_in_the_fem_workbench(self):
@@ -194,6 +253,9 @@ class TestSimulationGui(unittest.TestCase):
         self.assertIn("FemWorkbench", custom)
         names = [name for _gid, name, _cmds in custom["FemWorkbench"]]
         self.assertEqual(names, ["Simulation · Study", "Simulation · Setup", "Simulation · Mesh", "Simulation · Solve", "Simulation · Results"])
+        results = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Simulation · Results"][0]
+        for name in ("BruceWorx_ShowSafetyFactor", "BruceWorx_SafetyFactorBands", "BruceWorx_StudyReport"):
+            self.assertIn(name, results)
         self.assertIn("BruceWorx_SolveStudy", Gui.listCommands())
 
 

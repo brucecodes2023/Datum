@@ -20,12 +20,16 @@ around them, in the ribbon's five groups (workspaces.json, Simulation):
   max displacement, min safety factor), the field buttons, the probe and the
   report.
 * Results: **Stress**, **Displacement** and **Safety Factor** colour the result
-  mesh. The safety factor is drawn in bands, red below 1 (the band edge is the
-  SF = 1 contour), orange to 1.5, yellow to 2, green to 4, blue above, with the
-  legend in the panel. **Probe** reads the nearest node's von Mises,
-  displacement and safety factor at a clicked point. **Report** writes an HTML
-  file (and a PDF through QTextDocument) with three off-screen renders beside
-  the document.
+  mesh. The safety factor is drawn in the study's bands (30 Oct, S2: by default
+  red below 1, amber to 2, green above; thresholds, colours and the number of
+  bands are set in the panel's band editor or with **SF Bands**, and saved as
+  the default in Mod/BruceWorx/Sim), with the legend in the panel. The panel
+  also picks the stress measure the safety factor divides (S3: von Mises,
+  maximum principal or Tresca); a change recomputes it without a new solve.
+  **Probe** reads the nearest node's von Mises, displacement and safety factor
+  at a clicked point. **Report** writes report.tex with three off-screen
+  renders in a folder beside the document and compiles it to a PDF with
+  Tectonic (bundled), latexmk or pdflatex, in a QProcess (S4).
 
 Every signal connection of these plain-Python panels goes through
 bruceworx_slots.slot (PySide 6.8.3; see that module).
@@ -33,7 +37,6 @@ bruceworx_slots.slot (PySide 6.8.3; see that module).
 
 from __future__ import annotations
 
-import math
 import os
 import tempfile
 import time
@@ -48,14 +51,6 @@ CONSTRAINT_COMMANDS = (
     ("Force", "FEM_ConstraintForce"),
     ("Pressure", "FEM_ConstraintPressure"),
     ("Displacement", "FEM_ConstraintDisplacement"),
-)
-# Safety-factor bands: (upper bound, colour, legend text). The first edge is the SF = 1 contour.
-SF_BANDS = (
-    (1.0, (0.85, 0.11, 0.11), "below 1: the part yields"),
-    (1.5, (1.0, 0.55, 0.0), "1 to 1.5"),
-    (2.0, (1.0, 0.85, 0.0), "1.5 to 2"),
-    (4.0, (0.45, 0.78, 0.30), "2 to 4"),
-    (math.inf, (0.22, 0.55, 0.85), "above 4"),
 )
 RENDER_SIZE = (900, 600)
 
@@ -146,33 +141,48 @@ def current_study(doc=None):
 # ----- the fields -------------------------------------------------------------------------------------
 
 
-def band_color(value):
-    for upper, color, _text in SF_BANDS:
-        if value < upper:
-            return color
-    return SF_BANDS[-1][1]
-
-
-def band_colors(nodes, factors):
-    """{(node, ...): colour} per band, the form ViewProviderFemMesh.NodeColor takes (one entry per band)."""
+def band_colors(nodes, factors, bands):
+    """{(node, ...): (r, g, b)} per band, the form ViewProviderFemMesh.NodeColor takes (one entry per band)."""
+    thresholds, colors = bands
     groups = {}
     for node, sf in zip(nodes, factors):
-        groups.setdefault(band_color(sf), []).append(node)
-    return {tuple(ids): color for color, ids in groups.items()}
+        groups.setdefault(sim.band_index(sf, thresholds), []).append(node)
+    return {tuple(ids): sim.rgb(colors[i]) for i, ids in groups.items()}
 
 
-def legend_html(kind, result=None):
+def _brittle(uuid):
+    """True for a Keystone card marked brittle (acrylic, CFRP, G10: the materials agent's BruceWorx block)."""
+    try:
+        import bruceworx_materials
+
+        info = bruceworx_materials.card(uuid)
+        return bool(info and info.get("brittle"))
+    except Exception:
+        return False
+
+
+def _text_on(color):
+    """Black or white text, whichever reads on a band colour."""
+    r, g, b = sim.rgb(color)
+    return "#000" if 0.299 * r + 0.587 * g + 0.114 * b > 0.6 else "#fff"
+
+
+def legend_html(kind, result=None, analysis=None):
     """The panel's legend for a shown field."""
     if kind == "safety":
+        analysis = analysis or (sim.study_of(result) if result is not None else None)
+        thresholds, colors = sim.study_bands(analysis)
         chips = "".join(
-            f"<span style='background:rgb({int(c[0] * 255)},{int(c[1] * 255)},{int(c[2] * 255)});"
-            f"color:#fff;padding:1px 6px;border-radius:3px;margin-right:4px'>{text}</span>"
-            for _u, c, text in SF_BANDS)
+            f"<span style='background:{color};color:{_text_on(color)};padding:1px 6px;margin-right:4px'>"
+            f"&nbsp;{label}&nbsp;</span>"
+            for color, label in zip(colors, sim.band_labels(thresholds)))
+        measure = getattr(result, "StressMeasure", "") if result is not None else ""
+        measure = measure or sim.study_measure(analysis)
         basis = ""
         if result is not None and getattr(result, "AllowableStress", 0):
             basis = (f"<br><span style='color:#777'>allowable {result.AllowableStress:.4g} MPa "
                      f"({result.AllowableBasis})</span>")
-        return f"<b>Safety factor</b> = allowable / von Mises per node<br>{chips}{basis}"
+        return f"<b>Safety factor</b> = allowable / {sim.measure_label(measure)} stress per node<br>{chips}{basis}"
     if kind == "stress":
         return "<b>von Mises stress</b>, MPa: blue low to red high"
     if kind == "displacement":
@@ -225,6 +235,8 @@ def show_field(analysis, kind, result=None):
     has_vectors = len(vectors) == len(nodes) and bool(nodes)
     if has_vectors:
         vobj.setNodeDisplacementByVectors(nodes, vectors)  # applyDisplacement needs the vectors set first
+    if kind in ("stress", "displacement"):
+        _color_mode(vobj, "Overall")  # setNodeColorByScalars paints the material itself
     if kind == "stress":
         vobj.setNodeColorByScalars(nodes, list(result.vonMises))
         if has_vectors:
@@ -240,7 +252,9 @@ def show_field(analysis, kind, result=None):
         if not factors:
             _warn("No safety factor: the material has no yield or ultimate strength")
             return False
-        vobj.NodeColor = band_colors(nodes, factors)
+        # NodeColor fills NodeColorArray, which the view provider paints only in the ByNode colour mode
+        vobj.NodeColor = band_colors(nodes, factors, sim.study_bands(analysis))
+        _color_mode(vobj, "ByNode")
         if has_vectors:
             vobj.applyDisplacement(0.0)
     else:
@@ -251,6 +265,14 @@ def show_field(analysis, kind, result=None):
     except Exception:
         pass
     return True
+
+
+def _color_mode(vobj, mode):
+    try:
+        if vobj.ColorMode != mode:
+            vobj.ColorMode = mode
+    except Exception:
+        pass
 
 
 def shown_field(analysis):
@@ -379,34 +401,93 @@ def render_fields(analysis, folder, size=RENDER_SIZE):
     return images
 
 
-def report_pdf(html_path, pdf_path=None):
-    """The HTML report as a PDF through QTextDocument; returns the path or None."""
-    try:
-        from PySide import QtGui
-        from PySide.QtPrintSupport import QPrinter
-    except Exception:
-        return None
-    pdf_path = pdf_path or os.path.splitext(html_path)[0] + ".pdf"
-    with open(html_path, encoding="utf-8") as handle:
-        text = handle.read()
-    document = QtGui.QTextDocument()
-    document.setHtml(text)
-    printer = QPrinter(QPrinter.HighResolution)
-    printer.setOutputFormat(QPrinter.PdfFormat)
-    printer.setOutputFileName(pdf_path)
-    document.print_(printer)
-    return pdf_path if os.path.isfile(pdf_path) else None
+def report_study(analysis, folder=None, done=None):
+    """Writes the LaTeX report with three renders and compiles it to a PDF.
 
-
-def report_study(analysis, folder=None):
-    """Writes the HTML (and PDF) report with three renders; returns {"html": path, "pdf": path or None}."""
-    html_path = sim.report_path(analysis) if folder is None else os.path.join(folder, os.path.basename(sim.report_path(analysis)))
+    Blocking when ``done`` is None: returns write_report's {"dir", "tex", "pdf", "message"}. With a
+    callback the compiler runs in a QProcess (Tectonic's first run fetches its TeX files, ~30 s) and
+    ``done(files)`` is called when it finishes; the return value then has "pdf": None, "running": True.
+    """
     with tempfile.TemporaryDirectory(prefix="bw-sim-render-") as tmp:
         images = render_fields(analysis, tmp)
-        sim.report_html(analysis, images, html_path)
-    pdf = report_pdf(html_path)
-    status(f"Report written: {html_path}" + (f" and {os.path.basename(pdf)}" if pdf else ""), 12000)
-    return {"html": html_path, "pdf": pdf}
+        files = sim.write_report(analysis, images, folder, compile=False)
+    kind, path = sim.find_tex()
+    if kind is None:
+        files["message"] = (f"No LaTeX compiler (Tectonic, latexmk, pdflatex) found: the report's source is in "
+                            f"{files['dir']}")
+        _warn(files["message"])
+        if done:
+            done(files)
+        return files
+    if done is None:
+        files["pdf"], files["message"] = sim.compile_report(files)
+        status(files["message"], 12000)
+        return files
+    return _compile_async(files, kind, path, done)
+
+
+def _compile_async(files, kind, path, done):
+    from PySide import QtCore
+
+    old = _state.get("report_process")
+    if old is not None and _alive(old) and old.state() != QtCore.QProcess.NotRunning:
+        files["message"] = "A report is still being compiled"
+        _warn(files["message"])
+        done(files)
+        return files
+    if os.path.isfile(files["built"]):
+        os.remove(files["built"])
+    process = QtCore.QProcess()
+    env = QtCore.QProcessEnvironment()
+    for key, value in sim.tex_environment(path).items():
+        env.insert(key, value)
+    process.setProcessEnvironment(env)
+    process.setWorkingDirectory(files["dir"])
+    process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+    _state["report_process"] = process
+    argv = sim.tex_command(kind, path)
+
+    def finished(code=0, _exit_status=None):
+        output = bytes(process.readAll()).decode("utf-8", "replace") if _alive(process) else ""
+        files["pdf"] = sim.finish_report(files) if code == 0 else None
+        files["running"] = False
+        if files["pdf"]:
+            files["message"] = f"Report compiled with {kind}: {files['pdf']}"
+            status(files["message"], 12000)
+        else:
+            files["message"] = f"{kind} could not compile {files['tex']} (exit {code}): {output[-400:]}"
+            _warn(files["message"])
+        done(files)
+
+    def failed(error):
+        if process.state() == QtCore.QProcess.NotRunning and not files.get("pdf"):
+            files["running"] = False
+            files["message"] = f"{kind} did not start ({error})"
+            _warn(files["message"])
+            done(files)
+
+    process.finished.connect(slot(finished))
+    process.errorOccurred.connect(slot(failed))
+    files["running"] = True
+    status(f"Compiling the report with {kind}…" + (" (the first run fetches its TeX files)" if kind == "tectonic" else ""))
+    process.start(argv[0], argv[1:])
+    return files
+
+
+def wait_for_report(timeout=600.0):
+    """Pumps the GUI until the report compile started by report_study(done=...) ends (tests)."""
+    import FreeCADGui as Gui
+    from PySide import QtCore
+
+    process = _state.get("report_process")
+    end = time.time() + timeout
+    while process is not None and _alive(process) and process.state() != QtCore.QProcess.NotRunning:
+        if time.time() > end:
+            return False
+        process.waitForFinished(100)
+        Gui.updateGui()
+    Gui.updateGui()
+    return True
 
 
 # ----- the panels -----------------------------------------------------------------------------------------
@@ -444,6 +525,15 @@ def _make_classes():
         lab.setWordWrap(True)
         lab.setTextFormat(QtCore.Qt.RichText)
         return lab
+
+    def measure_combo(current):
+        combo = QtWidgets.QComboBox()
+        for key, label, _formula in sim.STRESS_MEASURES:
+            combo.addItem(label, key)
+        combo.setCurrentIndex(max(0, combo.findData(current)))
+        combo.setToolTip("The equivalent stress the safety factor divides: von Mises (ductile metals), maximum "
+                         "principal max(|s1|, |s3|) (Rankine, brittle), Tresca s1 - s3 (conservative)")
+        return combo
 
     def button(text, handler, tip=""):
         b = QtWidgets.QPushButton(text)
@@ -546,7 +636,8 @@ def _make_classes():
             for card in self.cards:
                 if card["library"] != library:
                     library = card["library"]
-                    self.material_combo.addItem(f"— {library} —", "")
+                    heading = {sim.STOCK_LIBRARY: "FreeCAD (FEM)"}.get(library, library)
+                    self.material_combo.addItem(f"— {heading} —", "")
                     item = self.material_combo.model().item(self.material_combo.count() - 1)
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
                 strength = f", yield {card['yield']:.4g} MPa" if card["yield"] else (
@@ -554,6 +645,8 @@ def _make_classes():
                 self.material_combo.addItem(f"{card['name']}  (E {card['E']:.4g} MPa{strength})", card["uuid"])
             self.material_combo.currentIndexChanged.connect(slot(self._material_changed))
             lay.addRow("Card", self.material_combo)
+            self.measure_combo = measure_combo(sim.default_measure())
+            lay.addRow("Safety factor from", self.measure_combo)
             w.layout().addLayout(lay)
             self.material_warn = hint()
             w.layout().addWidget(self.material_warn)
@@ -620,7 +713,11 @@ def _make_classes():
             if card is None:
                 return
             if card["yield"]:
-                self.material_warn.setText(f"E {card['E']:.4g} MPa, ν {card['nu']:.3g}, yield {card['yield']:.4g} MPa.")
+                note = ""
+                if _brittle(uuid):
+                    note = (" <span style='color:#8a6d00'>A brittle card (no yield; the strength is the tensile "
+                            "strength): Maximum principal suits it.</span>")
+                self.material_warn.setText(f"E {card['E']:.4g} MPa, ν {card['nu']:.3g}, yield {card['yield']:.4g} MPa.{note}")
             elif card["uts"]:
                 self.material_warn.setText(f"<span style='color:#8a6d00'>E {card['E']:.4g} MPa, ν {card['nu']:.3g}; no yield "
                                            f"strength: the safety factor uses the ultimate strength {card['uts']:.4g} MPa.</span>")
@@ -639,6 +736,7 @@ def _make_classes():
                 max_size=self.size_spin.value(),
                 fineness=self.fineness_combo.currentData(),
                 second_order=self.second_order.isChecked(),
+                stress_measure=self.measure_combo.currentData(),
             )
 
         def setup_buttons(self):
@@ -750,22 +848,174 @@ def _make_classes():
             row.setSpacing(4)
             row.addWidget(button("Stress", lambda: self.show("stress"), "Colour by von Mises stress"))
             row.addWidget(button("Displacement", lambda: self.show("displacement"), "Colour by displacement, exaggerated"))
-            row.addWidget(button("Safety Factor", lambda: self.show("safety"), "Colour by safety factor, red below 1"))
+            row.addWidget(button("Safety Factor", lambda: self.show("safety"), "Colour by safety factor in the study's bands"))
             w.layout().addLayout(row)
+            lay = form_layout()
+            self.measure_combo = measure_combo(sim.study_measure(self.analysis))
+            self.measure_combo.currentIndexChanged.connect(slot(self._measure_changed))
+            lay.addRow("Safety factor from", self.measure_combo)
+            w.layout().addLayout(lay)
             self.legend = hint()
             w.layout().addWidget(self.legend)
+            self.bands_button = QtWidgets.QPushButton("Bands…")
+            self.bands_button.setCheckable(True)
+            self.bands_button.setToolTip("Safety-factor bands: thresholds and colours of this study; save them as the default")
+            self.bands_button.toggled.connect(slot(self.show_bands))
+            row3 = QtWidgets.QHBoxLayout()
+            row3.addWidget(self.bands_button)
+            row3.addStretch(1)
+            w.layout().addLayout(row3)
+            w.layout().addWidget(self._build_bands())
             row2 = QtWidgets.QHBoxLayout()
             self.probe_button = QtWidgets.QPushButton("Probe")
             self.probe_button.setCheckable(True)
             self.probe_button.setToolTip("Click a point on the result mesh to read its values")
             self.probe_button.toggled.connect(slot(self.toggle_probe))
             row2.addWidget(self.probe_button)
-            row2.addWidget(button("Report", self.report, "HTML and PDF with the renders, beside the document"))
+            row2.addWidget(button("Report", self.report, "LaTeX report with the renders, compiled to a PDF beside the document"))
             row2.addStretch(1)
             w.layout().addLayout(row2)
             self.probe_label = hint()
             w.layout().addWidget(self.probe_label)
             return w
+
+        def _build_bands(self):
+            """The band editor: one row per band (its upper safety factor, its colour), hidden until Bands…."""
+            self.bands_box = QtWidgets.QWidget()
+            lay = QtWidgets.QVBoxLayout(self.bands_box)
+            lay.setContentsMargins(0, 0, 0, 0)
+            self.bands_table = QtWidgets.QTableWidget(0, 2)
+            self.bands_table.setHorizontalHeaderLabels(["Safety factor below", "Colour"])
+            self.bands_table.horizontalHeader().setStretchLastSection(True)
+            self.bands_table.verticalHeader().setVisible(False)
+            self.bands_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+            lay.addWidget(self.bands_table)
+            row = QtWidgets.QHBoxLayout()
+            row.setSpacing(4)
+            row.addWidget(button("+ Band", self.add_band, "Split the top band: one more threshold"))
+            row.addWidget(button("− Band", self.remove_band, "Merge the top two bands"))
+            row.addWidget(button("Apply", self.apply_bands, "Use these bands for this study"))
+            row.addStretch(1)
+            lay.addLayout(row)
+            row2 = QtWidgets.QHBoxLayout()
+            row2.setSpacing(4)
+            row2.addWidget(button("Save as default", self.save_bands_default,
+                                  "New studies start with these bands (Preferences: Mod/BruceWorx/Sim)"))
+            row2.addWidget(button("Load default", self.load_default_bands, "Put the default bands in the editor"))
+            row2.addStretch(1)
+            lay.addLayout(row2)
+            self.bands_note = hint()
+            lay.addWidget(self.bands_note)
+            self.load_bands(*sim.study_bands(self.analysis))
+            self.bands_box.setVisible(False)
+            return self.bands_box
+
+        def show_bands(self, on=True):
+            if self.bands_button.isChecked() != bool(on):
+                self.bands_button.setChecked(bool(on))  # comes back here through toggled
+                return
+            if on:
+                self.load_bands(*sim.study_bands(self.analysis))
+            self.bands_box.setVisible(bool(on))
+
+        def load_bands(self, thresholds, colors):
+            """Fills the editor: len(thresholds) + 1 rows; the last band has no upper bound."""
+            self._band_colors = list(colors)
+            table = self.bands_table
+            table.setRowCount(len(thresholds) + 1)
+            for i in range(len(thresholds) + 1):
+                if i < len(thresholds):
+                    spin = QtWidgets.QDoubleSpinBox()
+                    spin.setRange(0.01, 10000.0)
+                    spin.setDecimals(2)
+                    spin.setSingleStep(0.25)
+                    spin.setValue(thresholds[i])
+                    table.setCellWidget(i, 0, spin)
+                else:
+                    table.removeCellWidget(i, 0)
+                    item = QtWidgets.QTableWidgetItem("(above the last)")
+                    item.setFlags(QtCore.Qt.ItemIsEnabled)
+                    table.setItem(i, 0, item)
+                swatch = QtWidgets.QPushButton(self._band_colors[i])
+                swatch.setToolTip("Pick the band's colour")
+                swatch.clicked.connect(lambda *_a, row=i, receiver=slot(self.pick_band_color): receiver(row))
+                table.setCellWidget(i, 1, swatch)
+                self._paint_swatch(i)
+            table.setFixedHeight(table.horizontalHeader().height() + sum(table.rowHeight(r) for r in range(table.rowCount())) + 4)
+            self.bands_note.setText("")
+
+        def _paint_swatch(self, row):
+            color = self._band_colors[row]
+            swatch = self.bands_table.cellWidget(row, 1)
+            swatch.setText(color)
+            swatch.setStyleSheet(f"background:{color};color:{_text_on(color)};border:none;padding:2px")
+
+        def bands_from_editor(self):
+            """(thresholds, colours) as the editor shows them (not checked)."""
+            thresholds = [self.bands_table.cellWidget(i, 0).value() for i in range(self.bands_table.rowCount() - 1)]
+            return thresholds, list(self._band_colors)
+
+        def set_band_color(self, row, color):
+            self._band_colors[row] = sim._hex(color)
+            self._paint_swatch(row)
+
+        def pick_band_color(self, row):
+            color = QtWidgets.QColorDialog.getColor(QtGui.QColor(self._band_colors[row]), None, "Band colour")
+            if color.isValid():
+                self.set_band_color(row, color.name())
+
+        def add_band(self):
+            thresholds, colors = self.bands_from_editor()
+            top = thresholds[-1] if thresholds else 1.0
+            thresholds.append(round(top * 2, 2) if top < 5000 else top + 1)
+            colors.append(colors[-1])
+            self.load_bands(thresholds, colors)
+
+        def remove_band(self):
+            thresholds, colors = self.bands_from_editor()
+            if len(thresholds) <= 1:
+                self.bands_note.setText("<span style='color:#8a6d00'>One threshold is the least: two bands.</span>")
+                return
+            thresholds.pop()
+            colors.pop(-2)  # the top band keeps its colour
+            self.load_bands(thresholds, colors)
+
+        def apply_bands(self):
+            """The editor's bands on the study; the field is recoloured when it shows the safety factor."""
+            try:
+                sim.set_study_bands(self.analysis, *self.bands_from_editor())
+            except sim.StudyError as exc:
+                self.bands_note.setText(f"<span style='color:#b00020'>{exc}</span>")
+                return False
+            self.bands_note.setText("Applied to this study.")
+            if shown_field(self.analysis) == "safety":
+                self.show("safety")
+            else:
+                self._refresh_summary()
+            return True
+
+        def save_bands_default(self):
+            try:
+                sim.save_default_bands(*self.bands_from_editor())
+            except sim.StudyError as exc:
+                self.bands_note.setText(f"<span style='color:#b00020'>{exc}</span>")
+                return False
+            self.bands_note.setText("Saved: new studies start with these bands.")
+            return True
+
+        def load_default_bands(self):
+            self.load_bands(*sim.default_bands())
+            self.bands_note.setText("The default bands; Apply to use them here.")
+
+        def _measure_changed(self, *_a):
+            key = self.measure_combo.currentData()
+            if not key or key == sim.study_measure(self.analysis) and "StressMeasure" in self.analysis.PropertiesList:
+                return
+            sim.set_study_measure(self.analysis, key)
+            self.say(f"Safety factor from the {sim.measure_label(key)} stress")
+            if shown_field(self.analysis) == "safety":
+                self.show("safety")
+            self._refresh_summary()
 
         def getStandardButtons(self):
             return QtWidgets.QDialogButtonBox.Close
@@ -829,7 +1079,7 @@ def _make_classes():
                 f"Max displacement <b>{ext['max_disp']:.4g} mm</b> (node {ext['max_disp_node']})<br>"
                 f"Min safety factor {sf_text}")
             kind = shown_field(self.analysis)
-            self.legend.setText(legend_html(kind, result) if kind else "")
+            self.legend.setText(legend_html(kind, result, self.analysis) if kind else "")
 
         def _edit_member(self, item):
             name = item.data(QtCore.Qt.UserRole)
@@ -969,7 +1219,7 @@ def _make_classes():
         # --- results
         def show(self, kind):
             if show_field(self.analysis, kind):
-                self.legend.setText(legend_html(kind, sim.latest_result(self.analysis)))
+                self.legend.setText(legend_html(kind, sim.latest_result(self.analysis), self.analysis))
                 return True
             return False
 
@@ -987,15 +1237,27 @@ def _make_classes():
             if _alive(self.probe_label):
                 self.probe_label.setText(probe_text(reading))
 
-        def report(self):
+        def report(self, folder=None):
+            """Writes the report; the PDF compiles in the background and its link shows when done."""
             if sim.latest_result(self.analysis) is None:
                 _warn("Solve the study before writing its report")
                 return None
-            files = report_study(self.analysis)
-            self.probe_label.setText(f"Report: <a href='file://{files['html']}'>{os.path.basename(files['html'])}</a>"
-                                     + (f", {os.path.basename(files['pdf'])}" if files["pdf"] else ""))
-            self.probe_label.setOpenExternalLinks(True)
+            self.say("Writing the report…")
+            files = report_study(self.analysis, folder, done=slot(self._reported))
+            if files.get("running"):
+                self.probe_label.setText(f"Compiling {os.path.basename(files['tex'])}…")
             return files
+
+        def _reported(self, files):
+            if not _alive(self.probe_label):
+                return
+            self.probe_label.setOpenExternalLinks(True)
+            if files.get("pdf"):
+                self.probe_label.setText(f"Report: <a href='file://{files['pdf']}'>{os.path.basename(files['pdf'])}</a> "
+                                         f"(source: <a href='file://{files['dir']}'>{os.path.basename(files['dir'])}</a>)")
+            else:
+                self.probe_label.setText(f"<span style='color:#8a6d00'>{files.get('message', '')}</span><br>"
+                                         f"Source: <a href='file://{files['dir']}'>{os.path.basename(files['dir'])}</a>")
 
     return {"Panel": Panel, "NewStudyPanel": NewStudyPanel, "StudyPanel": StudyPanel}
 
@@ -1134,6 +1396,13 @@ def run_probe():
     return True
 
 
+def run_bands():
+    panel = open_study_panel()
+    if panel is not None:
+        panel.show_bands(True)
+    return panel
+
+
 def run_report():
     study = current_study()
     if study is None:
@@ -1141,7 +1410,7 @@ def run_report():
     panel = _state.get("panel")
     if isinstance(panel, classes()["StudyPanel"]) and not panel.released and panel.analysis is study:
         return panel.report()
-    return report_study(study)
+    return report_study(study, done=lambda files: None)
 
 
 COMMANDS = (
@@ -1165,8 +1434,10 @@ COMMANDS = (
      "Colour the result by safety factor: red below 1", _with_result, lambda: run_show("safety")),
     ("BruceWorx_StudyProbe", "Probe", os.path.join(HERE, "BruceWorx_Probe.svg"),
      "Read stress, displacement and safety factor at a clicked point", _with_result, run_probe),
+    ("BruceWorx_SafetyFactorBands", "SF Bands", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),
+     "Safety-factor bands of the study: thresholds and colours, saved as the default if you like", _with_study, run_bands),
     ("BruceWorx_StudyReport", "Report", os.path.join(HERE, "BruceWorx_StudyReport.svg"),
-     "Write the study report (HTML and PDF) with renders beside the document", _with_result, run_report),
+     "Write the study report (LaTeX with renders, compiled to a PDF) beside the document", _with_result, run_report),
 )
 
 

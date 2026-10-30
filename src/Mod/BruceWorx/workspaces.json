@@ -514,6 +514,7 @@
                 "BruceWorx_ShowStress",
                 "BruceWorx_ShowDisplacement",
                 "BruceWorx_ShowSafetyFactor",
+                "BruceWorx_SafetyFactorBands",
                 "BruceWorx_StudyProbe",
                 "BruceWorx_StudyReport"
               ],

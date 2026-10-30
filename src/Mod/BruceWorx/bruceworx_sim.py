@@ -18,30 +18,39 @@ colouring and the PDF are in bruceworx_sim_gui.
   mesh, supports (rigid-body motion heuristics), loads, empty references, ccx.
 * ``solve`` writes the CalculiX input with the stock ``FemToolsCcx``, runs ccx,
   loads the results and adds the safety factor to the result object:
-  ``SafetyFactor[i] = allowable / vonMises[i]``, ``allowable = Knockdown * yield``
+  ``SafetyFactor[i] = allowable / sigma_eq[i]``, ``allowable = Knockdown * yield``
   (the FDM knockdown is SIM-03; ``Knockdown`` is 1 until then). A card without
   a yield strength uses the ultimate tensile strength, with a note.
+* The equivalent stress ``sigma_eq`` is the study's ``StressMeasure`` (30 Oct,
+  S3): von Mises (default), maximum principal (Rankine: the largest principal
+  stress by magnitude, max(|s1|, |s3|)) or Tresca (s1 - s3). Changing it
+  recomputes the safety factor from the stored fields; no new solve.
+* The safety-factor colour bands are the study's ``SFThresholds`` and
+  ``SFColors`` (30 Oct, S2): n thresholds make n + 1 bands; the defaults come
+  from the preference ``Mod/BruceWorx/Sim`` (1 and 2: red, amber, green).
 * ``find_ccx`` looks for the solver in the FEM preference, then beside the
   program (Keystone bundles it as ``Contents/bin/ccx``), then the pixi
   environment of a development tree, then PATH. ``ensure_ccx_pref`` writes the
   first find into the preference once, so a fresh profile solves without a
   visit to the FEM settings.
-* ``report_html`` writes the study report (model, material, mesh, loads,
-  results, renders) as one self-contained HTML file.
+* ``write_report`` writes the study report as LaTeX (report.tex and the
+  renders in a folder beside the document) and ``compile_report`` makes the
+  PDF with Tectonic (bundled in Keystone), else latexmk or pdflatex (MacTeX);
+  without any, the .tex folder stays for the user (30 Oct, S4).
 
 Theory (plan chapter 60): static K u = f; sigma_vM from the stress tensor
-(CalculiX reports the nodal tensor, FreeCAD computes von Mises);
-SF = sigma_allow / sigma_vM per node, min SF = sigma_allow / max sigma_vM.
+(CalculiX reports the nodal tensor, FreeCAD computes von Mises and the
+principal stresses s1 >= s2 >= s3); SF = sigma_allow / sigma_eq per node,
+min SF = sigma_allow / max sigma_eq.
 """
 
 from __future__ import annotations
 
-import base64
 import datetime
-import html
 import math
 import os
 import shutil
+import subprocess
 import time
 
 CCX_PREFS = "User parameter:BaseApp/Preferences/Mod/Fem/Ccx"
@@ -51,6 +60,18 @@ FINENESS = ("VeryCoarse", "Coarse", "Moderate", "Fine", "VeryFine")
 DEFAULT_FINENESS = "Moderate"
 SF_CAP = 100.0  # a node with (almost) no stress reports this safety factor
 KNOCKDOWN = 1.0  # SIM-03: allowable = Knockdown * yield; 1 until the FDM model lands
+SIM_PREFS = "User parameter:BaseApp/Preferences/Mod/BruceWorx/Sim"
+
+# The equivalent stress the safety factor divides (S3, 30 Oct): (key, label, formula for the report).
+STRESS_MEASURES = (
+    ("vonMises", "von Mises", r"\sigma_{eq}=\sigma_{vM}=\sqrt{\frac{1}{2}\left[(\sigma_1-\sigma_2)^2+(\sigma_2-\sigma_3)^2+(\sigma_3-\sigma_1)^2\right]}"),
+    ("MaxPrincipal", "Maximum principal (Rankine)", r"\sigma_{eq}=\max(|\sigma_1|,|\sigma_3|)\quad\mbox{(the largest principal stress by magnitude)}"),
+    ("Tresca", "Tresca", r"\sigma_{eq}=\sigma_1-\sigma_3\quad\mbox{(twice the maximum shear stress)}"),
+)
+DEFAULT_MEASURE = "vonMises"
+# Safety-factor bands (S2, 30 Oct): n ascending thresholds make n + 1 bands, one colour each.
+DEFAULT_SF_THRESHOLDS = (1.0, 2.0)
+DEFAULT_SF_COLORS = ("#D91C1C", "#F2A007", "#3FA34D")
 
 # (key, label, available). The frame carries every type; only static runs today.
 STUDY_TYPES = (
@@ -229,21 +250,31 @@ def material_manager():
     return Materials.MaterialManager()
 
 
+KEYSTONE_LIBRARY = "Keystone"  # the material library with yield strengths (S1, 30 Oct; the materials agent's cards)
+STOCK_LIBRARY = "System"  # FreeCAD's own cards, the FEM ones among them
+
+
+def library_rank(library):
+    """The order of the libraries in the material picker: Keystone, the vault's, the stock cards, the rest."""
+    if library == KEYSTONE_LIBRARY:
+        return 0
+    if "vault" in (library or "").lower():
+        return 1
+    if library == STOCK_LIBRARY:
+        return 2
+    return 3
+
+
 def material_cards(manager=None):
-    """Every card with E and nu, as card_values dicts: vault library first, then the others by name."""
+    """Every card with E and nu, as card_values dicts: the Keystone library first, then the vault's,
+    then the stock (FEM) cards, then the others; by name within a library."""
     manager = manager or material_manager()
     cards = []
     for _uuid, material in manager.Materials.items():
         values = card_values(material)
         if usable(values):
             cards.append(values)
-
-    def key(values):
-        library = values["library"]
-        rank = 0 if "vault" in library.lower() else (2 if library in ("System", "BruceWorx") else 1)
-        return (rank, library, values["name"].lower())
-
-    cards.sort(key=key)
+    cards.sort(key=lambda v: (library_rank(v["library"]), v["library"], v["name"].lower()))
     return cards
 
 
@@ -386,7 +417,8 @@ class StudyPlan:
     """What New Study asks for."""
 
     def __init__(self, name="Study 1", study_type="static", model=None, material_uuid="", material=None,
-                 max_size=None, fineness=DEFAULT_FINENESS, second_order=True, knockdown=KNOCKDOWN):
+                 max_size=None, fineness=DEFAULT_FINENESS, second_order=True, knockdown=KNOCKDOWN,
+                 stress_measure=None, sf_thresholds=None, sf_colors=None):
         self.name = name
         self.study_type = study_type
         self.model = model
@@ -396,6 +428,221 @@ class StudyPlan:
         self.fineness = fineness
         self.second_order = second_order
         self.knockdown = knockdown
+        self.stress_measure = stress_measure  # None: the preference (von Mises by default)
+        self.sf_thresholds = sf_thresholds  # None: the preference's bands
+        self.sf_colors = sf_colors
+
+
+# ----- the stress measure and the safety-factor bands (S2, S3: 30 Oct) ---------------------------
+
+
+def _prefs():
+    import FreeCAD
+
+    return FreeCAD.ParamGet(SIM_PREFS)
+
+
+def measure_keys():
+    return [key for key, _label, _formula in STRESS_MEASURES]
+
+
+def measure_label(key):
+    return dict((k, label) for k, label, _f in STRESS_MEASURES).get(key, key)
+
+
+def measure_formula(key):
+    return dict((k, formula) for k, _l, formula in STRESS_MEASURES).get(key, "")
+
+
+def default_measure():
+    key = _prefs().GetString("StressMeasure", DEFAULT_MEASURE)
+    return key if key in measure_keys() else DEFAULT_MEASURE
+
+
+def set_default_measure(key):
+    if key not in measure_keys():
+        raise StudyError(f"unknown stress measure {key!r}")
+    _prefs().SetString("StressMeasure", key)
+
+
+def equivalent_stress(measure, vm, s1, s3):
+    """One node's equivalent stress (MPa) for a measure; s1 >= s3 are the extreme principal stresses."""
+    if measure == "MaxPrincipal":
+        return max(abs(s1), abs(s3))
+    if measure == "Tresca":
+        return s1 - s3
+    return vm
+
+
+def principal_stresses(sxx, syy, szz, sxy, sxz, syz):
+    """(s1, s2, s3), s1 >= s2 >= s3, of a symmetric stress tensor (the eigenvalues, as FEM's resulttools)."""
+    import numpy
+
+    tensor = numpy.array([[sxx, sxy, sxz], [sxy, syy, syz], [sxz, syz, szz]], dtype=float)
+    values = sorted((float(v) for v in numpy.linalg.eigvalsh(tensor)), reverse=True)
+    return values[0], values[1], values[2]
+
+
+def von_mises(s1, s2, s3):
+    return math.sqrt(((s1 - s2) ** 2 + (s2 - s3) ** 2 + (s3 - s1) ** 2) / 2.0)
+
+
+def equivalent_field(result, measure):
+    """(values, measure used): the result's equivalent stress per node.
+
+    Von Mises is the result's own field; Rankine and Tresca use its principal stresses
+    (PrincipalMax = s1, PrincipalMin = s3). A result without them falls back to von Mises.
+    """
+    vm = list(result.vonMises)
+    if measure in ("MaxPrincipal", "Tresca"):
+        p1 = list(getattr(result, "PrincipalMax", []) or [])
+        p3 = list(getattr(result, "PrincipalMin", []) or [])
+        if vm and len(p1) == len(vm) and len(p3) == len(vm):
+            return [equivalent_stress(measure, v, a, c) for v, a, c in zip(vm, p1, p3)], measure
+    return vm, "vonMises"
+
+
+def study_measure(analysis):
+    """The study's stress measure, or the preference's for a study made before 30 Oct."""
+    if analysis is not None and "StressMeasure" in analysis.PropertiesList:
+        key = str(analysis.StressMeasure)
+        if key in measure_keys():
+            return key
+    return default_measure()
+
+
+def set_study_measure(analysis, key):
+    """Sets the study's stress measure and recomputes the safety factor of its latest result; min SF."""
+    if key not in measure_keys():
+        raise StudyError(f"unknown stress measure {key!r}")
+    ensure_study_properties(analysis)
+    analysis.StressMeasure = key
+    result = latest_result(analysis)
+    return add_safety_factor(result, analysis) if result is not None else None
+
+
+def _hex(color):
+    """'#RRGGBB' from '#rrggbb', 'rrggbb' or an (r, g, b) of 0..1 floats or 0..255 integers."""
+    if isinstance(color, str):
+        text = color.strip().lstrip("#")
+        if len(text) != 6 or any(c not in "0123456789abcdefABCDEF" for c in text):
+            raise StudyError(f"not a colour: {color!r}")
+        return "#" + text.upper()
+    values = list(color)[:3]
+    if all(isinstance(v, float) and v <= 1.0 for v in values):
+        values = [v * 255.0 for v in values]
+    return "#" + "".join(f"{max(0, min(255, int(round(v)))):02X}" for v in values)
+
+
+def rgb(color):
+    """(r, g, b) in 0..1 of a '#RRGGBB' colour."""
+    text = _hex(color).lstrip("#")
+    return tuple(int(text[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
+
+def check_bands(thresholds, colors):
+    """Validated (thresholds, colours): ascending positive thresholds, one more colour than thresholds."""
+    thresholds = [float(t) for t in thresholds]
+    colors = [_hex(c) for c in colors]
+    if not thresholds:
+        raise StudyError("the bands need at least one threshold")
+    if any(t <= 0 for t in thresholds):
+        raise StudyError("the safety-factor thresholds must be above 0")
+    if any(b <= a for a, b in zip(thresholds, thresholds[1:])):
+        raise StudyError("the safety-factor thresholds must rise from band to band")
+    if len(colors) != len(thresholds) + 1:
+        raise StudyError(f"{len(thresholds)} thresholds make {len(thresholds) + 1} bands: one colour each")
+    return thresholds, colors
+
+
+def default_bands():
+    """(thresholds, colours) from the preference Mod/BruceWorx/Sim, else 1 and 2: red, amber, green."""
+    prefs = _prefs()
+    try:
+        thresholds = [float(t) for t in prefs.GetString("SFThresholds", "").split(";") if t.strip()]
+        colors = [c for c in prefs.GetString("SFColors", "").split(";") if c.strip()]
+        if thresholds or colors:
+            return check_bands(thresholds, colors)
+    except (StudyError, ValueError):
+        pass
+    return list(DEFAULT_SF_THRESHOLDS), list(DEFAULT_SF_COLORS)
+
+
+def save_default_bands(thresholds, colors):
+    """Writes the bands into the preference: new studies start with them."""
+    thresholds, colors = check_bands(thresholds, colors)
+    prefs = _prefs()
+    prefs.SetString("SFThresholds", ";".join(f"{t:g}" for t in thresholds))
+    prefs.SetString("SFColors", ";".join(colors))
+    return thresholds, colors
+
+
+def reset_default_bands():
+    prefs = _prefs()
+    prefs.RemString("SFThresholds")
+    prefs.RemString("SFColors")
+    return default_bands()
+
+
+def study_bands(analysis):
+    """The study's (thresholds, colours); the preference's when the study has none (or broken ones)."""
+    if analysis is not None and "SFThresholds" in analysis.PropertiesList:
+        try:
+            return check_bands(list(analysis.SFThresholds), list(analysis.SFColors))
+        except StudyError:
+            pass
+    return default_bands()
+
+
+def set_study_bands(analysis, thresholds, colors):
+    thresholds, colors = check_bands(thresholds, colors)
+    ensure_study_properties(analysis)
+    analysis.SFThresholds = thresholds
+    analysis.SFColors = colors
+    return thresholds, colors
+
+
+def band_index(sf, thresholds):
+    """The band a safety factor falls in: 0 below the first threshold, len(thresholds) above the last."""
+    for i, upper in enumerate(thresholds):
+        if sf < upper:
+            return i
+    return len(thresholds)
+
+
+def band_labels(thresholds):
+    """'below 1', '1 to 2', ..., 'above 2' for the legend and the report."""
+    labels = [f"below {thresholds[0]:g}"]
+    labels += [f"{a:g} to {b:g}" for a, b in zip(thresholds, thresholds[1:])]
+    labels.append(f"above {thresholds[-1]:g}")
+    return labels
+
+
+def band_counts(factors, thresholds):
+    """How many nodes fall in each band."""
+    counts = [0] * (len(thresholds) + 1)
+    for sf in factors:
+        counts[band_index(sf, thresholds)] += 1
+    return counts
+
+
+def ensure_study_properties(analysis):
+    """Adds the 30 Oct properties (StressMeasure, SFThresholds, SFColors) to a study that lacks them."""
+    props = analysis.PropertiesList
+    if "StressMeasure" not in props:
+        analysis.addProperty("App::PropertyEnumeration", "StressMeasure", "Study",
+                             "[BW] The equivalent stress the safety factor divides: vonMises, MaxPrincipal "
+                             "(Rankine, max |principal|) or Tresca (s1 - s3)")
+        analysis.StressMeasure = measure_keys()
+        analysis.StressMeasure = default_measure()
+    if "SFThresholds" not in props:
+        thresholds, colors = default_bands()
+        analysis.addProperty("App::PropertyFloatList", "SFThresholds", "Study",
+                             "[BW] Safety-factor band edges, ascending: n thresholds make n + 1 colour bands")
+        analysis.addProperty("App::PropertyStringList", "SFColors", "Study",
+                             "[BW] One colour (#RRGGBB) per safety-factor band, lowest band first")
+        analysis.SFThresholds = thresholds
+        analysis.SFColors = colors
 
 
 def _add_study_properties(analysis, plan):
@@ -404,10 +651,18 @@ def _add_study_properties(analysis, plan):
         analysis.addProperty("App::PropertyLink", "Model", "Study", "[BW] The body or part the study analyses")
         analysis.addProperty("App::PropertyString", "MaterialUUID", "Study", "[BW] The material card the study was set up with")
         analysis.addProperty("App::PropertyFloat", "Knockdown", "Study", "[BW] allowable = Knockdown * yield (SIM-03 FDM knockdown; 1 = none)")
+    ensure_study_properties(analysis)
     analysis.StudyType = plan.study_type
     analysis.Model = plan.model
     analysis.MaterialUUID = plan.material_uuid or ""
     analysis.Knockdown = plan.knockdown
+    if plan.stress_measure:
+        if plan.stress_measure not in measure_keys():
+            raise StudyError(f"unknown stress measure {plan.stress_measure!r}")
+        analysis.StressMeasure = plan.stress_measure
+    if plan.sf_thresholds is not None or plan.sf_colors is not None:
+        thresholds, colors = study_bands(analysis)
+        set_study_bands(analysis, plan.sf_thresholds or thresholds, plan.sf_colors or colors)
 
 
 def new_study(doc, plan):
@@ -768,11 +1023,11 @@ def study_material(analysis):
     return None
 
 
-def safety_factors(von_mises, allowable):
-    """SF per node: allowable / sigma_vM, capped at SF_CAP."""
+def safety_factors(stresses, allowable):
+    """SF per node: allowable / sigma_eq, capped at SF_CAP (also for a zero or NaN stress)."""
     out = []
-    for stress in von_mises:
-        if stress <= 0 or allowable / stress > SF_CAP:
+    for stress in stresses:
+        if not stress > 0 or allowable / stress > SF_CAP:  # NaN compares false: capped
             out.append(SF_CAP)
         else:
             out.append(allowable / stress)
@@ -780,7 +1035,8 @@ def safety_factors(von_mises, allowable):
 
 
 def add_safety_factor(result, analysis=None):
-    """Adds SafetyFactor (per node), AllowableStress and AllowableBasis to a result object.
+    """Adds SafetyFactor (per node), AllowableStress, AllowableBasis, StressMeasure and MinSafetyFactor
+    to a result object, with the study's stress measure.
 
     Returns min SF, or None when the material has no strength value.
     """
@@ -789,17 +1045,25 @@ def add_safety_factor(result, analysis=None):
     knockdown = getattr(analysis, "Knockdown", KNOCKDOWN) if analysis is not None and "Knockdown" in analysis.PropertiesList else KNOCKDOWN
     allowable, basis = allowable_stress(values, knockdown or KNOCKDOWN)
     if "SafetyFactor" not in result.PropertiesList:
-        result.addProperty("App::PropertyFloatList", "SafetyFactor", "Result", "[BW] allowable stress / von Mises stress per node")
+        result.addProperty("App::PropertyFloatList", "SafetyFactor", "Result", "[BW] allowable stress / equivalent stress per node")
         result.addProperty("App::PropertyFloat", "AllowableStress", "Result", "[BW] The allowable stress (MPa) the safety factor divides")
         result.addProperty("App::PropertyString", "AllowableBasis", "Result", "[BW] Where the allowable stress comes from")
         result.addProperty("App::PropertyFloat", "MinSafetyFactor", "Result", "[BW] The lowest safety factor")
+    if "StressMeasure" not in result.PropertiesList:
+        result.addProperty("App::PropertyString", "StressMeasure", "Result",
+                           "[BW] The equivalent stress the safety factor used: vonMises, MaxPrincipal or Tresca")
+        result.addProperty("App::PropertyFloat", "MaxEquivalentStress", "Result",
+                           "[BW] The largest equivalent stress (MPa) of that measure")
     result.AllowableBasis = basis
-    if not allowable or not len(result.vonMises):
+    stresses, used = equivalent_field(result, study_measure(analysis))
+    result.StressMeasure = used
+    result.MaxEquivalentStress = max(stresses) if stresses else 0.0
+    if not allowable or not stresses:
         result.SafetyFactor = []
         result.AllowableStress = 0.0
         result.MinSafetyFactor = 0.0
         return None
-    factors = safety_factors(result.vonMises, allowable)
+    factors = safety_factors(stresses, allowable)
     result.SafetyFactor = factors
     result.AllowableStress = allowable
     result.MinSafetyFactor = min(factors)
@@ -827,6 +1091,8 @@ def result_extrema(result):
     if sf:
         i = min(range(len(sf)), key=sf.__getitem__)
         out["min_sf"], out["min_sf_node"] = sf[i], nodes[i] if i < len(nodes) else None
+    out["measure"] = str(getattr(result, "StressMeasure", "") or "vonMises")
+    out["max_eq"] = float(getattr(result, "MaxEquivalentStress", 0.0) or out["max_vm"])
     return out
 
 
@@ -898,6 +1164,8 @@ def summary(analysis):
         "allowable": allowable,
         "basis": basis,
         "knockdown": knockdown,
+        "measure": study_measure(analysis),
+        "bands": study_bands(analysis),
         "mesh": mesh_stats(m["mesh"]) if m["mesh"] is not None else {},
         "supports": [_describe(o) for o in m["supports"]],
         "loads": [_describe(o) for o in m["loads"]],
@@ -912,6 +1180,8 @@ def summary(analysis):
     if result is not None:
         out["result"] = result_extrema(result)
         out["result"]["name"] = result.Label
+        factors = list(getattr(result, "SafetyFactor", []) or [])
+        out["result"]["band_counts"] = band_counts(factors, out["bands"][0]) if factors else None
     return out
 
 
@@ -925,118 +1195,318 @@ def report_folder(doc):
     return tempfile.gettempdir()
 
 
-def report_path(analysis, extension="html"):
+def report_stem(analysis):
+    """'<document>_<study>_report', the name of the report's folder and PDF."""
     doc = analysis.Document
     stem = os.path.splitext(os.path.basename(doc.FileName))[0] if doc.FileName else doc.Name
     name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in summary_name(analysis)).strip().replace(" ", "_")
-    return os.path.join(report_folder(doc), f"{stem}_{name}_report.{extension}")
+    return f"{stem}_{name}_report"
+
+
+def report_paths(analysis, folder=None):
+    """Where the report goes: {"dir": the LaTeX folder, "tex": its report.tex, "built": the PDF the compiler
+    writes there, "target": the PDF's copy beside the document}.
+
+    folder defaults to report_folder (beside the document: for a vault file that is the vault item's
+    working folder, so a release package can carry it).
+    """
+    folder = folder or report_folder(analysis.Document)
+    stem = report_stem(analysis)
+    directory = os.path.join(folder, stem)
+    return {"dir": directory, "tex": os.path.join(directory, "report.tex"), "target": os.path.join(folder, stem + ".pdf"),
+            "built": os.path.join(directory, "report.pdf")}
 
 
 def summary_name(analysis):
     return analysis.Label.replace("Study: ", "", 1)
 
 
-def _fmt(value, digits=3, unit=""):
+def _fmt(value, digits=3, unit="", cap=False):
+    """A number for the report; cap=True for a safety factor (SF_CAP and above read "> 100")."""
     if value is None:
         return "–"
     if isinstance(value, float):
-        if value >= SF_CAP:
+        if cap and value >= SF_CAP:
             return f"> {SF_CAP:g}"
         text = f"{value:.{digits}g}"
+        if "e+" in text:  # 210000, not 2.1e+05
+            text = f"{float(text):.0f}"
     else:
         text = str(value)
     return f"{text} {unit}".strip()
 
 
-def report_html(analysis, images=None, path=None, data=None):
-    """Writes the study report as one HTML file; images = {"stress": png path, "displacement": ..., "safety": ...}."""
+# ----- the LaTeX report (S4, 30 Oct) ----------------------------------------------------------------
+
+_TEX_SPECIALS = {"\\": r"\textbackslash{}", "{": r"\{", "}": r"\}", "$": r"\$", "&": r"\&", "#": r"\#",
+                 "^": r"\^{}", "_": r"\_", "%": r"\%", "~": r"\~{}"}
+_TEX_UNICODE = {"–": "--", "—": "---", "×": r"$\times$", "ν": r"$\nu$", "σ": r"$\sigma$", "°": r"$^\circ$",
+                "³": r"$^3$", "²": r"$^2$", "µ": r"$\mu$", "μ": r"$\mu$", "≤": r"$\le$", "≥": r"$\ge$",
+                "…": r"\dots{}", "·": r"$\cdot$", "−": "-", "✕": "x", "Ø": r"\O{}", "ø": r"\o{}"}
+FIGURES = (("stress", "von Mises stress (MPa)"), ("displacement", "Displacement (mm), shape exaggerated"),
+           ("safety", "Safety factor bands"))
+
+
+def tex_escape(text):
+    """Plain text made safe for LaTeX (the specials, and the few non-Latin signs a report uses)."""
+    out = []
+    for ch in str(text):
+        out.append(_TEX_SPECIALS.get(ch) or _TEX_UNICODE.get(ch) or ch)
+    return "".join(out)
+
+
+def _tex_value(value, digits=4, unit=""):
+    text = tex_escape(_fmt(value, digits))
+    return f"{text}\\,{unit}" if unit and value is not None else text
+
+
+def report_tex(analysis, images=None, folder=None, data=None):
+    """Writes report.tex (and copies the renders beside it as fig_<kind>.png); returns report_paths.
+
+    images: {"stress": png, "displacement": png, "safety": png} (the GUI's off-screen renders); a
+    headless report has none and says so.
+    """
     data = data or summary(analysis)
     data["ccx_version"] = data.get("ccx_version") or ccx_version(data.get("ccx") or None)
-    path = path or report_path(analysis)
-    esc = html.escape
-    mat = data["material"] or {}
-    res = data["result"]
-    rows = []
+    paths = report_paths(analysis, folder)
+    os.makedirs(paths["dir"], exist_ok=True)
+    figures = []
+    for kind, caption in FIGURES:
+        image = (images or {}).get(kind)
+        target = os.path.join(paths["dir"], f"fig_{kind}.png")
+        if image and os.path.isfile(image):
+            if os.path.abspath(image) != os.path.abspath(target):
+                shutil.copyfile(image, target)
+            figures.append((f"fig_{kind}.png", caption))
+        elif os.path.isfile(target):
+            os.remove(target)  # an old render must not stand in for this result
+    with open(paths["tex"], "w", encoding="utf-8") as handle:
+        handle.write(report_source(data, figures))
+    return paths
 
-    def row(label, value):
-        rows.append(f"<tr><th>{esc(label)}</th><td>{esc(str(value))}</td></tr>")
 
-    row("Study", data["name"])
-    row("Type", dict((k, l) for k, l, _ok in STUDY_TYPES).get(data["type"], data["type"]))
-    row("Document", data["document"])
-    row("Model", data["model"] or "–")
-    row("Date", data["date"])
-    row("Solver", f"CalculiX ccx {data['ccx_version'] or '?'}")
-    material_rows = []
+def report_source(data, figures=()):
+    """The LaTeX source of a report from summary() data; figures = [(file, caption)]."""
+    e = tex_escape
+    mat = data.get("material") or {}
+    res = data.get("result")
+    thresholds, colors = data.get("bands") or (list(DEFAULT_SF_THRESHOLDS), list(DEFAULT_SF_COLORS))
+    measure = (res or {}).get("measure") or data.get("measure") or DEFAULT_MEASURE
+    lines = [
+        r"\documentclass[10pt,a4paper]{article}",
+        "% Keystone simulation report (BruceWorx SIM-01). Compile with tectonic, latexmk -pdf or pdflatex.",
+        r"\usepackage{iftex}",
+        r"\ifXeTeX\usepackage{fontspec}\else\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\fi",
+        r"\usepackage[margin=20mm]{geometry}",
+        r"\usepackage{graphicx}",
+        r"\usepackage{booktabs}",
+        r"\usepackage{xcolor}",
+        r"\setlength{\parindent}{0pt}\setlength{\parskip}{4pt}",
+    ]
+    for i, color in enumerate(colors):
+        lines.append(rf"\definecolor{{band{chr(65 + i)}}}{{HTML}}{{{_hex(color).lstrip('#')}}}")
+    lines += [
+        r"\begin{document}",
+        rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",
+        rf"{{\small\color{{black!60}} Keystone simulation report, {e(data['date'])}}}",
+        "",
+        r"\section*{Study}",
+        r"\begin{tabular}{@{}ll@{}}",
+    ]
+    type_label = dict((k, l) for k, l, _ok in STUDY_TYPES).get(data["type"], data["type"])
+    for label, value in (("Study", data["name"]), ("Type", type_label), ("Document", data["document"]),
+                         ("Model", data["model"] or "–"), ("Solver", f"CalculiX ccx {data.get('ccx_version') or '?'}")):
+        lines.append(rf"{e(label)} & {e(value)}\\")
+    lines += [r"\end{tabular}", "", r"\section*{Material}"]
     if mat:
-        for label, key, unit in (("Card", "name", ""), ("Library", "library", ""), ("Young's modulus E", "E", "MPa"),
-                                 ("Poisson's ratio ν", "nu", ""), ("Yield strength", "yield", "MPa"),
-                                 ("Ultimate tensile strength", "uts", "MPa"), ("Density", "density", "kg/m³")):
+        lines.append(r"\begin{tabular}{@{}ll@{}}")
+        for label, key, unit in (("Card", "name", ""), ("Library", "library", ""), ("Young's modulus $E$", "E", "MPa"),
+                                 (r"Poisson's ratio $\nu$", "nu", ""), (r"Yield strength $\sigma_y$", "yield", "MPa"),
+                                 ("Ultimate tensile strength", "uts", "MPa"), ("Density", "density", r"kg/m$^3$")):
             value = mat.get(key)
             if value not in (None, ""):
-                material_rows.append(f"<tr><th>{esc(label)}</th><td>{esc(_fmt(value, 4, unit))}</td></tr>")
+                label_tex = label if "$" in label else e(label)
+                lines.append(rf"{label_tex} & {_tex_value(value, 4, unit) if unit else e(_fmt(value, 4))}\\")
         knock = "" if data["knockdown"] == 1 else f", knockdown {data['knockdown']:g}"
-        material_rows.append(f"<tr><th>Allowable stress</th><td>{esc(_fmt(data['allowable'], 4, 'MPa'))} "
-                             f"({esc(data['basis'])}{esc(knock)})</td></tr>")
+        lines.append(rf"Allowable stress & {_tex_value(data['allowable'], 4, 'MPa')} ({e(data['basis'])}{e(knock)})\\")
+        lines.append(r"\end{tabular}")
+        if data["allowable"] and "ultimate" in (data["basis"] or ""):
+            lines.append(r"\par\textbf{Note:} the card has no yield strength, so the safety factor divides the "
+                         r"ultimate tensile strength. It says how far the part is from breaking, not from yielding; "
+                         r"pick a card with a yield strength (the Keystone library has them) for a yield check.")
     else:
-        material_rows.append("<tr><td colspan=2>No material</td></tr>")
-    mesh = data["mesh"] or {}
-    mesh_rows = [
-        f"<tr><th>Nodes</th><td>{mesh.get('nodes', 0)}</td></tr>",
-        f"<tr><th>Elements</th><td>{mesh.get('elements', 0)} ({esc(mesh.get('order') or '?')} order)</td></tr>",
-        f"<tr><th>Max element size</th><td>{esc(_fmt(mesh.get('max_size'), 3, 'mm'))}, {esc(mesh.get('fineness', ''))}</td></tr>",
+        lines.append("No material.")
+    mesh = data.get("mesh") or {}
+    lines += [
+        "", r"\section*{Mesh}", r"\begin{tabular}{@{}ll@{}}",
+        rf"Nodes & {mesh.get('nodes', 0)}\\",
+        rf"Elements & {mesh.get('elements', 0)} ({e(mesh.get('order') or '?')} order)\\",
+        rf"Max element size & {_tex_value(mesh.get('max_size'), 3, 'mm')}, {e(mesh.get('fineness', ''))}\\",
+        r"\end{tabular}",
+        r"\par{\small Netgen tetrahedra; the mesh-convergence study (SIM-04) was not run.}",
     ]
 
-    def items(entries):
+    def items(title, entries):
+        out = ["", rf"\section*{{{title}}}"]
         if not entries:
-            return "<li>none</li>"
-        return "".join(f"<li><b>{esc(e['label'])}</b> ({esc(e['kind'])}) {esc(e['value'])}"
-                       f"{' on ' + esc(e['where']) if e['where'] else ''}</li>" for e in entries)
+            return out + ["None."]
+        out.append(r"\begin{itemize}\setlength{\itemsep}{0pt}")
+        for entry in entries:
+            where = f" on {e(entry['where'])}" if entry["where"] else ""
+            out.append(rf"\item \textbf{{{e(entry['label'])}}} ({e(entry['kind'])}) {e(entry['value'])}{where}")
+        return out + [r"\end{itemize}"]
 
-    result_rows = []
+    lines += items("Supports", data.get("supports"))
+    lines += items("Loads", data.get("loads"))
+    lines += ["", r"\section*{Results}"]
     if res:
-        result_rows.append(f"<tr><th>Max von Mises stress</th><td>{esc(_fmt(res['max_vm'], 4, 'MPa'))} (node {res['max_vm_node']})</td></tr>")
-        result_rows.append(f"<tr><th>Max displacement</th><td>{esc(_fmt(res['max_disp'], 4, 'mm'))} (node {res['max_disp_node']})</td></tr>")
+        lines.append(r"\begin{tabular}{@{}ll@{}}")
+        lines.append(rf"Max von Mises stress & {_tex_value(res['max_vm'], 4, 'MPa')} (node {res['max_vm_node']})\\")
+        if measure != "vonMises":
+            lines.append(rf"Max {e(measure_label(measure))} stress & {_tex_value(res.get('max_eq'), 4, 'MPa')}\\")
+        lines.append(rf"Max displacement & {_tex_value(res['max_disp'], 4, 'mm')} (node {res['max_disp_node']})\\")
         sf = res["min_sf"]
-        verdict = "" if sf is None else (" — <b style='color:#b00020'>below 1: the part yields</b>" if sf < 1 else " — above 1")
-        result_rows.append(f"<tr><th>Min safety factor</th><td>{esc(_fmt(sf, 3))} (node {res['min_sf_node']}){verdict}</td></tr>")
+        verdict = ""
+        if sf is not None:
+            verdict = r" \textcolor{bandA}{\textbf{below 1: the part fails}}" if sf < 1 else " (above 1)"
+        lines.append(rf"Min safety factor & \textbf{{{e(_fmt(sf, 3, cap=True))}}} (node {res['min_sf_node']}){verdict}\\")
+        lines.append(r"\end{tabular}")
     else:
-        result_rows.append("<tr><td colspan=2>Not solved yet</td></tr>")
-    figures = []
-    for key, caption in (("stress", "von Mises stress"), ("displacement", "Displacement"), ("safety", "Safety factor")):
-        image = (images or {}).get(key)
-        if image and os.path.isfile(image):
-            with open(image, "rb") as handle:
-                encoded = base64.b64encode(handle.read()).decode("ascii")
-            figures.append(f"<figure><img src='data:image/png;base64,{encoded}' alt='{esc(caption)}'><figcaption>{esc(caption)}</figcaption></figure>")
+        lines.append("Not solved yet.")
+    lines += [
+        "", r"\section*{Safety factor}",
+        rf"Safety factor per node $SF=\sigma_{{\mathrm{{allow}}}}/\sigma_{{eq}}$ with the "
+        rf"\textbf{{{e(measure_label(measure))}}} equivalent stress:",
+        rf"\[{measure_formula(measure)}\]",
+        rf"Nodes with almost no stress show $SF>{SF_CAP:g}$.",
+        "", r"\begin{tabular}{@{}lll@{}}", r"\toprule Band & Safety factor & Nodes\\ \midrule",
+    ]
+    counts = (res or {}).get("band_counts") or [None] * (len(thresholds) + 1)
+    for i, label in enumerate(band_labels(thresholds)):
+        count = "" if counts[i] is None else str(counts[i])
+        lines.append(rf"\textcolor{{band{chr(65 + i)}}}{{\rule{{8mm}}{{3mm}}}} & {e(label)} & {count}\\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    if figures:
+        lines += ["", r"\section*{Figures}"]
+        for name, caption in figures:
+            lines += [r"\begin{center}", rf"\includegraphics[width=0.78\linewidth]{{{name}}}\\[-2pt]",
+                      rf"{{\small {e(caption)}}}", r"\end{center}"]
+    elif res:
+        lines += ["", r"{\small No renders: the report was written without a 3D view (headless).}"]
     issues = data.get("issues") or []
-    issue_items = "".join(f"<li class='{kind}'>{esc(text)}</li>" for kind, text in issues) or "<li>none</li>"
-    doc_html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>{esc(data['name'])} — study report</title>
-<style>
-body {{ font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 32px; color: #1d1d1f; }}
-h1 {{ font-size: 22px; margin-bottom: 2px; }} h2 {{ font-size: 15px; margin-top: 22px; border-bottom: 1px solid #ccc; }}
-table {{ border-collapse: collapse; }} th {{ text-align: left; padding: 2px 14px 2px 0; font-weight: 600; white-space: nowrap; }}
-td {{ padding: 2px 0; }} figure {{ display: inline-block; margin: 8px 8px 8px 0; }} img {{ max-width: 420px; border: 1px solid #ddd; }}
-figcaption {{ font-size: 12px; color: #555; }} li.error {{ color: #b00020; }} li.warning {{ color: #8a6d00; }}
-.small {{ font-size: 11px; color: #777; }}
-</style></head><body>
-<h1>{esc(data['name'])}</h1>
-<div class="small">Keystone simulation report, {esc(data['date'])}</div>
-<h2>Study</h2><table>{''.join(rows)}</table>
-<h2>Material</h2><table>{''.join(material_rows)}</table>
-<h2>Mesh</h2><table>{''.join(mesh_rows)}</table>
-<h2>Supports</h2><ul>{items(data['supports'])}</ul>
-<h2>Loads</h2><ul>{items(data['loads'])}</ul>
-<h2>Results</h2><table>{''.join(result_rows)}</table>
-{''.join(figures)}
-<h2>Pre-check</h2><ul>{issue_items}</ul>
-<p class="small">Static linear analysis: K u = f; von Mises from the nodal stress tensor; safety factor = allowable stress / von Mises stress per node.</p>
-</body></html>
-"""
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(doc_html)
-    return path
+    lines += ["", r"\section*{Pre-check}"]
+    if issues:
+        lines.append(r"\begin{itemize}\setlength{\itemsep}{0pt}")
+        for kind, text in issues:
+            prefix = r"\textbf{Error:} " if kind == "error" else "Warning: "
+            lines.append(r"\item " + prefix + e(text))
+        lines.append(r"\end{itemize}")
+    else:
+        lines.append("Nothing missing.")
+    lines += [
+        "", r"\vfill{\small\color{black!60} Static linear analysis: $K u = f$, small displacements, linear elastic "
+        r"material; stresses from the nodal stress tensor of CalculiX.}",
+        r"\end{document}", "",
+    ]
+    return "\n".join(lines)
+
+
+TEX_PREF = "TexPath"  # Mod/BruceWorx/Sim: a tectonic, latexmk or pdflatex binary to use first
+MACTEX_BIN = "/Library/TeX/texbin"
+
+
+def _tex_kind(path):
+    name = os.path.basename(path).lower()
+    for kind in ("tectonic", "latexmk", "pdflatex"):
+        if name.startswith(kind):
+            return kind
+    return None
+
+
+def tex_candidates():
+    """(kind, path) in order: the preference, Tectonic in the bundle, in the pixi environment, on PATH;
+    then latexmk and pdflatex on PATH or in MacTeX's /Library/TeX/texbin."""
+    found = []
+    pref = _prefs().GetString(TEX_PREF, "")
+    if pref and _tex_kind(pref):
+        found.append((_tex_kind(pref), pref))
+    home = _home()
+    found.append(("tectonic", os.path.join(home, "bin", "tectonic")))  # Keystone: Contents/bin/tectonic
+    found.append(("tectonic", os.path.join(home, "..", "..", ".pixi", "envs", "default", "bin", "tectonic")))
+    for kind in ("tectonic", "latexmk", "pdflatex"):
+        which = shutil.which(kind)
+        if which:
+            found.append((kind, which))
+        if kind != "tectonic":
+            found.append((kind, os.path.join(MACTEX_BIN, kind)))
+    return [(kind, os.path.normpath(path)) for kind, path in found]
+
+
+def find_tex():
+    """(kind, path) of the first LaTeX compiler found, or (None, None)."""
+    for kind, path in tex_candidates():
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return kind, path
+    return None, None
+
+
+def tex_command(kind, path, tex="report.tex"):
+    """The argv that compiles report.tex in its own folder."""
+    if kind == "tectonic":
+        return [path, "--keep-logs", "--chatter", "minimal", tex]
+    if kind == "latexmk":
+        return [path, "-pdf", "-interaction=nonstopmode", "-halt-on-error", tex]
+    return [path, "-interaction=nonstopmode", "-halt-on-error", tex]
+
+
+def tex_environment(path):
+    """os.environ with the compiler's folder (and MacTeX's) on PATH: latexmk runs pdflatex by name."""
+    env = dict(os.environ)
+    folders = [os.path.dirname(path), MACTEX_BIN]
+    env["PATH"] = os.pathsep.join(folders + [env.get("PATH", "")])
+    return env
+
+
+def finish_report(paths):
+    """Copies the compiled report.pdf beside the document; returns the PDF path or None."""
+    if not os.path.isfile(paths["built"]):
+        return None
+    shutil.copyfile(paths["built"], paths["target"])
+    return paths["target"]
+
+
+def compile_report(paths, timeout=600):
+    """Compiles report.tex (blocking); returns (pdf path or None, message).
+
+    Tectonic fetches the TeX files it lacks on its first run (network; about 40 MB into
+    ~/Library/Caches/Tectonic) and is quick after that.
+    """
+    kind, path = find_tex()
+    if kind is None:
+        return None, (f"No LaTeX compiler (Tectonic, latexmk or pdflatex) was found: the report's source is in "
+                      f"{paths['dir']}")
+    if os.path.isfile(paths["built"]):
+        os.remove(paths["built"])
+    try:
+        run = subprocess.run(tex_command(kind, path), cwd=paths["dir"], env=tex_environment(path),
+                             capture_output=True, text=True, timeout=timeout)
+    except Exception as exc:
+        return None, f"{kind} did not run: {exc}"
+    pdf = finish_report(paths) if run.returncode == 0 else None
+    if pdf is None:
+        tail = (run.stdout + run.stderr)[-600:]
+        return None, f"{kind} could not compile {paths['tex']} (exit {run.returncode}): {tail}"
+    return pdf, f"Report compiled with {kind}: {pdf}"
+
+
+def write_report(analysis, images=None, folder=None, compile=True):
+    """report.tex (+ renders) and, when a compiler is there, the PDF: {"dir", "tex", "pdf" or None, "message"}."""
+    paths = report_tex(analysis, images, folder)
+    out = dict(paths)
+    out["pdf"], out["message"] = (None, f"LaTeX source written: {paths['tex']}")
+    if compile:
+        out["pdf"], out["message"] = compile_report(paths)
+    return out
 
 
 # ----- a benchmark --------------------------------------------------------------------------------
