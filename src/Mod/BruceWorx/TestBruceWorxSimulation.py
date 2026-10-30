@@ -410,6 +410,46 @@ class TestSimulationGui(unittest.TestCase):
             self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
         panel.release()
 
+    def test_simulation_preferences_page(self):
+        prefs = App.ParamGet(sim.SIM_PREFS)
+
+        def clean():
+            for name in ("SFThresholds", "SFColors", "StressMeasure", "TexPath"):
+                prefs.RemString(name)
+            for name in ("ModalModes", "BucklingModes"):
+                prefs.RemInt(name)
+            for name in ("TargetBLF", "MeshDivisor"):
+                prefs.RemFloat(name)
+
+        clean()
+        self.addCleanup(clean)
+        page = self.sg.classes()["SimPreferencesPage"]()
+        self.assertEqual(page.form.windowTitle(), "Simulation")
+        page.loadSettings()
+        self.assertEqual(page.thresholds.text(), "1;2")
+        self.assertEqual((page.modal_modes.value(), page.buckling_modes.value()), (8, 4))
+        self.assertAlmostEqual(page.divisor.value(), 30.0)
+        page.thresholds.setText("1;3")
+        page.colors.setText("#ff0000;#ffaa00;#00aa00")
+        page.measure.setCurrentIndex(page.measure.findData("Tresca"))
+        page.modal_modes.setValue(10)
+        page.buckling_modes.setValue(6)
+        page.target.setValue(2.0)
+        page.divisor.setValue(20.0)
+        page.saveSettings()
+        self.assertEqual(sim.default_bands(), ([1.0, 3.0], ["#FF0000", "#FFAA00", "#00AA00"]))
+        self.assertEqual(sim.default_measure(), "Tresca")
+        self.assertEqual((eigen.default_modes("modal"), eigen.default_modes("buckling")), (10, 6))
+        self.assertAlmostEqual(eigen.default_target(), 2.0)
+        self.assertAlmostEqual(sim.default_mesh_size(self.box), self.box.Shape.BoundBox.DiagonalLength / 20.0)
+        new_study = self.sg.classes()["NewStudyPanel"](self.doc)
+        self.assertEqual(new_study.modal_count.value(), 10)
+        new_study.release()
+        page.thresholds.setText("3;1")  # not rising: refused, the rest saved
+        page.saveSettings()
+        self.assertIn("not saved", page.note.text())
+        self.assertEqual(sim.default_bands()[0], [1.0, 3.0])
+
     def test_ribbon_commands_in_the_fem_workbench(self):
         import FreeCADGui as Gui
 

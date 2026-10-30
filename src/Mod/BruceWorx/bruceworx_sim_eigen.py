@@ -99,6 +99,13 @@ def default_target():
     return value if value > 0 else DEFAULT_TARGET_BLF
 
 
+def default_modes(kind):
+    """The mode count a new study starts with: the preference ModalModes / BucklingModes, else 8 / 4."""
+    name, fallback = ("ModalModes", MODAL_MODES) if kind == "modal" else ("BucklingModes", BUCKLING_MODES)
+    value = _prefs().GetInt(name, 0)
+    return value if value > 0 else fallback
+
+
 def save_default_target(value):
     value = float(value)
     if value <= 0:
@@ -126,7 +133,7 @@ def ensure_properties(analysis):
     kind = study_kind(analysis)
     if kind == "modal":
         _add(analysis, "App::PropertyInteger", "ModeCount", "Modal",
-             "Modes to find (8 by default); a free-free study finds the six rigid-body modes on top", MODAL_MODES)
+             "Modes to find (8 by default); a free-free study finds the six rigid-body modes on top", default_modes("modal"))
         _add(analysis, "App::PropertyFloat", "FrequencyMin", "Modal", "Lowest frequency (Hz) to look for; 0 = no limit", 0.0)
         _add(analysis, "App::PropertyFloat", "FrequencyMax", "Modal", "Highest frequency (Hz) to look for; 0 = no limit", 0.0)
         _add(analysis, "App::PropertyBool", "Prestressed", "Modal",
@@ -143,7 +150,8 @@ def ensure_properties(analysis):
         _add(analysis, "App::PropertyFloat", "BandMin", "Excitation", "Excitation band, lower edge (Hz)", 0.0)
         _add(analysis, "App::PropertyFloat", "BandMax", "Excitation", "Excitation band, upper edge (Hz)", 0.0)
     elif kind == "buckling":
-        _add(analysis, "App::PropertyInteger", "ModeCount", "Buckling", "Buckling load factors to find (4 by default)", BUCKLING_MODES)
+        _add(analysis, "App::PropertyInteger", "ModeCount", "Buckling", "Buckling load factors to find (4 by default)",
+             default_modes("buckling"))
         _add(analysis, "App::PropertyFloat", "TargetLoadFactor", "Buckling",
              "Target buckling load factor: lambda_1 red below 1, amber below the target, green at or above it",
              default_target())

@@ -823,7 +823,7 @@ def _make_classes():
             self.modal_box = QtWidgets.QWidget()
             mlay = form_layout()
             self.modal_box.setLayout(mlay)
-            self.modal_count = count_spin(eigen.MODAL_MODES)
+            self.modal_count = count_spin(eigen.default_modes("modal"))
             mlay.addRow("Modes", self.modal_count)
             self.fmin_spin, self.fmax_spin = hz_spin(), hz_spin()
             rng = QtWidgets.QHBoxLayout()
@@ -837,7 +837,7 @@ def _make_classes():
             self.buckling_box = QtWidgets.QWidget()
             blay = form_layout()
             self.buckling_box.setLayout(blay)
-            self.buckling_count = count_spin(eigen.BUCKLING_MODES)
+            self.buckling_count = count_spin(eigen.default_modes("buckling"))
             blay.addRow("Load factors", self.buckling_count)
             self.target_spin = target_spin(eigen.default_target())
             blay.addRow("Target factor", self.target_spin)
@@ -914,7 +914,7 @@ def _make_classes():
             self.size_spin.setRange(0.01, 100000.0)
             self.size_spin.setDecimals(3)
             self.size_spin.setSuffix(" mm")
-            self.size_spin.setToolTip("Largest element: the bounding-box diagonal / 30 by default")
+            self.size_spin.setToolTip(f"Largest element: the bounding-box diagonal / {sim.mesh_divisor():g} by default")
             lay.addRow("Max element", self.size_spin)
             self.fineness_combo = QtWidgets.QComboBox()
             for name in sim.FINENESS:
@@ -2025,8 +2025,90 @@ def _make_classes():
         def accept(self):
             return self.reject()
 
+    class SimPreferencesPage:
+        """Preferences > BruceWorx > Simulation (30 Oct follow-up 5): the defaults new studies start with,
+        all in Mod/BruceWorx/Sim."""
+
+        def __init__(self, *_args):
+            self.form = QtWidgets.QWidget()
+            self.form.setWindowTitle("Simulation")
+            self.form.setObjectName("bwSimPreferences")
+            lay = QtWidgets.QVBoxLayout(self.form)
+            static = QtWidgets.QGroupBox("Static stress")
+            f1 = QtWidgets.QFormLayout(static)
+            self.thresholds = QtWidgets.QLineEdit()
+            self.thresholds.setToolTip("Safety-factor band edges, ascending, separated by ';' (n edges make n + 1 bands)")
+            f1.addRow("Band edges", self.thresholds)
+            self.colors = QtWidgets.QLineEdit()
+            self.colors.setToolTip("One #RRGGBB colour per band, lowest band first, separated by ';'")
+            f1.addRow("Band colours", self.colors)
+            self.measure = measure_combo(sim.default_measure())
+            f1.addRow("Stress measure", self.measure)
+            lay.addWidget(static)
+            eig = QtWidgets.QGroupBox("Modal and buckling")
+            f2 = QtWidgets.QFormLayout(eig)
+            self.modal_modes = count_spin(eigen.default_modes("modal"))
+            f2.addRow("Modal modes", self.modal_modes)
+            self.buckling_modes = count_spin(eigen.default_modes("buckling"))
+            f2.addRow("Buckling load factors", self.buckling_modes)
+            self.target = target_spin(eigen.default_target())
+            f2.addRow("Target buckling load factor", self.target)
+            lay.addWidget(eig)
+            general = QtWidgets.QGroupBox("Mesh and report")
+            f3 = QtWidgets.QFormLayout(general)
+            self.divisor = QtWidgets.QDoubleSpinBox()
+            self.divisor.setRange(2.0, 1000.0)
+            self.divisor.setDecimals(1)
+            self.divisor.setToolTip("Default largest element = bounding-box diagonal / this")
+            f3.addRow("Mesh size: diagonal /", self.divisor)
+            row = QtWidgets.QHBoxLayout()
+            self.tex = QtWidgets.QLineEdit()
+            self.tex.setPlaceholderText("automatic: Tectonic in Keystone, else latexmk or pdflatex")
+            row.addWidget(self.tex, 1)
+            row.addWidget(button("…", self.browse_tex, "Pick a tectonic, latexmk or pdflatex binary"))
+            f3.addRow("TeX compiler", row)
+            lay.addWidget(general)
+            self.note = hint()
+            lay.addWidget(self.note)
+            lay.addStretch(1)
+
+        def browse_tex(self):
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(self.form, "TeX compiler")
+            if path:
+                self.tex.setText(path)
+
+        def loadSettings(self):
+            prefs = sim._prefs()
+            thresholds, colors = sim.default_bands()
+            self.thresholds.setText(";".join(f"{x:g}" for x in thresholds))
+            self.colors.setText(";".join(colors))
+            self.measure.setCurrentIndex(max(0, self.measure.findData(sim.default_measure())))
+            self.modal_modes.setValue(eigen.default_modes("modal"))
+            self.buckling_modes.setValue(eigen.default_modes("buckling"))
+            self.target.setValue(eigen.default_target())
+            self.divisor.setValue(sim.mesh_divisor())
+            self.tex.setText(prefs.GetString(sim.TEX_PREF, ""))
+
+        def saveSettings(self):
+            """Writes the page; bands that do not check out are left as they were, with the reason shown."""
+            prefs = sim._prefs()
+            try:
+                thresholds = [float(x) for x in self.thresholds.text().split(";") if x.strip()]
+                colors = [c.strip() for c in self.colors.text().split(";") if c.strip()]
+                sim.save_default_bands(thresholds, colors)
+                self.note.setText("")
+            except (ValueError, sim.StudyError) as exc:
+                self.note.setText(f"<span style='color:#b00020'>Bands not saved: {exc}</span>")
+                _warn(f"Simulation preferences: bands not saved: {exc}")
+            sim.set_default_measure(self.measure.currentData())
+            prefs.SetInt("ModalModes", self.modal_modes.value())
+            prefs.SetInt("BucklingModes", self.buckling_modes.value())
+            eigen.save_default_target(self.target.value())
+            prefs.SetFloat("MeshDivisor", self.divisor.value())
+            prefs.SetString(sim.TEX_PREF, self.tex.text().strip())
+
     return {"Panel": Panel, "NewStudyPanel": NewStudyPanel, "StudyPanel": StudyPanel,
-            "ModeTimelinePanel": ModeTimelinePanel}
+            "ModeTimelinePanel": ModeTimelinePanel, "SimPreferencesPage": SimPreferencesPage}
 
 
 def FreeCAD_params(path):
@@ -2250,6 +2332,10 @@ def install():
         return
     for name, text, icon, tip, active, handler in COMMANDS:
         Gui.addCommand(name, _Command(name, text, icon, tip, active, handler))
+    try:  # Preferences > BruceWorx > Simulation (30 Oct follow-up 5)
+        Gui.addPreferencePage(classes()["SimPreferencesPage"], "BruceWorx")
+    except Exception as exc:
+        _warn(f"The Simulation preferences page was not added: {exc}")
     try:  # a mode shape plays on the Motion Study timeline (ROB-05) when one is selected
         import bruceworx_motion as bm
 

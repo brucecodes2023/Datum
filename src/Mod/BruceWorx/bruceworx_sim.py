@@ -395,12 +395,21 @@ def model_candidates(doc, selection=None):
     return found
 
 
+def mesh_divisor():
+    """The default element size is the bounding-box diagonal over this: the preference MeshDivisor, else 30."""
+    try:
+        value = _prefs().GetFloat("MeshDivisor", 0.0)
+    except Exception:
+        value = 0.0
+    return value if value > 0 else MESH_DIVISOR
+
+
 def default_mesh_size(obj):
-    """Bounding-box diagonal / 30, in mm; 1 mm when the shape is empty."""
+    """Bounding-box diagonal / 30 (the preference MeshDivisor), in mm; 1 mm when the shape is empty."""
     shape = shape_of(obj)
     if shape is None:
         return 1.0
-    return max(0.01, shape.BoundBox.DiagonalLength / MESH_DIVISOR)
+    return max(0.01, shape.BoundBox.DiagonalLength / mesh_divisor())
 
 
 def mesh_shape_object(doc, model):
