@@ -1119,6 +1119,52 @@ def safety_factors(stresses, allowable):
     return out
 
 
+def support_nodes(analysis, result=None):
+    """The result mesh's nodes on the study's supports (sorted ids), matched by position from the study's
+    mesh (the FRD import may renumber a compacted mesh)."""
+    try:
+        from femmesh import meshtools
+    except Exception:
+        return []
+    m = members(analysis)
+    mesh = getattr(m["mesh"], "FemMesh", None) if m["mesh"] is not None else None
+    if mesh is None or not m["supports"]:
+        return []
+    ids = set()
+    for sup in m["supports"]:
+        try:
+            ids.update(meshtools.get_femnodes_by_femobj_with_references(mesh, {"Object": sup}))
+        except Exception:
+            continue
+    if result is None or not ids:
+        return sorted(ids)
+    nodes = result.Mesh.FemMesh.Nodes
+
+    def key(v):
+        return (round(v.x, 6), round(v.y, 6), round(v.z, 6))
+
+    if all(i in nodes and key(nodes[i]) == key(mesh.getNodeById(i)) for i in list(ids)[:50]):
+        return sorted(i for i in ids if i in nodes)
+    where = {key(v): n for n, v in nodes.items()}
+    return sorted(where[k] for k in (key(mesh.getNodeById(i)) for i in ids) if k in where)
+
+
+def element_min_factors(result):
+    """{element id: the lowest safety factor of its nodes} of a result's mesh (volumes, else faces): the
+    crisp safety-factor view colours each element by it (30 Oct follow-up 1)."""
+    factors = dict(zip(result.NodeNumbers, getattr(result, "SafetyFactor", []) or []))
+    if not factors:
+        return {}
+    fm = result.Mesh.FemMesh
+    elements = list(fm.Volumes) or list(fm.Faces)
+    out = {}
+    for elem in elements:
+        values = [factors[n] for n in fm.getElementNodes(elem) if n in factors]
+        if values:
+            out[elem] = min(values)
+    return out
+
+
 def add_safety_factor(result, analysis=None):
     """Adds SafetyFactor (per node), AllowableStress, AllowableBasis, StressMeasure and MinSafetyFactor
     to a result object, with the study's stress measure.
@@ -1152,6 +1198,17 @@ def add_safety_factor(result, analysis=None):
     result.SafetyFactor = factors
     result.AllowableStress = allowable
     result.MinSafetyFactor = min(factors)
+    # 30 Oct follow-up 2: a fully fixed face makes a stress singularity at its edges, so the minimum is
+    # also given without the nodes on the supports
+    if "SupportNodes" not in result.PropertiesList:
+        result.addProperty("App::PropertyIntegerList", "SupportNodes", "Result",
+                           "[BW] The nodes on the supports (a fixed face's edges are a stress singularity)")
+        result.addProperty("App::PropertyFloat", "MinSafetyFactorAwayFromSupports", "Result",
+                           "[BW] The lowest safety factor of the nodes not on a support")
+    on_support = set(support_nodes(analysis, result)) if analysis is not None else set()
+    result.SupportNodes = sorted(on_support)
+    away = [sf for n, sf in zip(result.NodeNumbers, factors) if n not in on_support]
+    result.MinSafetyFactorAwayFromSupports = min(away) if away else result.MinSafetyFactor
     return result.MinSafetyFactor
 
 
@@ -1173,9 +1230,16 @@ def result_extrema(result):
         i = max(range(len(disp)), key=disp.__getitem__)
         out["max_disp"], out["max_disp_node"] = disp[i], nodes[i] if i < len(nodes) else None
     sf = list(getattr(result, "SafetyFactor", []) or [])
+    out["min_sf_away"], out["min_sf_away_node"], out["support_nodes"] = None, None, 0
     if sf:
         i = min(range(len(sf)), key=sf.__getitem__)
         out["min_sf"], out["min_sf_node"] = sf[i], nodes[i] if i < len(nodes) else None
+        on_support = set(getattr(result, "SupportNodes", []) or [])
+        out["support_nodes"] = len(on_support)
+        away = [j for j in range(min(len(sf), len(nodes))) if nodes[j] not in on_support]
+        if away and on_support:
+            j = min(away, key=sf.__getitem__)
+            out["min_sf_away"], out["min_sf_away_node"] = sf[j], nodes[j]
     out["measure"] = str(getattr(result, "StressMeasure", "") or "vonMises")
     out["max_eq"] = float(getattr(result, "MaxEquivalentStress", 0.0) or out["max_vm"])
     return out
@@ -1483,7 +1547,14 @@ def report_source(data, figures=()):
         if sf is not None:
             verdict = r" \textcolor{bandA}{\textbf{below 1: the part fails}}" if sf < 1 else " (above 1)"
         lines.append(rf"Min safety factor & \textbf{{{e(_fmt(sf, 3, cap=True))}}} (node {res['min_sf_node']}){verdict}\\")
+        if res.get("min_sf_away") is not None:
+            lines.append(rf"Min safety factor away from the supports & \textbf{{{e(_fmt(res['min_sf_away'], 3, cap=True))}}} "
+                         rf"(node {res['min_sf_away_node']}; {res['support_nodes']} nodes on supports left out)\\")
         lines.append(r"\end{tabular}")
+        if res.get("min_sf_away") is not None:
+            lines.append(r"\par{\small A fully fixed face cannot contract sideways, so its edges carry a stress "
+                         r"singularity that grows as the mesh is refined; the second minimum leaves the nodes on the "
+                         r"supports out. Trust it only when the real support is not that stiff.}")
     else:
         lines.append("Not solved yet.")
     lines += [

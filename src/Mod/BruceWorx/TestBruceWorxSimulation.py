@@ -168,11 +168,15 @@ class TestSimulationGui(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn("Min safety factor", panel.summary.text())
         self.assertIn("below 1", panel.summary.text())
+        self.assertIn("Away from the supports", panel.summary.text())
         self.assertIn("Solved in", panel.progress.text())
         self.assertEqual(self.sg.shown_field(analysis), "safety")
-        # the banded colours: NodeColor has no getter (ViewProviderFemMeshPy), NodeColorArray is the per-vertex list
+        # the banded colours, crisp: one colour per element (its lowest node's band); ElementColor has no
+        # getter (ViewProviderFemMeshPy), ElementColorArray is the per-face list
+        self.assertEqual(result.Mesh.ViewObject.ColorMode, "ByElement")
+
         def shown_colors():
-            return {tuple(round(c, 2) for c in col[:3]) for col in result.Mesh.ViewObject.NodeColorArray}
+            return {tuple(round(c, 2) for c in col[:3]) for col in result.Mesh.ViewObject.ElementColorArray}
 
         def rounded(hex_color):
             return tuple(round(c, 2) for c in sim.rgb(hex_color))

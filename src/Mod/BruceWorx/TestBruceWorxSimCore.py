@@ -328,6 +328,17 @@ class TestCantileverBenchmark(unittest.TestCase):
         self.assertAlmostEqual(result.MinSafetyFactor, 355.0 / ext["max_vm"], places=6)
         self.assertAlmostEqual(ext["min_sf"], result.MinSafetyFactor, places=6)
         self.assertLess(ext["min_sf"], 1.0)  # 600 MPa bending stress on 355 MPa steel
+        # follow-up 2 (30 Oct): the nodes on the fixed face, and the minimum without them
+        on_support = set(result.SupportNodes)
+        self.assertGreater(len(on_support), 20)
+        nodes = result.Mesh.FemMesh.Nodes
+        self.assertTrue(all(abs(nodes[n].x) < 1e-6 for n in on_support))  # Face1 is x = 0
+        self.assertGreaterEqual(result.MinSafetyFactorAwayFromSupports, result.MinSafetyFactor)
+        self.assertEqual(ext["min_sf_away"], result.MinSafetyFactorAwayFromSupports)
+        # follow-up 1: the crisp view's per-element minimum
+        per_element = sim.element_min_factors(result)
+        self.assertEqual(len(per_element), result.Mesh.FemMesh.VolumeCount)
+        self.assertAlmostEqual(min(per_element.values()), result.MinSafetyFactor)
         # a probe at the tip reads the tip deflection
         reading = sim.probe(result, App.Vector(100, 5, 5))
         self.assertIsNotNone(reading)
@@ -346,6 +357,7 @@ class TestCantileverBenchmark(unittest.TestCase):
             text = handle.read()
         self.assertIn("Min safety factor", text)
         self.assertIn("below 1: the part fails", text)
+        self.assertIn("Min safety factor away from the supports", text)
         self.assertIn("No renders", text)
         # the other measures from the same fields: Tresca >= von Mises >= Rankine-ish in bending (near uniaxial)
         vm_sf = result.MinSafetyFactor
@@ -358,12 +370,16 @@ class TestCantileverBenchmark(unittest.TestCase):
         self.assertLessEqual(tresca, ext["max_vm"] * 2 / math.sqrt(3) + 1e-6)  # Tresca <= 2/sqrt(3) vM
         self.assertGreaterEqual(rankine, tresca / 2 - 1e-6)  # max |s| >= (s1 - s3) / 2 for any state
         self.assertAlmostEqual(rankine_sf, 355.0 / rankine, places=6)
+        # the Rankine minimum sits on the fixed face's corners (the singularity): away from it, it is higher
+        rankine_away = result.MinSafetyFactorAwayFromSupports
+        self.assertGreater(rankine_away, rankine_sf)
         sim.set_study_measure(analysis, "vonMises")
         App.Console.PrintMessage(
             f"\n[sim benchmark] tip {ext['max_disp']:.4f} mm vs {theory['deflection']:.4f} mm theory "
             f"({100 * error:.2f} %), max vM {ext['max_vm']:.1f} MPa vs {theory['stress']:.1f} MPa, min SF {ext['min_sf']:.3f}; "
             f"Tresca {tresca:.1f} MPa (SF {tresca_sf:.3f}), Rankine {rankine:.1f} MPa (SF {rankine_sf:.3f}); "
-            f"{s['mesh']['nodes']} nodes\n")
+            f"{s['mesh']['nodes']} nodes; away from the {len(on_support)} support nodes: von Mises SF "
+            f"{ext['min_sf_away']:.3f}, Rankine SF {rankine_away:.3f}\n")
 
     def test_solve_refuses_a_study_that_is_not_ready(self):
         doc = App.newDocument("NotReady")

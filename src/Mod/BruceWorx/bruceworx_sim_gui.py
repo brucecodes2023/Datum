@@ -151,7 +151,8 @@ def current_study(doc=None):
 
 
 def band_colors(nodes, factors, bands):
-    """{(node, ...): (r, g, b)} per band, the form ViewProviderFemMesh.NodeColor takes (one entry per band)."""
+    """{(id, ...): (r, g, b)} per band, the form ViewProviderFemMesh.NodeColor and ElementColor take (one
+    entry per band); nodes are node or element ids."""
     thresholds, colors = bands
     groups = {}
     for node, sf in zip(nodes, factors):
@@ -191,7 +192,8 @@ def legend_html(kind, result=None, analysis=None):
         if result is not None and getattr(result, "AllowableStress", 0):
             basis = (f"<br><span style='color:#777'>allowable {result.AllowableStress:.4g} MPa "
                      f"({result.AllowableBasis})</span>")
-        return f"<b>Safety factor</b> = allowable / {sim.measure_label(measure)} stress per node<br>{chips}{basis}"
+        return (f"<b>Safety factor</b> = allowable / {sim.measure_label(measure)} stress per node; each element "
+                f"in the band of its lowest node<br>{chips}{basis}")
     if kind == "stress":
         return "<b>von Mises stress</b>, MPa: blue low to red high"
     if kind == "displacement":
@@ -261,9 +263,16 @@ def show_field(analysis, kind, result=None):
         if not factors:
             _warn("No safety factor: the material has no yield or ultimate strength")
             return False
-        # NodeColor fills NodeColorArray, which the view provider paints only in the ByNode colour mode
-        vobj.NodeColor = band_colors(nodes, factors, sim.study_bands(analysis))
-        _color_mode(vobj, "ByNode")
+        # crisp bands (30 Oct follow-up 1): each element in the band of its lowest node, so a band edge is an
+        # element edge instead of a blur across one element. ElementColor fills ElementColorArray, which the
+        # view provider paints only in the ByElement colour mode.
+        elements = sim.element_min_factors(result)
+        if elements:
+            vobj.ElementColor = band_colors(list(elements), list(elements.values()), sim.study_bands(analysis))
+            _color_mode(vobj, "ByElement")
+        else:
+            vobj.NodeColor = band_colors(nodes, factors, sim.study_bands(analysis))
+            _color_mode(vobj, "ByNode")
         if has_vectors:
             vobj.applyDisplacement(0.0)
     else:
@@ -1658,10 +1667,16 @@ def _make_classes():
                 sf_text = f"<b style='color:#b00020'>{sf:.3g}</b> at node {ext['min_sf_node']} — below 1"
             else:
                 sf_text = f"<b style='color:#1f7a46'>{sf:.3g}</b> at node {ext['min_sf_node']}"
+            away = ""
+            if ext.get("min_sf_away") is not None:
+                color = "#b00020" if ext["min_sf_away"] < 1 else "#1f7a46"
+                away = (f"<br>Away from the supports <b style='color:{color}'>{ext['min_sf_away']:.3g}</b> at node "
+                        f"{ext['min_sf_away_node']} <span style='color:#777'>({ext['support_nodes']} nodes on supports left "
+                        "out: a fixed face's edges are a stress singularity that grows with mesh refinement)</span>")
             self.summary.setText(
                 f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b> (node {ext['max_vm_node']})<br>"
                 f"Max displacement <b>{ext['max_disp']:.4g} mm</b> (node {ext['max_disp_node']})<br>"
-                f"Min safety factor {sf_text}")
+                f"Min safety factor {sf_text}{away}")
             kind = shown_field(self.analysis)
             self.legend.setText(legend_html(kind, result, self.analysis) if kind else "")
 
