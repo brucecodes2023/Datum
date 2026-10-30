@@ -135,18 +135,24 @@ def _metered(row, target):
 
 
 def _extras(target, qty):
-    """[BW] ROU-05: the counted lines an item brings with it (a wire's terminals and seals, one per
-    end on a pin with a TerminalPN / SealPN: ``BomExtras`` "P/N|count|kind"), keyed by that P/N so
-    a vaulted terminal is a line and the rest are listed as missing by name."""
+    """[BW] ROU-05: the counted lines an item brings with it: a wire's terminals and seals (one per
+    end on a pin, ``BomExtras``) and a connector's accessories (one set per instance, e.g. a
+    wedgelock). Keys: the Standard Library item, then the manufacturer P/N, so a vaulted terminal
+    is a line; the name (what a missing line shows) is what to order: "Terminal: JST SXH-001T-P0.6
+    (STD-...)"."""
     rows = []
-    for entry in getattr(target, "BomExtras", None) or []:
-        try:
-            pn, count, kind = entry.split("|", 2)
-            n = int(count)
-        except ValueError:
-            continue
-        if pn and n > 0:
-            rows.append({"keys": [pn], "name": f"{pn} ({kind.lower()})", "qty": qty * n})
+    try:
+        import bruceworx_routing as br
+        import bruceworx_routing_ports as bp
+    except Exception:
+        return rows
+    found = [(key, n, kind, mfr, mpn) for key, n, kind, mfr, mpn in br.bom_extras(target)]
+    found += [(item or mpn, n, kind, mfr, mpn) for mpn, mfr, item, n, kind in bp.accessories(target)]
+    for key, n, kind, mfr, mpn in found:
+        if key and n > 0:
+            keys = [k for k in dict.fromkeys((key, mpn)) if k]
+            item = key if key != mpn else ""
+            rows.append({"keys": keys, "name": bp.bom_text(kind, mfr, mpn, item), "qty": qty * n})
     return rows
 
 
@@ -195,6 +201,7 @@ def walk(doc, imported=None) -> list:
                 continue
             name = os.path.basename(getattr(target.Document, "FileName", "") or "") or target.Document.Label
             rows.append(_metered({"keys": _keys(target, imported), "name": name, "qty": mult * count}, target))
+            rows.extend(_extras(target, mult * count))  # [BW] ROU-05: a connector's accessories
 
     visit(objects, 1, {top.Name} if top is not None else set())
     return rows

@@ -464,7 +464,8 @@ class ConnectorFittingTests(unittest.TestCase):
         part.PartNumber = pn
         for k, x in enumerate((0.0, 2.5), start=1):
             self.bp.make_pin(part, str(k), ((x, 0, 0), z, (1, 0, 0)), GaugeMin=28, GaugeMax=22, TerminalPN=terminal,
-                             SealPN=seal, DefaultSignal="+5V" if k == 1 else "")
+                             TerminalMfr="JST" if terminal else "", SealPN=seal,
+                             DefaultSignal="+5V" if k == 1 else "")
         return part
 
     def link(self, target, label, base, container, rotation=None):
@@ -654,23 +655,38 @@ class ConnectorFittingTests(unittest.TestCase):
         from bruceworx import bom
 
         part, asm, j1, j2, path = self.harness()
-        self.bp.pin(part, "1").SealPN = "WS-1"
+        pin1 = self.bp.pin(part, "1")
+        pin1.SealPN, pin1.SealMfr = "WS-1", "Acme"
+        for pin in self.bp.pins(part):
+            pin.TerminalItem = "STD-01-02001-001"  # the Standard Library item of the JST terminal
+        self.bp.set_connector(part, accessories=[("W2P", "TE Connectivity", "", 1, "Wedgelock")])
         w1 = br.make_wire(path, gauge="22 AWG", name="W1")
         a = self.bp.frame_ref(j1, self.bp.pin(part, "2"))
         path2 = br.make_path([(2.5, 0, 0), (60, 0, -20)], self.doc, attachments=[(0, a[0], a[1])], container=asm)
         br.make_wire(path2, gauge="24 AWG", name="W2")  # one end on a pin, the other loose
         self.doc.recompute()
-        self.assertEqual(sorted(w1.BomExtras), ["SXH-001T-P0.6|2|Terminal", "WS-1|2|Seal"])
-        self.assertEqual(sorted(br.terminal_rows(self.doc)), [("SXH-001T-P0.6", "Terminal", 3), ("WS-1", "Seal", 2)])
+        self.assertEqual(sorted(w1.BomExtras), ["STD-01-02001-001|2|Terminal|JST|SXH-001T-P0.6", "WS-1|2|Seal|Acme|WS-1"])
+        self.assertEqual(sorted(br.terminal_rows(self.doc)),
+                         [("STD-01-02001-001", "Terminal", 3, "JST", "SXH-001T-P0.6"), ("WS-1", "Seal", 2, "Acme", "WS-1")])
         rows = bb.walk(self.doc)
         counted = {}
         for r in rows:
-            if r["keys"] and r["keys"][0] in ("SXH-001T-P0.6", "WS-1"):
+            if r["keys"] and r["name"].split(":")[0] in ("Terminal", "Seal", "Wedgelock"):
                 counted[r["name"]] = counted.get(r["name"], 0) + r["qty"]
-        self.assertEqual(counted, {"SXH-001T-P0.6 (terminal)": 3, "WS-1 (seal)": 2})
-        lines, missing = bom.lines_from_walk(rows, {"SXH-001T-P0.6"})
+        # Ordered by manufacturer and MPN; the Standard Library item alongside; a wedgelock per housing.
+        self.assertEqual(counted, {"Terminal: JST SXH-001T-P0.6 (STD-01-02001-001)": 3, "Seal: Acme WS-1": 2,
+                                   "Wedgelock: TE Connectivity W2P": 2})
+        lines, missing = bom.lines_from_walk(rows, {"STD-01-02001-001"})
+        self.assertEqual([(l.child, l.qty) for l in lines], [("STD-01-02001-001", 3)])
+        self.assertIn({"name": "Seal: Acme WS-1", "qty": 2}, missing)
+        self.assertIn({"name": "Wedgelock: TE Connectivity W2P", "qty": 2}, missing)
+        # The terminal list to order from: manufacturer and MPN in columns of their own.
+        self.assertEqual(br.terminal_csv(self.doc).splitlines(), [
+            "Kind,Manufacturer,MPN,Standard Library item,Qty", "Seal,Acme,WS-1,,2",
+            "Terminal,JST,SXH-001T-P0.6,STD-01-02001-001,3", "Wedgelock,TE Connectivity,W2P,,2"])
+        # A terminal not in the Standard Library yet is still found by its MPN.
+        lines, _missing = bom.lines_from_walk(rows, {"SXH-001T-P0.6"})
         self.assertEqual([(l.child, l.qty) for l in lines], [("SXH-001T-P0.6", 3)])
-        self.assertIn({"name": "WS-1 (seal)", "qty": 2}, missing)
 
     # ----- fittings -----
 
@@ -799,7 +815,7 @@ class ConnectorFittingTests(unittest.TestCase):
             self.assertEqual(path.StartFrame, "Pin 1 of J1")
             self.assertAlmostEqual(path.Length.Value, length, places=6)
             self.assertEqual((wire.FromConnector, wire.ToPin), ("J1", "1"))
-            self.assertEqual(list(wire.BomExtras), ["SXH-001T-P0.6|2|Terminal"])
+            self.assertEqual(list(wire.BomExtras), ["SXH-001T-P0.6|2|Terminal|JST|SXH-001T-P0.6"])
             self.assertEqual(len(self.bp.ports(fit)), 3)
             self.bf.set_choice(fit, style="Elbow")
             doc.recompute()

@@ -959,6 +959,20 @@ def from_to_csv(rows):
         for r in rows])
 
 
+TERMINAL_COLUMNS = ("Kind", "Manufacturer", "MPN", "Standard Library item", "Qty")
+
+
+def terminal_csv(rows):
+    """The terminals, seals and connector accessories to order (ROU-05; your 30 Oct answer: ordered
+    by manufacturer and MPN, the Standard Library item alongside for finding). ``rows``: dicts with
+    kind, manufacturer, mpn, item, qty; summed per (kind, manufacturer, MPN, item), sorted."""
+    totals = {}
+    for r in rows:
+        key = (r.get("kind", ""), r.get("manufacturer", ""), r.get("mpn", ""), r.get("item", ""))
+        totals[key] = totals.get(key, 0) + int(r.get("qty", 0))
+    return _csv(TERMINAL_COLUMNS, [k + (n,) for k, n in sorted(totals.items())])
+
+
 def cut_list_csv(rows):
     """``rows``: dicts with item, kind, size, cut_length, radius, bends, table (the LRA rows)."""
     out = []

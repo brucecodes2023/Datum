@@ -48,7 +48,9 @@ vertices with the lead ends (a pipe's bend table is read from them). A wire on s
 ``DefaultSignal``) from the connector's label and the pin's name, as long as they are empty or
 still what was filled in last (``AutoFromTo``), so a typed value stays; ``Warnings`` names a gauge
 outside the pin's range; ``BomExtras`` lists one terminal (and seal) per attached end from the
-pin's ``TerminalPN`` (``SealPN``), which the vault BOM walker counts. A port's ``Engagement``
+pin's ``TerminalPN`` / ``TerminalMfr`` / ``TerminalItem`` (the seal's likewise): ordered by
+manufacturer and MPN, keyed by the Standard Library item when there is one; the vault BOM walker
+counts them. A port's ``Engagement``
 (tube inside the fitting) is added to a pipe's cut length and bend table and to a hose's length.
 The from-to list names each end's mating connector when both halves are in the document.
 """
@@ -847,10 +849,13 @@ class Wire(_Routed):
             problem = rt.gauge_fits(obj.Gauge, frame.GaugeMin, frame.GaugeMax)
             if problem:
                 warnings.append(f"{frame_text(frame, connector)}: {problem}")
-            for pn, what in ((frame.TerminalPN, "Terminal"), (frame.SealPN, "Seal")):
-                pn = str(pn or "").strip()
-                if pn:
-                    extras[(pn, what)] = extras.get((pn, what), 0) + 1
+            for what in ("Terminal", "Seal"):
+                mpn = str(getattr(frame, what + "PN", "") or "").strip()
+                mfr = str(getattr(frame, what + "Mfr", "") or "").strip()
+                item = str(getattr(frame, what + "Item", "") or "").strip()
+                if mpn or item:
+                    key = (item or mpn, what, mfr, mpn)
+                    extras[key] = extras.get(key, 0) + 1
         last = list(obj.AutoFromTo) if len(obj.AutoFromTo) == 5 else ["", "", "", "", ""]
         for k, name in enumerate(("FromConnector", "FromPin", "ToConnector", "ToPin", "Signal")):
             current = getattr(obj, name)
@@ -861,7 +866,7 @@ class Wire(_Routed):
         text = "; ".join(warnings)
         if obj.Warnings != text:
             obj.Warnings = text
-        rows = [f"{pn}|{n}|{what}" for (pn, what), n in extras.items()]
+        rows = [f"{key}|{n}|{what}|{mfr}|{mpn}" for (key, what, mfr, mpn), n in extras.items()]
         if list(obj.BomExtras) != rows:
             obj.BomExtras = rows
 
@@ -1163,24 +1168,49 @@ def from_to_rows(doc):
 
 
 def terminal_rows(doc):
-    """``[(P/N, kind, count)]``: the terminals and seals the wires in ``doc`` bring (ROU-05, C3),
-    summed per P/N."""
+    """``[(key, kind, count, manufacturer, MPN)]``: the terminals and seals the wires in ``doc``
+    bring (ROU-05, C3), summed per part; the key is the Standard Library item when the pin names
+    one, else the manufacturer P/N."""
     totals = {}
     for obj in routed(doc, (WIRE,)):
-        for pn, qty, kind in bom_extras(obj):
-            totals[(pn, kind)] = totals.get((pn, kind), 0) + qty
-    return [(pn, kind, n) for (pn, kind), n in totals.items()]
+        for key, qty, kind, mfr, mpn in bom_extras(obj):
+            totals[(key, kind, mfr, mpn)] = totals.get((key, kind, mfr, mpn), 0) + qty
+    return [(key, kind, n, mfr, mpn) for (key, kind, mfr, mpn), n in totals.items()]
+
+
+def terminal_list(doc):
+    """Rows for ``routing.terminal_csv``: every wire's terminals and seals and every connector
+    instance's accessories in ``doc``."""
+    bp = _bp()
+    rows = []
+    for obj in routed(doc, (WIRE,)):
+        for key, qty, kind, mfr, mpn in bom_extras(obj):
+            rows.append({"kind": kind, "manufacturer": mfr, "mpn": mpn, "item": key if key != mpn else "", "qty": qty})
+    for connector in bp.connectors(doc):
+        for mpn, mfr, item, qty, kind in bp.accessories(connector):
+            rows.append({"kind": kind, "manufacturer": mfr, "mpn": mpn, "item": item, "qty": qty})
+    return rows
+
+
+def terminal_csv(doc):
+    return _rt().terminal_csv(terminal_list(doc))
 
 
 def bom_extras(obj):
-    """``[(P/N, quantity, kind)]`` from an item's ``BomExtras``."""
+    """``[(key, quantity, kind, manufacturer, MPN)]`` from an item's ``BomExtras``
+    ("key|qty|kind|manufacturer|MPN"; the first ROU-05 entries had only the first three)."""
     out = []
     for entry in getattr(obj, "BomExtras", []) or []:
+        fields = entry.split("|")
+        if len(fields) < 3:
+            continue
         try:
-            pn, qty, kind = entry.split("|", 2)
-            out.append((pn, int(qty), kind))
+            qty = int(fields[1])
         except ValueError:
             continue
+        mfr = fields[3] if len(fields) > 3 else ""
+        mpn = fields[4] if len(fields) > 4 else fields[0]
+        out.append((fields[0], qty, fields[2], mfr, mpn))
     return out
 
 

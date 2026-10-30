@@ -350,6 +350,15 @@ class ReportTests(unittest.TestCase):
                                 "to_pin": "-", "length_m": 0.1}])
         self.assertEqual(text.splitlines()[1], "W2,,,,J1,2,P1,M1,-,,0.100")
 
+    def test_terminal_csv(self):
+        text = rt.terminal_csv([
+            {"kind": "Terminal", "manufacturer": "JST", "mpn": "SXH-001T-P0.6", "item": "STD-01-02001-001", "qty": 2},
+            {"kind": "Seal", "manufacturer": "TE Connectivity", "mpn": "0413-204-2005", "item": "", "qty": 4},
+            {"kind": "Terminal", "manufacturer": "JST", "mpn": "SXH-001T-P0.6", "item": "STD-01-02001-001", "qty": 1}])
+        lines = text.splitlines()
+        self.assertEqual(lines[0], "Kind,Manufacturer,MPN,Standard Library item,Qty")
+        self.assertEqual(lines[1:], ["Seal,TE Connectivity,0413-204-2005,,4", "Terminal,JST,SXH-001T-P0.6,STD-01-02001-001,3"])
+
     def test_cut_list_csv(self):
         rows = rt.lra_table([(0, 0, 0), (100, 0, 0), (100, 100, 0)], 20.0)
         text = rt.cut_list_csv([{"item": "Pipe", "kind": "Pipe", "size": "12 x 1", "cut_length": 191.4159,

@@ -15,7 +15,11 @@ part along the entry direction, which is the way a routed wire or tube leaves.
   2 x OD, or the bender's clamp length if larger) and ``Engagement`` (tube inside or over the
   fitting beyond the frame, added to the cut length).
 * The **connector** (the App::Part) carries ``ConnectorFamily``, ``ConnectorRole``, ``MatingPN``
-  (several separated by ";") and ``FrameAt``, beside the part-properties schema (PartNumber, ...).
+  (several separated by ";"), ``FrameAt`` and ``Accessories`` (parts counted once per connector
+  instance: a wedgelock, a TPA; "MPN|Manufacturer|STD item|qty|kind"), beside the part-properties
+  schema (PartNumber, ...).
+* Terminals and seals are ordered by manufacturer P/N (``TerminalPN`` + ``TerminalMfr``); the
+  Standard Library item (``TerminalItem``, STD-...) is how the vault finds them (30 Oct answer).
 
 The schema is the contract with the connector library (``rou05-interface.md`` in the session's
 agent notes; the Built chapter of ROU-05 has the same tables). A route path attaches to a frame
@@ -41,8 +45,12 @@ PIN_PROPS = {
     "PinName": ("App::PropertyString", "Pin name as on the datasheet or footprint (1, A3, VBAT)", ""),
     "GaugeMin": ("App::PropertyInteger", "Thinnest wire accepted, AWG (the larger number, e.g. 28); 0 = not stated", 0),
     "GaugeMax": ("App::PropertyInteger", "Thickest wire accepted, AWG (the smaller number, e.g. 22); 0 = not stated", 0),
-    "TerminalPN": ("App::PropertyString", "Crimp contact / terminal P/N; one per attached wire end goes to the BOM", ""),
-    "SealPN": ("App::PropertyString", "Wire seal P/N (sealed connectors); one per attached wire end", ""),
+    "TerminalPN": ("App::PropertyString", "Terminal's manufacturer P/N (for ordering); one per attached wire end goes to the BOM", ""),
+    "TerminalMfr": ("App::PropertyString", "Terminal's manufacturer", ""),
+    "TerminalItem": ("App::PropertyString", "Terminal's Standard Library vault P/N (for finding; the BOM line's key)", ""),
+    "SealPN": ("App::PropertyString", "Wire seal's manufacturer P/N (sealed connectors); one per attached wire end", ""),
+    "SealMfr": ("App::PropertyString", "Wire seal's manufacturer", ""),
+    "SealItem": ("App::PropertyString", "Wire seal's Standard Library vault P/N", ""),
     "DefaultSignal": ("App::PropertyString", "Signal a wire on this pin gets by default", ""),
     "StraightLength": ("App::PropertyLength", "Straight wire before the first bend; 0 = the default rule (Bend Rules)", 0.0),
 }
@@ -225,10 +233,15 @@ def make_port(part, name, placement=None, **props):
     return _make_frame(part, PORT, name, placement, props)
 
 
-def set_connector(part, family="", mating_pn="", role="", frame_at=""):
-    """The connector-level properties on ``part`` (only the arguments given are written)."""
+def set_connector(part, family="", mating_pn="", role="", frame_at="", accessories=None):
+    """The connector-level properties on ``part`` (only the arguments given are written).
+    ``accessories``: ``["MPN|Manufacturer|STD item|qty|kind", ...]`` or tuples of those five."""
     for name, doc in CONNECTOR_PROPS.items():
         _add(part, "App::PropertyString", name, doc, "")
+    _add(part, "App::PropertyStringList", "Accessories",
+         "Parts counted once per connector instance (wedgelock, TPA): MPN|Manufacturer|STD item|qty|kind")
+    if accessories is not None:
+        part.Accessories = ["|".join(str(v) for v in a) if not isinstance(a, str) else a for a in accessories]
     for name, value in (("ConnectorFamily", family), ("MatingPN", mating_pn), ("ConnectorRole", role),
                         ("FrameAt", frame_at)):
         if value:
@@ -316,6 +329,30 @@ def frame_ref(owner, frame):
     if owner is None or owner is frame:
         return frame, ""
     return owner, frame.Name + "."
+
+
+def accessories(obj):
+    """``[(mpn, manufacturer, item, qty, kind)]`` of a connector (a part or a link to one)."""
+    try:
+        target = obj.getLinkedObject(True)
+    except Exception:
+        target = obj
+    out = []
+    for entry in getattr(target, "Accessories", None) or []:
+        fields = (entry.split("|") + ["", "", "", "1", ""])[:5]
+        try:
+            qty = int(fields[3] or 1)
+        except ValueError:
+            qty = 1
+        if fields[0] or fields[2]:
+            out.append((fields[0].strip(), fields[1].strip(), fields[2].strip(), qty, fields[4].strip() or "Accessory"))
+    return out
+
+
+def bom_text(kind, manufacturer, mpn, item=""):
+    """"Terminal: JST SXH-001T-P0.6 (STD-01-02001-001)": what to order, and where the vault has it."""
+    text = f"{kind}: " + " ".join(t for t in (manufacturer, mpn) if t)
+    return text + (f" ({item})" if item and item != mpn else "")
 
 
 def connector_label(connector):
