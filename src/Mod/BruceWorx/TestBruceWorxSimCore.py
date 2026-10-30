@@ -107,8 +107,10 @@ class TestStudy(unittest.TestCase):
 
     def test_planned_study_types_are_refused(self):
         with self.assertRaises(sim.StudyError):
-            sim.new_study(self.doc, sim.StudyPlan(study_type="modal", model=self.box))
-        self.assertEqual([k for k, _l, ok in sim.STUDY_TYPES if ok], ["static"])
+            sim.new_study(self.doc, sim.StudyPlan(study_type="thermal", model=self.box))
+        self.assertEqual([k for k, _l, ok in sim.STUDY_TYPES if ok], ["static", "modal", "buckling"])
+        with self.assertRaises(sim.StudyError):  # a static study takes no modal options
+            sim.new_study(self.doc, sim.StudyPlan(model=self.box, options={"ModeCount": 3}))
 
     def test_precheck_lists_what_is_missing(self):
         objs = sim.new_study(self.doc, sim.StudyPlan(model=self.box))  # no material card
@@ -368,6 +370,334 @@ class TestCantileverBenchmark(unittest.TestCase):
         objs = sim.new_study(doc, sim.StudyPlan(model=box))
         with self.assertRaises(sim.StudyError):
             sim.solve(objs["analysis"], working_dir=self.tmp)
+
+
+
+# ----- modal and buckling (SIM-01 next, 30 Oct) ---------------------------------------------------------------------
+
+import bruceworx_sim_eigen as eigen  # noqa: E402
+
+DAT = """
+                        S T E P       2
+
+
+     E I G E N V A L U E   O U T P U T
+
+ MODE NO    EIGENVALUE                       FREQUENCY
+                                     REAL PART            IMAGINARY PART
+                           (RAD/TIME)      (CYCLES/TIME     (RAD/TIME)
+
+      4   0.1011061E-03   0.1005515E-01   0.1600327E-02   0.0000000E+00
+      5   0.1042396E+10   0.3228615E+05   0.5138501E+04   0.0000000E+00
+
+     P A R T I C I P A T I O N   F A C T O R S
+
+MODE NO.   X-COMPONENT     Y-COMPONENT     Z-COMPONENT     X-ROTATION      Y-ROTATION      Z-ROTATION
+
+      4   0.1156635E-02  -0.7301111E-02   0.2625940E-05   0.1744805E-01   0.4043798E-01  -0.3484241E+00
+      5  -0.4237390E-03   0.4789567E-02   0.9532608E-03  -0.4816347E-01   0.8609741E-02   0.2371366E+00
+
+     E F F E C T I V E   M O D A L   M A S S
+
+MODE NO.   X-COMPONENT     Y-COMPONENT     Z-COMPONENT     X-ROTATION      Y-ROTATION      Z-ROTATION
+
+      4   0.1337804E-05   0.5330622E-04   0.6895562E-11   0.3044346E-03   0.1635230E-02   0.1213994E+00
+      5   0.1795547E-06   0.2293995E-04   0.9087061E-06   0.2319720E-02   0.7412764E-04   0.5623377E-01
+TOTAL     0.7850000E-04   0.7850000E-04   0.7850000E-04   0.5233333E-02   0.2642833E+00   0.2642833E+00
+
+     T O T A L   E F F E C T I V E   M A S S
+
+           X-COMPONENT     Y-COMPONENT     Z-COMPONENT     X-ROTATION      Y-ROTATION      Z-ROTATION
+
+          0.7850000E-04   0.7850000E-04   0.7850000E-04   0.5233333E-02   0.2642833E+00   0.2642833E+00
+
+     B U C K L I N G   F A C T O R   O U T P U T
+
+ MODE NO       BUCKLING
+                FACTOR
+
+      1  -0.1243110E+06
+      2   0.1729197E+01
+"""
+
+FRD = """    1PSTEP                         1           1           1
+  100CL  101 0.00000E+00         2                     4    1           1
+ -4  DISP        4    1
+ -5  D1          1    2    1    0
+ -1         1 1.00000E+00 0.00000E+00 0.00000E+00
+ -1         2 2.00000E+00 0.00000E+00 0.00000E+00
+ -3
+    1PSTEP                         2           1           1
+  100CL  102-1.24311E+05         2                     4    2           1
+ -4  DISP        4    1
+ -1         1 0.00000E+00-5.00000E-01 0.00000E+00
+ -1         2 0.00000E+00 1.00000E+00 0.00000E+00
+ -3
+  100CL  102-1.24311E+05         2                     4    2           1
+ -4  STRESS      6    1
+ -1         1 9.00000E+00 9.00000E+00 9.00000E+00 9.00000E+00 9.00000E+00 9.00000E+00
+ -3
+ 9999
+"""
+
+INP = """*Node, NSET=Nall
+1, 0, 0, 0
+2, 10, 0, 0
+*MATERIAL, NAME=Material
+*ELASTIC
+210000,0.3
+*EXPANSION, ZERO=0
+*STEP
+*BUCKLE
+4,0.01
+*CLOAD
+** node loads on shape: Col:Face2
+2,1,-250
+*DLOAD
+Eall,GRAV,9810,0,0,-1
+7,P3,0.5
+*NODE FILE
+U
+*EL FILE
+S, E
+*OUTPUT, FREQUENCY=1
+*END STEP
+"""
+
+
+class TestEigenParts(unittest.TestCase):
+    """The modal and buckling helpers without a solver: CalculiX's output, the input changes, the checks."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bw-eigen-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def write(self, name, text):
+        path = os.path.join(self.tmp, name)
+        with open(path, "w") as handle:
+            handle.write(text)
+        return path
+
+    def test_read_dat(self):
+        data = eigen.read_dat(self.write("a.dat", DAT))
+        self.assertEqual([n for n, _e, _f in data["eigen"]], [4, 5])
+        self.assertAlmostEqual(data["eigen"][1][2], 5138.501)
+        self.assertEqual(sorted(data["mass"]), [4, 5])  # the TOTAL row is not a mode
+        self.assertAlmostEqual(data["mass"][4][1], 0.5330622e-4)
+        self.assertEqual(data["total"][:3], [0.785e-4] * 3)
+        self.assertEqual(data["buckling"], [(1, -0.1243110e6), (2, 1.729197)])
+
+    def test_read_frd_sets_fixed_columns(self):
+        sets = eigen.read_frd_sets(self.write("a.frd", FRD))
+        self.assertEqual([s["set"] for s in sets], [101, 102])
+        self.assertEqual(sets[1]["value"], -1.24311e5)  # glued to the set number
+        self.assertEqual(sets[1]["disp"][1], (0.0, -0.5, 0.0))
+        self.assertNotIn("stress", sets[1])
+
+    def test_input_changes(self):
+        dense = eigen.add_density(INP, 7.85e-9)
+        self.assertIn("*ELASTIC\n210000,0.3\n*DENSITY\n7.85E-09\n", dense)
+        self.assertEqual(eigen.add_density(dense, 1.0), dense)  # once
+        step = eigen.perturbation_step(8, 10, 500)
+        self.assertIn("*STEP, PERTURBATION\n*FREQUENCY\n8,10,500\n", step)
+        self.assertEqual(eigen.frequency_card(6), "6")
+        scaled = eigen.scale_loads(INP, 2.0)
+        self.assertIn("2,1,-500", scaled)
+        self.assertIn("Eall,GRAV,19620,0,0,-1", scaled)
+        self.assertIn("7,P3,1", scaled)
+        self.assertIn("** node loads on shape: Col:Face2", scaled)
+        moved = eigen.offset_nodes(INP, {2: (0.0, 0.1, -0.2)})
+        self.assertIn("2, 10, 0.1, -0.2", moved)
+        self.assertIn("1, 0, 0, 0", moved)
+        text = eigen.nonlinear_input(INP, {1: (0, 0.5, 0)}, 3.0, 2)
+        self.assertIn("*NSET, NSET=BWMON\n2\n*STEP, NLGEOM, INC=1000\n*STATIC\n0.02,1.0,1E-06,0.02\n", text)
+        self.assertIn("*NODE PRINT, NSET=BWMON, FREQUENCY=1\nU\n*END STEP", text)
+        self.assertIn("2,1,-750", text)
+        self.assertNotIn("*BUCKLE", text)
+        self.assertNotIn("*EL FILE", text)
+        self.assertNotIn("*OUTPUT", text)
+
+    def test_collapse_point_and_curve(self):
+        # an imperfect strut: u = e0 / (1 - lambda / lambda_cr), lambda_cr = 2, e0 = 0.1
+        curve = [(0.1 / (1 - lam / 2.0) - 0.1, lam) for lam in [0.02 * i for i in range(1, 100)]]
+        lam, basis = eigen.collapse_point(curve, False)
+        self.assertTrue(1.7 < lam < 2.0, lam)  # slope 1 % of the start: lambda / lambda_cr = 1 - 0.1
+        self.assertIn("knee", basis)
+        self.assertEqual(eigen.collapse_point([(0.1, 0.5), (0.2, 1.0), (0.3, 1.5)], True)[0], 1.5)  # stiff, stopped
+        self.assertIsNone(eigen.collapse_point([(0.1, 0.5), (0.2, 1.0), (0.3, 1.5)], False)[0])
+        kept, note = eigen.clean_curve([(0.1, 0.5), (0.3, 1.0), (5.6, 1.7), (-12.0, 1.74), (-10.0, 1.75)])
+        self.assertEqual(kept[-1], (5.6, 1.7))
+        self.assertIn("left the equilibrium path", note)
+        self.assertEqual(eigen.clean_curve(curve), (curve, ""))
+
+    def test_status_and_bands(self):
+        self.assertEqual([eigen.blf_status(f, 3.0) for f in (-2.0, 0.5, 1.0, 2.9, 3.0)],
+                         ["grey", "red", "amber", "amber", "green"])
+        bands = [("blade pass", 100.0, 400.0), ("1x rpm", 50.0, 200.0)]
+        self.assertEqual(eigen.band_of(300.0, bands), "blade pass")
+        self.assertEqual(eigen.band_of(60.0, bands), "1x rpm")
+        self.assertEqual(eigen.band_of(500.0, bands), "")
+        self.assertAlmostEqual(eigen.phase_factor(5, 20), 1.0)
+
+    def test_theory(self):
+        f = [eigen.euler_bernoulli(b, 100, 210000, 7850, 10, 10) for b in eigen.CANTILEVER_BETA_L]
+        self.assertAlmostEqual(f[0], 835.5, delta=1.0)
+        self.assertAlmostEqual(f[1] / f[0], (4.6941 / 1.8751) ** 2, places=6)
+        self.assertLess(eigen.timoshenko(4.6941, 100, 210000, 0.3, 7850, 10, 10), f[1])
+        self.assertAlmostEqual(eigen.euler_column(500, 10, 210000, 1000), 1.7272, places=3)
+        self.assertAlmostEqual(eigen.tensioned_frequency(1, 500, 10, 210000, 7850, 0.0),
+                               eigen.euler_bernoulli(math.pi, 500, 210000, 7850, 10, 10), places=6)
+
+
+class TestEigenStudy(unittest.TestCase):
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+        self.addCleanup(eigen.reset_default_target)
+        self.doc = App.newDocument("EigenCore")
+        self.box = self.doc.addObject("Part::Box", "Box")
+        self.box.Length, self.box.Width, self.box.Height = 100, 10, 10
+        self.doc.recompute()
+
+    def test_modal_study_defaults_and_precheck(self):
+        objs = sim.new_study(self.doc, sim.StudyPlan(study_type="modal", model=self.box, material=dict(eigen.STEEL)))
+        analysis = objs["analysis"]
+        self.assertEqual(analysis.ModeCount, 8)
+        self.assertEqual((analysis.FrequencyMin, analysis.FrequencyMax), (0.0, 0.0))
+        self.assertFalse(analysis.Prestressed)
+        self.assertFalse(analysis.ExcitationCheck)
+        self.assertAlmostEqual(analysis.ModeScale, 0.1)
+        self.assertEqual(objs["solver"].AnalysisType, "frequency")
+        self.assertEqual(objs["solver"].EigenmodesCount, 14)  # free-free: 8 + the six rigid modes
+        issues = sim.precheck(analysis)
+        self.assertTrue(sim.ready(issues), issues)  # free-free and no load: warnings only
+        texts = [t for _k, t in issues]
+        self.assertTrue(any("free-free" in t for t in texts), texts)
+        self.assertFalse(any("yield" in t for t in texts), texts)  # the strength is a static matter
+        analysis.Prestressed = True
+        texts = [t for k, t in sim.precheck(analysis) if k == "error"]
+        self.assertTrue(any("static step" in t for t in texts), texts)
+        self.assertTrue(any("prestress with" in t for t in texts), texts)
+        # no density: an error for a modal study
+        values = dict(eigen.STEEL, density=None)
+        objs = sim.new_study(self.doc, sim.StudyPlan(study_type="modal", model=self.box, material=values,
+                                                     options={"ModeCount": 3, "FrequencyMin": 10.0, "FrequencyMax": 900.0}))
+        self.assertTrue(any("no density" in t for k, t in sim.precheck(objs["analysis"]) if k == "error"))
+        eigen.configure_solver(objs["analysis"], objs["solver"])
+        self.assertEqual(objs["solver"].EigenmodesCount, 3)  # a range above 1 Hz has no rigid modes
+        self.assertAlmostEqual(objs["solver"].EigenmodeHighLimit.getValueAs("Hz").Value, 900.0)
+        with self.assertRaises(sim.StudyError):
+            sim.new_study(self.doc, sim.StudyPlan(study_type="modal", model=self.box, options={"TargetLoadFactor": 2}))
+
+    def test_excitation_bands(self):
+        objs = sim.new_study(self.doc, sim.StudyPlan(study_type="modal", model=self.box, material=dict(eigen.STEEL)))
+        analysis = objs["analysis"]
+        self.assertEqual(eigen.excitation_bands(analysis), [])  # off by default
+        analysis.ExcitationCheck = True
+        analysis.MotorRpmMin, analysis.MotorRpmMax, analysis.BladeCount = 6000.0, 12000.0, 3
+        self.assertEqual(eigen.excitation_bands(analysis),
+                         [("blade pass (3 blades)", 300.0, 600.0), ("1x rpm", 100.0, 200.0)])
+        analysis.ExcitationSource = "FrequencyBand"
+        analysis.BandMin, analysis.BandMax = 900.0, 700.0
+        self.assertEqual(eigen.excitation_bands(analysis), [("band", 700.0, 900.0)])
+
+    def test_buckling_study_defaults_and_target(self):
+        eigen.save_default_target(2.5)
+        objs = sim.new_study(self.doc, sim.StudyPlan(study_type="buckling", model=self.box, material=dict(eigen.STEEL)))
+        analysis = objs["analysis"]
+        self.assertEqual(analysis.ModeCount, 4)
+        self.assertAlmostEqual(analysis.TargetLoadFactor, 2.5)  # the preference
+        self.assertFalse(analysis.Nonlinear)
+        self.assertEqual(objs["solver"].AnalysisType, "buckling")
+        self.assertEqual(objs["solver"].BucklingFactors, 4)
+        texts = [t for k, t in sim.precheck(analysis) if k == "error"]
+        self.assertTrue(any("reference load" in t for t in texts), texts)
+        self.assertTrue(any(t.startswith("No support") for t in texts), texts)
+        self.assertAlmostEqual(eigen.reset_default_target(), 3.0)
+        with self.assertRaises(eigen.EigenError):
+            eigen.save_default_target(0)
+
+    def test_section_size_and_imperfection(self):
+        self.assertAlmostEqual(eigen.section_size(self.box.Shape), 4 * 10000 / self.box.Shape.Area, places=6)
+        plate = self.doc.addObject("Part::Box", "Plate")
+        plate.Length, plate.Width, plate.Height = 100, 100, 1
+        self.doc.recompute()
+        self.assertAlmostEqual(eigen.section_size(plate.Shape), 1.0)
+        objs = sim.new_study(self.doc, sim.StudyPlan(study_type="buckling", model=plate, options={"Nonlinear": True}))
+        amplitude, how = eigen.imperfection_amplitude(objs["analysis"])
+        self.assertAlmostEqual(amplitude, 0.01)
+        self.assertIn("1 %", how)
+        objs["analysis"].ImperfectionAmplitude = 0.25
+        self.assertEqual(eigen.imperfection_amplitude(objs["analysis"]), (0.25, "set on the study"))
+
+
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestModalBenchmarks(unittest.TestCase):
+    """SIM-05: the cantilever's modes, a free-free bar, the excitation check, a report."""
+
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+        self.tmp = tempfile.mkdtemp(prefix="bw-modal-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_cantilever_modes(self):
+        doc, objs, _theory = sim.cantilever(name="Modes", study_type="modal")
+        analysis = objs["analysis"]
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.modal_rows(analysis)
+        self.assertEqual(len(rows), 8)
+        f = [r["frequency"] for r in rows]
+        eb = [eigen.euler_bernoulli(b, 100, 210000, 7850, 10, 10) for b in eigen.CANTILEVER_BETA_L]
+        tim = [eigen.timoshenko(b, 100, 210000, 0.3, 7850, 10, 10) for b in eigen.CANTILEVER_BETA_L]
+        bending = [f[0], f[1], f[2], f[3], f[6], f[7]]  # 5: torsion, 6: axial
+        for a, b in zip(bending[::2], bending[1::2]):
+            self.assertLess(abs(a - b) / a, 0.005)  # a square section: the modes come in pairs
+        self.assertLess(abs(f[0] - eb[0]) / eb[0], 0.03, f)
+        # this stubby bar (L/h = 10) is a Timoshenko beam from mode 2 on: shear and rotary inertia lower f2 by
+        # about 4 % and f3 by about 10 % against Euler-Bernoulli, so modes 2 and 3 are checked against those
+        self.assertLess(abs(f[2] - tim[1]) / tim[1], 0.03, f)
+        self.assertLess(abs(f[6] - tim[2]) / tim[2], 0.08, f)
+        self.assertLess(f[2], eb[1])
+        # effective modal mass: the bending pair in Y and Z, the axial mode in X
+        self.assertGreater(rows[0]["mass"][1] + rows[0]["mass"][2], 50.0)
+        self.assertGreater(rows[5]["mass"][0], 50.0)
+        self.assertLess(rows[4]["mass"][0] + rows[4]["mass"][1] + rows[4]["mass"][2], 1.0)  # torsion moves no mass
+        self.assertEqual(eigen.rigid_count(analysis, rows), 0)
+        # the excitation check: 25 000 rpm x 2 blades = 833 Hz
+        analysis.ExcitationCheck = True
+        analysis.MotorRpmMin, analysis.MotorRpmMax, analysis.BladeCount = 20000.0, 30000.0, 2
+        excited = [r["index"] for r in eigen.modal_rows(analysis) if r["band"]]
+        self.assertEqual(excited, [1, 2])
+        part = sim.summary(analysis)["eigen"]
+        self.assertEqual(part["excited"], [1, 2])
+        out = sim.write_report(analysis, folder=self.tmp, compile=False)
+        with open(out["tex"], encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("Modal frequencies", text)
+        self.assertIn("in the blade pass (2 blades) band", text)
+        self.assertIn("Modes inside a band: 1, 2", text)
+        self.assertNotIn("Safety factor", text)
+        App.Console.PrintMessage(
+            "\n[modal benchmark] f = " + ", ".join(f"{x:.1f}" for x in f) + f" Hz; Euler-Bernoulli {eb[0]:.1f}, "
+            f"{eb[1]:.0f}, {eb[2]:.0f}; Timoshenko {tim[0]:.1f}, {tim[1]:.0f}, {tim[2]:.0f}\n")
+
+    def test_free_free_bar(self):
+        doc, objs, theory = eigen.free_bar()
+        analysis = objs["analysis"]
+        self.assertTrue(sim.ready(sim.precheck(analysis)))
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.modal_rows(analysis)
+        self.assertEqual(eigen.rigid_count(analysis, rows), 6)
+        elastic = [r for r in rows if not r["rigid"]]
+        self.assertGreaterEqual(len(elastic), 8)
+        error = abs(elastic[0]["frequency"] - theory["f1"]) / theory["f1"]
+        self.assertLess(error, 0.03, (elastic[0]["frequency"], theory))
+        out = sim.write_report(analysis, folder=self.tmp, compile=False)
+        with open(out["tex"], encoding="utf-8") as handle:
+            self.assertIn("6 rigid-body modes", handle.read())
+        App.Console.PrintMessage(f"\n[free-free] f1 {elastic[0]['frequency']:.1f} Hz vs {theory['f1']:.1f} "
+                                 f"(beta L 4.7300), {100 * error:.2f} %\n")
 
 
 if __name__ == "__main__":

@@ -142,6 +142,7 @@ SET(BruceWorx_SRCS
     BruceWorx_InsertFastener.svg
     BruceWorx_MarkCots.svg
     bruceworx_sim.py
+    bruceworx_sim_eigen.py
     TestBruceWorxSimCore.py
     bruceworx_sim_gui.py
     TestBruceWorxSimulation.py

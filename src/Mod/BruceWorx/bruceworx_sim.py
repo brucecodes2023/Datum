@@ -73,11 +73,12 @@ DEFAULT_MEASURE = "vonMises"
 DEFAULT_SF_THRESHOLDS = (1.0, 2.0)
 DEFAULT_SF_COLORS = ("#D91C1C", "#F2A007", "#3FA34D")
 
-# (key, label, available). The frame carries every type; only static runs today.
+# (key, label, available). The frame carries every type; static, modal and buckling run (modal and
+# buckling: bruceworx_sim_eigen, 30 Oct).
 STUDY_TYPES = (
     ("static", "Static stress", True),
-    ("modal", "Modal frequencies", False),
-    ("buckling", "Structural buckling", False),
+    ("modal", "Modal frequencies", True),
+    ("buckling", "Structural buckling", True),
     ("thermal", "Thermal", False),
     ("thermal_stress", "Thermal stress", False),
 )
@@ -418,7 +419,7 @@ class StudyPlan:
 
     def __init__(self, name="Study 1", study_type="static", model=None, material_uuid="", material=None,
                  max_size=None, fineness=DEFAULT_FINENESS, second_order=True, knockdown=KNOCKDOWN,
-                 stress_measure=None, sf_thresholds=None, sf_colors=None):
+                 stress_measure=None, sf_thresholds=None, sf_colors=None, options=None):
         self.name = name
         self.study_type = study_type
         self.model = model
@@ -431,6 +432,9 @@ class StudyPlan:
         self.stress_measure = stress_measure  # None: the preference (von Mises by default)
         self.sf_thresholds = sf_thresholds  # None: the preference's bands
         self.sf_colors = sf_colors
+        # a modal or buckling study's settings by property name (bruceworx_sim_eigen): ModeCount,
+        # FrequencyMin/Max, Prestressed, ExcitationCheck, ..., TargetLoadFactor, Nonlinear, ...
+        self.options = dict(options or {})
 
 
 # ----- the stress measure and the safety-factor bands (S2, S3: 30 Oct) ---------------------------
@@ -663,6 +667,15 @@ def _add_study_properties(analysis, plan):
     if plan.sf_thresholds is not None or plan.sf_colors is not None:
         thresholds, colors = study_bands(analysis)
         set_study_bands(analysis, plan.sf_thresholds or thresholds, plan.sf_colors or colors)
+    if plan.study_type in ("modal", "buckling"):
+        import bruceworx_sim_eigen as eigen
+
+        try:
+            eigen.apply_options(analysis, plan.options)
+        except eigen.EigenError as exc:
+            raise StudyError(str(exc)) from exc
+    elif plan.options:
+        raise StudyError(f"a {plan.study_type} study takes no options")
 
 
 def new_study(doc, plan):
@@ -678,7 +691,7 @@ def new_study(doc, plan):
 
     available = {key for key, _label, ok in STUDY_TYPES if ok}
     if plan.study_type not in available:
-        raise StudyError(f"{plan.study_type} studies are planned, not built yet; static stress runs today")
+        raise StudyError(f"{plan.study_type} studies are planned, not built yet; static, modal and buckling run today")
     if plan.model is None or not is_model(plan.model):
         raise StudyError("the study needs a body or part with solids")
     values = plan.material or card(plan.material_uuid)
@@ -696,6 +709,10 @@ def new_study(doc, plan):
     solver.SplitInputWriter = False
     solver.WorkingDir = ""
     analysis.addObject(solver)
+    if plan.study_type in ("modal", "buckling"):
+        import bruceworx_sim_eigen as eigen
+
+        eigen.configure_solver(analysis, solver)
 
     material = ObjectsFem.makeMaterialSolid(doc, "Material")
     if usable(values):
@@ -845,9 +862,23 @@ def _value(obj, name, unit=None):
         return None
 
 
+def study_kind(analysis):
+    """The study's type key: static, modal, buckling (a study made before 30 Oct is static)."""
+    if analysis is None or "StudyType" not in analysis.PropertiesList:
+        return "static"
+    return str(analysis.StudyType or "static")
+
+
 def precheck(analysis):
-    """What is missing before a solve: a list of ("error"|"warning", text). Empty means ready."""
+    """What is missing before a solve: a list of ("error"|"warning", text). Empty means ready.
+
+    By study type: static and buckling need supports and a load (buckling: the reference load); a
+    modal study needs a density, may be free-free (a warning: six rigid-body modes are skipped) and
+    ignores its loads unless it is prestressed (then it needs supports and a load, as a static one).
+    """
     issues = []
+    kind = study_kind(analysis)
+    prestressed = kind == "modal" and bool(getattr(analysis, "Prestressed", False))
     m = members(analysis)
     model = getattr(analysis, "Model", None) if "Model" in analysis.PropertiesList else None
     if m["mesh"] is None:
@@ -873,14 +904,23 @@ def precheck(analysis):
             nu = _number(data.get("PoissonRatio"))
             if not E or nu is None:
                 issues.append(("error", f"{mat.Label}: no Young's modulus or Poisson's ratio"))
-            elif not _quantity_mpa(data.get("YieldStrength")):
+            elif kind == "modal":
+                if not _density_kg_m3(data.get("Density")):
+                    issues.append(("error", f"{mat.Label}: no density: a modal study needs the mass"))
+            elif kind == "static" and not _quantity_mpa(data.get("YieldStrength")):
                 if _quantity_mpa(data.get("UltimateTensileStrength")):
                     issues.append(("warning", f"{mat.Label}: no yield strength; the safety factor uses the ultimate tensile strength"))
                 else:
                     issues.append(("warning", f"{mat.Label}: no yield or ultimate strength; no safety factor"))
 
     if not m["supports"]:
-        issues.append(("error", "No support: add a Fixed or Displacement constraint, or the model moves as a rigid body"))
+        if kind == "modal" and not prestressed:
+            issues.append(("warning", "No supports: a free-free study; the first 6 modes are rigid-body modes "
+                                      "(below 1 Hz), skipped in the table and reported"))
+        elif prestressed:
+            issues.append(("error", "No support: the static step of a prestressed modal study needs one"))
+        else:
+            issues.append(("error", "No support: add a Fixed or Displacement constraint, or the model moves as a rigid body"))
     else:
         fixed_axes = set()
         for sup in m["supports"]:
@@ -896,7 +936,15 @@ def precheck(analysis):
             missing = ", ".join(sorted({"x", "y", "z"} - fixed_axes))
             issues.append(("warning", f"The supports leave {missing} free: rigid-body motion is likely"))
     if not m["loads"]:
-        issues.append(("error", "No load: add a Force or Pressure"))
+        if kind == "buckling":
+            issues.append(("error", "No load: a buckling study needs a load (it is the reference load)"))
+        elif prestressed:
+            issues.append(("error", "No load: a prestressed modal study needs the loads to prestress with"))
+        elif kind != "modal":
+            issues.append(("error", "No load: add a Force or Pressure"))
+    elif kind == "modal" and not prestressed:
+        issues.append(("warning", "The loads are ignored: a plain modal study finds the free vibration "
+                                  "(Prestressed stiffens the modes with them)"))
     for obj in m["supports"] + m["loads"] + m["others"]:
         if _references_empty(obj) and obj.TypeId != "Fem::ConstraintSelfWeight":
             issues.append(("error", f"{obj.Label}: no faces, edges or vertices chosen"))
@@ -939,6 +987,11 @@ def prepare_solve(analysis, working_dir=None, progress=None):
         mesh_study(analysis, progress)
     ensure_ccx_pref()
     _purge_results(analysis)
+    eigen = None
+    if study_kind(analysis) in ("modal", "buckling"):
+        import bruceworx_sim_eigen as eigen
+
+        eigen.configure_solver(analysis, m["solver"])
     fea = ccxtools.FemToolsCcx(analysis, m["solver"])
     fea.update_objects()
     fea.setup_working_dir(working_dir)
@@ -950,6 +1003,11 @@ def prepare_solve(analysis, working_dir=None, progress=None):
     fea.write_inp_file()
     if not fea.inp_file_name:
         raise StudyError("the CalculiX input file was not written")
+    if eigen is not None:
+        try:
+            eigen.patch_input(analysis, fea.inp_file_name)  # prestressed modal: the perturbation step
+        except eigen.EigenError as exc:
+            raise StudyError(str(exc)) from exc
     return fea
 
 
@@ -975,10 +1033,22 @@ class _no_post_pipeline:
 
 
 def finish_solve(fea, progress=None):
-    """Loads the results of a finished ccx run, adds the safety factor; returns the result object."""
+    """Loads the results of a finished ccx run, adds the safety factor; returns the result object.
+
+    A modal or buckling study's results are its modes (bruceworx_sim_eigen.finish); this returns the
+    first one. The nonlinear buckling run is separate (``solve`` runs it; the panel in a QProcess).
+    """
     analysis = fea.analysis
     if progress:
         progress("Reading the results…")
+    if study_kind(analysis) in ("modal", "buckling"):
+        import bruceworx_sim_eigen as eigen
+
+        try:
+            modes = eigen.finish(analysis, fea)
+        except eigen.EigenError as exc:
+            raise StudyError(str(exc)) from exc
+        return modes[0]
     with _no_post_pipeline():
         fea.load_results()
     results = members(analysis)["results"]
@@ -1000,7 +1070,16 @@ def solve(analysis, working_dir=None, progress=None):
         raise StudyError(f"CalculiX finished with exit code {code}: {(fea.ccx_stderr or '')[-400:]}")
     if progress:
         progress(f"CalculiX finished in {time.time() - t0:.1f} s")
-    return finish_solve(fea, progress)
+    result = finish_solve(fea, progress)
+    if study_kind(analysis) == "buckling" and bool(getattr(analysis, "Nonlinear", False)):
+        import bruceworx_sim_eigen as eigen
+
+        try:
+            eigen.solve_nonlinear(analysis, fea, progress)
+        except eigen.EigenError as exc:
+            if progress:
+                progress(f"Nonlinear buckling not run: {exc}")
+    return result
 
 
 def study_material(analysis):
@@ -1176,6 +1255,11 @@ def summary(analysis):
         "result": None,
         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    if out["type"] in ("modal", "buckling"):
+        import bruceworx_sim_eigen as eigen
+
+        out["eigen"] = eigen.summary_part(analysis)
+        return out
     result = latest_result(analysis)
     if result is not None:
         out["result"] = result_extrema(result)
@@ -1242,7 +1326,8 @@ _TEX_SPECIALS = {"\\": r"\textbackslash{}", "{": r"\{", "}": r"\}", "$": r"\$", 
                  "^": r"\^{}", "_": r"\_", "%": r"\%", "~": r"\~{}"}
 _TEX_UNICODE = {"–": "--", "—": "---", "×": r"$\times$", "ν": r"$\nu$", "σ": r"$\sigma$", "°": r"$^\circ$",
                 "³": r"$^3$", "²": r"$^2$", "µ": r"$\mu$", "μ": r"$\mu$", "≤": r"$\le$", "≥": r"$\ge$",
-                "…": r"\dots{}", "·": r"$\cdot$", "−": "-", "✕": "x", "Ø": r"\O{}", "ø": r"\o{}"}
+                "…": r"\dots{}", "·": r"$\cdot$", "−": "-", "✕": "x", "Ø": r"\O{}", "ø": r"\o{}",
+                "λ": r"$\lambda$", "ψ": r"$\psi$", "φ": r"$\phi$", "ω": r"$\omega$"}
 FIGURES = (("stress", "von Mises stress (MPa)"), ("displacement", "Displacement (mm), shape exaggerated"),
            ("safety", "Safety factor bands"))
 
@@ -1271,7 +1356,15 @@ def report_tex(analysis, images=None, folder=None, data=None):
     paths = report_paths(analysis, folder)
     os.makedirs(paths["dir"], exist_ok=True)
     figures = []
-    for kind, caption in FIGURES:
+    wanted = FIGURES
+    if data.get("eigen"):
+        import bruceworx_sim_eigen as eigen
+
+        wanted = eigen.figures_for(data["eigen"])
+        for name in os.listdir(paths["dir"]):  # renders of an earlier run's other modes
+            if name.startswith("fig_mode") and name.endswith(".png"):
+                os.remove(os.path.join(paths["dir"], name))
+    for kind, caption in wanted:
         image = (images or {}).get(kind)
         target = os.path.join(paths["dir"], f"fig_{kind}.png")
         if image and os.path.isfile(image):
@@ -1305,6 +1398,11 @@ def report_source(data, figures=()):
     ]
     for i, color in enumerate(colors):
         lines.append(rf"\definecolor{{band{chr(65 + i)}}}{{HTML}}{{{_hex(color).lstrip('#')}}}")
+    part = data.get("eigen")
+    if part:
+        import bruceworx_sim_eigen as eigen
+
+        lines += eigen.report_preamble(part)
     lines += [
         r"\begin{document}",
         rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",
@@ -1328,9 +1426,10 @@ def report_source(data, figures=()):
                 label_tex = label if "$" in label else e(label)
                 lines.append(rf"{label_tex} & {_tex_value(value, 4, unit) if unit else e(_fmt(value, 4))}\\")
         knock = "" if data["knockdown"] == 1 else f", knockdown {data['knockdown']:g}"
-        lines.append(rf"Allowable stress & {_tex_value(data['allowable'], 4, 'MPa')} ({e(data['basis'])}{e(knock)})\\")
+        if not part:
+            lines.append(rf"Allowable stress & {_tex_value(data['allowable'], 4, 'MPa')} ({e(data['basis'])}{e(knock)})\\")
         lines.append(r"\end{tabular}")
-        if data["allowable"] and "ultimate" in (data["basis"] or ""):
+        if not part and data["allowable"] and "ultimate" in (data["basis"] or ""):
             lines.append(r"\par\textbf{Note:} the card has no yield strength, so the safety factor divides the "
                          r"ultimate tensile strength. It says how far the part is from breaking, not from yielding; "
                          r"pick a card with a yield strength (the Keystone library has them) for a yield check.")
@@ -1358,6 +1457,14 @@ def report_source(data, figures=()):
 
     lines += items("Supports", data.get("supports"))
     lines += items("Loads", data.get("loads"))
+    if part:
+        if part["kind"] == "modal" and not part.get("prestressed") and data.get("loads"):
+            lines.append(r"{\small A plain modal study ignores the loads.}")
+        lines += eigen.report_results(part, e)
+        lines += _report_figures(figures, part.get("rows"))
+        lines += _report_precheck(data.get("issues") or [])
+        lines += ["", r"\vfill{\small\color{black!60} " + eigen.report_footer(part) + "}", r"\end{document}", ""]
+        return "\n".join(lines)
     lines += ["", r"\section*{Results}"]
     if res:
         lines.append(r"\begin{tabular}{@{}ll@{}}")
@@ -1386,15 +1493,33 @@ def report_source(data, figures=()):
         count = "" if counts[i] is None else str(counts[i])
         lines.append(rf"\textcolor{{band{chr(65 + i)}}}{{\rule{{8mm}}{{3mm}}}} & {e(label)} & {count}\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
+    lines += _report_figures(figures, res)
+    lines += _report_precheck(data.get("issues") or [])
+    lines += [
+        "", r"\vfill{\small\color{black!60} Static linear analysis: $K u = f$, small displacements, linear elastic "
+        r"material; stresses from the nodal stress tensor of CalculiX.}",
+        r"\end{document}", "",
+    ]
+    return "\n".join(lines)
+
+
+def _report_figures(figures, solved):
+    """The report's figures section; a line saying there are none when a solved study had no 3D view."""
+    e = tex_escape
+    lines = []
     if figures:
         lines += ["", r"\section*{Figures}"]
         for name, caption in figures:
             lines += [r"\begin{center}", rf"\includegraphics[width=0.78\linewidth]{{{name}}}\\[-2pt]",
                       rf"{{\small {e(caption)}}}", r"\end{center}"]
-    elif res:
+    elif solved:
         lines += ["", r"{\small No renders: the report was written without a 3D view (headless).}"]
-    issues = data.get("issues") or []
-    lines += ["", r"\section*{Pre-check}"]
+    return lines
+
+
+def _report_precheck(issues):
+    e = tex_escape
+    lines = ["", r"\section*{Pre-check}"]
     if issues:
         lines.append(r"\begin{itemize}\setlength{\itemsep}{0pt}")
         for kind, text in issues:
@@ -1403,12 +1528,7 @@ def report_source(data, figures=()):
         lines.append(r"\end{itemize}")
     else:
         lines.append("Nothing missing.")
-    lines += [
-        "", r"\vfill{\small\color{black!60} Static linear analysis: $K u = f$, small displacements, linear elastic "
-        r"material; stresses from the nodal stress tensor of CalculiX.}",
-        r"\end{document}", "",
-    ]
-    return "\n".join(lines)
+    return lines
 
 
 TEX_PREF = "TexPath"  # Mod/BruceWorx/Sim: a tectonic, latexmk or pdflatex binary to use first
@@ -1513,8 +1633,9 @@ def write_report(analysis, images=None, folder=None, compile=True):
 
 
 def cantilever(doc=None, length=100.0, width=10.0, height=10.0, load=1000.0, E=210000.0, nu=0.3,
-               yield_strength=355.0, name="Cantilever", divisor=MESH_DIVISOR):
+               yield_strength=355.0, name="Cantilever", divisor=MESH_DIVISOR, study_type="static", options=None):
     """A steel cantilever study: fixed at x=0, a tip load in -z on the far face. Returns (doc, study objects, theory).
+    study_type "modal" or "buckling" makes that study on the same beam (options: its settings).
 
     theory: tip deflection P L^3 / (3 E I) with I = w h^3 / 12, and the bending stress M c / I at the root.
     """
@@ -1527,7 +1648,8 @@ def cantilever(doc=None, length=100.0, width=10.0, height=10.0, load=1000.0, E=2
     doc.recompute()
     values = {"uuid": "", "name": "Steel (benchmark)", "library": "", "E": E, "nu": nu, "yield": yield_strength,
               "uts": None, "density": 7850.0}
-    plan = StudyPlan(name=name, model=box, material=values, max_size=box.Shape.BoundBox.DiagonalLength / divisor)
+    plan = StudyPlan(name=name, model=box, material=values, max_size=box.Shape.BoundBox.DiagonalLength / divisor,
+                     study_type=study_type, options=options)
     objs = new_study(doc, plan)
     analysis = objs["analysis"]
     fixed = ObjectsFem.makeConstraintFixed(doc, "Fixed")
