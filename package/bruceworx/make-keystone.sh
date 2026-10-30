@@ -101,8 +101,8 @@ else
 fi
 # Tectonic compiles a study's LaTeX report (SIM-01, 30 Oct); its ICU, HarfBuzz, graphite2, FreeType,
 # libpng, zlib and iconv dylibs come along through the relocation step. bruceworx_sim.find_tex looks
-# for Contents/bin/tectonic. It fetches the TeX files it needs on its first run (network, ~40 MB into
-# ~/Library/Caches/Tectonic); after that it works offline.
+# for Contents/bin/tectonic. Its TeX files are pre-seeded into Contents/Resources/tectonic-cache below
+# (after the bundled Tectonic is checked), so the first report works offline too.
 if [[ -x "$env/bin/tectonic" ]]; then
     cp -p "$env/bin/tectonic" "$C/bin/tectonic"
 else
@@ -240,6 +240,25 @@ if [[ -x "$C/bin/tectonic" ]]; then
     # (0.15 prints its version twice, "tectonic 0.15.0Tectonic 0.15.0")
     [[ "$tectonic_out" == *"Tectonic "* ]] || fail "the bundled Tectonic does not start (its dylibs were not relocated?): $tectonic_out"
     say "$(grep -o 'Tectonic [0-9.]*' <<<"$tectonic_out")"
+    # Pre-seed Tectonic's cache (30 Oct): compile tectonic-seed/seed.tex once (it loads every package the
+    # study reports use, in every size and shape) with TECTONIC_CACHE_DIR inside the bundle. This run needs
+    # the network (about 16 MB). At run time bruceworx_sim.tectonic_cache copies the seed once into
+    # ~/Library/Caches/Keystone/tectonic (the bundle stays read-only) and points TECTONIC_CACHE_DIR there.
+    seed="$C/Resources/tectonic-cache"
+    rm -rf "$seed" "$stage/texseed"
+    mkdir -p "$seed" "$stage/texseed"
+    cp "$here/tectonic-seed/seed.tex" "$stage/texseed/seed.tex"
+    cp "$here/branding/keystonesplash_2x.png" "$stage/texseed/seed.png"
+    if (cd "$stage/texseed" && env -i HOME="$HOME" PATH=/usr/bin:/bin TECTONIC_CACHE_DIR="$seed" \
+            "$C/bin/tectonic" --chatter minimal seed.tex) >"$stage/texseed.log" 2>&1 \
+       && (cd "$stage/texseed" && env -i HOME="$HOME" PATH=/usr/bin:/bin TECTONIC_CACHE_DIR="$seed" \
+            "$C/bin/tectonic" --only-cached --chatter minimal seed.tex) >>"$stage/texseed.log" 2>&1; then
+        say "Tectonic cache seeded for offline reports ($(du -sh "$seed" | cut -f1))"
+    else
+        tail -5 "$stage/texseed.log"
+        rm -rf "$seed"
+        say "warning: the Tectonic cache could not be seeded (no network?): the first report downloads its TeX files"
+    fi
 fi
 
 target="$dest/$app_name.app"

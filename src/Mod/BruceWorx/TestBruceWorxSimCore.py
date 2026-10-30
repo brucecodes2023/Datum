@@ -8,6 +8,7 @@ factor = yield / max von Mises. The solver tests skip when ccx is absent.
 
 import math
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -179,6 +180,36 @@ class TestStudy(unittest.TestCase):
             self.assertEqual(os.path.dirname(out["pdf"]), tmp)
             with open(out["pdf"], "rb") as handle:
                 self.assertEqual(handle.read(5), b"%PDF-")
+
+    def test_tectonic_seed_covers_the_reports(self):
+        """Follow-up 3 (30 Oct): Keystone's Tectonic cache seed loads every package a report uses, and the run-time
+        copy of a bundled seed into a writable cache."""
+        seed = os.path.normpath(os.path.join(App.getHomePath(), "..", "..", "package", "bruceworx", "tectonic-seed", "seed.tex"))
+        if not os.path.isfile(seed):
+            self.skipTest("not a development tree")
+        with open(seed, encoding="utf-8") as handle:
+            seeded = set(re.findall(r"\\usepackage(?:\[[^]]*\])?\{([^}]+)\}", handle.read()))
+        part = {"kind": "buckling", "rows": [], "target": 3.0, "first": 1.7, "nonlinear": True, "limit": 1.2,
+                "curve": {"factors": [0.5, 1.0], "displacements": [0.1, 0.3], "collapse": 1.0, "basis": "knee",
+                          "monitor": 1, "amplitude": 0.1, "how": "set", "max": 1.0, "note": ""}}
+        data = {"name": "S", "date": "now", "type": "buckling", "document": "D", "model": "M", "material": {},
+                "mesh": {}, "supports": [], "loads": [], "issues": [], "knockdown": 1.0, "allowable": None,
+                "basis": "", "eigen": part}
+        used = set()
+        for source in (sim.report_source(data), sim.report_source(dict(data, eigen=None, type="static"))):
+            used |= set(re.findall(r"\\usepackage(?:\[[^]]*\])?\{([^}]+)\}", source))
+        self.assertTrue(used, used)
+        self.assertLessEqual(used, seeded)
+        home = tempfile.mkdtemp(prefix="bw-seed-")
+        self.addCleanup(shutil.rmtree, home, ignore_errors=True)
+        self.assertIsNone(sim.tectonic_cache(home, os.path.join(home, "user")))
+        os.makedirs(os.path.join(home, "Resources", "tectonic-cache", "files"))
+        with open(os.path.join(home, "Resources", "tectonic-cache", "files", "x"), "w") as handle:
+            handle.write("x")
+        target = sim.tectonic_cache(home, os.path.join(home, "user"))
+        self.assertEqual(target, os.path.join(home, "user"))
+        self.assertTrue(os.path.isfile(os.path.join(target, "files", "x")))
+        self.assertTrue(os.path.isfile(os.path.join(target, ".keystone-seed")))
 
     def test_tex_escape(self):
         self.assertEqual(sim.tex_escape("a_b & 5% #1 {x} ~ ^"), r"a\_b \& 5\% \#1 \{x\} \~{} \^{}")

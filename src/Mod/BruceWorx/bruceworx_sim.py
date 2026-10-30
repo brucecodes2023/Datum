@@ -1665,11 +1665,47 @@ def tex_command(kind, path, tex="report.tex"):
     return [path, "-interaction=nonstopmode", "-halt-on-error", tex]
 
 
+TECTONIC_SEED = os.path.join("Resources", "tectonic-cache")  # in Keystone's Contents (make-keystone.sh)
+
+
+def tectonic_cache(home=None, user_cache=None):
+    """Keystone's Tectonic cache, or None without a bundled seed: the seed (Contents/Resources/tectonic-cache,
+    made at bundle time) copied once into ~/Library/Caches/Keystone/tectonic, writable, and copied again when
+    the bundle's seed is newer. The first report then compiles offline (30 Oct follow-up 3)."""
+    seed = os.path.join(home or _home(), TECTONIC_SEED)
+    if not os.path.isdir(seed):
+        return None
+    target = user_cache or os.path.join(os.path.expanduser("~"), "Library", "Caches", "Keystone", "tectonic")
+    stamp = os.path.join(target, ".keystone-seed")
+    want = f"{os.path.getmtime(seed):.0f}"
+    try:
+        with open(stamp, encoding="utf-8") as handle:
+            current = handle.read().strip()
+    except OSError:
+        current = ""
+    if current != want:
+        try:
+            shutil.copytree(seed, target, dirs_exist_ok=True)
+            with open(stamp, "w", encoding="utf-8") as handle:
+                handle.write(want)
+        except OSError:
+            return seed if os.access(seed, os.W_OK) else None
+    return target
+
+
 def tex_environment(path):
-    """os.environ with the compiler's folder (and MacTeX's) on PATH: latexmk runs pdflatex by name."""
+    """os.environ with the compiler's folder (and MacTeX's) on PATH: latexmk runs pdflatex by name.
+    Keystone's Tectonic gets TECTONIC_CACHE_DIR, its pre-seeded cache (tectonic_cache)."""
     env = dict(os.environ)
     folders = [os.path.dirname(path), MACTEX_BIN]
     env["PATH"] = os.pathsep.join(folders + [env.get("PATH", "")])
+    if _tex_kind(path) == "tectonic" and "TECTONIC_CACHE_DIR" not in env:
+        try:
+            cache = tectonic_cache()
+        except Exception:
+            cache = None
+        if cache:
+            env["TECTONIC_CACHE_DIR"] = cache
     return env
 
 
