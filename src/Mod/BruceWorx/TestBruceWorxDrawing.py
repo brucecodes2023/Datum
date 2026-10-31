@@ -109,6 +109,19 @@ class TestPage(unittest.TestCase):
         self.assertEqual(report["kept"], ["finish"])
         self.assertEqual(list(page.BWHandTyped), ["finish"])
 
+    @staticmethod
+    def _visible_edges(view, seconds=8.0):
+        """Visible edge count of a view; in the GUI TechDraw projects on a worker thread, so wait for it."""
+        import time
+
+        end = time.time() + seconds
+        while FreeCAD.GuiUp and not view.getVisibleEdges() and time.time() < end:
+            from PySide import QtWidgets
+
+            QtWidgets.QApplication.processEvents()
+            time.sleep(0.05)
+        return len(view.getVisibleEdges())
+
     def _part(self, doc, name="Plate", pn="BW-01-01001-001"):
         part = doc.addObject("App::Part", name)
         box = doc.addObject("Part::Box", "Box")
@@ -171,7 +184,7 @@ class TestPage(unittest.TestCase):
         other.recompute()
         self.assertGreater(len(group.Views), 0)
         for view in group.Views:
-            self.assertGreater(len(view.getVisibleEdges()), 0, view.Name + " projects no edges")
+            self.assertGreater(self._visible_edges(view), 0, view.Name + " projects no edges")
         texts = page.Template.EditableTexts
         self.assertEqual((texts["part_number"], texts["title"], texts["units"]),
                          ("BW-01-01001-001", "Base plate", "inch"))  # the model's units, not the sheet's
