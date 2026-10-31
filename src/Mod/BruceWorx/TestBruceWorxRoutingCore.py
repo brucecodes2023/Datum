@@ -809,6 +809,17 @@ class ConnectorFittingTests(unittest.TestCase):
         self.assertAlmostEqual((mount.Rotation.multVec(V(0, 0, 1)) - V(0, 0, -1)).Length, 0.0, places=6)
         tube = self.bp.port(fit, "1").getGlobalPlacement()
         self.assertGreater(tube.Base.z, 40.0)  # the socket stands up out of the face
+        elbow = bf.make_fitting(self.doc, "Push-to-connect", "Elbow", "6 mm", "1/8 NPT")
+        bf.place_fitting(elbow, V(10, 10, 40), V(0, 0, 1))
+        self.doc.recompute()
+        out = self.bp.port(elbow, "1").getGlobalPlacement().Rotation.multVec(V(0, 0, 1))
+        self.assertAlmostEqual((out - V(1, 0, 0)).Length, 0.0, places=6)  # stands as drawn: outlet along +X
+        bf.place_fitting(elbow, V(10, 10, 40), V(0, 0, 1), angle=90.0)
+        self.doc.recompute()
+        out = self.bp.port(elbow, "1").getGlobalPlacement().Rotation.multVec(V(0, 0, 1))
+        self.assertAlmostEqual(abs(out.y), 1.0, places=6)  # turned a quarter about the thread
+        mount = bf.mount_port(elbow).getGlobalPlacement().Base
+        self.assertAlmostEqual((mount - V(10, 10, 40)).Length, 0.0, places=6)
 
     def test_fitting_port_drives_a_tube_path(self):
         bf, bp = self.bf, self.bp

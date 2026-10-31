@@ -33,6 +33,7 @@ Every Qt signal to a bound method goes through ``slot`` (bruceworx_slots). The s
 is not a Qt signal: FreeCAD calls its methods directly.
 """
 
+import math
 import os
 
 import FreeCAD as App
@@ -1257,6 +1258,22 @@ class FittingPanel:
         self.pn.setPlaceholderText("vault P/N (optional)")
         self.pn.editingFinished.connect(slot(self._changed))
         grid.addRow("Part number", self.pn)
+        turn = QtWidgets.QHBoxLayout()
+        self.left = QtWidgets.QPushButton("⟲ 90°")
+        self.right = QtWidgets.QPushButton("⟳ 90°")
+        self.angle = QtWidgets.QDoubleSpinBox()
+        self.angle.setObjectName("fittingAngle")
+        self.angle.setRange(-360.0, 360.0)
+        self.angle.setDecimals(1)
+        self.angle.setSuffix("°")
+        self.angle.setWrapping(True)
+        self.angle.setToolTip("Turn the fitting about the port it is placed by (its thread)")
+        for widget in (self.left, self.right, self.angle):
+            turn.addWidget(widget)
+        self.left.clicked.connect(slot(lambda *_a: self.turn(90.0)))
+        self.right.clicked.connect(slot(lambda *_a: self.turn(-90.0)))
+        self.angle.valueChanged.connect(slot(self._changed))
+        grid.addRow("Turn", turn)
         layout.addLayout(grid)
         self.status = QtWidgets.QLabel("")
         self.status.setObjectName("fittingStatus")
@@ -1298,8 +1315,12 @@ class FittingPanel:
                               None if family_changed else c["Size"], None if family_changed else c["Thread"])
             if "PartNumber" in self.fitting.PropertiesList and self.fitting.PartNumber != self.pn.text().strip():
                 self.fitting.PartNumber = self.pn.text().strip()
+            if self.pick is None and abs(self.angle.value()) > 1e-9:
+                mount = bf.mount_port(self.fitting).getGlobalPlacement()  # an existing fitting turns in place
+                self.pick = (mount.Base, mount.Rotation.multVec(App.Vector(0, 0, -1)), self.fitting.Placement)
             if self.pick is not None:
-                bf.place_fitting(self.fitting, self.pick[0], self.pick[1])
+                bf.place_fitting(self.fitting, self.pick[0], self.pick[1], angle=self.angle.value()
+                                 + self._base_angle())
             self.doc.recompute()
         except Exception as exc:
             self.status.setText(RED.format(_html(exc)))
@@ -1313,6 +1334,31 @@ class FittingPanel:
                                thread=b.Thread if b.Thread != "None" else None)
         ports = ", ".join(f"{_html(f.Label)} {_html(f.PortType)} {_html(f.PortSize)}" for f in _bp().ports(self.fitting))
         self.status.setText(f"<b>{_html(self.fitting.Description)}</b><br>{_html(b.FittingCode)}<br>{ports}")
+
+    def turn(self, degrees):
+        """Turn the fitting by ``degrees`` about the port it is placed by."""
+        value = self.angle.value() + degrees
+        while value > 180.0:
+            value -= 360.0
+        while value <= -180.0:
+            value += 360.0
+        self.angle.setValue(value)  # valueChanged applies it
+
+    def _base_angle(self):
+        """For an existing fitting turned in place: the angle that keeps its current heading."""
+        if len(self.pick) < 3:
+            return 0.0
+        bf = _bf()
+        before = self.pick[2]
+        probe = App.Placement(before)
+        self.fitting.Placement = probe
+        bf.place_fitting(self.fitting, self.pick[0], self.pick[1])
+        minimal = self.fitting.Placement.Rotation
+        self.fitting.Placement = before
+        delta = before.Rotation.multiply(minimal.inverted())
+        axis = self.pick[1] * -1.0
+        sign = 1.0 if delta.Axis.dot(axis) >= 0 else -1.0
+        return sign * math.degrees(delta.Angle)
 
     def getStandardButtons(self):
         _QtCore, _QtGui, QtWidgets = _qt()

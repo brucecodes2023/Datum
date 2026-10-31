@@ -386,10 +386,11 @@ def mount_port(fitting):
     return next((f for f in frames if f.PortType in THREAD_TYPES), frames[0] if frames else None)
 
 
-def place_fitting(fitting, point, direction, port=None):
+def place_fitting(fitting, point, direction, port=None, angle=0.0):
     """Move ``fitting`` so ``port`` (default: the mount port) sits on ``point`` (document frame)
     with its +Z along ``-direction``: ``direction`` is the outward normal of the face, hole or port
-    it goes on, so a thread points into the part and two ports face each other."""
+    it goes on, so a thread points into the part and two ports face each other. ``angle`` (degrees)
+    turns it about that port's axis (an elbow's outlet round to where the tube goes)."""
     port = port or mount_port(fitting)
     if port is None:
         return fitting
@@ -400,6 +401,8 @@ def place_fitting(fitting, point, direction, port=None):
     # fitting placed on a top face stands as drawn and its tube port keeps its heading.
     local = port.Placement
     rotation = App.Rotation(local.Rotation.multVec(App.Vector(0, 0, 1)), z)
+    if angle:
+        rotation = App.Rotation(z, float(angle)).multiply(rotation)
     world = App.Placement(V(point) - rotation.multVec(local.Base), rotation)
     try:
         parent = fitting.getParentGeoFeatureGroup()
