@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Build Keystone.app from the working tree and install it in /Applications (roadmap FND-02).
+# Build "Vector Labs.app" from the working tree and install it in /Applications (roadmap FND-02).
 #
-# Keystone is this FreeCAD fork, fully renamed: window title, menu bar, Dock, About box, and its own
-# settings folders (~/Library/Preferences/Keystone, ~/Library/Application Support/Keystone), so it runs
+# Vector Labs (powered by FreeCAD) is this FreeCAD fork, fully renamed: menu bar and Dock say "Vector Labs";
+# the splash, About box, window title and Get Info say "Vector Labs, powered by FreeCAD". It has its own
+# settings folders (~/Library/Preferences/Vector Labs, ~/Library/Application Support/Vector Labs), so it runs
 # beside the development build (build/release) without sharing or touching its settings. The bundle is
 # self-contained: the Python, Qt, OCCT, CalculiX, Tectonic and other libraries it needs are copied from the pixi environment
 # and every path into the environment or the build tree is rewritten, so it keeps working after a
 # rebuild or `pixi clean`. Built from whatever is checked out, uncommitted changes included; the version
 # shows the commit and "-dirty". Ad-hoc signed, not notarized: for this Mac.
 #
-# Usage: package/bruceworx/make-keystone.sh [--no-build] [--dest DIR] [--dmg]
+# On first launch the bundle's launcher (Contents/MacOS/Vector Labs) copies the old Keystone settings folders
+# into the Vector Labs ones when those do not exist yet, and rewrites the absolute paths in the copied *.cfg.
+#
+# Usage: package/bruceworx/make-vectorlabs.sh [--no-build] [--dest DIR] [--dmg]
 #   --no-build  use build/release as it is (skip the ninja step)
 #   --dest DIR  install into DIR instead of /Applications
-#   --dmg       also write dist/Keystone-<version>-macOS-arm64.dmg
-# Claude's MCP server finds Keystone's bridge with
-#   BW_BRIDGE_DIR="$HOME/Library/Application Support/Keystone/v1-1/BruceWorx"
+#   --dmg       also write dist/Vector-Labs-<version>-macOS-arm64.dmg
+# Claude's MCP server finds the Vector Labs bridge with
+#   BW_BRIDGE_DIR="$HOME/Library/Application Support/Vector Labs/v1-1/BruceWorx"
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,8 +27,9 @@ repo="$(cd "$here/../.." && pwd)"
 env="$repo/.pixi/envs/default"
 build="$repo/build/release"
 dest="/Applications"
-app_name="Keystone"
-bundle_id="com.bruceworx.keystone"
+app_name="Vector Labs"
+display_name="Vector Labs, powered by FreeCAD"
+bundle_id="com.vectorlabs.app"
 do_build=1
 do_dmg=0
 while [[ $# -gt 0 ]]; do
@@ -33,13 +38,13 @@ while [[ $# -gt 0 ]]; do
         --dest) dest="$2"; shift ;;
         --dmg) do_dmg=1 ;;
         -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
-        *) echo "make-keystone: unknown option $1" >&2; exit 2 ;;
+        *) echo "make-vectorlabs: unknown option $1" >&2; exit 2 ;;
     esac
     shift
 done
 
-say() { printf '\033[1m[keystone]\033[0m %s\n' "$*"; }
-fail() { printf '\033[31m[keystone] %s\033[0m\n' "$*" >&2; exit 1; }
+say() { printf '\033[1m[vectorlabs]\033[0m %s\n' "$*"; }
+fail() { printf '\033[31m[vectorlabs] %s\033[0m\n' "$*" >&2; exit 1; }
 
 [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]] || fail "needs macOS on Apple silicon"
 [[ -d "$env/lib" ]] || fail "no pixi environment at $env (run 'pixi install' in the repo)"
@@ -56,7 +61,7 @@ dirty=""
 git -C "$repo" diff --quiet HEAD -- 2>/dev/null || dirty="-dirty"
 version="$release+$commit$dirty"
 short="$(ver MAJOR).$(ver MINOR).$(ver PATCH)"
-say "Keystone $version"
+say "Vector Labs $version"
 
 # ----- 1. build ---------------------------------------------------------------------------------------
 if [[ $do_build == 1 ]]; then
@@ -65,7 +70,7 @@ if [[ $do_build == 1 ]]; then
 fi
 
 # ----- 2. stage the bundle: FreeCAD installed into Contents, the runtime copied from the environment -----
-stage="$(mktemp -d "${TMPDIR:-/tmp}/keystone.XXXXXX")"
+stage="$(mktemp -d "${TMPDIR:-/tmp}/vectorlabs.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
 app="$stage/$app_name.app"
 C="$app/Contents"
@@ -109,9 +114,38 @@ else
     say "warning: no tectonic in the environment (pixi.toml lists it): study reports stay LaTeX unless MacTeX is installed"
 fi
 
-# The real executable sits in Contents/MacOS, so macOS sees Keystone.app (menu bar, Dock, icon); FreeCAD
-# takes its home from the executable's parent folder, Contents.
-cp -p "$C/bin/FreeCAD" "$C/MacOS/$app_name"
+# The real executable sits in Contents/MacOS (as "vectorlabs"), so FreeCAD takes its home from the
+# executable's parent folder, Contents. macOS sees "Vector Labs.app" (menu bar, Dock, icon) through the
+# bundle's Info.plist; the bundle's own executable, MacOS/"Vector Labs", is a small launcher that first
+# brings over the old Keystone settings (first launch only), then execs the real one.
+cp -p "$C/bin/FreeCAD" "$C/MacOS/vectorlabs"
+cat > "$C/MacOS/$app_name" <<'LAUNCHER'
+#!/bin/bash
+# Vector Labs launcher. First launch: copy the Keystone settings folders into the Vector Labs ones
+# (the Keystone folders stay as a backup) and rewrite the absolute paths inside the copied *.cfg files.
+# Whatever name started this (also the temporary MacOS/Keystone link), the Vector Labs folders are used:
+# the branding.xml ExeName decides the folders, not the name of this file.
+here="$(cd "$(dirname "$0")" && pwd)"
+if [ -z "${FREECAD_USER_HOME:-}" ] && [ -n "${HOME:-}" ]; then
+    for kind in "Library/Preferences" "Library/Application Support"; do
+        old="$HOME/$kind/Keystone"
+        new="$HOME/$kind/Vector Labs"
+        if [ -d "$old" ] && [ ! -e "$new" ]; then
+            if /usr/bin/ditto "$old" "$new" 2>/dev/null; then
+                /usr/bin/find "$new" -name '*.cfg' -type f -print0 | while IFS= read -r -d '' f; do
+                    /usr/bin/sed -i ''                         -e 's#Application Support/Keystone#Application Support/Vector Labs#g'                         -e 's#Library/Preferences/Keystone#Library/Preferences/Vector Labs#g'                         -e 's#Library/Caches/Keystone#Library/Caches/Vector Labs#g'                         -e 's#/Keystone\.app/#/Vector Labs.app/#g' "$f"
+                done
+            else
+                rm -rf "$new"   # a half copy would hide the backup from the next start
+            fi
+        fi
+    done
+fi
+exec "$here/vectorlabs" "$@"
+LAUNCHER
+chmod +x "$C/MacOS/$app_name"
+# Temporary: old scripts and watchers still start MacOS/Keystone (/Applications/Keystone.app is a link to this app).
+ln -sf "$app_name" "$C/MacOS/Keystone"
 
 # Qt finds its plugins from qt.conf, which Qt reads from Contents/Resources in a bundle.
 cat > "$C/Resources/qt.conf" <<QTCONF
@@ -132,28 +166,28 @@ cat > "$C/etc/fonts.conf" <<FONTS
   <dir>/System/Library/Fonts/Supplemental</dir>
   <dir>/Library/Fonts</dir>
   <dir>~/Library/Fonts</dir>
-  <cachedir>~/Library/Caches/$app_name/fontconfig</cachedir>
+  <cachedir>~/Library/Caches/Vector Labs/fontconfig</cachedir>
 </fontconfig>
 FONTS
 
 # ----- 3. the name: branding.xml renames the application and moves its settings ---------------------
-say "branding: Keystone, its own settings folders"
-mkdir -p "$C/share/keystone"
+say "branding: Vector Labs, its own settings folders"
+mkdir -p "$C/share/vectorlabs"
 cat > "$C/bin/branding.xml" <<BRAND
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Keystone.app branding (written by make-keystone.sh): the name everywhere, and ExeName moves the
-     settings to ~/Library/Preferences/Keystone and ~/Library/Application Support/Keystone. -->
+<!-- Vector Labs.app branding (written by make-vectorlabs.sh): the name everywhere, and ExeName moves the
+     settings to ~/Library/Preferences/Vector Labs and ~/Library/Application Support/Vector Labs. -->
 <Branding>
   <Application>$app_name</Application>
-  <WindowTitle>$app_name</WindowTitle>
+  <WindowTitle>$display_name</WindowTitle>
   <ExeName>$app_name</ExeName>
   <ExeVendor>BruceWorx</ExeVendor>
   <AppDataSkipVendor>true</AppDataSkipVendor>
   <BuildVersionSuffix>$(ver SUFFIX)+$commit$dirty</BuildVersionSuffix>
-  <WindowIcon>share/keystone/keystone.png</WindowIcon>
-  <AboutImage>share/keystone/keystone_about.png</AboutImage>
-  <CopyrightInfo>Keystone, built on FreeCAD. FreeCAD is LGPL-2.1-or-later software by the FreeCAD contributors.</CopyrightInfo>
-  <SplashScreen>keystonesplash</SplashScreen>
+  <WindowIcon>share/vectorlabs/vectorlabs.png</WindowIcon>
+  <AboutImage>share/vectorlabs/vectorlabs_about.png</AboutImage>
+  <CopyrightInfo>Vector Labs, powered by FreeCAD. FreeCAD is LGPL-2.1-or-later software by the FreeCAD contributors.</CopyrightInfo>
+  <SplashScreen>vectorlabs_splash</SplashScreen>
   <SplashInfoColor>#00000000</SplashInfoColor>
   <SplashAlignment>Bottom|Left</SplashAlignment>
   <SplashTextColor>#8a97a8</SplashTextColor>
@@ -168,17 +202,17 @@ if [[ -n "$chrome" ]]; then
     "$chrome" --headless --hide-scrollbars --default-background-color=00000000 --window-size=1024,1024 \
         --virtual-time-budget=1500 --screenshot="$png" "file://$here/branding/icon.html" >/dev/null 2>&1 || true
 fi
-[[ -f "$png" ]] || png="$here/branding/keystone_icon_1024.png"
-[[ -f "$png" ]] || fail "no icon: install Playwright's headless Chrome or add branding/keystone_icon_1024.png"
-iconset="$stage/Keystone.iconset"
+[[ -f "$png" ]] || png="$here/branding/vectorlabs_icon_1024.png"
+[[ -f "$png" ]] || fail "no icon: install Playwright's headless Chrome or add branding/vectorlabs_icon_1024.png"
+iconset="$stage/VectorLabs.iconset"
 mkdir -p "$iconset"
 for s in 16 32 128 256 512; do
     sips -z $s $s "$png" --out "$iconset/icon_${s}x${s}.png" >/dev/null
     sips -z $((s * 2)) $((s * 2)) "$png" --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o "$C/Resources/$app_name.icns"
-sips -z 256 256 "$png" --out "$C/share/keystone/keystone.png" >/dev/null
-cp "$here/branding/keystonesplash_2x.png" "$C/share/keystone/keystone_about.png"
+sips -z 256 256 "$png" --out "$C/share/vectorlabs/vectorlabs.png" >/dev/null
+cp "$here/branding/vectorlabs_splash_2x.png" "$C/share/vectorlabs/vectorlabs_about.png"
 
 # ----- 5. Info.plist -----------------------------------------------------------------------------------
 cat > "$C/Info.plist" <<PLIST
@@ -193,7 +227,7 @@ cat > "$C/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$short</string>
   <key>CFBundleVersion</key><string>$version</string>
-  <key>CFBundleGetInfoString</key><string>Keystone $version, built on FreeCAD</string>
+  <key>CFBundleGetInfoString</key><string>$display_name $version</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>LSArchitecturePriority</key><array><string>arm64</string></array>
   <key>NSHighResolutionCapable</key><true/>
@@ -216,13 +250,13 @@ PLIST
 
 # ----- 6. self-contained: copy the libraries it needs, rewrite every path into the environment ---------
 say "relocating libraries (a few minutes)"
-python3 "$here/keystone_relocate.py" "$C" "$env" "$build" "$repo" \
+python3 "$here/vectorlabs_relocate.py" "$C" "$env" "$build" "$repo" \
     || fail "some files still point into the environment or the build tree (listed above)"
 # Python and the pyvenv-less interpreter look for their home through PYTHONHOME (Info.plist above).
 
 # ----- 7. check it starts, then install -----------------------------------------------------------------
 say "checking the staged bundle"
-# A throwaway home: the check must not write Keystone's real settings (it once applied the theme headless
+# A throwaway home: the check must not write the real Vector Labs settings (it once applied the theme headless
 # and left the staging folder in them).
 mkdir -p "$stage/home"
 FREECAD_USER_HOME="$stage/home" PYTHONHOME="$C" PYTHONNOUSERSITE=1 "$C/bin/FreeCADCmd" -c "import FreeCAD, Part, sys; print('ok', FreeCAD.Version()[0:3], sys.prefix)" \
@@ -243,12 +277,12 @@ if [[ -x "$C/bin/tectonic" ]]; then
     # Pre-seed Tectonic's cache (30 Oct): compile tectonic-seed/seed.tex once (it loads every package the
     # study reports use, in every size and shape) with TECTONIC_CACHE_DIR inside the bundle. This run needs
     # the network (about 16 MB). At run time bruceworx_sim.tectonic_cache copies the seed once into
-    # ~/Library/Caches/Keystone/tectonic (the bundle stays read-only) and points TECTONIC_CACHE_DIR there.
+    # ~/Library/Caches/Vector Labs/tectonic (the bundle stays read-only) and points TECTONIC_CACHE_DIR there.
     seed="$C/Resources/tectonic-cache"
     rm -rf "$seed" "$stage/texseed"
     mkdir -p "$seed" "$stage/texseed"
     cp "$here/tectonic-seed/seed.tex" "$stage/texseed/seed.tex"
-    cp "$here/branding/keystonesplash_2x.png" "$stage/texseed/seed.png"
+    cp "$here/branding/vectorlabs_splash_2x.png" "$stage/texseed/seed.png"
     if (cd "$stage/texseed" && env -i HOME="$HOME" PATH=/usr/bin:/bin TECTONIC_CACHE_DIR="$seed" \
             "$C/bin/tectonic" --chatter minimal seed.tex) >"$stage/texseed.log" 2>&1 \
        && (cd "$stage/texseed" && env -i HOME="$HOME" PATH=/usr/bin:/bin TECTONIC_CACHE_DIR="$seed" \
@@ -264,8 +298,8 @@ fi
 target="$dest/$app_name.app"
 if [[ -e "$target" ]]; then
     old_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$target/Contents/Info.plist" 2>/dev/null || true)"
-    [[ "$old_id" == "$bundle_id" ]] || fail "$target exists and is not Keystone ($old_id): not replacing it"
-    say "replacing the Keystone.app installed before"
+    [[ "$old_id" == "$bundle_id" ]] || fail "$target exists and is not Vector Labs ($old_id): not replacing it"
+    say "replacing the Vector Labs.app installed before"
     rm -rf "$target"
 fi
 mkdir -p "$dest"
@@ -276,10 +310,10 @@ say "installed $target ($size)"
 
 if [[ $do_dmg == 1 ]]; then
     mkdir -p "$repo/dist"
-    dmg="$repo/dist/$app_name-$release+$commit$dirty-macOS-arm64.dmg"
+    dmg="$repo/dist/Vector-Labs-$release+$commit$dirty-macOS-arm64.dmg"
     rm -f "$dmg"
     ln -s /Applications "$stage/Applications"
     hdiutil create -volname "$app_name $release" -srcfolder "$app" -srcfolder "$stage/Applications" -ov -format UDZO "$dmg" >/dev/null
     say "wrote $dmg"
 fi
-say "open it from Applications, or: open -a $app_name"
+say "open it from Applications, or: open -a \"$app_name\""

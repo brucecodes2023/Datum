@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- KEYSTONE splash screen. Rendered by render_splash.sh at 568x368 (1x) and 1136x736 (2x).
+<!-- Vector Labs splash screen. Rendered by render_splash.sh at 568x368 (1x) and 1136x736 (2x).
      The query string carries the version: splash.html?v=1.1.4-bw.1 -->
 <html>
 <head>
@@ -23,10 +23,10 @@
     background-size: 64px 64px, 64px 64px, 16px 16px, 16px 16px;
     -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.35) 35%, #000 70%);
   }
-  svg { position: absolute; right: 14px; top: 62px; }
+  svg { position: absolute; right: 10px; top: 96px; }
   .mark { position: absolute; left: 40px; top: 116px; }
   .word {
-    font-size: 42px; font-weight: 800; letter-spacing: 5px; line-height: 1;
+    font-size: 38px; font-weight: 800; letter-spacing: 4px; line-height: 1;
     color: #f4f7fb;
   }
   .bar { width: 46px; height: 4px; border-radius: 2px; background: #2f7bff; margin: 16px 0 14px 2px;
@@ -42,11 +42,11 @@
 </head>
 <body>
 <div class="grid"></div>
-<svg id="arch" width="232" height="232" viewBox="0 0 300 300"></svg>
+<svg id="mark" width="232" height="232" viewBox="0 0 300 300"></svg>
 <div class="mark">
-  <div class="word">KEYSTONE</div>
+  <div class="word">VECTOR LABS</div>
   <div class="bar"></div>
-  <div class="tag">Engineering CAD &mdash; <b>built on FreeCAD</b></div>
+  <div class="tag">Engineering CAD &mdash; <b>powered by FreeCAD</b></div>
   <div class="verbs">DESIGN &middot; ASSEMBLE &middot; RELEASE</div>
 </div>
 <div class="line"></div>
@@ -56,35 +56,31 @@
   const v = new URLSearchParams(location.search).get("v") || "";
   document.getElementById("version").textContent = v;
 
-  // A semicircular arch of 9 voussoirs; the middle one, the keystone, is filled with the accent.
-  const svg = document.getElementById("arch");
+  // The mark: a vector. An origin, an arrow to its tip, and the dashed x and y components that
+  // make it a vector, over a small dimensioned grid (the drawing-office touch).
+  const svg = document.getElementById("mark");
   const NS = "http://www.w3.org/2000/svg";
-  const cx = 150, cy = 236, r1 = 78, r2 = 128, n = 9, gap = 0.016;
-  function pt(r, a) { return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; }
   function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; }
-  // Glow behind the keystone.
   const defs = el("defs", {});
   defs.innerHTML = '<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2f7bff" stop-opacity="0.55"/><stop offset="1" stop-color="#2f7bff" stop-opacity="0"/></radialGradient>' +
-                   '<linearGradient id="k" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b9bff"/><stop offset="1" stop-color="#1f5fd6"/></linearGradient>';
-  el("circle", { cx: cx, cy: cy - (r1 + r2) / 2, r: 62, fill: "url(#g)" });
-  for (let i = 0; i < n; i++) {
-    const a0 = Math.PI * i / n + gap, a1 = Math.PI * (i + 1) / n - gap;
-    // The keystone flares outward a little, as real keystones do.
-    const key = i === (n - 1) / 2;
-    const ro = key ? r2 + 10 : r2;
-    const p = [pt(r1, a0), pt(ro, a0), pt(ro, a1), pt(r1, a1)];
-    const d = `M${p[0]} L${p[1]} A${ro},${ro} 0 0 0 ${p[2]} L${p[3]} A${r1},${r1} 0 0 1 ${p[0]} Z`;
-    el("path", key
-      ? { d, fill: "url(#k)", stroke: "#8fbaff", "stroke-width": 1.2 }
-      : { d, fill: "rgba(255,255,255,0.035)", stroke: "rgba(214,226,240,0.55)", "stroke-width": 1.1 });
-  }
-  // Piers and a dimension line: the drawing-office touch.
-  el("rect", { x: cx - r2, y: cy, width: r2 - r1, height: 46, fill: "rgba(255,255,255,0.03)", stroke: "rgba(214,226,240,0.45)", "stroke-width": 1.1 });
-  el("rect", { x: cx + r1, y: cy, width: r2 - r1, height: 46, fill: "rgba(255,255,255,0.03)", stroke: "rgba(214,226,240,0.45)", "stroke-width": 1.1 });
-  el("line", { x1: cx - r1, y1: cy + 30, x2: cx + r1, y2: cy + 30, stroke: "rgba(143,186,255,0.7)", "stroke-width": 0.9 });
-  el("path", { d: `M${cx - r1},${cy + 30} l6,-3 v6 Z M${cx + r1},${cy + 30} l-6,-3 v6 Z`, fill: "rgba(143,186,255,0.8)" });
-  const t = el("text", { x: cx, y: cy + 26, "text-anchor": "middle", fill: "rgba(143,186,255,0.85)",
-                         "font-family": "SF Mono, Menlo, monospace", "font-size": 8.5 });
+                   '<linearGradient id="k" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1f5fd6"/><stop offset="1" stop-color="#6aa6ff"/></linearGradient>';
+  const ox = 56, oy = 232, tx = 250, ty = 70;
+  el("circle", { cx: tx, cy: ty, r: 56, fill: "url(#g)" });
+  // axes
+  el("line", { x1: ox, y1: oy, x2: 280, y2: oy, stroke: "rgba(214,226,240,0.45)", "stroke-width": 1.1 });
+  el("line", { x1: ox, y1: oy, x2: ox, y2: 30, stroke: "rgba(214,226,240,0.45)", "stroke-width": 1.1 });
+  // components
+  el("line", { x1: ox, y1: oy, x2: tx, y2: oy, stroke: "rgba(143,186,255,0.7)", "stroke-width": 1, "stroke-dasharray": "4 4" });
+  el("line", { x1: tx, y1: oy, x2: tx, y2: ty, stroke: "rgba(143,186,255,0.7)", "stroke-width": 1, "stroke-dasharray": "4 4" });
+  // the vector: shaft and head
+  const ang = Math.atan2(oy - ty, tx - ox), hl = 30, hw = 0.42;
+  const bx = tx - hl * 0.8 * Math.cos(ang), by = ty + hl * 0.8 * Math.sin(ang);
+  el("line", { x1: ox, y1: oy, x2: bx, y2: by, stroke: "url(#k)", "stroke-width": 7, "stroke-linecap": "round" });
+  const hp = [[tx, ty], [tx - hl * Math.cos(ang - hw), ty + hl * Math.sin(ang - hw)], [tx - hl * Math.cos(ang + hw), ty + hl * Math.sin(ang + hw)]];
+  el("path", { d: `M${hp[0]} L${hp[1]} L${hp[2]} Z`, fill: "#6aa6ff", stroke: "#a9c9ff", "stroke-width": 1.2, "stroke-linejoin": "round" });
+  el("circle", { cx: ox, cy: oy, r: 6, fill: "#121821", stroke: "#8fbaff", "stroke-width": 2 });
+  const t = el("text", { x: (ox + tx) / 2, y: oy + 18, "text-anchor": "middle", fill: "rgba(143,186,255,0.85)",
+                         "font-family": "SF Mono, Menlo, monospace", "font-size": 9 });
   t.textContent = "156";
 </script>
 </body>

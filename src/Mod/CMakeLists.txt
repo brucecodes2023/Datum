@@ -177,18 +177,18 @@ if(BUILD_BW_SHEETMETAL OR BUILD_BW_FASTENERS)
     )
 endif()
 
-# [BW] KEYSTONE splash screen (24 Oct 2026): App::Application reads <home>/bin/branding.xml at
+# [BW] Vector Labs splash screen (24 Oct 2026): App::Application reads <home>/bin/branding.xml at
 # start; the images go to <home>/icons, which BitmapFactory searches (the _2x one on Retina).
-option(BUILD_BW_BRANDING "BruceWorx: KEYSTONE splash screen (bin/branding.xml, icons/keystonesplash*.png)" ON)
+option(BUILD_BW_BRANDING "BruceWorx: Vector Labs splash screen (bin/branding.xml, icons/vectorlabs_splash*.png)" ON)
 if(BUILD_BW_BRANDING)
     set(BW_BRANDING_DIR ${CMAKE_SOURCE_DIR}/package/bruceworx/branding)
     configure_file(${BW_BRANDING_DIR}/branding.xml ${CMAKE_BINARY_DIR}/bin/branding.xml COPYONLY)
-    foreach(BW_SPLASH keystonesplash.png keystonesplash_2x.png)
+    foreach(BW_SPLASH vectorlabs_splash.png vectorlabs_splash_2x.png)
         configure_file(${BW_BRANDING_DIR}/${BW_SPLASH} ${CMAKE_BINARY_DIR}/icons/${BW_SPLASH} COPYONLY)
     endforeach()
     install(FILES ${BW_BRANDING_DIR}/branding.xml DESTINATION bin)
     install(
-        FILES ${BW_BRANDING_DIR}/keystonesplash.png ${BW_BRANDING_DIR}/keystonesplash_2x.png
+        FILES ${BW_BRANDING_DIR}/vectorlabs_splash.png ${BW_BRANDING_DIR}/vectorlabs_splash_2x.png
         DESTINATION icons
     )
 endif()

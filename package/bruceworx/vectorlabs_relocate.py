@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Make a staged Keystone.app self-contained (used by make-keystone.sh).
+"""Make a staged Vector Labs.app self-contained (used by make-vectorlabs.sh).
 
 The build installs FreeCAD with absolute rpaths into the pixi environment. This walks every
 Mach-O file in the bundle and:
@@ -11,7 +11,7 @@ Mach-O file in the bundle and:
   @executable_path/../lib for Contents/MacOS);
 * ad-hoc signs every file it changed (arm64 refuses to load a Mach-O whose signature is broken).
 
-    python3 keystone_relocate.py <Contents> <env prefix> [<other prefix to strip> ...]
+    python3 vectorlabs_relocate.py <Contents> <env prefix> [<other prefix to strip> ...]
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ def main(contents: str, env: str, strip: list[str]) -> int:
                 os.chmod(target, 0o755)
                 pending.append(target)
                 copied += 1
-    print(f"keystone: {copied} libraries copied from the environment")
+    print(f"vectorlabs: {copied} libraries copied from the environment")
 
     # 2. load commands, ids and rpaths
     changed = 0
@@ -129,11 +129,11 @@ def main(contents: str, env: str, strip: list[str]) -> int:
             subprocess.run(["install_name_tool", *args, path], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
             # a duplicate rpath delete or similar: say which file, keep going
-            print(f"keystone: install_name_tool on {os.path.relpath(path, contents)}: {exc.stderr.strip()}")
+            print(f"vectorlabs: install_name_tool on {os.path.relpath(path, contents)}: {exc.stderr.strip()}")
             continue
         subprocess.run(["codesign", "--force", "--sign", "-", path], check=True, capture_output=True)
         changed += 1
-    print(f"keystone: {changed} files relocated and re-signed")
+    print(f"vectorlabs: {changed} files relocated and re-signed")
 
     # 3. nothing may still point at the environment or the build tree
     left = []
@@ -145,7 +145,7 @@ def main(contents: str, env: str, strip: list[str]) -> int:
         if bad:
             left.append((os.path.relpath(path, contents), bad[0]))
     for rel, bad in left[:20]:
-        print(f"keystone: still absolute: {rel} -> {bad}")
+        print(f"vectorlabs: still absolute: {rel} -> {bad}")
     return 1 if left else 0
 
 
