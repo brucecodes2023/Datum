@@ -347,6 +347,10 @@ EPICS = [
       "(new, 30 Oct)",
       "Flattened harness drawing (tree layout, true segment lengths, not to scale) with connector and pin-out tables, from-to list and stock lengths; tube drawing with the YBC (LRA) and XYZ intersection tables, CLR and cut length. Plan: 'BW-ROU next' (questions D1-D3).",
       "The sample harness and the three-bend tube print drawings a shop can build from without the 3D model."),
+    E("ROU-08", "Flexible wires", "M5", "To do", ["ROU-05", "ASM-03"],
+      "(new, 30 Oct)",
+      "Every wire is a fixed-length rope (XPBD: length, bending from gauge and insulation, minimum bend radius, gravity, collision with part proxies), solved live in Assembly drags from its last shape; the drag stops when a wire is taut; light tube while dragging, solid on release; flexible sub-assemblies carry routed items. Plan: 'BW-ROU-08 plan' (questions W1-W11).",
+      "The battery's T plug dragged through an arc: leads keep 81 mm, update at 20 frames/s or better, the drag stops when taut; catenary and cantilever-stub benchmarks within tolerance."),
     # Robotics & drones ---------------------------------------------------
     E("ROB-01", "COTS library & insert", "M1", "To do", ["MOD-05"],
       "FCB-P2-09/10, P2R-01..04",

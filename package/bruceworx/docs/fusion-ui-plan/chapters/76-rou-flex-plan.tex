@@ -1,0 +1,172 @@
+%======================================================================
+\subsection{BW-ROU-08 plan: flexible wires that keep their length (30 Oct 2026)}\label{sec:rou-flex-plan}
+%======================================================================
+
+\paragraph{The request.} You asked, through the session building the battery (\code{STD-02-01001-001}: two
+12\,AWG leads from the pack to a T plug, four 22\,AWG balance leads to an XHP-4), for wires that behave like
+real wires. Today a wire is a spline through its path points. Dragging the plug re-routes it only on release,
+and the spline stretches (81\,mm became 132\,mm in the test). Your answers, already given:
+\begin{enumerate}[nosep]
+  \item the wire \textbf{keeps its length} (its cut length) and never bends tighter than its minimum radius;
+        the ends stay clamped to the pin frames and leave them straight, as now;
+  \item it moves \textbf{live during an Assembly drag}, solved again at each drag step from the last shape;
+  \item pulled taut, \textbf{the drag stops} at the wire's length, like the joint-limit drag stop of
+        \S\ref{sec:joints} (no warn and continue);
+  \item \textbf{gravity sag} is in;
+  \item \textbf{collisions with parts} are in, against simplified shapes for speed;
+  \item this is the \textbf{default for every wire}, not a mode.
+\end{enumerate}
+The method borrows the \emph{ideas} of Blender's hair and cloth tools, not their code (Blender is GPL): position-based
+dynamics for the rope and discrete elastic rods for the stiffness. Everything is numpy; nothing new is bundled.
+
+%----------------------------------------------------------------------
+\subsubsection*{Theory}
+
+\paragraph{The rope.} A wire of cut length $L$ is $N$ points $\mathbf x_0\dots\mathbf x_{N-1}$ with a rest
+segment length $\ell_0=L/(N-1)$. The first and last $k$ points sit on the leads: they are fixed on the pin
+frames' $+Z$ axes for the straight lengths of ROU-05, so the wire leaves each terminal straight. The rest move.
+The shape is the \emph{resting} configuration under three kinds of constraint and gravity. It is not a dynamic
+simulation: we want where the wire settles, not how it swings.
+
+\paragraph{XPBD (Macklin, M\"uller, Chentanez 2016).} Extended position-based dynamics moves points directly to
+satisfy constraints $C_j(\mathbf x)=0$ (or $\ge0$), each with a compliance $\alpha_j$ (the inverse of a
+stiffness). One step of length $\Delta t$:
+\[
+  \tilde{\mathbf x}_i=\mathbf x_i+\Delta t\,\mathbf v_i+\Delta t^2\,\mathbf g,\qquad
+  \Delta\lambda_j=\frac{-C_j-\tilde\alpha_j\lambda_j}{\sum_i w_i\lVert\nabla_iC_j\rVert^2+\tilde\alpha_j},\qquad
+  \Delta\mathbf x_i=w_i\,\nabla_iC_j\,\Delta\lambda_j,
+\]
+with $\tilde\alpha_j=\alpha_j/\Delta t^2$, inverse masses $w_i$ (zero for the clamped points), and the
+Lagrange multipliers $\lambda_j$ accumulated over the iterations. With heavy velocity damping and the previous
+shape as the start, a few steps reach rest. That is what lets a drag step cost milliseconds, because each step
+starts from where the wire already is.
+
+\paragraph{Constraints.}
+\begin{itemize}
+  \item \textbf{Length} (inextensible, $\alpha=0$): $C=\lVert\mathbf x_{i+1}-\mathbf x_i\rVert-\ell_0$ per segment.
+        The wire neither stretches nor shrinks; its length is $L$ by construction, not by checking.
+  \item \textbf{Bending} (elastic): the turning angle $\theta_i$ at point $i$ between consecutive segments.
+        The discrete elastic rod (Bergou et al.\ 2008) gives the bending energy
+        $E_b=\sum_i \frac{EI}{\ell_0}\bigl(2\tan\frac{\theta_i}{2}\bigr)^2$, so the compliance is
+        $\alpha_b=\ell_0/EI$. Twist is left out: a round wire's twist barely changes its centreline.
+  \item \textbf{Minimum bend radius} (a limit, not a spring): the local radius $R_i=\ell_0/(2\sin\frac{\theta_i}{2})$
+        must stay at or above $R_{\min}$ from the wire's bend rule, i.e.\ $\theta_i\le\theta_{\max}=2\arcsin
+        \frac{\ell_0}{2R_{\min}}$. It is active only when violated. For 12\,AWG at $4\times$OD ($R_{\min}=14.4$\,mm)
+        and $\ell_0=6$\,mm, $\theta_{\max}=24^\circ$.
+  \item \textbf{Collision} (inequality): for each point and each nearby part proxy with signed distance $d(\mathbf x)$,
+        $C=d(\mathbf x_i)-r\ge0$ with $r$ the wire radius plus a clearance. A violated point is pushed out along
+        $\nabla d$.
+\end{itemize}
+
+\paragraph{Stiffness from the gauge.} A stranded conductor bends with its strands sliding, so its stiffness is
+close to the sum of the strands', $EI_c\approx n_s E_{\text{Cu}}\pi d_s^4/64$, a lower bound (friction adds
+some). The insulation is a tube, $EI_i=E_i\pi(D^4-d^4)/64$. For 12\,AWG (65 strands of 0.254\,mm, PVC OD
+3.6\,mm): $EI_c\approx1554$, $EI_i\approx137$, $EI\approx1.7\times10^3$\,N\,mm$^2$. A table per insulation type
+(PVC, silicone, PTFE, XLPE, matching the ROU bend-rule presets) holds $E_i$ and density, and a per-wire factor
+calibrates it against a hang test (question W9).
+
+\paragraph{Gravity.} The weight per length $q=(\rho_{\text{Cu}}A_c+\rho_iA_i)g$ is
+$3.7\times10^{-4}$\,N/mm for 12\,AWG. Gravity points along $-Z$ of the top assembly unless the assembly says
+otherwise (question W7).
+
+\paragraph{Taut and the drag stop.} An inextensible rope whose end points move apart beyond its length has no
+solution. The solver detects this as a residual: the length constraints cannot all be met, and the largest
+segment strain stays above $10^{-3}$ after the iterations. The quick test first is the lower bound
+$\lVert\mathbf a-\mathbf b\rVert+\ell_a+\ell_b\le L$ between the lead tips $\mathbf a,\mathbf b$ (with obstacles
+the shortest path is longer, so the residual decides). The drag step is then cut back by bisection, as the joint
+limits already are (\S\ref{sec:joints}): the part stops where the wire just reaches its length.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,font=\sffamily\scriptsize]
+  \fill[black!8] (0,10) rectangle (12,34); \node at (6,36) {pack};
+  \fill[black!8] (108,16) rectangle (120,40); \node at (114,42) {plug};
+  \fill[bworange!25] (48,0) rectangle (70,12); \node at (59,6) {part (proxy box)};
+  \draw[black!40, dashed] (12,22) -- (20,22); \draw[black!40, dashed] (100,28) -- (108,28);
+  \draw[bwblue, line width=1.1pt] plot[smooth, tension=0.6] coordinates {(12,22) (20,22) (32,18) (46,15) (59,14.5) (72,16) (86,21) (100,28) (108,28)};
+  \foreach \p in {(12,22),(16,22),(20,22),(108,28),(104,28),(100,28)} \fill[black] \p circle (0.8);
+  \foreach \p in {(26,20),(32,18),(39,16.3),(46,15),(52.5,14.6),(59,14.5),(65.5,15),(72,16),(79,18.3),(86,21),(93,24.5)} \draw[bwblue, fill=white] \p circle (0.8);
+  \draw[->, black!50] (5,4) -- (5,-2) node[right] {$\mathbf g$};
+  \node[anchor=west, text=black!55] at (2,46) {$\bullet$ clamped on the lead (straight length of the pin)};
+  \node[anchor=west, text=black!55] at (2,50) {$\circ$ free points: length, bending, bend limit, collision, gravity};
+  \node[anchor=west, text=black!55] at (60,50) {the part proxy pushes points out by $r$};
+\end{tikzpicture}
+\caption{A wire as a rope of points. The leads are clamped along the pin frames; the free points settle under
+gravity while every segment keeps $\ell_0$, every bend stays above $R_{\min}$, and no point enters a part proxy.}
+\label{fig:rou-flex}
+\end{figure}
+
+%----------------------------------------------------------------------
+\subsubsection*{How it fits Keystone}
+
+\begin{itemize}
+  \item \textbf{The wire keeps a state.} A new hidden property stores the rope's points. A recompute that moves a
+        pin (an edited joint, a moved part) solves from that state, so a wire never jumps to a new shape.
+  \item \textbf{During a drag.} Assembly drags go through \code{preDrag}/\code{doDragStep}/\code{postDrag}
+        (commit 1a15d0d1). A small \code{[BW]} hook in \code{AssemblyObject::doDragStep} calls the registered
+        Python \emph{drag checks} after the solver proposes placements and before they are applied. The rope
+        module is one of them: it solves the wires attached to the moved parts, returns ``ok'' or ``taut'', and
+        a taut answer sends the step into the existing bisection. While dragging, a wire is drawn as a light
+        tube (a Coin line set with the wire's width and colour), because sweeping an OCC solid 30 times a second is
+        too slow; the real solid is built once on release.
+  \item \textbf{Collision proxies.} Each part near a wire (bounding boxes within the wire's reach) gets a proxy:
+        its oriented bounding box by default, or a convex hull or decimated mesh for parts where the box is too coarse
+        (question W6). Signed distances to boxes are exact and cheap; to a mesh, through a small BVH in numpy.
+  \item \textbf{Resolution.} About one point per 1.5\,OD, clamped to 20--200 points (question W4); 40 for the
+        battery's 81\,mm lead.
+  \item \textbf{Flexible sub-assemblies.} An \code{AssemblyLink} with \code{Rigid=False} copies only links and
+        assembly links into the parent (\code{synchronizeComponents}). Wires and route paths stay behind in the
+        sub-assembly's document and do not follow parts the parent moves. The fix: the copy step also copies
+        routed items, re-pointing their attachments to the copied links (C++, \code{[BW]}).
+\end{itemize}
+
+\paragraph{Verification.}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Catenary & $EI\to0$, ends 200\,mm apart at the same height, $L=250$\,mm: the shape is a catenary with
+  $a=84.55$\,mm and sag $a(\cosh\frac{d}{2a}-1)=66.36$\,mm; the test accepts 1\,\%.\\
+Cantilever stub & 12\,AWG, 100\,mm clamped horizontally at one end, free at the other: tip sag
+  $qL^4/8EI=2.76$\,mm (small deflection); accepts 5\,\%.\\
+Length & any drag sequence: $\sum\lVert\mathbf x_{i+1}-\mathbf x_i\rVert=L$ within $10^{-3}$.\\
+Bend limit & a pin turned back on itself: no turning angle above $\theta_{\max}$.\\
+Drag stop & the T plug dragged away from the pack stops where the 12\,AWG leads are taut, within one bisection
+  step; dragging back frees it.\\
+Collision & a wire over a box sags onto it and no point is inside the box minus $10^{-2}$\,mm.\\
+Battery & \code{STD-02-01001-001} (on a vault copy): drag P1 through an arc; the leads keep 81\,mm, update live
+  ($\ge20$ frames/s), stop when taut.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{New epic.} \eref{ROU-08} Flexible wires: rope solver as the default wire behaviour, live in drags, drag
+stop when taut, gravity, collision proxies, flexible sub-assemblies carrying routed items.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=W\arabic*.]
+  \item \textbf{Hand-placed path points.} Under the rope, what is a point you picked? \emph{Recommendation:} a
+        point picked on a part (a clip, an LCS) becomes a \emph{clip} the wire passes through, free to turn; a point
+        in free space is only a \emph{guide} for the first shape and then forgotten.
+  \item \textbf{Migrating existing wires.} Each wire's cut length becomes its current length (with its slack), so
+        nothing changes shape until something moves? \emph{Recommendation:} yes, and the slack field then edits the
+        cut length directly.
+  \item \textbf{Bundles, hoses, pipes.} \emph{Recommendation:} hoses follow (same rope, hose stiffness); a bundle is
+        one rope with the combined OD and stiffness, branches at breakouts later; pipes and tubes stay rigid (they are
+        bent, not flexible).
+  \item \textbf{Resolution.} One point per 1.5\,OD, 20--200 points? \emph{Recommendation:} yes.
+  \item \textbf{Live display.} A light tube while dragging, the real solid on release? \emph{Recommendation:} yes.
+  \item \textbf{Collision proxies.} Oriented box per part by default, convex hull or mesh chosen per part; wire to
+        wire contact later? \emph{Recommendation:} yes.
+  \item \textbf{Gravity.} $-Z$ of the top assembly, settable per assembly (a drone shown on its side)?
+        \emph{Recommendation:} yes.
+  \item \textbf{Outside drags.} A recompute that moves a pin (joint edit, typed placement) solves the rope from its
+        last shape, and a taut wire there turns red with a badge rather than refusing the edit?
+        \emph{Recommendation:} yes. Only drags can be stopped.
+  \item \textbf{Stiffness data.} Table per insulation type plus a per-wire calibration factor from a hang test (clamp
+        100\,mm, measure the tip sag)? \emph{Recommendation:} yes.
+  \item \textbf{Bend limit while dragging.} If a drag would force a bend tighter than the minimum (the pin turned hard),
+        stop the drag there too, or let the wire turn red? \emph{Recommendation:} stop the drag, like taut.
+  \item \textbf{Flexible sub-assemblies.} Copy routed items into the parent with the links (above)?
+        \emph{Recommendation:} yes.
+\end{enumerate}
