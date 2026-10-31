@@ -289,6 +289,7 @@ void PagePrinter::printBannerPage(QPrinter* printer, QPainter& painter, QPageLay
 void PagePrinter::renderPage(ViewProviderPage* vpp, QPainter& painter, QRectF& sourceRect,
                              QRect& targetRect)
 {
+    vpp->ensureSceneBuilt();  // [BW] an unopened page has an empty scene
     // Clear selection to avoid it being rendered to the file
     vpp->getQGSPage()->clearSelection();
     vpp->setTemplateMarkers(false);
@@ -405,6 +406,7 @@ void PagePrinter::saveSVG(ViewProviderPage* vpPage, const std::string& file)
     filespec = DU::cleanFilespecBackslash(file);
     QString filename = QString::fromStdString(filespec);
 
+    vpPage->ensureSceneBuilt();  // [BW] an unopened page has an empty scene
     auto ourScene = vpPage->getQGSPage();
     ourScene->setExportingSvg(true);
     auto ourDoc = vpPage->getDocument();

@@ -117,6 +117,7 @@ public:
     void unsetEdit(int ModNum) override;
     MDIViewPage* getMDIViewPage() const;
     bool showMDIViewPage();
+    void ensureSceneBuilt();  // [BW] fill the scene without an MDI tab (exports)
     void removeMDIView();
     void switchToMdiViewPage();
 

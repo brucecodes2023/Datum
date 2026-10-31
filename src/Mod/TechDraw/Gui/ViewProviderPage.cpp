@@ -291,6 +291,20 @@ void ViewProviderPage::hide()
     ViewProviderDocumentObject::hide();
 }
 
+// [BW] A page that was never opened has an empty scene (the template and views are only
+// added in showMDIViewPage), so exporting it wrote nothing but the annotations. Fill the
+// scene off screen, without creating a tab.
+void ViewProviderPage::ensureSceneBuilt()
+{
+    if (!m_mdiView.isNull() || !m_graphicsScene) {
+        return;
+    }
+    m_graphicsScene->addChildrenToPage();
+    m_graphicsScene->updateTemplate(true);
+    m_graphicsScene->redrawAllViews();
+    m_graphicsScene->fixOrphans(true);
+}
+
 bool ViewProviderPage::showMDIViewPage()
 {
     if (m_mdiView.isNull()) {
