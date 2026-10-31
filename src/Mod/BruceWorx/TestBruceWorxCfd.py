@@ -83,6 +83,21 @@ class TestDetection(unittest.TestCase):
         self.assertTrue(cfd.INSTALL_URL.startswith("https://github.com/gerlero/openfoam-app"))
 
 
+class TestRunDir(unittest.TestCase):
+    @needs_foam
+    def test_a_case_path_with_a_space_runs(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder = os.path.join(t, "Vector Labs", "cfd", "case")
+            os.makedirs(folder)
+            alias = cfd.run_dir(folder)
+            self.assertNotIn(" ", alias)
+            self.assertEqual(os.path.realpath(alias), os.path.realpath(folder))
+            cfd.write_pipe_case(folder, n_axial=60, n_radial=8)
+            run = cfd.Runner(folder, INSTALL).start()
+            run.wait()
+            self.assertEqual(run.result(), "done", cfd._read(os.path.join(folder, "log.run")))
+
+
 class TestGeometry(unittest.TestCase):
     def test_watertight(self):
         self.assertEqual(cfd.open_edges(cfd.sphere_triangles(0.05)), 0)

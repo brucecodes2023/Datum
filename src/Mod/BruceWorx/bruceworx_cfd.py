@@ -1094,6 +1094,22 @@ def _clean_env():
     return env
 
 
+def run_dir(folder):
+    """The path OpenFOAM runs in. It chokes on spaces in the case path (fileName::stripInvalid is fatal), and the
+    default cache folder is 'Vector Labs', so a space gets a space-free symlink to the folder."""
+    if " " not in folder:
+        return folder
+    import hashlib
+    import tempfile
+
+    alias = os.path.join(tempfile.gettempdir(), "vlcfd-" + hashlib.md5(folder.encode()).hexdigest()[:10])
+    if os.path.islink(alias) and os.readlink(alias) != folder:
+        os.remove(alias)
+    if not os.path.lexists(alias):
+        os.symlink(folder, alias)
+    return alias
+
+
 class Runner:
     """Runs a case's Allrun in the OpenFOAM environment in the background."""
 
@@ -1112,7 +1128,7 @@ class Runner:
         shutil.rmtree(os.path.join(self.folder, "postProcessing"), ignore_errors=True)
         self.log = open(os.path.join(self.folder, "log.run"), "w")
         self.started = time.time()
-        self.process = subprocess.Popen([self.install["launcher"], "-c", f"cd '{self.folder}' && ./Allrun"],
+        self.process = subprocess.Popen([self.install["launcher"], "-c", f"cd '{run_dir(self.folder)}' && ./Allrun"],
                                         stdout=self.log, stderr=subprocess.STDOUT, env=_clean_env(),
                                         start_new_session=True)
         return self
@@ -1539,7 +1555,7 @@ def convert_vtk(folder, install=None):
     install = install or find_openfoam()
     if install is None:
         raise CfdError(install_text())
-    r = subprocess.run([install["launcher"], "-c", f"cd '{folder}' && foamToVTK -latestTime -ascii > log.foamToVTK 2>&1"],
+    r = subprocess.run([install["launcher"], "-c", f"cd '{run_dir(folder)}' && foamToVTK -latestTime -ascii > log.foamToVTK 2>&1"],
                        env=_clean_env(), capture_output=True, text=True, timeout=600)
     found = sorted(glob.glob(os.path.join(folder, "VTK", "*", "internal.vtu")) + glob.glob(os.path.join(folder, "VTK", "*.vtk")))
     if r.returncode or not found:
