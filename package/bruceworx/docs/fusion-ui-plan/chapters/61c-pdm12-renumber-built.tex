@@ -1,0 +1,73 @@
+%======================================================================
+\subsection{BW-PDM-12 --- Built 31 Oct: renumber an item, and assemblies numbered as parts}\label{sec:pdm12-built}
+%======================================================================
+
+You asked for the battery to be a Part number in Standard Libraries and for the vault to be able to rename an item.
+Both are built, as planned in \S\ref{sec:pdm12-plan}. Nothing has been run on the real vaults: that is your step
+(below).
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{Number assemblies as parts.} A box in Vault Settings (Part numbering), stored in the vault's
+        \file{numbering.json} as \code{"assemblies\_as\_parts": true}, and
+        \code{bw-hooks vault settings --assemblies-as-parts on|off}. Off in a new vault. Import, New Part in Vault,
+        project setup, the KiCad import, the connector library and Renumber's suggestion all pick the document type
+        through \code{vault\_setup.document\_type\_for\_item}. Drawings keep type 03; the item stays an assembly.
+  \item \textbf{Renumber\ldots} in the right-click menu of the Vault panel (and the Vault menu). The dialog
+        suggests the next free number, takes a typed one, requires a reason, and shows what will be rewritten, the
+        files that link the item and the items in the neighbour vaults that link its file name. It closes the
+        affected open documents when you agree and refuses while one has unsaved changes.
+  \item \textbf{Command line.} \code{bw-hooks vault renumber PN [--to NEW | --document-type CODE] --reason TEXT
+        [--dry-run]}. The dry run needs no FreeCAD. Other vault commands accept an old number and say what it is now.
+  \item \textbf{Activity log.} ``renumbered \code{A} $\to$ \code{B}: reason'', with the new file versions in the
+        detail. \textbf{Search} finds an item by a former number.
+\end{itemize}
+
+\paragraph{How it works.} One new journal operation, \code{renumber} (old, new, reason, and the file versions it
+wrote as P/N $\to$ object record). \code{bruceworx.renumber} does the file step first: the item's latest file is
+copied, \code{write\_part\_number} writes the new \code{PartNumber} keeping the revision, the link errors the
+headless save leaves are cleared, the view data FreeCADCmd drops is restored
+(\code{connector\_library.restore\_view\_data}), and the geometry fingerprint is compared (refused if it differs).
+It is stored as \file{\textless new\textgreater.FCStd}. Each file that links the item has its link re-pointed
+(\code{rewrite\_links}) and is stored as a new version of its current revision. The objects are written before the
+single journal line. Replay (\code{pdm.Vault.renumber}, \code{FolderVault}) re-keys the item, versions, locks,
+released files, BOM lines in every revision, drawings, configurations, ECR/ECO lists and project tops; the old
+number is an alias (\code{vault.resolve}), chained renumbers resolve to the last. Get Revision and link fixing read
+old links through the aliases; a read-only work copy under the old name is replaced at the next refresh.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item The journal line carries each new file as \code{\{sha256, size, filename\}}, not the SHA-256 alone, so a
+        replay needs no file access. The activity detail shows P/N and the start of the SHA-256.
+  \item A released linker's \emph{released} file moves to the new version too (it is the same revision, only the
+        link changed); otherwise Released would point at a file that links a number that no longer exists.
+  \item The new versions keep the old fingerprint. A drawing's \code{made\_from} is re-keyed to the new number, and
+        its entries for rewritten files point at the new versions.
+  \item The number is reserved in \file{numbering.json} just before the journal line (a typed number too), so a
+        later new number passes it by. A failure before that burns nothing; one after leaves an unused number.
+  \item \code{renumber} sits in the contract table as row T16 and in \file{docs/pdm-openapi.yaml}.
+  \item The fingerprint reader is a second copy in \code{freecad\_io} (the Vault panel's lives in the GUI module).
+\end{itemize}
+
+\paragraph{Every Keystone needs this code.} Like \code{set\_category}, \code{renumber} is a new journal operation:
+an older Keystone opening a vault with the line reports it as a problem and goes on with the \emph{old} numbers.
+Install the new build on every Mac before using it on a shared vault.
+
+\paragraph{Tests.} \code{test\_renumber.py} (model, every state, refusals, chained aliases; folder vault files and
+links, released linker, crash before the line, dry run, KiCad refusal, cross-vault list, activity text, workspace
+refresh and Get Revision, the setting in every numbering path, the CLI) and contract row T16; GUI tests in
+\code{TestBruceWorxVaultClient} (assembly numbered as a part, renumber with its file, unsaved document refused,
+clean one closed, search by old number) and \code{TestBruceWorxVaultWizard} (the box). Tried on a copy of Standard
+Libraries: the battery went to the next \code{STD-01} number under FreeCADCmd with its eight links intact.
+
+\paragraph{Not done.} KiCad items are refused. The activity detail for other vaults' links is a list in the dialog
+only. Links in the neighbour vaults are not rewritten: they resolve through the aliases and are re-pointed at the
+item's next check-in.
+
+\paragraph{Your step.} After the new Keystone is installed, in Standard Libraries:
+\begin{verbatim}
+bw-hooks vault settings --vault "/Volumes/Extreme SSD/VectorLabs/Vault/Standard Libraries" \
+    --assemblies-as-parts on
+bw-hooks vault renumber STD-02-01001-001 --vault "/Volumes/Extreme SSD/VectorLabs/Vault/Standard Libraries" \
+    --reason "library items are numbered as parts (31 Oct)"
+\end{verbatim}
