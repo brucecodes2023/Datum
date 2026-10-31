@@ -295,7 +295,7 @@ EPICS = [
       "Report regenerates from the study; convergence plot included."),
     E("SIM-05", "Verification & validation", "M4", "To do", ["SIM-01"],
       "(new)",
-      "Cantilever, plate with hole, Euler column, beam modes vs closed form. 31 Oct (your request): validation against open data. Plan: chapter 'SIM-05 validation plan' with three tiers (closed form, published benchmarks NAFEMS LE10/FV52 and Code_Aster V-docs, experiments: NACA 0012 Ladson, printed PLA by orientation, your own parts); questions V1-V7 open.",
+      "Cantilever, plate with hole, Euler column, beam modes vs closed form. 31 Oct (your request): validation against open data. Plan: chapter 'SIM-05 validation plan' with three tiers (closed form, published benchmarks NAFEMS LE10/FV52 and Code_Aster V-docs, experiments: NACA 0012 Ladson, printed PLA by orientation, your own parts); 31 Oct answers: V1-V7 as recommended (structural/thermal set first, CFD cases with SIM-06, own-part tests third, Ahmed on demand).",
       "All benchmarks within stated tolerance in CI."),
     E("SIM-06", "CFD / airflow", "M5", "To do", ["SIM-01", "ROB-04"],
       "(new)",

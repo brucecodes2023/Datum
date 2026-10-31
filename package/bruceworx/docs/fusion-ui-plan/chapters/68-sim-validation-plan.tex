@@ -146,3 +146,10 @@ The real fix for the drone is measured data from your own parts (V5).
         and 15\,\% for $C_d$, since drag is the hardest quantity for RANS to get right.
         \emph{Recommendation:} yes.
 \end{enumerate}
+
+\paragraph{Your answers (31 Oct).} V1--V7 as recommended. The cases in the table come first, with the missing
+manual values filled in and B-TT1's diameter confirmed, and the gaps closed with the three closed forms.
+Code\_Aster and NAFEMS values are stored with citations; TMR and UIUC files are downloaded at test time. The
+fast set runs with every build, the slow set on demand, and the \emph{Validation} command writes the report.
+Your own part tests come third, the Ahmed body is on demand only, and the tolerances are as in the table. Order
+of work: the structural and thermal set now; the CFD cases with \eref{SIM-06} once OpenFOAM is installed.
