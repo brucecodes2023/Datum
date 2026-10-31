@@ -1233,7 +1233,7 @@ QWidget#thumbnailWidget[state="pressed"] {
   color: @AccentColor;
 }
 
-/* The Start page's one-line vault switcher (PDM-04): the vault's name with a menu. */
+/* The Start page's vault list (PDM-04): the open vault, then each vault beside it. */
 #BruceWorxStart QToolButton#bwStartVaultSwitch {
   background: transparent;
   color: @TextForegroundColor;
@@ -1252,6 +1252,36 @@ QWidget#thumbnailWidget[state="pressed"] {
 #BruceWorxStart QToolButton#bwStartVaultSwitch::menu-indicator {
   image: none;
   width: 0px;
+}
+
+#BruceWorxStart QPushButton#bwStartVaultPlace {
+  background: transparent;
+  color: @TextForegroundColor;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+#BruceWorxStart QPushButton#bwStartVaultPlace:hover {
+  background-color: @HoverColor;
+}
+
+#BruceWorxStart QPushButton#bwDashPlace {
+  background: transparent;
+  color: @TextForegroundColor;
+  border: none;
+  border-radius: 6px;
+  padding: 2px 2px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+#BruceWorxStart QPushButton#bwDashPlace:hover {
+  background-color: @HoverColor;
 }
 
 #BruceWorxStart QFrame#bwStartVault {
@@ -1952,6 +1982,21 @@ QLabel#bwVaultName {
   font-weight: 600;
 }
 
+QPushButton#bwVaultPlace {
+  background: transparent;
+  color: @TextForegroundColor;
+  border: none;
+  border-radius: 6px;
+  padding: 2px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+QPushButton#bwVaultPlace:hover {
+  background-color: @HoverColor;
+}
+
 QLabel#bwVaultSync,
 QLabel#bwVaultCount,
 QToolButton#bwVaultSort,
@@ -2258,11 +2303,11 @@ QWidget#bwRightTabs QToolButton#bwRightTab {
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0px;
-  padding: 0px 6px;
+  padding: 0px 4px;
   margin: 0px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: @TextSecondaryColor;
+  color: @TextForegroundColor;
 }
 
 QWidget#bwRightTabs QToolButton#bwRightTab:hover {

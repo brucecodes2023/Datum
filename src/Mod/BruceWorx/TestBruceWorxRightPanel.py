@@ -40,6 +40,19 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(rp.bring_properties(False, rp.PROPERTIES))
 
 
+class PackTests(unittest.TestCase):
+    def test_everything_shows_when_it_fits(self):
+        self.assertEqual(rp.pack_tabs([40, 50, 60], 200, 0), ([0, 1, 2], False))
+
+    def test_the_rest_go_under_more(self):
+        self.assertEqual(rp.pack_tabs([78, 42, 84, 62, 100, 88], 366, 1), ([0, 1, 2, 3], True))
+
+    def test_the_current_tab_stays_visible(self):
+        shown, more = rp.pack_tabs([80, 80, 80, 80], 200, 3, spacing=0, more=40)
+        self.assertTrue(more)
+        self.assertIn(3, shown)
+
+
 class StripTests(unittest.TestCase):
     def test_command_word(self):
         self.assertEqual(rp.command_word("Pad Parameters"), "Pad")

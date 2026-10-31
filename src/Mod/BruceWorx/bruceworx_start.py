@@ -8,11 +8,13 @@ This module adds the BruceWorx page to that stack and shows it instead of
 page 1, so the Start tab, its close button and ShowOnStartup stay stock.
 
 * Left: New (Part, Assembly, Drawing, Sketch, Simulation study), Open and
-  Import, then one line for the vault: its name (Preferences/BruceWorx/VaultPath)
-  with a menu to open, create, import into, configure or close a vault (task
-  dialogs in bruceworx_vaultwizard). Picking a folder that is not a vault
-  opens Create Vault on it. The New buttons do what the stock buttons do:
-  Std_New, the workbench, then its first command.
+  Import, then one row per vault under VAULT. The open vault
+  (Preferences/BruceWorx/VaultPath) keeps the menu to open, create, import
+  into, configure or close a vault (task dialogs in bruceworx_vaultwizard).
+  Each vault beside it, such as Standard Libraries next to Vector, is its own
+  row and opens that vault. Picking a folder that is not a vault opens Create
+  Vault on it. The New buttons do what the stock buttons do: Std_New, the
+  workbench, then its first command.
 * Right, with a vault open: My work (PDM-04 plan, 23 Oct): files checked out
   to me, waiting for review, and newer in the vault than my work copy, read
   with bruceworx/pdm_workspace.py as the actor pinned for the vault; a row
@@ -1250,7 +1252,7 @@ def _make_classes():
             s.addWidget(importer)
             s.addSpacing(10)
             s.addWidget(label("VAULT", "bwStartCaption", side))
-            # One line: the vault's name; its menu opens, creates, configures or closes a vault.
+            # The open vault, then one row for each vault beside it (Vector and Standard Libraries).
             self.vault_button = QtWidgets.QToolButton(side)
             self.vault_button.setObjectName("bwStartVaultSwitch")
             self.vault_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -1260,6 +1262,14 @@ def _make_classes():
             self.vault_menu = QtWidgets.QMenu(self.vault_button)
             self.vault_button.setMenu(self.vault_menu)
             s.addWidget(self.vault_button)
+            self.vault_places = QtWidgets.QWidget(side)
+            self.vault_places.setObjectName("bwStartVaultPlaces")
+            self.vault_places_layout = QtWidgets.QVBoxLayout(self.vault_places)
+            self.vault_places_layout.setContentsMargins(0, 0, 0, 0)
+            self.vault_places_layout.setSpacing(2)
+            self._vault_place_sig = None
+            self.vault_places.hide()
+            s.addWidget(self.vault_places)
             s.addStretch(1)
             started = ItemButton("Getting started", _icon(("help-browser",)), "", side)
             started.clicked.connect(lambda: self.stack.setCurrentIndex(FIRST_START_PAGE))
@@ -1600,6 +1610,7 @@ def _make_classes():
             vault = self.vault
             menu = self.vault_menu
             menu.clear()
+            self._fill_vault_places(vault)
             if vault is None:
                 self.vault_button.setText("No vault open  ▾")
                 self.vault_button.setToolTip("Part numbers, check-out and release live in a vault folder.")
@@ -1633,6 +1644,36 @@ def _make_classes():
                 self.work_table.fill(sections)
                 self.work_table.setVisible(bool(sections))
                 self.work_empty.setVisible(not sections)
+
+        def _fill_vault_places(self, vault):
+            """One sidebar row for each vault beside the open one."""
+            import bruceworx_vaultclient as vc
+
+            others = []
+            if vault is not None:
+                root = vault.get("root") or vault.get("path") or ""
+                others = vc.other_places(root) if root else []
+            sig = tuple(others)
+            if sig == self._vault_place_sig:
+                return
+            self._vault_place_sig = sig
+            lay = self.vault_places_layout
+            while lay.count():
+                widget = lay.takeAt(0).widget()
+                if widget is not None:
+                    widget.deleteLater()
+            self.vault_places.setVisible(bool(others))
+            for name, folder in others:
+                button = QtWidgets.QPushButton(name, self.vault_places)
+                button.setObjectName("bwStartVaultPlace")
+                button.setIcon(_icon(("BruceWorx_Vault", "folder"), ""))
+                button.setIconSize(QtCore.QSize(16, 16))
+                button.setCursor(QtCore.Qt.PointingHandCursor)
+                button.setFlat(True)
+                button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                button.setToolTip(f"Open {name}")
+                button.clicked.connect(lambda _c=False, f=folder: vc.use_place(f))
+                lay.addWidget(button)
 
         def showEvent(self, event):
             super().showEvent(event)

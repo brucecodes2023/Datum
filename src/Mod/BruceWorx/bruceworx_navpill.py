@@ -2,7 +2,7 @@
 """Navigation pill: a small bar at the bottom centre of every 3D view.
 
 Roadmap §13.3, marker 10 (UIX-06). Left group: orbit, pan, zoom, fit. Right
-group: display style, camera, section, measure. The right group and Fit run
+group: display style, camera, section, measure, ground grid. The right group and Fit run
 their commands (Std_DrawStyle, Std_OrthographicCamera / Std_PerspectiveCamera,
 BruceWorx_Section, Std_Measure, Std_ViewFitAll) and show their icons; orbit, pan, zoom and fit use the mock's line glyphs, drawn
 in the theme's secondary text colour.
@@ -57,6 +57,7 @@ GLYPHS = {
     "zoom": '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14M5 7h4M7 5v4"/>',
     "fit": '<path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/>'
     '<rect x="5.5" y="5.5" width="5" height="5" rx="1"/>',
+    "grid": '<path d="M2 2h12v12H2zM2 6h12M2 10h12M6 2v12M10 2v12"/>',
 }
 
 TOOLTIPS = {
@@ -64,6 +65,7 @@ TOOLTIPS = {
     "pan": "Pan: drag in the view with the left button. Esc to stop.",
     "zoom": "Zoom: drag up to zoom in, down to zoom out. Esc to stop.",
     "fit": "Fit all",
+    "grid": "Ground grid",
 }
 
 # Used when the theme is not BruceWorx (BruceWorx.qss carries the real block).
@@ -386,6 +388,12 @@ def _make_classes():
                 button.setDefaultAction(actions[0])
                 layout.addWidget(button)
 
+            grid = self._button("grid", TOOLTIPS["grid"])
+            grid.setCheckable(True)
+            grid.setIconSize(QtCore.QSize(GLYPH_SIZE, GLYPH_SIZE))
+            grid.clicked.connect(self.toggle_grid)
+            layout.addWidget(grid)
+
             for key in ("style", "camera", "section", "measure"):
                 if key in self.buttons:
                     self.buttons[key].setIconSize(QtCore.QSize(ICON_SIZE, ICON_SIZE))
@@ -455,6 +463,7 @@ def _make_classes():
                     label = self.style_actions[index].text().replace("&", "")[2:]
                     self.buttons["style"].setToolTip("Display style: " + label)
                 self._refresh_camera()
+                self.refresh_grid()
                 self.adjustSize()
                 self.reposition()
             finally:
@@ -474,6 +483,29 @@ def _make_classes():
                 self.buttons["camera"].setIcon(actions[0].icon())
             other = "perspective" if target == "Std_PerspectiveCamera" else "orthographic"
             self.buttons["camera"].setToolTip("%s camera. Click for %s." % (kind, other))
+
+        def refresh_grid(self):
+            """The ground-grid button stays down while the grid is drawn."""
+            button = self.buttons.get("grid")
+            if button is None or not _alive(button):
+                return
+            try:
+                import ground_grid
+
+                shown = ground_grid.prefs_request_grid()
+            except Exception:
+                shown = False
+            button.blockSignals(True)
+            button.setChecked(shown)
+            button.blockSignals(False)
+            button.setToolTip("Ground grid on. Click to hide." if shown else "Ground grid off. Click to show.")
+
+        def toggle_grid(self):
+            import ground_grid
+
+            button = self.buttons["grid"]
+            ground_grid.set_shown(button.isChecked())
+            self.refresh_grid()
 
         # --- placement
         def reposition(self):

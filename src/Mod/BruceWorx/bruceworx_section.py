@@ -1210,21 +1210,55 @@ def any_shown(doc):
     return doc is not None and any(shown(o) for o in sections(doc))
 
 
+def viewer_cut(view):
+    """True when the view has a clipping plane. That cut has no section object, so the
+    Section button used to ignore it and there was no way to turn it off."""
+    try:
+        return view is not None and bool(view.hasClippingPlane())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def clear_viewer_cuts(doc):
+    """Take clipping planes off this file's 3D views."""
+    pla = _app().Placement()
+    for view in views_of(doc) if doc is not None else []:
+        if not viewer_cut(view):
+            continue
+        try:
+            view.toggleClippingPlane(0, False, True, pla)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def cut_shown(doc, view=None):
+    """A section of the file is on, or the view is clipped."""
+    if any_shown(doc):
+        return True
+    return viewer_cut(view if view is not None else _active_view())
+
+
 def sections_off(doc):
-    """Every section of ``doc`` off, in one undo step; an open Section tab is closed first, kept."""
+    """Every section of ``doc`` off, in one undo step; an open Section tab is closed first, kept.
+    A clipping plane on the view goes too: it is the cut when no section object is on."""
+    if doc is None:
+        return
     panel = _state["editing"]
     if panel is not None:
         panel.accept()
-    doc.openTransaction("Sections off")
-    for obj in sections(doc):
-        obj.Visibility = False
-    doc.commitTransaction()
-    schedule(doc)
+    if sections(doc):
+        doc.openTransaction("Sections off")
+        for obj in sections(doc):
+            obj.Visibility = False
+        doc.commitTransaction()
+        schedule(doc)
+    clear_viewer_cuts(doc)
 
 
 def sync_button(doc=None):
     """The Section command's button (the nav pill's, the View menu's) is down while a section of
-    the active file is on. Its signals are held: setting the state must not run the command."""
+    the active file is on, or the view is clipped. Its signals are held: setting the state must
+    not run the command."""
     import FreeCADGui as Gui
 
     doc = doc if doc is not None else _app().ActiveDocument
@@ -1232,7 +1266,7 @@ def sync_button(doc=None):
         actions = Gui.Command.get("BruceWorx_Section").getAction()
     except Exception:  # noqa: BLE001 -- not installed yet
         return
-    on = any_shown(doc)
+    on = cut_shown(doc)
     for action in actions:
         if action.isChecked() != on:
             held = action.blockSignals(True)
@@ -1247,9 +1281,9 @@ class _NewSection:
     def GetResources(self):
         return {"Pixmap": ICON, "MenuText": "Section View", "Checkable": False,  # a toggle (the key makes it one), up at start
                 "CmdType": "ForEdit",  # pressable while its own Section tab is open (IsActive refuses other tools')
-                "ToolTip": "Section view on or off. Select a face first to cut on it; with nothing "
-                           "selected the last section comes back. Saved in the file: caps every part, "
-                           "hatched, clashes in red; up to three planes cut at once."}
+                "ToolTip": "Section view on or off. Press it again to turn the cut off, including a "
+                           "clipping plane. With the view whole, select a face first to cut on it. "
+                           "Saved in the file: caps every part, hatched, clashes in red; up to three planes."}
 
     def IsActive(self):
         import FreeCADGui as Gui
@@ -1268,6 +1302,12 @@ class _NewSection:
         sel = Gui.Selection.getSelectionEx("", 0)
         faces = [f for f in picked_faces(sel) if face_placement(f) is not None]
         points = [p for s in sel for p in s.PickedPoints]
+        # A clipping plane is on with no section behind it. This click turns that cut off
+        # instead of starting another one on top of it.
+        if cut_shown(doc, view) and not any_shown(doc):
+            sections_off(doc)
+            sync_button(doc)
+            return
         if checked is None:
             checked = not any_shown(doc) or bool(faces)
         if not checked and not faces:

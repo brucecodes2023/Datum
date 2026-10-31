@@ -155,16 +155,37 @@ def sync() -> None:
         pass
 
 
+def set_shown(shown: bool) -> bool:
+    """Show or hide the ground grid while the pack is applied. Returns whether it is shown."""
+    group = _prefs()
+    if not group.GetBool("Applied", False):
+        _refresh_action()
+        _refresh_pills()
+        return False
+    group.SetBool("ShowGroundGrid", bool(shown))
+    sync()
+    _refresh_action()
+    _refresh_pills()
+    return bool(shown)
+
+
 def toggle() -> bool:
     """Flip ShowGroundGrid while the pack is applied. Returns the new flag."""
     group = _prefs()
     if not group.GetBool("Applied", False):
         return False
-    updated = not group.GetBool("ShowGroundGrid", True)
-    group.SetBool("ShowGroundGrid", updated)
-    sync()
-    _refresh_action()
-    return updated
+    return set_shown(not group.GetBool("ShowGroundGrid", True))
+
+
+def _refresh_pills() -> None:
+    """The navigation pill's ground-grid button follows the preference."""
+    try:
+        import bruceworx_navpill
+
+        for pill in bruceworx_navpill.pills():
+            pill.refresh_grid()
+    except Exception:
+        pass
 
 
 class _Observer:

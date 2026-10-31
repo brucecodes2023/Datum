@@ -215,9 +215,23 @@ def show_index(index):
     if tabs is None or not 0 <= index < tabs.count():
         return False
     if tabs.currentIndex() != index:
+        _release_dock(tabs, index)  # a folded dock has no height until it is the current page
         tabs.setCurrentIndex(index)
         tabs.tabBar().tabBarClicked.emit(index)  # OverlayTabWidget::onCurrentChanged sizes the splitter
     return True
+
+
+def _release_dock(tabs, index):
+    """Let one dock fill the panel again. Folded docks are held at zero height."""
+    from PySide import QtWidgets
+
+    for child in tabs.children():
+        if isinstance(child, QtWidgets.QSplitter) and 0 <= index < child.count():
+            page = child.widget(index)
+            if page is not None:
+                page.setMaximumHeight(16777215)
+                page.setMinimumSize(0, 0)
+            return
 
 
 def show_tab(key):
@@ -230,6 +244,41 @@ def show_tab(key):
         if tabs.tabText(i) == title:
             return show_index(i)
     return False
+
+
+def pack_tabs(widths, available, current, spacing=2, more=48):
+    """Indexes to show, and whether the rest go under a More button.
+
+    Labels stay whole. The current tab is always one of the ones shown. What does not
+    fit is overflow, so six tabs in a narrow panel do not have to be clipped."""
+    count = len(widths)
+    if count == 0:
+        return [], False
+
+    def total(indexes, with_more):
+        if not indexes:
+            return more if with_more else 0
+        size = sum(widths[i] for i in indexes) + spacing * (len(indexes) - 1)
+        if with_more:
+            size += spacing + more
+        return size
+
+    everything = list(range(count))
+    if total(everything, False) <= available:
+        return everything, False
+    shown = []
+    for index in everything:
+        if total(shown + [index], True) <= available:
+            shown.append(index)
+    if current not in shown and 0 <= current < count:
+        while shown and total(shown + [current], True) > available:
+            shown.pop()
+        if total(shown + [current], True) <= available:
+            shown.append(current)
+        elif not shown:
+            shown = [current]
+    overflow = [index for index in everything if index not in shown]
+    return shown, bool(overflow)
 
 
 def command_word(title):
@@ -281,6 +330,9 @@ def _strip_class():
             self.row = QtWidgets.QHBoxLayout(self)
             self.row.setContentsMargins(8, 0, 6, 0)
             self.row.setSpacing(2)
+            font = self.font()
+            font.setPixelSize(12)
+            self.setFont(font)
             self.buttons = []
             self.timer = QtCore.QTimer(self)
             self.timer.setSingleShot(True)
@@ -341,7 +393,7 @@ def _strip_class():
             self._no_dock_titles()
             self._panel_title()
             # The panel's own title row: FreeCAD keeps it above the splitter, shown or not.
-            top = max(splitter.geometry().top(), 18)
+            top = max(splitter.geometry().top(), 30)  # the header reserved in OverlayTabWidget
             if self.geometry() != QtCore.QRect(0, 0, self.tabs.width(), top):
                 self.setGeometry(0, 0, self.tabs.width(), top)
             if not self.isVisible():
@@ -352,15 +404,78 @@ def _strip_class():
             task_dock = self.tabs.window().findChild(QtWidgets.QDockWidget, TASK_DOCK)
             command_title = task_dock.windowTitle() if task_dock is not None else ""
             items = strip_items(titles, self.tabs.currentIndex(), _dialog_open(), command_title, _badges())
-            if [(i, t, k) for i, t, k, _c in items] != [(b.index, b.text(), b.property("kind")) for b in self.buttons]:
-                self.rebuild(items)
-            for b, (_i, _t, _k, current) in zip(self.buttons, items):
-                if bool(b.property("current")) != current:
-                    b.setProperty("current", current)
-                    b.style().unpolish(b)
-                    b.style().polish(b)
+            visible, overflow = self._pack(items)
+            signature = ([(i, t, k) for i, t, k, _c in visible], [i for i, _t, _k, _c in overflow])
+            current_sig = ([(b.index, b.property("fullText") or b.text(), b.property("kind"))
+                            for b in self.buttons if b.property("kind") != "more"],
+                           list(getattr(self, "_overflow", [])))
+            if signature != current_sig:
+                self.rebuild(items, visible, overflow)
+            else:
+                for b, (_i, _t, _k, current) in zip(
+                        [b for b in self.buttons if b.property("kind") != "more"], visible):
+                    if bool(b.property("current")) != current:
+                        b.setProperty("current", current)
+                        b.style().unpolish(b)
+                        b.style().polish(b)
+            self._fold_hidden_docks(splitter)
 
-        def rebuild(self, items):
+        def _fold_hidden_docks(self, splitter):
+            """Collapsed pages stay inside the panel.
+
+            A dock with a minimum size is given a zero slot and then laid out at its minimum,
+            which puts it just to the left of the panel. Its last letters show there and the
+            page itself is missing. Hold every page but the current one at zero height.
+            """
+            current = self.tabs.currentIndex()
+            width = splitter.width()
+            for i in range(splitter.count()):
+                page = splitter.widget(i)
+                if page is None:
+                    continue
+                page.setMinimumSize(0, 0)
+                if i == current:
+                    if page.maximumHeight() < splitter.height():
+                        page.setMaximumHeight(16777215)
+                    continue
+                page.setMaximumHeight(0)
+                geom = page.geometry()
+                if geom.x() < 0 or geom.y() < 0 or geom.height() > 0:
+                    page.setGeometry(0, 0, width, 0)
+
+        def _pack(self, items):
+            margins = self.row.contentsMargins()
+            available = self.width() - margins.left() - margins.right()
+            metrics = self.fontMetrics()
+            more = metrics.horizontalAdvance("More") + 22
+            preferred = [metrics.horizontalAdvance(text) + 16 for _i, text, _k, _c in items]
+            current = next((n for n, item in enumerate(items) if item[3]), 0)
+            indexes, _has_more = pack_tabs(preferred, max(40, available), current, self.row.spacing(), more)
+            return [items[i] for i in indexes], [items[i] for i in range(len(items)) if i not in indexes]
+
+        def _button(self, index, text, kind, current):
+            b = QtWidgets.QToolButton(self)
+            b.setObjectName("bwRightTab")
+            b.setProperty("fullText", text)
+            b.setText(text)
+            b.setToolTip("")
+            b.setAutoRaise(True)
+            b.setCursor(QtCore.Qt.PointingHandCursor)
+            b.setFixedHeight(26)
+            width = self.fontMetrics().horizontalAdvance(text) + 16
+            b.setFixedWidth(width)
+            b.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+            b.setProperty("kind", kind)
+            b.setProperty("current", current)
+            b.setAttribute(QtCore.Qt.WA_ContentsMarginsRespectsSafeArea, False)
+            b.index = index
+            if kind != "more":
+                b.clicked.connect(lambda _c=False, i=index: show_index(i))
+            self.row.addWidget(b)
+            self.buttons.append(b)
+            return b
+
+        def rebuild(self, items, visible=None, overflow=None):
             for b in self.buttons:
                 self.row.removeWidget(b)
                 b.hide()  # at once: deleteLater would leave it painted until the next event loop turn
@@ -368,22 +483,24 @@ def _strip_class():
             while self.row.count():
                 self.row.takeAt(0)
             self.buttons = []
-            for index, text, kind, current in items:
+            if visible is None:
+                visible, overflow = self._pack(items)
+            overflow = overflow or []
+            self._overflow = [i for i, _t, _k, _c in overflow]
+            for index, text, kind, current in visible:
                 if kind == "command":
                     self.row.addStretch(1)
-                b = QtWidgets.QToolButton(self)
-                b.setObjectName("bwRightTab")
-                b.setText(text)
-                b.setAutoRaise(True)
-                b.setCursor(QtCore.Qt.PointingHandCursor)
-                b.setProperty("kind", kind)
-                b.setProperty("current", current)
-                b.setAttribute(QtCore.Qt.WA_ContentsMarginsRespectsSafeArea, False)
-                b.index = index
-                b.clicked.connect(lambda _c=False, i=index: show_index(i))
-                self.row.addWidget(b)
-                self.buttons.append(b)
-            if not any(k == "command" for _i, _t, k, _c in items):
+                self._button(index, text, kind, current)
+            if overflow:
+                if not any(k == "command" for _i, _t, k, _c in visible):
+                    self.row.addStretch(1)
+                more = self._button(-1, "More", "more", False)
+                menu = QtWidgets.QMenu(more)
+                for index, text, _kind, _current in overflow:
+                    menu.addAction(text).triggered.connect(lambda _c=False, i=index: show_index(i))
+                more.setMenu(menu)
+                more.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            elif not any(k == "command" for _i, _t, k, _c in visible):
                 self.row.addStretch(1)
 
     return TabStrip

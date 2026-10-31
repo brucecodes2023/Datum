@@ -1892,7 +1892,14 @@ void OverlayTabWidget::setupLayout()
         return;
     }
 
-    if (count() == 1) {
+    // [BW] UIX-12: the right panel draws its own tab strip. Keep the native tab bar
+    // out of the layout and reserve a header tall enough for the labels.
+    const bool ownStrip = property("bwTabStrip").toBool();
+    if (ownStrip) {
+        tabBar()->hide();
+        tabSize = 0;
+    }
+    else if (count() == 1) {
         tabSize = 0;
     }
     else {
@@ -1906,6 +1913,9 @@ void OverlayTabWidget::setupLayout()
         tabSize = tsize;
     }
     int titleBarSize = widgetMinSize(this, true);
+    if (ownStrip && titleBarSize < 30) {
+        titleBarSize = 30;
+    }
     QRect rect, rectTitle;
     switch (tabPosition()) {
         case West:
@@ -2013,8 +2023,24 @@ void OverlayTabWidget::onCurrentChanged(int index)
 
     auto sizes = splitter->sizes();
     int i = 0;
-    int size = splitter->orientation() == Qt::Vertical ? height() - tabBar()->height()
+    // [BW] The native tab bar is hidden when the panel draws its own strip. Its height
+    // is not chrome, and a non-zero minimum on a folded dock leaves a sliver of that dock.
+    int size;
+    if (property("bwTabStrip").toBool()) {
+        size = splitter->orientation() == Qt::Vertical ? splitter->height() : splitter->width();
+        if (size < 1) {
+            size = splitter->orientation() == Qt::Vertical ? height() - 30 : width();
+        }
+        for (int n = 0; n < splitter->count(); ++n) {
+            if (QWidget* page = splitter->widget(n)) {
+                page->setMinimumSize(0, 0);
+            }
+        }
+    }
+    else {
+        size = splitter->orientation() == Qt::Vertical ? height() - tabBar()->height()
                                                        : width() - tabBar()->width();
+    }
     for (auto& s : sizes) {
         if (i++ == index) {
             s = size;
