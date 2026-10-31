@@ -596,7 +596,7 @@ class TestSimulationGui(unittest.TestCase):
         custom = ws.custom_toolbars(ws.definition())
         self.assertIn("FemWorkbench", custom)
         names = [name for _gid, name, _cmds in custom["FemWorkbench"]]
-        self.assertEqual(names, ["Simulation · Study", "Simulation · Setup", "Simulation · Mesh", "Simulation · Solve", "Simulation · Results"])
+        self.assertEqual(names, ["Simulation · Study", "Simulation · Setup", "Simulation · Mesh", "Simulation · Solve", "Simulation · Results", "Simulation · Validation"])
         results = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Simulation · Results"][0]
         for name in ("BruceWorx_ShowSafetyFactor", "BruceWorx_SafetyFactorBands", "BruceWorx_StudyReport"):
             self.assertIn(name, results)
