@@ -301,23 +301,38 @@ def collision_candidates(obj):
     return out
 
 
-def box_records(obj, exclude):
+def global_placement(obj):
+    """Document-frame placement of an assembly child (an App::Link has no getGlobalPlacement)."""
+    try:
+        return obj.getGlobalPlacement()
+    except Exception:
+        parent = _br()._container_of(obj)
+        base = parent.getGlobalPlacement() if parent is not None else App.Placement()
+        return base.multiply(obj.Placement)
+
+
+def box_records(obj, exclude, inside_points=()):
     """Collision proxies of ``obj``'s neighbours: ``[(child, center_global, axes_global (rows), half, base placement)]``."""
     np = _np()
     out = []
+    inside_points = [tuple(p) for p in inside_points]
     for child in collision_candidates(obj):
         if child.Name in exclude:
             continue
         local = _local_box(child)
         if local is None:
             continue
-        try:
-            g = child.getGlobalPlacement()
-        except Exception:
-            continue
+        g = global_placement(child)
         center = g.multVec(App.Vector(*local[0]))
         axes = [g.Rotation.multVec(App.Vector(*e)) for e in ((1, 0, 0), (0, 1, 0), (0, 0, 1))]
-        out.append((child, _arr(center), np.array([[a.x, a.y, a.z] for a in axes]), np.array(local[1]), g))
+        record = (child, _arr(center), np.array([[a.x, a.y, a.z] for a in axes]), np.array(local[1]), g)
+        if inside_points:
+            # a part whose box already holds an end of the wire (a cover over a connector) is no obstacle to it
+            box = _rp().Box(tuple(record[1]), tuple(record[3]), tuple(map(tuple, record[2])))
+            sd, _g = _rp().box_distance(box, np.array(inside_points))
+            if (sd < 0.5).any():
+                continue
+        out.append(record)
     return out
 
 
@@ -472,10 +487,19 @@ class RopeItem:
             return (o, np.array([v.x, v.y, v.z]), end.lead[2]), None
         return None, _arr(d.multVec(_vec(end.point)))
 
+    def neighbour_records(self):
+        pts = []
+        for e in self.ends:
+            if e.lead is not None:
+                pts += [tuple(e.lead[0]), tuple(e.lead[0] + e.lead[1] * e.lead[2])]
+            else:
+                pts.append(tuple(e.point))
+        return box_records(self.obj, self.exclude, pts)
+
     def boxes(self, deltas=None, rope=None):
         np = _np()
         if self.records is None:
-            self.records = box_records(self.obj, self.exclude)
+            self.records = self.neighbour_records()
         reach = None
         if rope is not None:
             pad = self.length

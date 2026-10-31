@@ -144,7 +144,7 @@ class RopeDragCheck:
             for e in item.ends:
                 e.owner = self._owner_of(e.owner) if e.owner is not None else None
             item.exclude = {e.owner.Name for e in item.ends if e.owner is not None}
-            item.records = brope.box_records(obj, item.exclude)
+            item.records = item.neighbour_records()
             item.state = item.stored()
             item.base = self._worry(item.solve(state=item.state, max_steps=6, tol=0.02))  # where it starts
             item.touch_names = set(item.exclude) | {t.Name for _i, _p, t in item.clips if t is not None}
