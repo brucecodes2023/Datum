@@ -36,7 +36,7 @@ SYNC_WARN_SECONDS = 600  # "still syncing" turns orange after 10 minutes
 FUTURE_SLACK_SECONDS = 300
 QUIET_OPS = ("checkout", "undo_checkout", "set_bom")  # shown only with show_all
 FEED_OPS = ("checkin", "submit", "approve", "reject", "retire", "raise_ecr", "decide_ecr", "open_eco",
-            "release_eco", "create_item", "create_project", "update_project") + QUIET_OPS
+            "release_eco", "create_item", "create_project", "update_project", "renumber") + QUIET_OPS
 _CONFLICT = re.compile(r"( \d+| \(.*conflicted copy.*\)|\.sync-conflict-.*)\.jsonl$", re.IGNORECASE)
 
 
@@ -286,7 +286,7 @@ def changes(vault, rows=None) -> dict:
 
 def _target(event):
     args = event.args
-    return args.get("part_number") or args.get("number") or args.get("parent") or args.get("name") or ""
+    return args.get("part_number") or args.get("new") or args.get("number") or args.get("parent") or args.get("name") or ""
 
 
 def _verb(event, count, vault, me):
@@ -320,6 +320,10 @@ def _verb(event, count, vault, me):
         return f"opened {target}"
     if op == "release_eco":
         return f"released {target}"
+    if op == "renumber":  # PDM-12
+        args = event.args
+        reason = f": {args['reason']}" if args.get("reason") else ""
+        return f"renumbered {args.get('old', '')} -> {args.get('new', '')}{reason}"
     if op == "create_project":
         return f"created project {event.args.get('code', '')} ({event.args.get('name', '')})".replace(" ()", "")
     if op == "update_project":
@@ -337,6 +341,10 @@ def _detail(event, events, vault):
         return f"“{comment}”" if comment else ""
     if op == "raise_ecr":
         return event.args.get("problem", "")
+    if op == "renumber":  # the file versions it wrote, P/N and the start of the SHA-256
+        files = event.args.get("files") or {}
+        return ("new file versions: " + ", ".join(f"{pn} ({rec.get('sha256', '')[:8]})"
+                                                  for pn, rec in sorted(files.items()))) if files else ""
     if op in ("open_eco", "release_eco", "decide_ecr") and vault is not None:
         eco = vault.ecos.get(target)
         if eco is not None:
@@ -351,7 +359,7 @@ def _detail(event, events, vault):
 ICONS = {"checkin": "up", "approve": "released", "release_eco": "released", "submit": "review", "reject": "reject",
          "retire": "retire", "raise_ecr": "change", "decide_ecr": "change", "open_eco": "change",
          "create_item": "plus", "create_project": "plus", "checkout": "lock", "undo_checkout": "lock",
-         "set_bom": "bom"}
+         "set_bom": "bom", "renumber": "dot"}
 
 
 def fold(events, gap=FOLD_SECONDS) -> list:
@@ -363,7 +371,7 @@ def fold(events, gap=FOLD_SECONDS) -> list:
         if groups and when is not None and last_when is not None:
             head = groups[-1][-1]
             if head.actor == event.actor and head.op == event.op and event.op not in (
-                    "raise_ecr", "decide_ecr", "open_eco", "release_eco", "create_project") \
+                    "raise_ecr", "decide_ecr", "open_eco", "release_eco", "create_project", "renumber") \
                     and 0 <= (when - last_when).total_seconds() <= gap:
                 groups[-1].append(event)
                 last_when = when

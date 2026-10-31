@@ -408,6 +408,8 @@ class Vault:
         self.ecrs: dict[str, ECR] = {}
         self.ecos: dict[str, ECO] = {}
         self.projects: dict[str, Project] = {}  # PDM-09
+        # PDM-12: former part number -> the number it was renumbered to (the last one, chains collapsed).
+        self.aliases: dict[str, str] = {}
         # Merged into every decision record; a store sets who and when ({"by", "at"}).
         self.context: dict = {}
         # The rules of 24 Oct (required texts, BOM items, file links); a store replaying an older
@@ -474,6 +476,71 @@ class Vault:
         item = self.items[part_number]
         item.category = normalize_category(category)
         return item
+
+    def renumber(self, old, new, reason=""):
+        """Give ``old`` the part number ``new`` (PDM-12), in any lifecycle state (released and
+        obsolete included) but not while it is In Review. The item keeps its revisions, history,
+        BOMs and state; every reference moves with it: BOM lines in every revision (as parent and as
+        child), ``drawing_of`` and ``configuration_of``, ECR/ECO item lists and project tops. The old
+        number becomes an alias (:meth:`resolve`); chained renumbers resolve to the last number.
+        ``new`` must be unused: neither an item nor a former number. A reason is required and is
+        recorded on the item's latest revision. Locks and files belong to the store, not here."""
+        item = self.items.get(old)
+        if item is None:
+            now = self.resolve(old)
+            raise LifecycleError(f"{old} is not an item in this vault" + (f" (it is now {now})" if now != old else ""))
+        if item.configuration_of:
+            raise LifecycleError(f"{old} is configuration {item.configuration!r} of {item.configuration_of}; "
+                                 f"renumber {item.configuration_of}, its file")
+        new = str(new or "").strip()
+        if not new or any(ch.isspace() or ch in "/\\" for ch in new):
+            raise LifecycleError(f"{new!r} is not a part number")
+        if new == old:
+            raise LifecycleError(f"{old} already has that number")
+        if new in self.items:
+            raise LifecycleError(f"{new} is already an item in this vault")
+        if new in self.aliases:
+            raise LifecycleError(f"{new} was the number of {self.aliases[new]}; a former number is not reused")
+        if item.latest.state == IN_REVIEW:
+            raise LifecycleError(f"{old} is in review; finish the review before renumbering it")
+        self._text(reason, "a reason for renumbering")
+        rekeyed = [(new if pn == old else pn, it) for pn, it in self.items.items()]  # same place in the order
+        self.items.clear()
+        self.items.update(rekeyed)
+        item.part_number = new
+        for other in self.items.values():
+            if other.drawing_of == old:
+                other.drawing_of = new
+            if other.configuration_of == old:
+                other.configuration_of = new
+            for rev in other.revisions:  # a configuration item's views carry BOM lines of their own
+                for line in rev.bom or ():
+                    if line.child == old:
+                        line.child = new
+        for change in list(self.ecrs.values()) + list(self.ecos.values()):
+            change.items = [new if pn == old else pn for pn in change.items]
+        for project in self.projects.values():
+            if project.top == old:
+                project.top = new
+        self.aliases = {k: (new if v == old else v) for k, v in self.aliases.items()}
+        self.aliases[old] = new
+        rev = item.latest
+        rev.history.append(f"renumbered {old} -> {new}: {reason}" if reason else f"renumbered {old} -> {new}")
+        rev.records.append(self._entry("renumber", old=old, new=new, reason=reason))
+        return item
+
+    def resolve(self, part_number):
+        """The current number for ``part_number``: itself when it is an item, the number it was
+        renumbered to when it is a former number, else unchanged (an unknown number stays unknown)."""
+        seen = set()
+        while part_number not in self.items and part_number in self.aliases and part_number not in seen:
+            seen.add(part_number)
+            part_number = self.aliases[part_number]
+        return part_number
+
+    def former_numbers(self, part_number) -> list:
+        """The numbers ``part_number`` had before, sorted."""
+        return sorted(old for old, now in self.aliases.items() if now == part_number)
 
     def drawings_of(self, part_number):
         return [i for i in self.items.values() if i.drawing_of == part_number]

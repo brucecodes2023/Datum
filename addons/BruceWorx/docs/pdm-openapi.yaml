@@ -155,6 +155,24 @@ paths:
         content: {application/json: {schema: {type: object, required: [category], properties: {category: {type: string, maxLength: 60}}}}}
       responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /items/{pn}/renumber:
+    post:
+      operationId: renumber
+      summary: >
+        Give the item a new part number (PDM-12), in any lifecycle state except In Review. The item,
+        its file versions, BOM lines (as parent and child, every revision), drawings, configurations,
+        ECR/ECO item lists and project tops move to the new number; the old number becomes an alias.
+        A reason is required. Refused (409) while the item or a file linking it is checked out, when the
+        new number is an item or a former number, or for a configuration item. The folder vault also
+        writes the new PartNumber into the item's file (stored as <new>.FCStd) and re-points the links in
+        every file that links it, as new versions of the same revision, before the one journal line.
+        A journal op added 31 Oct 2026; every client opening the vault must know it.
+      parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [new, reason], properties: {new: {type: string}, reason: {type: string}}}}}
+      responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
   /items/{pn}/configurations:
     post:
       operationId: add_configuration

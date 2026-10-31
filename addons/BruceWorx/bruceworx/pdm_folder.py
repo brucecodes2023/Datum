@@ -84,6 +84,12 @@ LIFECYCLE_OPS = {
     "update_project": ("code", "name", "top", "units", "drawing_profile", "description", "status"),
 }
 FILE_OPS = ("checkout", "undo_checkout", "checkin")
+# PDM-12 (31 Oct 2026): ``renumber`` moves an item, its file versions, locks and released files to a new
+# part number, so the folder vault replays it (not pdm.Vault alone): args ``old``, ``new``, ``reason`` and
+# ``files`` ({P/N: {"sha256", "size", "filename"}}, the new file versions it wrote, keyed by the number
+# they have after it). Every Keystone copy must know the operation before the vault uses it; an older
+# one records "unknown operation 'renumber'" as a problem and goes on with the old numbers.
+RENUMBER_OP = "renumber"
 # A check-in may also carry (PDM-09) ``made_from`` (for a drawing: P/N -> the SHA-256 of the version
 # of each file it was made from, its closure C(D)) and ``fingerprint`` (for a part: its geometry,
 # see bruceworx.product_tree). Both are optional and come from the FreeCAD side; a journal without
@@ -368,6 +374,8 @@ class FolderVault:
                 for pn in self.model.ecos[args["number"]].items:
                     self._freeze(pn)
             return result
+        if event.op == RENUMBER_OP:
+            return self._apply_renumber(event)
         pn = args.get("part_number")
         item = self.model.items.get(pn)
         if item is not None and item.configuration_of:  # MOD-03: a configuration has no file of its own
@@ -402,6 +410,56 @@ class FolderVault:
             return version
         else:
             raise ValueError(f"unknown operation {event.op!r}")
+        return None
+
+    def _apply_renumber(self, event: Event):
+        """Replay a renumber (PDM-12): the model re-keys the item and its references, then the file
+        versions, locks and released files follow, and the new versions it wrote are appended to the
+        item and to each file that links it. They keep the revision code and the state of the item
+        (only the identity changed), the geometry fingerprint, and a drawing's ``made_from`` pointing
+        at the renumbered files. A new operation checks that nobody holds the item or a linker."""
+        args = event.args
+        old, new, files = args["old"], args["new"], args.get("files") or {}
+        for pn in files:  # before the model changes, so a bad line leaves the state as it was
+            if pn != new and pn not in self.model.items:
+                raise LifecycleError(f"renumber wrote a file for {pn}, which is not an item")
+        if self.model.strict:
+            for pn in [old] + [p for p in files if p != new]:
+                holder = self.locks.get(pn)
+                if holder:
+                    raise LifecycleError(f"{pn} is checked out by {holder}; renumbering needs it checked in")
+        self.model.context = {"by": event.actor, "at": event.at}
+        try:
+            self.model.renumber(old, new, args.get("reason", ""))
+        finally:
+            self.model.context = {}
+        if old in self.versions:
+            self.versions[new] = self.versions.pop(old)
+        for table in (self.locks, self.lock_times):
+            if old in table:
+                table[new] = table.pop(old)
+        for (pn, code) in [k for k in self.released_files if k[0] == old]:
+            self.released_files[(new, code)] = self.released_files.pop((pn, code))
+        for versions in self.versions.values():  # a drawing made from the old number was made from the new one
+            for version in versions:
+                if version.made_from and old in version.made_from:
+                    version.made_from = {(new if k == old else k): v for k, v in version.made_from.items()}
+        for pn, record in files.items():
+            item = self.model.items[pn]
+            before = (self.versions.get(pn) or [None])[-1]
+            made_from = dict(before.made_from) if before is not None and before.made_from else None
+            if made_from:
+                for target in files:  # the files this one links were rewritten too
+                    if target in made_from:
+                        made_from[target] = files[target]["sha256"]
+            version = FileVersion(
+                record["sha256"], int(record["size"]), record["filename"], item.latest.code, event.actor, event.at,
+                f"Renumbered {old} -> {new}", made_from=made_from,
+                fingerprint=dict(before.fingerprint) if before is not None and before.fingerprint else None)
+            self.versions.setdefault(pn, []).append(version)
+            held = self.released_files.get((pn, item.latest.code))
+            if held is not None and before is not None and held == before.sha256:
+                self.released_files[(pn, item.latest.code)] = version.sha256  # the released file is the renumbered one
         return None
 
     def _freeze(self, pn):
@@ -499,6 +557,23 @@ class FolderVault:
 
     def set_category(self, part_number, category):
         return self._record("set_category", dict(part_number=part_number, category=pdm.normalize_category(category)))
+
+    def renumber(self, old, new, reason, files=None):
+        """Give ``old`` the number ``new`` (PDM-12; the checks are pdm.Vault.renumber's and the lock check
+        of :meth:`_apply_renumber`). ``files`` are the new file versions already stored in objects/
+        ({P/N: store_object record}, keyed by the number they have after the renumber): the file objects
+        are written first and this single journal line last, so a crash leaves only unused objects."""
+        reason = str(reason or "").strip()
+        return self._record(RENUMBER_OP, _optional(dict(old=old, new=new), reason=reason,
+                                                   files={pn: {k: record[k] for k in ("sha256", "size", "filename")}
+                                                          for pn, record in (files or {}).items()}))
+
+    def resolve(self, part_number):
+        """The current number for a number that may be a former one (PDM-12)."""
+        return self.model.resolve(part_number)
+
+    def former_numbers(self, part_number) -> list:
+        return self.model.former_numbers(part_number)
 
     def categories(self) -> dict:
         """{category: item count}; items without one count under ""."""
@@ -884,6 +959,7 @@ class FolderVault:
                 "type": item.item_type,
                 "description": item.description,
                 "category": item.category,
+                "former": self.model.former_numbers(pn),
                 "revision": rev.code,
                 "state": item.state,
                 "released": item.released.code if item.released else None,

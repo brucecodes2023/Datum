@@ -144,6 +144,36 @@ def write_part_number(path: str, part_number: str, revision: str | None = None, 
     return name
 
 
+def fingerprint_of_file(path: str):
+    """The geometry fingerprint (product_tree.make_fingerprint) of the solids in an .FCStd, opened
+    hidden and closed again; None when it holds no solid. The same numbers the Vault panel records at
+    a check-in (bruceworx_project.fingerprint_of_document); PDM-12's renumber compares them."""
+    require_freecad()
+    import FreeCAD  # noqa: PLC0415
+
+    from bruceworx import numbering, product_tree  # noqa: PLC0415
+
+    try:
+        doc = FreeCAD.openDocument(os.path.abspath(path), hidden=True)
+    except TypeError:
+        doc = FreeCAD.openDocument(os.path.abspath(path))
+    try:
+        shapes = [obj.Shape for obj in numbering.part_objects(doc)
+                  if getattr(obj, "Shape", None) is not None and not obj.Shape.isNull() and obj.Shape.Solids]
+        if not shapes:
+            return None
+        import Part  # noqa: PLC0415
+
+        compound = shapes[0] if len(shapes) == 1 else Part.makeCompound(shapes)
+        box = compound.BoundBox
+        centre = compound.CenterOfMass if hasattr(compound, "CenterOfMass") else compound.CenterOfGravity
+        return product_tree.make_fingerprint(
+            compound.Volume, compound.Area, (centre.x, centre.y, centre.z),
+            (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax), sum(len(s.Solids) for s in shapes))
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def export_step(objects, output_path: str) -> None:
     """Write STEP. Prefer the Import workbench, then Part."""
     require_freecad()

@@ -483,7 +483,7 @@ class Workspace:
         """Get Latest for a linked file that is a vault item's missing work copy; else nothing."""
         if self.read_only or os.path.dirname(real) != os.path.realpath(self.root):
             return
-        item = os.path.splitext(os.path.basename(real))[0]
+        item = self.vault.resolve(os.path.splitext(os.path.basename(real))[0])  # PDM-12: a former number
         if item in self.vault.model.items and self.vault.versions.get(item) and not self.is_folder(item):
             self.get_latest(item)
 
@@ -545,6 +545,30 @@ class Workspace:
             if st.code == NEWER:
                 work.newer.append(st)
         return work
+
+    def refresh_renamed(self) -> list:
+        """Replace the read-only work copies of items that were renumbered (PDM-12): the copy under the
+        former number is removed (with its state entry) and, when the item has a file and no work copy
+        under its new number, the latest version is placed under it. A copy that is writable (edited
+        by hand) is left alone. Returns ``[(former, new)]`` for the copies replaced."""
+        self._writable()
+        done = []
+        for old, new in sorted(self.vault.model.aliases.items()):
+            path = os.path.join(self.root, old + SUFFIX)
+            if old in self.vault.model.items or not os.path.isfile(path) or os.access(path, os.W_OK):
+                continue
+            os.remove(path)
+            self._hashes.pop(path, None)
+            self.state["items"].pop(old, None)
+            self.state.get("hashes", {}).pop(os.path.basename(path), None)
+            target = self.vault.resolve(new)
+            if (self.vault.latest_version(target) is not None and not self.is_folder(target)
+                    and not os.path.exists(self.path(target)) and self.vault.locks.get(target) != self.vault.actor):
+                self.get_latest(target)
+            done.append((old, target))
+        if done:
+            self._save_state()
+        return done
 
     # --- operations --------------------------------------------------------------
     def _place(self, pn: str, version, writable: bool) -> str:
@@ -727,8 +751,12 @@ class Workspace:
         os.replace(fetched, dest)
         # An older assembly sits one folder down: point its links at the work copies beside it.
         items = self.vault.model.items
-        rewrite_links(dest, lambda old: "../" + os.path.basename(old)
-                      if os.path.splitext(os.path.basename(old))[0] in items and "/" not in old else None)
+        def relink(old):  # PDM-12: a link to a former number reads the item's number now
+            stem, ext = os.path.splitext(os.path.basename(old))
+            now = self.vault.resolve(stem)
+            return "../" + now + ext if now in items and "/" not in old else None
+
+        rewrite_links(dest, relink)
         _set_writable(dest, False)
         return dest
 
@@ -770,6 +798,8 @@ class Workspace:
                 real = resolve_link(holder, link)
                 exists = os.path.isfile(real) or bool(icloud_placeholder(real))
                 target = stem if stem in items else ""
+                if not target and self.vault.resolve(stem) in items:
+                    target = self.vault.resolve(stem)  # PDM-12: the file's number was changed
                 if not target:
                     if known is None:
                         known = self.known_files()

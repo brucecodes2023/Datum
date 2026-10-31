@@ -34,6 +34,7 @@ VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
     "submit", "approve", "reject", "retire", "fetch", "sync", "import", "settings",
     "set-category", "categories",  # item categories (30 Oct 2026)
+    "renumber",  # PDM-12: a new part number for an item
     "kicad-import", "kicad-update", "kicad-open",  # ECD-05: KiCad projects as vault items (ecad_vault)
 )
 _ENTRY_NAMES = {"hooks.py", "hooks"}
@@ -164,6 +165,14 @@ def build_parser() -> argparse.ArgumentParser:
     vault.add_argument("--export", dest="export_csv", default="", help="settings: write the tables to this CSV")
     vault.add_argument("--import", dest="import_csv", default="",
                        help="settings: add, rename or retire rows from this CSV")
+    vault.add_argument("--assemblies-as-parts", dest="assemblies_as_parts", choices=("on", "off"), default=None,
+                       help="settings: number assemblies with the Part document type (PDM-12)")
+    # renumber (PDM-12): the item is the PN argument; --to or --document-type picks the new number.
+    vault.add_argument("--to", dest="renumber_to", default="", help="renumber: the new part number (default: the "
+                       "next free one)")
+    vault.add_argument("--document-type", dest="renumber_type", default="",
+                       help="renumber: document type code of the next free number (default: the setting's)")
+    vault.add_argument("--reason", default="", help="renumber: why (required)")
     # project (PDM-09): New Project from the command line. preview needs no FreeCAD; new runs in FreeCADCmd.
     project = sub.add_parser("project", help="New Project: a typed structure becomes numbered files in the vault")
     project.add_argument("action", choices=("preview", "new"))
@@ -401,6 +410,9 @@ def _vault_command(args) -> int:
 
         partprops.attach_vault(vault)
     payload = {"ok": True, "command": f"vault {args.action}"}
+    _accept_former_numbers(vault, args)
+    if args.action == "renumber":
+        return _vault_renumber(vault, args, payload)
     if args.action == "set-category":
         return _vault_set_category(vault, args, payload)
     if args.action == "categories":
@@ -444,6 +456,47 @@ def _vault_command(args) -> int:
     elif args.pn in vault.items:
         payload["revision"] = vault.items[args.pn].latest.code
         payload["state"] = vault.items[args.pn].state
+    emit(payload)
+    return 0
+
+
+def _accept_former_numbers(vault, args) -> None:
+    """A part number that was renumbered (PDM-12) reads as its current number, and says so."""
+    def now(pn):
+        current = vault.resolve(pn) if pn else pn
+        if current != pn:
+            print(f"{pn} is now {current}", file=sys.stderr)
+        return current
+
+    args.pn = now(args.pn)
+    args.pns = [now(pn) for pn in args.pns]
+
+
+def _vault_renumber(vault, args, payload) -> int:
+    """renumber PN [--to NEW | --document-type CODE] --reason TEXT [--dry-run] (PDM-12, FreeCAD needed to
+    write the file; --dry-run needs none): the item gets a new part number, the files linking it follow."""
+    from bruceworx import renumber  # noqa: PLC0415
+    from bruceworx.pdm_workspace import Workspace  # noqa: PLC0415
+
+    pns = list(args.pns) + ([args.pn] if args.pn else [])
+    if len(pns) != 1:
+        raise ValueError("vault renumber needs one part number: renumber PN [--to NEW] --reason TEXT")
+    if args.renumber_to and args.renumber_type:
+        raise ValueError("vault renumber takes --to or --document-type, not both")
+    if not args.dry_run:
+        if not args.reason.strip():
+            raise ValueError("vault renumber needs --reason")
+        freecad_io.require_freecad()
+    result = renumber.renumber(vault, pns[0], args.reason, new=args.renumber_to, document_type=args.renumber_type,
+                               workspace=None if args.dry_run else Workspace(vault), dry_run=args.dry_run)
+    payload.update(result)
+    verb = "would renumber" if args.dry_run else "renumbered"
+    print(f"{verb} {result['old']} -> {result['new']}", file=sys.stderr)
+    for pn in result["linkers"]:
+        print(f"  links re-pointed in {pn}", file=sys.stderr)
+    for other in result["cross_vault"]:
+        print(f"  note: {', '.join(other['items'])} in {other['vault']} link the old file name; "
+              "they resolve through this vault's aliases", file=sys.stderr)
     emit(payload)
     return 0
 
@@ -736,8 +789,17 @@ def _vault_settings(args) -> int:
 
     root = os.path.dirname(find_ref_file(os.path.expanduser(args.vault)))
     payload = {"ok": True, "command": "vault settings", "vault": root}
+    if args.assemblies_as_parts:
+        settings = vault_setup.load_settings(root)
+        settings.assemblies_as_parts = args.assemblies_as_parts == "on"
+        vault_setup.save_settings(root, settings)
+        payload["assemblies_as_parts"] = settings.assemblies_as_parts
+        if not (args.export_csv or args.import_csv):
+            print(f"Assemblies are numbered as {'parts' if settings.assemblies_as_parts else 'assemblies'}.")
+            emit(payload)
+            return 0
     if bool(args.export_csv) == bool(args.import_csv):
-        raise ValueError("vault settings needs --export FILE or --import FILE")
+        raise ValueError("vault settings needs --export FILE, --import FILE or --assemblies-as-parts on|off")
     if args.export_csv:
         vault_setup.write_csv_file(args.export_csv, vault_setup.load_settings(root))
         payload["export"] = os.path.abspath(args.export_csv)
