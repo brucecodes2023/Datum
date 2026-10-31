@@ -78,10 +78,10 @@ class ViewTests(unittest.TestCase):
     def test_indented_and_flattened_csv(self):
         text = bom.bom_csv(self.v, TOP)
         self.assertEqual(text.splitlines()[0], ",".join(bom.BOM_COLUMNS))
-        self.assertIn(f"2,2,{BOLT},01,Bolt M5x12,4,8,WIP,", text)
-        self.assertIn("1,,shim.FCStd,,,1,1,,not a vault item", text)
+        self.assertIn(f"2,2,{BOLT},01,Bolt M5x12,,,4,8,WIP,", text)
+        self.assertIn("1,,shim.FCStd,,,,,1,1,,not a vault item", text)
         flat = bom.bom_csv(self.v, TOP, flattened=True)
-        self.assertIn(f"{BOLT},01,Bolt M5x12,10,WIP", flat)
+        self.assertIn(f"{BOLT},01,Bolt M5x12,,,10,WIP", flat)
         self.assertEqual(bom.default_csv_name(TOP, "A"), f"{TOP}-A-BOM.csv")
 
     def test_where_used_csv(self):
@@ -99,7 +99,41 @@ class ViewTests(unittest.TestCase):
         rows = text.splitlines()
         self.assertEqual(len(rows), 1 + 2 + 2)  # header, bracket's 2 lines, top's 2 lines
         self.assertIn(f"{TOP},A,,", rows[-1])
-        self.assertTrue(rows[-1].endswith(f",2,{BOLT},A,Bolt M5x12,2"))
+        self.assertTrue(rows[-1].endswith(f",2,{BOLT},A,Bolt M5x12,,,2"))
+
+    def test_manufacturer_and_mpn_on_every_line(self):
+        """ROU-05 (30 Oct): what is ordered prints its manufacturer and MPN; a made part is blank."""
+        found = [{"keys": [PLATE], "name": "plate", "qty": 1},
+                 {"keys": [BOLT], "name": "bolt.FCStd", "qty": 4, "manufacturer": "Bossard", "mpn": "BN 610 M5x12"},
+                 {"keys": ["SXH"], "name": "Terminal: JST SXH-001T-P0.6", "qty": 6, "manufacturer": "JST",
+                  "mpn": "SXH-001T-P0.6"}]
+        lines, missing = bom.lines_from_walk(found, {PLATE, BOLT})
+        self.assertEqual([(l.child, l.manufacturer, l.mpn) for l in lines],
+                         [(PLATE, "", ""), (BOLT, "Bossard", "BN 610 M5x12")])
+        self.assertEqual(missing, [{"name": "Terminal: JST SXH-001T-P0.6", "qty": 6, "manufacturer": "JST",
+                                    "mpn": "SXH-001T-P0.6"}])
+        self.assertEqual(lines[1].as_dict()["mpn"], "BN 610 M5x12")
+        self.assertEqual(pdm.bom_line(lines[1].as_dict()), lines[1])  # the journal keeps them
+        self.v.set_bom(BRK, lines)
+        self.v.set_bom(TOP, [(BRK, 2, 1)])
+        text = bom.bom_csv(self.v, BRK)
+        self.assertIn(f"1,1,{PLATE},01,Plate,,,1,1,WIP,", text)
+        self.assertIn(f"1,2,{BOLT},01,Bolt M5x12,Bossard,BN 610 M5x12,4,4,WIP,", text)
+        flat = bom.bom_csv(self.v, TOP, flattened=True)
+        self.assertIn(f"{BOLT},01,Bolt M5x12,Bossard,BN 610 M5x12,8,WIP", flat)
+        # A reopened vault (the journal replayed) still has them.
+        again = FolderVault(self.v.ref_path, actor="me@mac")
+        self.assertIn(f"{BOLT},01,Bolt M5x12,Bossard,BN 610 M5x12,4,4,", bom.bom_csv(again, BRK))
+        for pn in (PLATE, BOLT, BRK):
+            self.v.submit(pn)
+            self.v.approve(pn, note="first release")
+        self.assertTrue(any(r.endswith(",Bolt M5x12,Bossard,BN 610 M5x12,4") for r in
+                            bom.outbox_csv(self.v.outbox()).splitlines()))
+        # The in-memory vault keeps a missing line's manufacturer and MPN too.
+        v = pdm.Vault()
+        v.create_item(PLATE, "assembly", "Plate")
+        v.set_bom(PLATE, [], missing=missing)
+        self.assertEqual(v.indented(PLATE)[0]["mpn"], "SXH-001T-P0.6")
 
     def test_cycle_path_before_a_check_in(self):
         self.assertIsNone(self.v.cycle_path(TOP, [PLATE]))

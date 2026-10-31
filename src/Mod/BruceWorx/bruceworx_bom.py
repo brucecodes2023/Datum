@@ -124,6 +124,27 @@ def _keys(target, imported, shown=None):
     return keys
 
 
+def _maker(row, target):
+    """[BW] ROU-05 (30 Oct): what the line is ordered by: the part's Manufacturer and
+    ManufacturerPartNumber, else the Vendor and VendorPartNumber it is bought from (a McMaster-Carr
+    fitting); nothing for a made part."""
+    holders = [target]
+    try:
+        parent = target.getParentGeoFeatureGroup()
+        if parent is not None:
+            holders.append(parent)
+    except Exception:
+        pass
+    for maker_key, mpn_key in (("Manufacturer", "ManufacturerPartNumber"), ("Vendor", "VendorPartNumber")):
+        for holder in holders:
+            maker = str(getattr(holder, maker_key, "") or "").strip()
+            mpn = str(getattr(holder, mpn_key, "") or "").strip()
+            if mpn:
+                row["manufacturer"], row["mpn"] = maker, mpn
+                return row
+    return row
+
+
 def _metered(row, target):
     """[BW] ROU-04: a routed item (QuantityUnit "m", QuantityPer its metres) is listed by length:
     the row's qty becomes count x QuantityPer and carries the unit."""
@@ -152,7 +173,8 @@ def _extras(target, qty):
         if key and n > 0:
             keys = [k for k in dict.fromkeys((key, mpn)) if k]
             item = key if key != mpn else ""
-            rows.append({"keys": keys, "name": bp.bom_text(kind, mfr, mpn, item), "qty": qty * n})
+            rows.append({"keys": keys, "name": bp.bom_text(kind, mfr, mpn, item), "qty": qty * n,
+                         "manufacturer": mfr, "mpn": mpn})
     return rows
 
 
@@ -187,7 +209,8 @@ def walk(doc, imported=None) -> list:
                 if source is not None and source.Document is not doc:
                     base = os.path.basename(getattr(source.Document, "FileName", "") or "") or source.Document.Label
                     name = f"{base} ({getattr(copy, 'Configuration', '')})"
-                    rows.append({"keys": _keys(source, imported, shown=copy), "name": name, "qty": mult * count})
+                    rows.append(_maker({"keys": _keys(source, imported, shown=copy), "name": name, "qty": mult * count},
+                                       copy))
                     continue
             if target.Document is doc:
                 if _type(target, "Assembly::AssemblyObject") and target is not top:
@@ -196,11 +219,13 @@ def walk(doc, imported=None) -> list:
                     continue
                 if target is top:
                     continue
-                rows.append(_metered({"keys": [], "name": f"{target.Label} (in this file)", "qty": mult * count}, target))
+                rows.append(_maker(_metered({"keys": [], "name": f"{target.Label} (in this file)", "qty": mult * count},
+                                            target), target))
                 rows.extend(_extras(target, mult * count))  # [BW] ROU-05: terminals
                 continue
             name = os.path.basename(getattr(target.Document, "FileName", "") or "") or target.Document.Label
-            rows.append(_metered({"keys": _keys(target, imported), "name": name, "qty": mult * count}, target))
+            rows.append(_maker(_metered({"keys": _keys(target, imported), "name": name, "qty": mult * count}, target),
+                               target))
             rows.extend(_extras(target, mult * count))  # [BW] ROU-05: a connector's accessories
 
     visit(objects, 1, {top.Name} if top is not None else set())
@@ -449,13 +474,16 @@ def _make_classes():
                 self.list.setHeaderLabels(list(bom.FLAT_COLUMNS))
                 for r in rows:
                     QtWidgets.QTreeWidgetItem(self.list, [r["part_number"], r["revision"], r["description"],
-                                                          str(r["total"]), r["state"]])
+                                                          r.get("manufacturer", ""), r.get("mpn", ""),
+                                                          bom.qty_text(r["total"], r.get("unit", "")), r["state"]])
             else:
                 self.list.setHeaderLabels(list(bom.BOM_COLUMNS))
                 for r in rows:
                     QtWidgets.QTreeWidgetItem(self.list, [
                         " " * (r["level"] - 1) + str(r["level"]), str(r["find"] or ""), r["part_number"],
-                        r["revision"], r["description"], str(r["qty"]), str(r["total"]), r["state"], r["note"]])
+                        r["revision"], r["description"], r.get("manufacturer", ""), r.get("mpn", ""),
+                        bom.qty_text(r["qty"], r.get("unit", "")), bom.qty_text(r["total"], r.get("unit", "")),
+                        r["state"], r["note"]])
             for i in range(self.list.columnCount()):
                 self.list.resizeColumnToContents(i)
             rev = self.s.vault.model._revision(self.s.vault.items[self.pn], code)

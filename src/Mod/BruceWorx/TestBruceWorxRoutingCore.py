@@ -710,9 +710,25 @@ class ConnectorFittingTests(unittest.TestCase):
         self.assertEqual(counted, {"Terminal: JST SXH-001T-P0.6 (STD-01-02001-001)": 3, "Seal: Acme WS-1": 2,
                                    "Wedgelock: TE Connectivity W2P": 2})
         lines, missing = bom.lines_from_walk(rows, {"STD-01-02001-001"})
-        self.assertEqual([(l.child, l.qty) for l in lines], [("STD-01-02001-001", 3)])
-        self.assertIn({"name": "Seal: Acme WS-1", "qty": 2}, missing)
-        self.assertIn({"name": "Wedgelock: TE Connectivity W2P", "qty": 2}, missing)
+        self.assertEqual([(l.child, l.qty, l.manufacturer, l.mpn) for l in lines],
+                         [("STD-01-02001-001", 3, "JST", "SXH-001T-P0.6")])
+        self.assertIn({"name": "Seal: Acme WS-1", "qty": 2, "manufacturer": "Acme", "mpn": "WS-1"}, missing)
+        self.assertIn({"name": "Wedgelock: TE Connectivity W2P", "qty": 2, "manufacturer": "TE Connectivity",
+                       "mpn": "W2P"}, missing)
+        # A bought part in the assembly prints what it is ordered by (30 Oct): its manufacturer and MPN,
+        # else its vendor and vendor P/N; a made part nothing.
+        fit = self.bf.make_fitting(self.doc, "Push-to-connect", "Straight", "6 mm", container=asm)
+        fit.Vendor, fit.VendorPartNumber = "McMaster-Carr", "5779K108"
+        self.doc.recompute()
+        by_name = {r["name"]: r for r in bb.walk(self.doc)}
+        self.assertEqual((by_name[f"{fit.Label} (in this file)"]["manufacturer"],
+                          by_name[f"{fit.Label} (in this file)"]["mpn"]), ("McMaster-Carr", "5779K108"))
+        part.addProperty("App::PropertyString", "Manufacturer", "BruceWorx")
+        part.addProperty("App::PropertyString", "ManufacturerPartNumber", "BruceWorx")
+        part.Manufacturer, part.ManufacturerPartNumber = "JST", "XHP-2"
+        by_name = {r["name"]: r for r in bb.walk(self.doc)}
+        self.assertEqual(by_name[f"{part.Label} (in this file)"]["mpn"], "XHP-2")
+        self.assertNotIn("mpn", by_name[f"{w1.Label} (in this file)"])
         # The terminal list to order from: manufacturer and MPN in columns of their own.
         self.assertEqual(br.terminal_csv(self.doc).splitlines(), [
             "Kind,Manufacturer,MPN,Standard Library item,Qty", "Seal,Acme,WS-1,,2",

@@ -9,6 +9,12 @@ rows and CSV text. No FreeCAD import.
 Quantities are counts, except a routed item (a wire, pipe or hose, ROU-04) whose row carries a
 ``unit`` ("m") and a metered, possibly fractional, ``qty``: the Qty and Total cells then read
 ``2.5 m``.
+
+Every line prints its **Manufacturer** and **MPN** (ROU-05, your 30 Oct rule: anything used for
+ordering prints the manufacturer and the manufacturer's P/N; the vault P/N is for finding it).
+The walker reads them from the part (``Manufacturer`` / ``ManufacturerPartNumber``, else the
+``Vendor`` / ``VendorPartNumber`` it is bought from) and the BOM line keeps them; a made part
+leaves them blank.
 """
 
 from __future__ import annotations
@@ -19,11 +25,12 @@ import os
 
 from bruceworx import pdm
 
-BOM_COLUMNS = ("Level", "Find", "Part number", "Revision", "Description", "Qty", "Total", "State", "Note")
-FLAT_COLUMNS = ("Part number", "Revision", "Description", "Total", "State")
+BOM_COLUMNS = ("Level", "Find", "Part number", "Revision", "Description", "Manufacturer", "MPN", "Qty", "Total",
+               "State", "Note")
+FLAT_COLUMNS = ("Part number", "Revision", "Description", "Manufacturer", "MPN", "Total", "State")
 WHERE_USED_COLUMNS = ("Assembly", "Revision", "State", "Current", "Quantity", "Path", "List")
 OUTBOX_COLUMNS = ("Assembly", "Revision", "ECO", "Released", "By", "SHA-256", "Find", "Part number",
-                  "Child revision", "Description", "Qty")
+                  "Child revision", "Description", "Manufacturer", "MPN", "Qty")
 
 
 def lines_from_walk(found, items) -> tuple:
@@ -34,6 +41,7 @@ def lines_from_walk(found, items) -> tuple:
     for row in found:
         unit = str(row.get("unit") or "")  # [BW] ROU-04
         qty = float(row.get("qty", 1)) if unit else int(row.get("qty", 1))
+        maker, mpn = str(row.get("manufacturer") or ""), str(row.get("mpn") or "")  # [BW] ROU-05
         pn = next((k for k in row.get("keys", ()) if k and k in items), None)
         if pn is None:
             name = row.get("name") or "?"
@@ -43,12 +51,18 @@ def lines_from_walk(found, items) -> tuple:
                 by_name[name] = {"name": name, "qty": qty}
                 if unit:
                     by_name[name]["unit"] = unit
+                if maker:
+                    by_name[name]["manufacturer"] = maker
+                if mpn:
+                    by_name[name]["mpn"] = mpn
                 missing.append(by_name[name])
             continue
         if pn in by_pn:
             by_pn[pn].qty += qty
+            by_pn[pn].manufacturer = by_pn[pn].manufacturer or maker
+            by_pn[pn].mpn = by_pn[pn].mpn or mpn
         else:
-            by_pn[pn] = pdm.BomLine(pn, qty, len(by_pn) + 1, unit=unit)
+            by_pn[pn] = pdm.BomLine(pn, qty, len(by_pn) + 1, unit=unit, manufacturer=maker, mpn=mpn)
             lines.append(by_pn[pn])
     return lines, missing
 
@@ -76,15 +90,18 @@ def bom_rows(vault, pn, revision=None, flattened=False) -> list:
         for row in model.indented(pn, start.code):
             if row["leaf"] and not row["missing"]:
                 resolved.setdefault(row["part_number"], set()).add(row["revision"])
-        units = {}
+        units, makers = {}, {}
         for row in model.indented(pn, start.code):
             if row.get("unit"):
                 units[row["part_number"]] = row["unit"]
+            if row.get("manufacturer") or row.get("mpn"):
+                makers.setdefault(row["part_number"], (row.get("manufacturer", ""), row.get("mpn", "")))
         for child in sorted(totals):
             item = vault.items[child]
+            maker, mpn = makers.get(child, ("", ""))
             rows.append({"part_number": child, "revision": "/".join(sorted(resolved.get(child, ()))),
                          "description": item.description, "total": totals[child], "state": item.state,
-                         "unit": units.get(child, "")})
+                         "unit": units.get(child, ""), "manufacturer": maker, "mpn": mpn})
         return rows
     newer = {child: released for child, _pinned, released in model.newer_children(pn, revision)}
     rows = []
@@ -109,9 +126,11 @@ def _csv(columns, rows) -> str:
 def bom_csv(vault, pn, revision=None, flattened=False) -> str:
     rows = bom_rows(vault, pn, revision, flattened)
     if flattened:
-        return _csv(FLAT_COLUMNS, [(r["part_number"], r["revision"], r["description"],
-                                    qty_text(r["total"], r.get("unit", "")), r["state"]) for r in rows])
+        return _csv(FLAT_COLUMNS, [(r["part_number"], r["revision"], r["description"], r.get("manufacturer", ""),
+                                    r.get("mpn", ""), qty_text(r["total"], r.get("unit", "")), r["state"])
+                                   for r in rows])
     return _csv(BOM_COLUMNS, [(r["level"], r["find"] or "", r["part_number"], r["revision"], r["description"],
+                               r.get("manufacturer", ""), r.get("mpn", ""),
                                qty_text(r["qty"], r.get("unit", "")), qty_text(r["total"], r.get("unit", "")),
                                r["state"], r["note"]) for r in rows])
 
@@ -130,7 +149,8 @@ def outbox_csv(rows) -> str:
         for line in row.get("lines", ()):
             out.append((row["part_number"], row["revision"], row.get("eco") or "", row.get("at", ""),
                         row.get("by", ""), row.get("sha256", ""), line.get("find", ""), line["child"],
-                        line.get("rev", ""), line.get("description", ""), line["qty"]))
+                        line.get("rev", ""), line.get("description", ""), line.get("manufacturer", ""),
+                        line.get("mpn", ""), line["qty"]))
     return _csv(OUTBOX_COLUMNS, out)
 
 
