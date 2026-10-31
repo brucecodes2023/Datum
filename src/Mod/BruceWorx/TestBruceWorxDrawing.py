@@ -163,9 +163,15 @@ class TestPage(unittest.TestCase):
         other.saveAs(os.path.join(tmp, "drawing.FCStd"))
         page = drawing.new_drawing(part, root="", doc=other)
         self.assertIs(page.Document, other)
-        link = page.Views[0].Source[0]
-        self.assertEqual(link.TypeId, "App::Link")
-        self.assertIs(drawing.part_of(link), part)
+        group = page.Views[0]
+        self.assertEqual(list(group.Source), [])
+        self.assertIs(group.XSource[0], part)
+        self.assertIs(drawing.part_of(group.XSource[0]), part)
+        self.assertIs(drawing.part_of_page(page), part)
+        other.recompute()
+        self.assertGreater(len(group.Views), 0)
+        for view in group.Views:
+            self.assertGreater(len(view.getVisibleEdges()), 0, view.Name + " projects no edges")
         texts = page.Template.EditableTexts
         self.assertEqual((texts["part_number"], texts["title"], texts["units"]),
                          ("BW-01-01001-001", "Base plate", "inch"))  # the model's units, not the sheet's

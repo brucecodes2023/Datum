@@ -631,7 +631,7 @@ def new_drawing(part, sheet=None, root=None, doc=None):
     """A page with our template and front, top and right views of ``part`` (third angle unless
     the vault says first), on the profile of the part's units: an inch part gets the vault's
     inch sheet, ASME tolerances and "%.3f" dimensions (PDM-09). ``doc``: the drawing's own
-    document (default the part's); a part in another file is shown through an App::Link there.
+    document (default the part's); a part in another file is linked through the group's XSource.
     Returns the page."""
     import FreeCAD
 
@@ -642,13 +642,9 @@ def new_drawing(part, sheet=None, root=None, doc=None):
 
     settings = ds.profile(standards(root), bruceworx_units.document_units(part.Document))
     sheet = choose_sheet(settings, sheet)
-    source = part
-    if doc is not part.Document:
-        if not doc.FileName or not part.Document.FileName:
-            raise ValueError("A drawing in its own file links the model's file: save both documents first.")
-        source = doc.addObject("App::Link", "Model")
-        source.LinkedObject = part
-        source.Label = part.Label
+    cross = doc is not part.Document
+    if cross and (not doc.FileName or not part.Document.FileName):
+        raise ValueError("A drawing in its own file links the model's file: save both documents first.")
     page = doc.addObject("TechDraw::DrawPage", "Drawing")
     template = doc.addObject("TechDraw::DrawSVGTemplate", "Template")
     template.Template = template_path(sheet)
@@ -657,7 +653,12 @@ def new_drawing(part, sheet=None, root=None, doc=None):
     group = doc.addObject("TechDraw::DrawProjGroup", "ProjGroup")
     page.addView(group)
     group.ProjectionType = "First angle" if settings.projection == "first" else "Third angle"
-    group.Source = [source]
+    if cross:
+        # An App::Link in Source projects nothing across files; XSource is TechDraw's own
+        # cross-document link.
+        group.XSource = [part]
+    else:
+        group.Source = [part]
     group.addProjection("Front")
     anchor = group.Anchor
     anchor.Direction = FreeCAD.Vector(0, -1, 0)
