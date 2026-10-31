@@ -112,6 +112,8 @@ public:
 // NOLINTBEGIN
     using Connection = boost::signals2::scoped_connection;
     Connection connectGuiRepaint;
+    Connection connectDeletedObject;  // [BW]
+    void onDeletedObject(const App::DocumentObject& obj);  // [BW]
 // NOLINTEND
 
     void unsetEdit(int ModNum) override;

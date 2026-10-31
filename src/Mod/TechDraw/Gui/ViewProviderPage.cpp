@@ -124,6 +124,12 @@ void ViewProviderPage::attach(App::DocumentObject* pcFeat)
     auto* feature = dynamic_cast<TechDraw::DrawPage*>(pcFeat);
     if (feature) {
         connectGuiRepaint = feature->signalGuiPaint.connect(bnd);
+        // [BW] The scene can hold graphics for the views without a tab (fixOrphans fills it
+        // on every repaint). Only the tab dropped them when a view was deleted, so a view
+        // removed from a page without a tab (removeProjection) left a QGIView pointing at a
+        // deleted object, and the next showMDIViewPage crashed in QGSPage::findParent.
+        connectDeletedObject = feature->getDocument()->signalDeletedObject.connect(
+            std::bind(&ViewProviderPage::onDeletedObject, this, sp::_1));
         if (feature->isAttachedToDocument()) {
             // it could happen that feature is not completely in the document yet and getNameInDocument returns
             // nullptr, so we only update m_myName if we got a valid string.
@@ -289,6 +295,14 @@ void ViewProviderPage::hide()
         removeMDIView();
     }
     ViewProviderDocumentObject::hide();
+}
+
+void ViewProviderPage::onDeletedObject(const App::DocumentObject& obj)
+{
+    if (m_graphicsScene && m_mdiView.isNull() && obj.isDerivedFrom<TechDraw::DrawView>()
+        && obj.isAttachedToDocument()) {
+        (void)m_graphicsScene->removeQViewByName(obj.getNameInDocument());
+    }
 }
 
 // [BW] A page that was never opened has an empty scene (the template and views are only
