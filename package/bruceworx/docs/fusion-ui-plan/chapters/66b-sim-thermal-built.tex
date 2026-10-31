@@ -1,0 +1,81 @@
+%======================================================================
+\subsection{BW-SIM-01 thermal --- Built, 30 Oct: steady and transient heat, one-way thermal stress, HDT bands}\label{sec:sim-thermal-built}
+%======================================================================
+
+Thermal and Thermal stress now run on the frame of \S\ref{sec:sim01-built}, built on your answers H1--H5
+(\S\ref{sec:sim-thermal-plan}). Code: \file{src/Mod/BruceWorx/bruceworx\_sim\_thermal.py} (headless), the panels in
+\file{bruceworx\_sim\_gui.py}; commits ``SIM-01: Thermal and Thermal stress studies\ldots'' and ``SIM-01: thermal panels,
+Setup commands\ldots''.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{New Study} offers Thermal (a \emph{Transient} box with end time and step, initial temperature) and
+        Thermal stress (the stress-free $T_{ref}$). Thermal is a CalculiX \code{*HEAT TRANSFER}; thermal stress is
+        \code{*UNCOUPLED TEMPERATURE-DISPLACEMENT, STEADY STATE}, which solves the temperature field and then the stress it
+        causes in one step (one way, as planned).
+  \item \textbf{Setup} (ribbon and study panel): Temperature, Heat flux, Heat source (watts, spread over the body's volume;
+        a body of several solids shares the power by volume) and Convection with presets still air 10, light airflow 25,
+        fan or prop wash 75\,W/m$^2$K or a typed value, ambient temperature, and a note that these are estimates.
+  \item \textbf{Pre-check}: $k$ (plus $\alpha$ for thermal stress, $\rho$ and $c_p$ for a transient run), at least one
+        temperature or convection boundary, supports for thermal stress, times that make at most 2000 steps.
+  \item \textbf{Results}: Temperature and HDT bands (each element in the band of its hottest node: red at or above the heat
+        deflection temperature, amber within the margin, 10\,K by default, settable per study; the limit can also be typed
+        over the card's). Transient: a result per time step (at most 60 kept), a time-step picker, the temperature of the
+        hottest node and of a probe node against time, and the time to reach the limit. Thermal stress adds the static views
+        and the safety factor.
+  \item \textbf{Report}: setup, temperatures, the band table, the pgfplots curve, and the heat balance (heat in against heat out).
+  \item \textbf{HDT on the cards}: every plastic and printed Keystone card has \code{HeatDeflectionTemperature}, basis and
+        source in its \code{BruceWorx:} block (ISO 75 / ASTM D648 at the heavier load, 1.8\,MPa; the 0.45\,MPa value is in the
+        basis). The ten printed grades are read from the Bambu data sheets (e.g.\ PLA 54, PETG 65, ABS 84, PA12-CF 170\,$^\circ$C),
+        POM-C and UHMW-PE from their data sheets, four machined plastics (Delrin 150, PA6, PC sheet, PMMA) from handbook
+        typicals marked ``check the data sheet''. TPU 95A has none (the sheet says N/A); metals and composites have none.
+        All 33 cards regenerate from the extended \file{make\_cards.py} with only those lines added.
+\end{itemize}
+
+\paragraph{Benchmarks} (\file{TestBruceWorxSimCore}, skip without \code{ccx}).
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+Case & FE & Reference & Error\\
+\midrule
+Bar, mid-length & 59.98\,$^\circ$C & 60 & $-0.04$\,\%\\
+Bar, heat flow & 13.360\,W (RFL) & 13.36 & 0\\
+Fin, tip & 65.638\,$^\circ$C & 65.640 & 0\,\%\\
+Fin, heat out (convection integral) & 5.032\,W & 5.033 & 0\,\%\\
+Thermal stress, free growth & 0.06000\,mm & 0.060 & 0\,\%\\
+Thermal stress, held, 300\,mm bar & $-127.4$\,MPa & $-126$ & $+1.1$\,\%\\
+Cooling block, 600\,s, worst of 50 steps & & lumped & 0.34\,\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{One uncoupled step, not two.} ``A thermal step then a static step'' is what \code{*UNCOUPLED TEMPERATURE-DISPLACEMENT}
+        does inside one step, with the same one-way result and no temperature hand-over file.
+  \item \textbf{The held bar is 300\,mm.} On the plan's 100\,mm bar the clamped ends, which also hold the sideways growth, still
+        reach the mid-length: $-130.3$\,MPa ($+3.4$\,\%). At 300\,mm it is $-127.4$. The free-growth case stays at 100\,mm.
+  \item \textbf{CalculiX needs an initial temperature} for any thermomechanical step, so the study owns an Initial temperature
+        object (all nodes) driven by the study's setting.
+  \item \textbf{Heat balance} without a second solve: the heat at the fixed temperatures from CalculiX \code{*NODE PRINT, RFL}
+        totals, convection and flux integrated over the faces named in the written input (exact for the quadratic mid-node
+        rule), sources from their watts. Transient runs show the terms and the heat stored, not a closed balance.
+  \item \textbf{Touching bodies} of a container are fused (\code{Part::MultiFuse}) for thermal studies, so they share one
+        conforming mesh and are perfectly bonded; one material per study for now.
+  \item \textbf{Fixed time steps} (\code{DIRECT}) for a transient run, so results fall on the step times; backward Euler,
+        hence 3\,s steps for the 323\,s time constant of the block.
+  \item \textbf{Probe}: the click sets the plotted point and redraws its curve from the stored results, no new solve; without
+        a click the probe is the node nearest the centre of the bounding box.
+\end{itemize}
+
+\paragraph{Tests.} \file{TestBruceWorxSimCore} 53 (7 thermal without a solve, 5 benchmarks and a compiled report),
+\file{TestBruceWorxSimulation} 13 (New Study for both types; a transient solve with sources, convection, bands, time steps,
+probe and report), \file{TestBruceWorxMaterials} 9, \file{TestBruceWorxWorkspaces} 25 and the lint \file{TestBruceWorx} 15 pass.
+
+\paragraph{Open questions.}
+\begin{enumerate}[nosep]
+  \item HDT at 1.8\,MPa (conservative, a loaded mount) or 0.45\,MPa? The card records both; the bands use the first.
+  \item The four handbook HDTs (Delrin, PA6, PC sheet, PMMA) want the supplier's sheet; supply them and the cards are updated.
+  \item Radiation and a contact conductance between bodies are not built (H2, H5: later).
+\end{enumerate}
