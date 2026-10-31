@@ -201,14 +201,37 @@ def make_library(tmp):
     return vs.create_vault(setup, actor=ME)
 
 
-def fake_fcstd(path, label):
-    """A minimal .FCStd (Document.xml with one App::Part) so the vault can check it in."""
+def fake_fcstd(path, label, extra=""):
+    """A minimal .FCStd (Document.xml with one App::Part carrying its MPN) so the vault can check it in."""
     xml = ('<?xml version="1.0" encoding="utf-8"?><Document SchemaVersion="4"><Objects Count="1">'
            '<Object type="App::Part" name="Connector"/></Objects><ObjectData Count="1"><Object name="Connector">'
-           f'<Properties Count="1"><Property name="Label" type="App::PropertyString"><String value="{label}"/>'
-           '</Property></Properties></Object></ObjectData></Document>')
+           f'<Properties Count="2"><Property name="Label" type="App::PropertyString"><String value="{label}"/>'
+           '</Property><Property name="ManufacturerPartNumber" type="App::PropertyString">'
+           f'<String value="{label}"/></Property></Properties></Object></ObjectData>{extra}</Document>')
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("Document.xml", xml)
+
+
+class BergStikAndStrip(unittest.TestCase):
+    def test_bergstik_mpns(self):
+        self.assertEqual(cl.bergstik_mpn("v", 1, 2), "68000-102HLF")
+        self.assertEqual(cl.bergstik_mpn("r", 1, 2), "68016-102HLF")
+        self.assertEqual(cl.bergstik_mpn("v", 2, 4), "67996-108HLF")
+        self.assertEqual(cl.bergstik_mpn("r", 2, 4), "68020-108HLF")
+        by = {e.mpn: e for e in cl.catalog()}
+        self.assertNotIn("HDR254-M-1x04", by)
+        self.assertEqual(by["68000-104HLF"].previous, ["HDR254-M-1x04"])
+        self.assertEqual(by["68000-104HLF"].manufacturer, "Amphenol FCI")
+        self.assertIn("NOT individually confirmed", by["68000-104HLF"].notes)
+        self.assertNotIn("NOT individually", by["68000-103HLF"].notes)
+        right = by["68020-108HLF"]
+        self.assertEqual(len(right.pins), 8)
+        self.assertEqual(right.pins[0].dir, (1, 0, 0))
+
+    def test_strip_length(self):
+        by = {e.mpn: e for e in cl.catalog()}
+        self.assertEqual(by["DT04-4P"].strip_length, 7.1)
+        self.assertEqual(by["XHP-4"].strip_length, 0.0)  # no published value on hand
 
 
 class VaultImport(unittest.TestCase):
@@ -286,6 +309,44 @@ class VaultImport(unittest.TestCase):
             self.assertIn("GuiDocument.xml", zf.namelist())
             self.assertIn("ShapeAppearance", zf.namelist())
         self.assertFalse(cl.restore_view_data(original, staged))  # already there
+
+    def test_update_path(self):
+        import copy
+
+        cl.import_library(self.vault, self.entries, self.lib)  # A-1, B-1 in as WIP 01
+        self.assertEqual(cl.vault_mpns(self.vault), {"A-1": "STD-01-01001-001", "B-1": "STD-01-01002-001"})
+        previous = copy.deepcopy(self.entries)
+        new = copy.deepcopy(self.entries)
+        new[0].mfr_model = "F/A-1.step"  # a manufacturer body for A-1
+        new[1].mpn, new[1].previous, new[1].file = "B-2", ["B-1"], "B-2.FCStd"  # B-1 renamed to B-2
+        fake_fcstd(os.path.join(self.lib, "A-1.FCStd"), "A-1", extra="<!-- new body -->")
+        fake_fcstd(os.path.join(self.lib, "B-2.FCStd"), "B-2")
+        plans = {p.mpn: p for p in cl.plan_update(self.vault, new, previous)}
+        self.assertEqual((plans["A-1"].action, plans["A-1"].changes), ("update", ["mfr_model"]))
+        self.assertEqual((plans["B-2"].part_number, plans["B-2"].action), ("STD-01-01002-001", "update"))
+        self.assertEqual(plans["B-2"].changes, ["mpn"])
+        self.assertEqual(plans["C-1"].action, "new")
+        self.assertEqual(self.vault.versions["STD-01-01001-001"].__len__(), 1)  # the plan changed nothing
+        written = []
+        done = cl.update_library(self.vault, new, previous, self.lib,
+                                 writer=lambda path, pn, rev: written.append((pn, rev)))
+        self.assertEqual(sorted(written), [("STD-01-01001-001", "01"), ("STD-01-01002-001", "01")])
+        self.assertEqual(len(self.vault.versions["STD-01-01001-001"]), 2)  # a new version of WIP 01
+        latest = self.vault.latest_version("STD-01-01001-001")
+        self.assertIn("update: mfr_model", latest.comment)
+        self.assertEqual(self.vault.locks, {})
+        self.assertEqual(cl.vault_mpns(self.vault)["B-2"], "STD-01-01002-001")  # found by its new MPN now
+        self.assertEqual({p.mpn: p.action for p in done}["C-1"], "new")
+        # an import after the rename does not add B-2 again
+        self.assertIn("already in the vault as STD-01-01002-001",
+                      {p.mpn: p.skip for p in cl.plan_import(self.vault, new, self.lib)}["B-2"])
+        # a released item is refused: a change needs an ECR and an ECO
+        self.vault.submit("STD-01-01001-001")
+        self.vault.approve("STD-01-01001-001", note="released for the test")
+        new[0].notes = "changed again"
+        plan = {p.mpn: p for p in cl.plan_update(self.vault, new, previous)}["A-1"]
+        self.assertEqual(plan.action, "refused")
+        self.assertIn("ECR and an ECO", plan.why)
 
     def test_cli_dry_run(self):
         path = cl.write_manifest(self.entries, self.lib)

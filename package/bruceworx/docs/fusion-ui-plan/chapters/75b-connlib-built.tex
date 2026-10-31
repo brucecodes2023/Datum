@@ -279,3 +279,79 @@ restored, the DT layouts and the checked values); headless FreeCAD 9 (new: termi
 \bottomrule
 \end{tabularx}
 \end{center}
+
+%----------------------------------------------------------------------
+\subsubsection*{Answers 6--8 (30 Oct)}
+
+\paragraph{Answer 6: manufacturer STEP bodies (mechanism built, files wait for you).} The generator now takes a
+manufacturer's STEP where KiCad has none: it looks in \file{\textasciitilde/Documents/BruceWorx/ConnectorModels/<family>/<MPN>.step}
+(override with \code{BW\_CONNECTOR\_MODELS}; family folder = the family name with spaces and dots as ``\_'':
+\code{JST-XH}, \code{JST-PH}, \code{JST-GH}, \code{JST-SH}, \code{XT30}, \code{XT60}, \code{XT90}, \code{MR30},
+\code{Molex\_Micro-Fit\_3\_0}, \code{Deutsch\_DT}). A model found there is turned by the axis-aligned rotation that
+best fits the datasheet outline's box and centred on it; a model more than 1.5\,mm (or 15\,\%) off the outline on any
+axis is \emph{not} used, the outline stays and the part's notes say why, so a wrong file never reaches the vault. Its
+\code{ModelSource} says ``Manufacturer STEP'', and its licence field carries the manufacturer's terms (below).
+\textbf{No manufacturer file could be fetched here}: JST's download links sit behind a Cloudflare bot check (not
+bypassed), AMASS publishes only PDF catalogues (the STEP files are by request), and Molex and TE need their own
+download dialogue. So the 87 outlines are unchanged for now. What you download by hand (save under the folder above,
+rename each file to the MPN, e.g.\ \code{XHP-4.step}; JST delivers a ZIP per part, unzip it):
+\begin{itemize}[nosep]
+  \item \textbf{JST} (series pages, ``3D/2D Data'' table, STEP column; one ZIP per housing):
+        XH \url{https://www.jst-mfg.com/product/detail_e.php?series=277} (\code{XHP-2}\dots\code{XHP-8});
+        PH \url{https://www.jst-mfg.com/product/detail_e.php?series=199} (\code{PHR-2}\dots);
+        GH \url{https://www.jst-mfg.com/product/detail_e.php?series=105} (\code{GHR-02V-S}\dots);
+        SH \url{https://www.jst-mfg.com/product/detail_e.php?series=231} (\code{SHR-02V-S-B}\dots).
+  \item \textbf{AMASS} XT30, XT60, XT90, MR30: ask \url{https://www.china-amass.com/} (service $\to$ download, or the
+        contact form) for ``STEP of XT30U-M/F, XT30PW-M/F, XT60-M/F, XT60PW-M/F, XT90H-M/F, XT90PW-M, MR30-M/F,
+        MR30PW-M/FB''; folders \code{XT30}, \code{XT60}, \code{XT90}, \code{MR30}.
+  \item \textbf{Molex Micro-Fit} (then XT90, MR30, DT in that order): on each product page under ``Documents'' take
+        ``3D Model'' (STEP) for 43025-xx00, 43020-xx00, 43045-xx12 ($xx$ = 02\dots12), folder
+        \code{Molex\_Micro-Fit\_3\_0}.
+  \item \textbf{Deutsch DT}: on te.com the product pages \code{DT04-nP} and \code{DT06-nS} ($n$ = 2, 3, 4, 6, 8, 12),
+        ``Product Drawings'' / CAD files (STEP); folder \code{Deutsch\_DT}.
+\end{itemize}
+\textbf{Licence terms (to keep with the parts).} JST, AMASS, Molex and TE publish these models for designing with
+their parts; none allows redistribution of the files themselves, so the library keeps them inside your vault and
+never in the repository (the licence field says so). Exact wording per manufacturer is on the download page at the
+time you download; copy it into the part's \code{ModelLicense} if it differs.
+
+\paragraph{Answer 7: pin headers with real MPNs.} The generic \code{HDR254-M-\dots} headers are replaced by
+Amphenol FCI BergStik 2.54\,mm unshrouded headers (5.84\,mm mating, 2.41\,mm tail), with manufacturer
+\emph{Amphenol FCI}: \code{68000-1nnHLF} single row vertical, \code{68016-1nnHLF} single row right angle,
+\code{67996-1nnHLF} dual row vertical, \code{68020-1nnHLF} dual row right angle, where \code{nn} is the \emph{total}
+contact count (\code{68000-102HLF} = 2 positions; \code{67996-108HLF} = $2\times4$). Source: the Amphenol/FCI
+product specification of \code{68000-102HLF} (series 68000, 3\,A, 2.41\,mm tail) and the ``Mating Half'' list of the
+Mini-PV \code{65043-033LF} datasheet, which names \code{67996-108HLF} and \code{68020-108HLF}. Confirmed on a
+manufacturer or distributor page: \code{68000-102/103/105/136HLF}, \code{68016-102/136HLF}, \code{67996-108HLF},
+\code{68020-108HLF}. \emph{Every other count follows the same pattern but was not individually confirmed}; its part
+notes say ``NOT individually confirmed, check before ordering''. The vertical headers keep their vault items
+(renamed: the update path below finds them through \code{Entry.previous}); the right-angle ones are new (14).
+Right-angle frames sit at the mated housing's rear face, 13.84\,mm beyond the body face, wire along $+X$; the two row
+heights come from the KiCad horizontal model (estimate).
+
+\paragraph{Answer 8: Deutsch DT cavity numbering.} Left flagged (``estimate'') until you save the TE customer
+drawings. In hand: \code{C-2286003} (sheets \code{2286003-1} to \code{-4}, DT06 plug; note 1 is the cavity
+numbering). Still needed: the customer drawing of each housing, from the ``Documents / Drawings'' block of
+\url{https://www.te.com/en/product-DT04-4P.html} and likewise \code{DT04-2P}, \code{-3P}, \code{-6P}, \code{-8P},
+\code{-12P}, \code{DT06-2S}, \code{-3S}, \code{-4S}, \code{-6S}, \code{-8S}, \code{-12S}. Save the PDFs in
+\file{\textasciitilde/Documents/BruceWorx/ConnectorDrawings/DT/} named \code{<MPN>.pdf}; the numbering is then
+checked against them.
+
+\paragraph{Strip length (from rou05's v1.3).} Each crimp pin now carries \code{StripLength} when a published value is
+in a datasheet we hold: \textbf{Deutsch} size-16 contacts, 7.1\,mm (the middle of the TE/Deutsch range
+6.35--7.92\,mm, from ``How to Strip a Wire for the HDT48-00''). \textbf{No published strip length} was found for JST
+(\code{SXH-001T-P0.6}, \code{SPH-002T-P0.5S}, \code{SSHL-002T-P0.2}, \code{SSH-003T-P0.2-H}; it is in the JST crimp
+application specification, not the series datasheet), Molex \code{43030/43031} (application specification
+AS-43030), Amphenol FCI \code{48235-000LF}, and the AMASS solder cups (depth is in the drawing only): they stay
+$0$ (``unknown''), to be filled when those documents are saved.
+
+\paragraph{Updating parts already in the vault.} New command, \code{update}, beside \code{import}: it compares the
+new manifest with the one the vault's parts were made from (\code{-{}-previous}), finds each vault item by MPN (or a
+former MPN) in its file, and checks the changed parts in as a \emph{new version of the same item} (check out, new
+file with the item's P/N and revision written in, check in with the changed fields as the comment; the P/N and
+revision do not change). Items past WIP are \emph{refused}: a change needs an ECR and an ECO (PDM-05). Parts not
+yet in the vault are listed as ``new'' (\code{import} adds them). It also puts connectors in the vault category
+\emph{Connectors} and terminals, seals and wedgelocks in \emph{Terminals \& seals} when the vault has categories.
+Proved on a copy of the real vault: 40 items updated (14 BergStik headers renamed, 14 Mini-PV housings' mating,
+12 DT connectors' strip length), 14 new right-angle headers imported, then a second pass finds nothing to do.
+Library 3 holds 195 parts.

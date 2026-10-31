@@ -45,7 +45,7 @@ from dataclasses import asdict, dataclass, field
 
 from bruceworx import kicad_bridge as kb
 
-LIBRARY_VERSION = 2  # bump when the generated parts change
+LIBRARY_VERSION = 3  # bump when the generated parts change
 ITEM_TYPE = "cots"
 COMMENT_PREFIX = "Connector library: "
 KICAD_LICENSE = ("KiCad library 3D model, CC-BY-SA 4.0 with the KiCad libraries exception (designs using it are "
@@ -93,6 +93,7 @@ class Entry:
     gauge_min: int = 0  # AWG, thinnest (larger number)
     gauge_max: int = 0  # AWG, thickest (smaller number)
     seal: str = ""
+    strip_length: float = 0.0  # mm of conductor inside the contact (datasheet strip length); 0 = not published
     accessory: str = ""  # MPN of a part counted once per connector (DT wedgelock)
     terminal_mfr: str = ""  # manufacturers of the above (filled by catalog() from ACCESSORIES)
     seal_mfr: str = ""
@@ -100,6 +101,8 @@ class Entry:
     notes: str = ""
     footprint: str = ""  # "Lib:Name" of the KiCad footprint the pins come from
     model: str = ""  # "<lib>.3dshapes/<file>.step" relative to the KiCad 3D model dir; "" = parametric
+    mfr_model: str = ""  # "<family>/<MPN>.step" in the manufacturer model folder (used when KiCad has none)
+    previous: list = field(default_factory=list)  # former MPNs of this part (a renamed vault item)
     body: list = field(default_factory=list)  # parametric primitives (see build_shape)
     pins: list = field(default_factory=list)
     frame_at: str = FRAME_NORMAL
@@ -108,15 +111,23 @@ class Entry:
 
     @property
     def source(self) -> str:
-        return "kicad" if self.model else "parametric"
+        return "kicad" if self.model else ("manufacturer" if self.mfr_model else "parametric")
 
     @property
     def model_source(self) -> str:
-        return f"KiCad 3D library: {self.model}" if self.model else PARAMETRIC_SOURCE
+        if self.model:
+            return f"KiCad 3D library: {self.model}"
+        if self.mfr_model:
+            return f"Manufacturer STEP: {self.mfr_model} (aligned to the datasheet outline)"
+        return PARAMETRIC_SOURCE
 
     @property
     def license(self) -> str:
-        return KICAD_LICENSE if self.model else PARAMETRIC_LICENSE
+        if self.model:
+            return KICAD_LICENSE
+        if self.mfr_model:
+            return MFR_TERMS.get(self.manufacturer, MFR_TERMS[""])
+        return PARAMETRIC_LICENSE
 
     def as_dict(self) -> dict:
         data = asdict(self)
@@ -195,6 +206,92 @@ def footprint_model(lib_id: str) -> str:
             if os.path.isfile(os.path.join(models_dir(), candidate)):
                 return candidate
     return ""
+
+
+# ----- manufacturer STEP models -----------------------------------------------------------------
+
+# Where the user drops manufacturer STEP files the KiCad library does not have: <folder>/<family>/<MPN>.step
+# (family as in FAMILY_ORDER with spaces and dots as "_", e.g. "JST-XH", "Molex_Micro-Fit_3_0", "Deutsch_DT").
+MFR_MODELS_ENV = "BW_CONNECTOR_MODELS"
+MFR_MODELS_DEFAULT = os.path.join("~", "Documents", "BruceWorx", "ConnectorModels")
+MFR_TERMS = {
+    "": ("Manufacturer's 3D model, used under the manufacturer's terms of use for CAD models (for designing with "
+         "its parts); kept inside this vault, not redistributed."),
+}
+# Turn a manufacturer's model into the library's frame before it is centred on the outline: a list of
+# (axis, degrees) per family, found by looking at the first model of the family. A family not listed is
+# oriented automatically (the axis-aligned turn whose box best matches the outline's) and says so.
+MFR_ROTATIONS: dict = {}
+
+
+def mfr_models_dir() -> str:
+    return os.path.expanduser(os.environ.get(MFR_MODELS_ENV) or MFR_MODELS_DEFAULT)
+
+
+def family_folder(family: str) -> str:
+    return re.sub(r"[ .]+", "_", family)
+
+
+def find_mfr_model(family: str, mpn: str) -> str:
+    """``<family folder>/<file>`` of a manufacturer STEP for ``mpn`` when one is there (any case, .step/.stp),
+    else ""."""
+    folder = os.path.join(mfr_models_dir(), family_folder(family))
+    if not os.path.isdir(folder):
+        return ""
+    want = {safe_name(mpn).lower() + ext for ext in (".step", ".stp")}
+    for name in sorted(os.listdir(folder)):
+        if name.lower() in want:
+            return family_folder(family) + "/" + name
+    return ""
+
+
+def outline_box(ops) -> tuple:
+    """(xmin, ymin, zmin, xmax, ymax, zmax) of the parametric outline's added primitives."""
+    lo, hi = [math.inf] * 3, [-math.inf] * 3
+    for op in ops:
+        if op[0] == "cut":
+            continue
+        if op[0] == "box":
+            (x, y, z), (dx, dy, dz) = op[1:]
+            a, b = (x, y, z), (x + dx, y + dy, z + dz)
+        else:
+            (x, y, z), r, h, axis = op[1:]
+            end = [c + h * d for c, d in zip((x, y, z), axis)]
+            a = [min(c, e) - (r if abs(d) < 0.5 else 0) for c, e, d in zip((x, y, z), end, axis)]
+            b = [max(c, e) + (r if abs(d) < 0.5 else 0) for c, e, d in zip((x, y, z), end, axis)]
+        lo = [min(u, v) for u, v in zip(lo, a)]
+        hi = [max(u, v) for u, v in zip(hi, b)]
+    return tuple(lo + hi)
+
+
+def axis_turns() -> list:
+    """The 24 axis-aligned rotations as 3x3 row lists (identity first)."""
+    import itertools  # noqa: PLC0415
+
+    out = []
+    for perm in itertools.permutations(range(3)):
+        for signs in itertools.product((1, -1), repeat=3):
+            m = [[0, 0, 0] for _ in range(3)]
+            for row, (col, sign) in enumerate(zip(perm, signs)):
+                m[row][col] = sign
+            det = (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                   + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+            if det == 1:
+                out.append(m)
+    out.sort(key=lambda m: m != [[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    return out
+
+
+def fit_extents(model_ext, outline_ext) -> tuple:
+    """(turn, error): the axis turn that makes the model's box extents best match the outline's, and the
+    largest extent difference left (mm)."""
+    best = None
+    for m in axis_turns():
+        ext = [sum(abs(m[r][c]) * model_ext[c] for c in range(3)) for r in range(3)]
+        err = max(abs(a - b) for a, b in zip(ext, outline_ext))
+        if best is None or err < best[1] - 1e-9:
+            best = (m, err)
+    return best
 
 
 # ----- helpers for the tables ------------------------------------------------------------------
@@ -334,6 +431,31 @@ def dupont_mpn(rows: int, cols: int) -> str:
     return f"{DUPONT['series'][rows]}-{DUPONT['suffix'][cols]}LF"
 
 
+# Amphenol FCI BergStik unshrouded headers, 2.54 mm, 5.84 mm mating, 2.41 mm tail (Amphenol/FCI product
+# specifications "68000-102HLF ... Single Row, 2 Positions, Vertical" and the dual-row pages linked from the
+# Mini-PV 65043-033LF datasheet, "Mating Half" list: 67996-108HLF vertical and 68020-108HLF right angle, both
+# Double row, 8 Positions). The part number is <series>-1<positions as two digits>HLF with the TOTAL contact count.
+# Series: 68000 single row vertical, 68016 single row right angle, 67996 dual row vertical, 68020 dual row right
+# angle. Seen on a distributor or manufacturer page (30 Oct): the others follow the same pattern but each count
+# was not individually confirmed (flagged in the part's notes; check before ordering).
+BERGSTIK = {("v", 1): "68000", ("r", 1): "68016", ("v", 2): "67996", ("r", 2): "68020"}
+BERGSTIK_SEEN = {"68000-102HLF", "68000-103HLF", "68000-105HLF", "68000-136HLF", "68016-102HLF", "68016-136HLF",
+                 "67996-108HLF", "68020-108HLF"}
+BERGSTIK_BODY = 2.54  # plastic body thickness; the mated housing starts at its face
+BERGSTIK_FACE = 4.04  # right-angle body face (x) in the KiCad horizontal model: body 1.5 .. 4.04 mm
+
+
+def bergstik_mpn(orient: str, rows: int, cols: int) -> str:
+    return f"{BERGSTIK[(orient, rows)]}-1{rows * cols:02d}HLF"
+
+
+def _bergstik_note(mpn: str) -> str:
+    return ("Amphenol FCI BergStik datasheet (68000 series); this exact count confirmed on a distributor/maker page"
+            if mpn in BERGSTIK_SEEN else
+            "Amphenol FCI BergStik datasheet pattern <series>-1<positions>HLF; this exact count NOT individually "
+            "confirmed, check before ordering")
+
+
 def _dupont() -> list:
     t = DUPONT
     gmin, gmax = awg(t["awg"])
@@ -341,8 +463,10 @@ def _dupont() -> list:
     for rows, cols in t["counts"]:
         n = rows * cols
         tag = f"{rows}x{cols:02d}"
-        housing, header = dupont_mpn(rows, cols), f"HDR254-M-{tag}"
+        housing = dupont_mpn(rows, cols)
+        vert, right = bergstik_mpn("v", rows, cols), bergstik_mpn("r", rows, cols)
         fp = f"Connector_PinHeader_2.54mm:PinHeader_{tag}_P2.54mm_Vertical"
+        hfp = f"Connector_PinHeader_2.54mm:PinHeader_{tag}_P2.54mm_Horizontal"
         pads = footprint_pads(fp)
         cx, cy = centroid((x, y) for _n, x, y in pads)
         xs = {round(x, 3) for _n, x, _y in pads}
@@ -351,7 +475,7 @@ def _dupont() -> list:
         top = t["z0"] + t["H"]
         common = dict(family=t["family"], positions=n, pitch=2.54)
         out.append(Entry(
-            housing, role="Wire housing", manufacturer=t["manufacturer"], mating=[header], footprint=fp,
+            housing, role="Wire housing", manufacturer=t["manufacturer"], mating=[vert, right], footprint=fp,
             terminal=t["terminal"], gauge_min=gmin, gauge_max=gmax,
             description=f"Connector, Mini-PV (Dupont) 2.54 mm wire housing, {tag} ({housing})",
             body=[box_about(cx, cy, w, d, t["z0"], t["H"])] + cavities(pads, top, 1.2),
@@ -359,12 +483,26 @@ def _dupont() -> list:
             notes="Amphenol FCI Mini-PV housing (the original 'Dupont'); clones fit; mates a male 2.54 mm header",
             **common))
         out.append(Entry(
-            header, role="Header", manufacturer="Generic", mating=[housing], footprint=fp, model=footprint_model(fp),
-            description=f"Connector, pin header 2.54 mm, male, vertical, {tag} ({header})",
+            vert, role="Header", manufacturer=t["manufacturer"], mating=[housing], footprint=fp,
+            model=footprint_model(fp), previous=[f"HDR254-M-{tag}"],
+            description=f"Connector, BergStik 2.54 mm unshrouded header, {tag}, vertical ({vert})",
             pins=pins_at(pads, top), frame_at=FRAME_MATED, colour=BLACK,
             body=[box_about(cx, cy, w, d, 0.0, 2.54)] + stubs(pads),
-            notes=f"generic 2.54 mm header (no MPN chosen); pin frames at the rear face of the mated {housing}",
-            **common))
+            notes=f"{_bergstik_note(vert)}; pin frames at the rear face of the mated {housing}", **common))
+        hpads = footprint_pads(hfp)
+        exit_x = BERGSTIK_FACE + t["H"]
+        rowz = sorted({round(x, 3) for _n, x, _y in hpads})
+        zs = {rx: 1.27 + 2.54 * k for k, rx in enumerate(rowz)}
+        right_body = [("box", (BERGSTIK_FACE - BERGSTIK_BODY, min(y for _n, _x, y in hpads) - 1.27, 0.0),
+                       (BERGSTIK_BODY, 2.54 * len(ys), 2.54 * rows))] + stubs(hpads)
+        out.append(Entry(
+            right, role="Header", manufacturer=t["manufacturer"], mating=[housing], footprint=hfp,
+            model=footprint_model(hfp),
+            description=f"Connector, BergStik 2.54 mm unshrouded header, {tag}, right angle ({right})",
+            pins=[Pin(num, (exit_x, y, zs[round(x, 3)]), (1, 0, 0)) for num, x, y in hpads],
+            frame_at=FRAME_MATED, colour=BLACK, body=right_body,
+            notes=(f"{_bergstik_note(right)}; pin frames at the rear face of the mated {housing}, wire leaves along "
+                   "+X; row heights from the KiCad horizontal model (estimate)"), **common))
     return out
 
 
@@ -634,8 +772,18 @@ def is_accessory(entry) -> bool:
     return entry.role in ACCESSORY_ROLES
 
 
+# Strip length per terminal (mm), the wire length that goes into the contact (rou05 StripLength, v1.3). Only the
+# families whose datasheet we hold publish one: Deutsch (Deutsch/TE "How to Strip a Wire for the HDT48-00",
+# size 16 contacts: .250-.312 in = 6.35-7.92 mm; the middle, 7.1 mm, is used). JST, Molex, AMASS and FCI do not
+# print a strip length in the datasheets/product pages we could read (they give it in the crimp application
+# specification, or the solder-cup depth in a drawing): left 0 until those documents are in.
+STRIP_LENGTH = {"0460-202-16141": 7.1, "0462-201-16141": 7.1}
+STRIP_SOURCE = "Deutsch/TE 'How to Strip a Wire for the HDT48-00 Crimp Tool': size 16 contact 6.35-7.92 mm (mid 7.1)"
+
+
 def _fill_manufacturers(entries) -> None:
     for e in entries:
+        e.strip_length = STRIP_LENGTH.get(e.terminal, e.strip_length)
         e.terminal_mfr = ACCESSORIES[e.terminal][0] if e.terminal in ACCESSORIES else ""
         e.seal_mfr = ACCESSORIES[e.seal][0] if e.seal in ACCESSORIES else ""
         e.accessory_mfr = ACCESSORIES[e.accessory][0] if e.accessory in ACCESSORIES else ""
@@ -660,6 +808,9 @@ def catalog() -> list:
         entries += _jst(key)
     entries += _dupont() + _microfit() + _power() + _bullets() + _dt()
     _fill_manufacturers(entries)
+    for entry in entries:
+        if not entry.model:
+            entry.mfr_model = find_mfr_model(entry.family, entry.mpn)
     for entry in entries:
         entry.file = safe_name(entry.mpn) + ".FCStd"
     return entries
@@ -718,7 +869,7 @@ def summary(entries) -> list:
     rows = {}
     for e in entries:
         row = rows.setdefault(e.family, {"family": e.family, "parts": 0, "kicad": 0, "parametric": 0,
-                                         "positions": set(), "accessories": 0})
+                                         "manufacturer": 0, "positions": set(), "accessories": 0})
         if is_accessory(e):
             row["accessories"] += 1
             continue
@@ -744,8 +895,8 @@ def write_manifest(entries, folder: str) -> str:
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=1)
     columns = ("file", "mpn", "manufacturer", "description", "family", "role", "positions", "pitch", "mating",
-               "terminal_mfr", "terminal", "gauge_min", "gauge_max", "seal_mfr", "seal", "accessory_mfr", "accessory",
-               "source", "model", "footprint", "frame_at")
+               "terminal_mfr", "terminal", "strip_length", "gauge_min", "gauge_max", "seal_mfr", "seal", "accessory_mfr", "accessory",
+               "source", "model", "mfr_model", "footprint", "frame_at")
     with open(os.path.join(folder, "manifest.csv"), "w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(columns)
@@ -836,8 +987,17 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
         part.Label = entry.mpn
         body = doc.addObject("Part::Feature", "Model")
         body.Label = f"{entry.mpn} body"
+        notes = entry.notes
         if entry.model:
             shape = Part.read(os.path.join(models_dir(), entry.model))
+        elif entry.mfr_model:
+            shape, why = align_mfr_model(os.path.join(mfr_models_dir(), entry.mfr_model), entry)
+            if shape is None:  # a model that does not fit the datasheet outline is not used
+                App.Console.PrintWarning(f"connector library: {entry.mpn}: {why}\n")
+                shape, notes = build_shape(entry.body), f"{notes}; manufacturer model not used: {why}"
+                entry = _replace(entry, mfr_model="")
+            elif why:
+                notes = f"{notes}; {why}"
         else:
             shape = build_shape(entry.body)
         body.Shape = shape
@@ -863,11 +1023,12 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
                 bp.set_connector(part, family=entry.family, mating_pn="; ".join(entry.mating), role=entry.role,
                                  frame_at=entry.frame_at)
             xdir = _x_dir(entry)
+            strip = {"StripLength": entry.strip_length} if entry.strip_length else {}
             for pin in entry.pins:
                 placement = (pin.pos, pin.dir, xdir) if xdir else (pin.pos, pin.dir)
                 bp.make_pin(part, pin.name, placement, GaugeMin=entry.gauge_min, GaugeMax=entry.gauge_max,
                             TerminalPN=entry.terminal, TerminalMfr=entry.terminal_mfr, SealPN=entry.seal,
-                            SealMfr=entry.seal_mfr)
+                            SealMfr=entry.seal_mfr, **strip)
         try:
             from bruceworx import partprops  # noqa: PLC0415
 
@@ -887,7 +1048,7 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
         _string(part, "Manufacturer", entry.manufacturer, "Manufacturer of the part")
         _string(part, "ManufacturerPartNumber", entry.mpn, "Manufacturer's part number")
         _string(part, "ConnectorPitch", f"{entry.pitch:g} mm" if entry.pitch else "", "Contact pitch")
-        _string(part, "ConnectorNotes", entry.notes, "Notes from the connector library")
+        _string(part, "ConnectorNotes", notes, "Notes from the connector library")
         _string(part, "Footprint", entry.footprint, "KiCad footprint the pins come from")
         _string(part, "ModelSource", entry.model_source, "Where the body comes from", group="Source")
         _string(part, "ModelLicense", entry.license, "Licence and attribution of the body", group="Source")
@@ -899,6 +1060,45 @@ def build_part(entry: Entry, out_path: str, schema_layers=None) -> str:
     finally:
         App.closeDocument(doc.Name)
     return out_path
+
+
+def _replace(entry, **changes):
+    import dataclasses  # noqa: PLC0415
+
+    return dataclasses.replace(entry, **changes)
+
+
+def align_mfr_model(path: str, entry):
+    """(shape, note) of a manufacturer STEP turned (MFR_ROTATIONS or the best axis turn) and moved so its box
+    sits on the datasheet outline's box; ``(None, why)`` when its size is off the outline by more than
+    max(1.5 mm, 15 %) on an axis, so a wrong file or a wrong turn never lands in the library. FreeCAD only."""
+    import FreeCAD as App  # noqa: PLC0415
+    import Part  # noqa: PLC0415
+
+    shape = Part.read(path)
+    target = outline_box(entry.body)
+    t_ext = [target[i + 3] - target[i] for i in range(3)]
+    note = ""
+    turns = MFR_ROTATIONS.get(entry.family)
+    if turns:
+        for axis, deg in turns:
+            shape.rotate(App.Vector(0, 0, 0), App.Vector(*axis), deg)
+        b = shape.BoundBox
+        err = max(abs(a - c) for a, c in zip((b.XLength, b.YLength, b.ZLength), t_ext))
+    else:
+        b = shape.BoundBox
+        m, err = fit_extents((b.XLength, b.YLength, b.ZLength), t_ext)
+        mat = App.Matrix(m[0][0], m[0][1], m[0][2], 0, m[1][0], m[1][1], m[1][2], 0, m[2][0], m[2][1], m[2][2], 0)
+        shape = shape.copy()
+        shape.transformShape(mat)  # a rigid turn: the geometry stays exact
+        note = "manufacturer model turned automatically (box fit); check its mating face"
+    b = shape.BoundBox
+    if err > max(1.5, 0.15 * max(t_ext)):
+        return None, (f"{os.path.basename(path)} is {b.XLength:.1f} x {b.YLength:.1f} x {b.ZLength:.1f} mm, the "
+                      f"datasheet outline {t_ext[0]:.1f} x {t_ext[1]:.1f} x {t_ext[2]:.1f} mm")
+    centre = [(target[i] + target[i + 3]) / 2 for i in range(3)]
+    shape.translate(App.Vector(centre[0] - b.Center.x, centre[1] - b.Center.y, centre[2] - b.Center.z))
+    return shape, note
 
 
 def fill_items(path: str, items: dict) -> int:
@@ -1016,11 +1216,15 @@ def plan_import(vault, entries, folder: str, program: str = "") -> list:
     types = vault_setup._vault_document_types(source, data)
     code = vault_setup.document_type_for("part", types)
     have = _imported_descriptions(vault)
+    known = vault_mpns(vault)
     plans = []
     for entry in _accessories_first(entries):
         path = os.path.join(folder, entry.file)
         plan = ImportPlan("", entry.mpn, entry.description, path)
-        if entry.description.strip().lower() in have:
+        former = next((known[k] for k in [entry.mpn] + list(entry.previous) if k in known), "")
+        if former:
+            plan.skip = f"already in the vault as {former}"
+        elif entry.description.strip().lower() in have:
             plan.skip = f"already in the vault as {have[entry.description.strip().lower()]}"
         elif not os.path.isfile(path):
             plan.skip = "part file not built"
@@ -1042,6 +1246,7 @@ def import_library(vault, entries, folder: str, program: str = "", writer=None, 
     from bruceworx import vault_setup  # noqa: PLC0415
 
     have = _imported_descriptions(vault)
+    known = vault_mpns(vault)
     items = {}  # accessory MPN -> its STD number
     plans = []
     ordered = _accessories_first(entries)
@@ -1049,7 +1254,12 @@ def import_library(vault, entries, folder: str, program: str = "", writer=None, 
         path = os.path.join(folder, entry.file)
         plan = ImportPlan("", entry.mpn, entry.description, path)
         key = entry.description.strip().lower()
-        if key in have:
+        former = next((known[k] for k in [entry.mpn] + list(entry.previous) if k in known), "")
+        if former:
+            plan.skip = f"already in the vault as {former}"
+            if is_accessory(entry):
+                items[entry.mpn] = former
+        elif key in have:
             plan.skip = f"already in the vault as {have[key]}"
             if is_accessory(entry):
                 items[entry.mpn] = have[key]
@@ -1067,12 +1277,38 @@ def import_library(vault, entries, folder: str, program: str = "", writer=None, 
 
             plan.part_number = vault_setup.new_item(vault, ITEM_TYPE, entry.description, make_file, program)
             have[key] = plan.part_number
+            set_category(vault, plan.part_number, entry)
             if is_accessory(entry):
                 items[entry.mpn] = plan.part_number
         plans.append(plan)
         if progress is not None:
             progress(done, len(ordered), plan)
     return plans
+
+
+CATEGORY_CONNECTORS = "Connectors"
+CATEGORY_PARTS = "Terminals & seals"
+
+
+def category_of(entry) -> str:
+    return CATEGORY_PARTS if is_accessory(entry) else CATEGORY_CONNECTORS
+
+
+def set_category(vault, part_number: str, entry) -> bool:
+    """Put the item in its vault category (the user can hide a category); a vault without categories
+    (before the category op landed) is left alone. True when set."""
+    setter = getattr(vault, "set_category", None)
+    if setter is None:
+        return False
+    item = vault.model.items.get(part_number)
+    want = category_of(entry)
+    if item is not None and getattr(item, "category", want) == want:
+        return False
+    try:
+        setter(part_number, want)
+    except Exception:  # noqa: BLE001 -- a category must never fail an import
+        return False
+    return True
 
 
 def write_numbers(plans, entries, path: str) -> str:
@@ -1090,6 +1326,150 @@ def write_numbers(plans, entries, path: str) -> str:
     return path
 
 
+# ----- updating parts already in the vault ------------------------------------------------------
+
+# What a library update compares between the manifest the vault's parts were made from and the new one.
+COMPARED = ("mpn", "manufacturer", "description", "family", "role", "positions", "pitch", "mating", "terminal",
+            "strip_length",
+            "terminal_mfr", "gauge_min", "gauge_max", "seal", "seal_mfr", "accessory", "accessory_mfr", "footprint",
+            "model", "mfr_model", "body", "pins", "frame_at", "notes")
+
+
+@dataclass
+class UpdatePlan:
+    part_number: str
+    mpn: str
+    action: str  # "update", "unchanged", "new", "refused"
+    changes: list = field(default_factory=list)
+    why: str = ""
+    revision: str = ""
+
+
+def _object_mpn(vault, part_number: str) -> str:
+    """ManufacturerPartNumber in the item's latest file (read from its Document.xml, no FreeCAD)."""
+    import zipfile  # noqa: PLC0415
+
+    version = vault.latest_version(part_number)
+    if version is None:
+        return ""
+    folder = os.path.join(vault.root, "objects", version.sha256[:2])
+    path = os.path.join(folder, version.object_name)
+    if not os.path.isfile(path):
+        hits = sorted(n for n in os.listdir(folder) if n.startswith(version.sha256)) if os.path.isdir(folder) else []
+        if not hits:
+            return ""
+        path = os.path.join(folder, hits[0])
+    try:
+        with zipfile.ZipFile(path) as zf:
+            text = zf.read("Document.xml").decode("utf-8", "replace")
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return ""
+    match = re.search(r'<Property name="ManufacturerPartNumber"[^>]*>\s*<String value="([^"]*)"', text)
+    return match.group(1) if match else ""
+
+
+def vault_mpns(vault) -> dict:
+    """MPN -> vault P/N of the library parts in ``vault`` (cots items whose file names an MPN)."""
+    out = {}
+    for pn, item in vault.model.items.items():
+        if item.item_type != ITEM_TYPE:
+            continue
+        mpn = _object_mpn(vault, pn)
+        if mpn:
+            out.setdefault(mpn, pn)
+    return out
+
+
+def _differences(old: dict, new: dict) -> list:
+    return [key for key in COMPARED if old.get(key) != new.get(key)]
+
+
+def plan_update(vault, entries, previous) -> list:
+    """What :func:`update_library` would do: for each part of the new library, the vault item it updates
+    (found by its MPN or a former MPN in ``Entry.previous``, read from the items' files), the fields that
+    changed against ``previous`` (the entries the vault's parts were made from), or why it cannot be
+    updated: a released item needs an ECR and ECO for a new letter (PDM-05), a locked one waits for its
+    holder. Parts not in the vault are "new" (:func:`import_library` adds them)."""
+    by_mpn = vault_mpns(vault)
+    old = {e.mpn: e.as_dict() for e in previous}
+    plans = []
+    for entry in entries:
+        keys = [entry.mpn] + list(entry.previous)
+        pn = next((by_mpn[k] for k in keys if k in by_mpn), "")
+        if not pn:
+            plans.append(UpdatePlan("", entry.mpn, "new"))
+            continue
+        before = next((old[k] for k in keys if k in old), None)
+        changes = ["(not in the previous manifest)"] if before is None else _differences(before, entry.as_dict())
+        item = vault.model.items[pn]
+        plan = UpdatePlan(pn, entry.mpn, "update" if changes else "unchanged", changes, revision=item.latest.code)
+        if changes:
+            holder = vault.locks.get(pn)
+            if item.latest.state != "WIP":
+                plan.action, plan.why = "refused", (f"{pn} is {item.latest.state} at {item.latest.code}: a change "
+                                                    "needs an ECR and an ECO (new letter), then this update")
+            elif holder and holder != vault.actor:
+                plan.action, plan.why = "refused", f"{pn} is checked out by {holder}"
+        plans.append(plan)
+    return plans
+
+
+def update_library(vault, entries, previous, folder: str, writer=None, item_writer=None) -> list:
+    """Check the changed parts in as new versions of their vault items (check out, the new file with the
+    item's P/N and current revision written in, the STD numbers of its terminals and accessories, the view
+    data; check in with the changed fields as the comment). WIP items only; the journal keeps the item's
+    description (the vault has no operation to change it), the file carries the new one. Returns the
+    :class:`UpdatePlan` list."""
+    from bruceworx import vault_setup  # noqa: PLC0415
+
+    plans = plan_update(vault, entries, previous)
+    by_mpn = {e.mpn: e for e in entries}
+    items = {}
+    for mpn, pn in vault_mpns(vault).items():
+        if mpn in ACCESSORIES:
+            items[mpn] = pn
+    staging = os.path.join(vault.root, vault_setup.STAGING_DIR)
+    for plan in plans:
+        if plan.action == "unchanged" and plan.mpn in by_mpn:
+            set_category(vault, plan.part_number, by_mpn[plan.mpn])  # files stay; only the category
+        if plan.action != "update":
+            continue
+        entry = by_mpn[plan.mpn]
+        source = os.path.join(folder, entry.file)
+        if not os.path.isfile(source):
+            plan.action, plan.why = "refused", "part file not built"
+            continue
+        os.makedirs(staging, exist_ok=True)
+        staged = os.path.join(staging, plan.part_number + ".FCStd")
+        vault.checkout(plan.part_number)
+        try:
+            shutil.copyfile(source, staged)
+            os.chmod(staged, 0o644)
+            if writer is not None:
+                writer(staged, plan.part_number, plan.revision)
+            if item_writer is not None and not is_accessory(entry) and items:
+                item_writer(staged, dict(items))
+            restore_view_data(source, staged)
+            comment = f"{COMMENT_PREFIX}v{LIBRARY_VERSION} update: " + ", ".join(plan.changes)
+            vault.checkin(plan.part_number, staged, comment=comment)
+            set_category(vault, plan.part_number, entry)
+        except Exception as exc:  # noqa: BLE001 -- one part must not stop the rest
+            vault.undo_checkout(plan.part_number)
+            plan.action, plan.why = "refused", f"{type(exc).__name__}: {exc}"
+        finally:
+            for name in os.listdir(staging):
+                if name.startswith(plan.part_number + "."):
+                    try:
+                        os.remove(os.path.join(staging, name))
+                    except OSError:
+                        pass
+    try:
+        os.rmdir(staging)
+    except OSError:
+        pass
+    return plans
+
+
 # ----- command line ------------------------------------------------------------------------------
 
 
@@ -1103,7 +1483,8 @@ def main(argv=None) -> int:
     if argv is None:
         argv = shlex.split(os.environ["BW_CONNLIB_ARGS"]) if os.environ.get("BW_CONNLIB_ARGS") else sys.argv[1:]
     parser = argparse.ArgumentParser(prog="bruceworx.connector_library")
-    parser.add_argument("action", choices=("check", "manifest", "build", "import"))
+    parser.add_argument("action", choices=("check", "manifest", "build", "import", "update"))
+    parser.add_argument("--previous", default="", help="update: the manifest the vault's parts were made from")
     parser.add_argument("--out", default="")
     parser.add_argument("--only", default="")
     parser.add_argument("--vault", default="")
@@ -1115,7 +1496,8 @@ def main(argv=None) -> int:
         entries = catalog()
         problems = check(entries)
         for row in summary(entries):
-            print(f"{row['family']:22} {row['parts']:4} parts  kicad {row['kicad']:3}  parametric {row['parametric']:3}  accessories {row['accessories']:2}"
+            print(f"{row['family']:22} {row['parts']:4} parts  kicad {row['kicad']:3}  maker {row['manufacturer']:3}  "
+                  f"parametric {row['parametric']:3}  accessories {row['accessories']:2}"
                   f"  positions {row['positions']}")
         for problem in problems:
             print("PROBLEM:", problem)
@@ -1136,6 +1518,29 @@ def main(argv=None) -> int:
     vault = FolderVault(args.vault)
     entries = read_manifest(args.manifest)
     folder = os.path.dirname(os.path.abspath(args.manifest))
+    if args.action == "update":
+        if not args.previous:
+            raise SystemExit("update needs --previous <manifest.json the vault's parts were made from>")
+        previous = read_manifest(args.previous)
+        if args.dry_run:
+            plans = plan_update(vault, entries, previous)
+        else:
+            from bruceworx import freecad_io  # noqa: PLC0415
+
+            on = freecad_io.freecad_available()
+            plans = update_library(
+                vault, entries, previous, folder,
+                writer=(lambda path, pn, rev: freecad_io.write_part_number(path, pn, revision=rev)) if on else None,
+                item_writer=fill_items if on else None)
+        for plan in plans:
+            if plan.action != "unchanged":
+                print(f"{plan.action:9} {plan.part_number or '-':18} {plan.mpn:20} "
+                      f"{plan.why or ', '.join(plan.changes)}")
+        counts = {a: sum(1 for p in plans if p.action == a) for a in ("update", "unchanged", "new", "refused")}
+        verb = "would be updated" if args.dry_run else "updated"
+        print(f"{counts['update']} {verb}, {counts['unchanged']} unchanged, {counts['new']} new (import them), "
+              f"{counts['refused']} refused")
+        return 1 if counts["refused"] else 0
     if args.dry_run:
         plans = plan_import(vault, entries, folder, args.program)
     else:

@@ -20,7 +20,7 @@ import bruceworx_routing_ports as bp
 from bruceworx import connector_library as cl
 
 SAMPLES = ("XHP-4", "B4B-XH-A", "S4B-XH-A", "GHR-03V-S", "43025-0600", "43020-0600", "XT60-M", "XT30PW-M",
-           "DT04-6P", "DT06-6S", "BULLET-3.5-M", "HDR254-M-2x03")
+           "DT04-6P", "DT06-6S", "BULLET-3.5-M", "67996-106HLF")
 ACCESSORY_SAMPLES = ("SXH-001T-P0.6", "114017", "W6P")
 
 
