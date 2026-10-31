@@ -1,0 +1,60 @@
+%======================================================================
+\subsection{BW-ROB-03/04 --- Built, 30 Oct: mass report and drone balance}\label{sec:rob0304-built}
+%======================================================================
+
+Two commits (ROB-03, ROB-04), all Python. The maths is FreeCAD-free in \file{addons/BruceWorx/bruceworx/balance.py}
+(21 unit tests in \file{tests/test\_balance.py}); the assembly walk and the balance inputs are in
+\file{bruceworx\_massreport.py}; the two panels, the CG marker and the commands in \file{bruceworx\_massreport\_gui.py}.
+All your answers D1--D5 were kept.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{Typed masses.} \code{MeasuredMass} and \code{DatasheetMass} are in the part-property schema (the
+        lowest layer, \file{part\_properties.json}). The part's mass is the measured one, else the datasheet one,
+        else a body's \code{MassOverride}, else volume $\times$ density; the part's computed \code{Mass} follows the
+        same order. With a typed mass the centre of mass stays the shape's centroid and the inertia is the shape's
+        scaled to that mass (split by volume over the part's bodies).
+  \item \textbf{Mass Report} (Solid tab, Inspect, group \emph{Mass \& Balance}): walks the selected assembly (else the
+        active one, else the document) through links, sub-assemblies, link arrays and routed wires. A table of item,
+        quantity, mass source, mass and share, biggest first; the total, the CG, and the inertia about the CG and
+        about the origin. \emph{Export CSV} writes the table plus the totals; \emph{Show CG} draws a red sphere and a
+        plumb line through the CG on the model (it goes when the panel closes). Parts without a mass are listed in
+        amber.
+  \item \textbf{Drone Balance}: select a motor part and \emph{Mark selected as motor} (adds \code{ThrustAxis},
+        default $+z$ in the part's frame, and \code{ThrustTable}), \emph{Attach thrust CSV} to the picked row (the file
+        is read once to check it and its path is recorded on the motor part; keeping the file with the vault item
+        comes later). Pack capacity is typed in the panel or read from \code{CapacitymAh} on the battery part. The
+        panel shows T/W, hover throttle (where each motor gives $mg/n$), hover current, flight time $0.8\,C/I$, each
+        motor's hover share, throttle and current, and the checks in green, amber and red. Thresholds are the
+        preferences \code{Balance\_tw\_amber}, \code{\_tw\_red}, \code{\_offset\_amber}, \code{\_offset\_red},
+        \code{\_hover\_amber}, \code{\_hover\_red} under \code{BaseApp/Preferences/BruceWorx} (defaults 2, 1.5, 2\,\%,
+        5\,\%, 60\,\%, 80\,\%); there is no preferences page for them yet.
+  \item \textbf{Thrust CSV}: columns by header (throttle, thrust, current, voltage, any order and extra words such as
+        ``Thrust (g)''), or in that order without a header; throttle given as 0--1 becomes percent.
+\end{itemize}
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item The frame plane is the plane perpendicular to the mean thrust axis, so a frame lying in any orientation works;
+        the motor's point is the centre of the motor in the model, its axis is \code{ThrustAxis} rotated by the
+        occurrence's global placement.
+  \item With fewer than three motors, or motors in a line, the shares cannot trim a CG offset; the check turns red.
+  \item \emph{Mass Properties} moved into the new group (the group's caption did not fit over two buttons in the
+        narrow-window test).
+  \item The Physical tab (MOD-11) still ignores the two new properties; the report and the part's \code{Mass} use them.
+\end{itemize}
+
+\paragraph{Tests.} \file{TestBruceWorxBalance} (16, with a GUI panel test) on the figure's model rebuilt with the same
+dimensions: 388.1\,g and CG $(2.45, 0, -2.73)$\,mm reproduced; measured over datasheet over override; a typed mass
+keeps the centroid and scales the inertia against the box formula; a link array inside a linked sub-assembly; the
+density path; a routed wire's own mass; motors found with global axes. Also \file{test\_balance.py}
+(shares sum to $mg$ and balance moments, symmetric quad against $\frac{mg}{4}+\frac{mg}{2a^2}\mathbf r_i\cdot\Delta\mathbf c$,
+interpolation, flight time), \file{TestBruceWorxPhysical}, \file{TestBruceWorxWorkspaces}, \file{TestBruceWorxInspect}
+and the lint \file{TestBruceWorx} pass.
+
+\paragraph{Open question: the acceptance figure and the 2\,\% limit disagree.} The figure's CG is 2.45\,mm off the
+thrust centre; the motor diagonal is 230\,mm, so that is 1.07\,\%, \emph{under} the 2\,\% amber limit of D4. The
+offset check therefore reads ok for it by default (the front motors do carry 3\,\% more than the rear ones, shown in
+the table); a 1\,\% limit or a battery 12\,mm forward flags it. The epic's wording was ``a fraction of the arm
+length'': 2\,\% of the arm (115\,mm) is 2.3\,mm, which does flag it. Which should the default be?
+\textbf{Recommendation:} measure against the arm length (half the diagonal), keeping 2\,\% and 5\,\%.
