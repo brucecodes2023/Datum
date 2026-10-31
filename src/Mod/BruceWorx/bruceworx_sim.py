@@ -947,6 +947,11 @@ def active_study(doc, selection=None):
     return found[-1] if found else None
 
 
+def is_self_weight(obj):
+    """FEM's Self weight is a Python constraint (TypeId Fem::ConstraintPython), with no faces: it loads the whole model."""
+    return obj.TypeId == "Fem::ConstraintSelfWeight" or getattr(getattr(obj, "Proxy", None), "Type", "") == "Fem::ConstraintSelfWeight"
+
+
 def members(analysis):
     """The study's members by role: solver, material(s), mesh, supports, loads, others, results."""
     out = {"solver": None, "materials": [], "mesh": None, "supports": [], "loads": [], "others": [], "results": []}
@@ -964,7 +969,7 @@ def members(analysis):
             out["results"].append(obj)
         elif tid in SUPPORT_TYPES:
             out["supports"].append(obj)
-        elif tid in LOAD_TYPES:
+        elif tid in LOAD_TYPES or is_self_weight(obj):
             out["loads"].append(obj)
         elif obj.isDerivedFrom("Fem::Constraint"):
             out["others"].append(obj)
@@ -1133,7 +1138,7 @@ def precheck(analysis):
             issues.append(("warning", "The loads are ignored: a plain modal study finds the free vibration "
                                       "(Prestressed stiffens the modes with them)"))
     for obj in m["supports"] + m["loads"] + m["others"]:
-        if _references_empty(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
+        if _references_empty(obj) and not is_self_weight(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
             issues.append(("error", f"{obj.Label}: no faces, edges or vertices chosen"))
         if obj.TypeId == "Fem::ConstraintForce" and not _value(obj, "Force"):
             issues.append(("error", f"{obj.Label}: the force is zero"))
