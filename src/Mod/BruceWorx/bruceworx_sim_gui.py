@@ -66,6 +66,8 @@ TYPE_HINTS = {
                "banded against the material's heat deflection temperature.",
     "thermal_stress": "Thermal stress, one way: the steady temperature field, then the stress it causes (alpha (T - T_ref)). "
                       "Needs k and alpha, a Temperature or Convection, and supports.",
+    "external_flow": "External flow (OpenFOAM simpleFoam): drag and lift on the model at a speed and angle of attack, "
+                     "Cd and Cl on a reference area, surface pressure and the flow on a plane. Needs OpenFOAM-v2606.app.",
     "buckling": "Structural buckling: load factors λ under the study's loads (CalculiX *BUCKLE). Linear buckling is "
                 "non-conservative; the nonlinear run seeds an imperfection from mode 1.",
 }
@@ -655,7 +657,7 @@ def report_study(analysis, folder=None, done=None):
     ``done(files)`` is called when it finishes; the return value then has "pdf": None, "running": True.
     """
     with tempfile.TemporaryDirectory(prefix="bw-sim-render-") as tmp:
-        images = render_fields(analysis, tmp)
+        images = {} if sim.study_kind(analysis) == "external_flow" else render_fields(analysis, tmp)
         files = sim.write_report(analysis, images, folder, compile=False)
     kind, path = sim.find_tex()
     if kind is None:
@@ -882,7 +884,13 @@ def _make_classes():
             self.name_edit = QtWidgets.QLineEdit(f"Study {len(sim.studies(self.doc)) + 1}")
             lay.addRow("Name", self.name_edit)
             self.type_combo = QtWidgets.QComboBox()
+            air_group = False
             for key, label, available in sim.STUDY_TYPES:
+                if key == "external_flow" and not air_group:  # the Airflow group heading
+                    air_group = True
+                    self.type_combo.addItem("— Airflow —", "")
+                    head = self.type_combo.model().item(self.type_combo.count() - 1)
+                    head.setFlags(head.flags() & ~QtCore.Qt.ItemIsEnabled)
                 self.type_combo.addItem(label if available else f"{label}  (planned)", key)
                 if not available:
                     item = self.type_combo.model().item(self.type_combo.count() - 1)
@@ -932,6 +940,10 @@ def _make_classes():
             tlay.addRow(self.reference_label, self.reference_spin)
             self.transient_check.toggled.connect(slot(self._type_changed))
             w.layout().addWidget(self.thermal_box)
+            import bruceworx_cfd_gui as cfd_gui
+
+            self.air_box = cfd_gui.classes()["NewStudyBox"]()
+            w.layout().addWidget(self.air_box.widget)
             self.type_hint = hint()
             w.layout().addWidget(self.type_hint)
             self.type_combo.currentIndexChanged.connect(slot(self._type_changed))
@@ -942,6 +954,10 @@ def _make_classes():
             self.modal_box.setVisible(kind == "modal")
             self.buckling_box.setVisible(kind == "buckling")
             self.thermal_box.setVisible(kind in thermal.KINDS)
+            air = kind == "external_flow"
+            self.air_box.widget.setVisible(air)
+            for part in self.form[2:]:  # no material or CalculiX mesh for airflow
+                part.setVisible(not air)
             self.transient_check.setVisible(kind == "thermal")
             for widget in (self.end_spin, self.step_spin):
                 widget.setEnabled(kind == "thermal" and self.transient_check.isChecked())
@@ -966,6 +982,8 @@ def _make_classes():
             if kind == "thermal_stress":
                 return {"InitialTemperature": self.reference_spin.value(),
                         "ReferenceTemperature": self.reference_spin.value()}
+            if kind == "external_flow":
+                return self.air_box.options()
             return {}
 
         def _build_model(self):
@@ -1117,6 +1135,9 @@ def _make_classes():
             self.doc.commitTransaction()
             analysis = objs["analysis"]
             set_active(analysis)
+            if plan.study_type == "external_flow":
+                status(f"Airflow study '{plan.name}' created: Pre-check, then Run")
+                return analysis
             if not plan.material:
                 _warn("The study has no material yet: pick one before solving")
             status(f"Study '{plan.name}' created: add the supports and loads, then Solve")
@@ -2394,6 +2415,12 @@ def _make_classes():
             row.addWidget(button("…", self.browse_tex, "Pick a tectonic, latexmk or pdflatex binary"))
             f3.addRow("TeX compiler", row)
             lay.addWidget(general)
+            air = QtWidgets.QGroupBox("Airflow")
+            f4 = QtWidgets.QFormLayout(air)
+            self.openfoam = QtWidgets.QLineEdit()
+            self.openfoam.setPlaceholderText("automatic: OpenFOAM-v2606.app in /Applications or ~/Applications")
+            f4.addRow("OpenFOAM app", self.openfoam)
+            lay.addWidget(air)
             self.note = hint()
             lay.addWidget(self.note)
             lay.addStretch(1)
@@ -2417,6 +2444,7 @@ def _make_classes():
             self.warn_nodes.setValue(sim.mesh_warn_nodes())
             self.max_nodes.setValue(sim.mesh_max_nodes())
             self.tex.setText(prefs.GetString(sim.TEX_PREF, ""))
+            self.openfoam.setText(prefs.GetString("OpenFOAMPath", ""))
 
         def saveSettings(self):
             """Writes the page; bands that do not check out are left as they were, with the reason shown."""
@@ -2438,6 +2466,7 @@ def _make_classes():
             prefs.SetInt("MeshWarnNodes", self.warn_nodes.value())
             prefs.SetInt("MeshMaxNodes", self.max_nodes.value())
             prefs.SetString(sim.TEX_PREF, self.tex.text().strip())
+            prefs.SetString("OpenFOAMPath", self.openfoam.text().strip())
 
     return {"Panel": Panel, "NewStudyPanel": NewStudyPanel, "StudyPanel": StudyPanel,
             "ModeTimelinePanel": ModeTimelinePanel, "SimPreferencesPage": SimPreferencesPage}
@@ -2469,6 +2498,10 @@ def open_study_panel(analysis=None):
         _warn("No study in the document: New Study first")
         return None
     set_active(analysis)
+    if sim.study_kind(analysis) == "external_flow":
+        import bruceworx_cfd_gui as cfd_gui
+
+        return show_panel(cfd_gui.classes()["AirflowPanel"](analysis))
     return show_panel(classes()["StudyPanel"](analysis))
 
 

@@ -66,11 +66,14 @@ class TestSimulationGui(unittest.TestCase):
         panel = self.sg.classes()["NewStudyPanel"](self.doc)
         self.assertEqual(len(panel.form), 4)
         self.assertEqual([panel.model_combo.itemData(i) for i in range(panel.model_combo.count())], ["Box"])
-        # all five types are available
+        # all five structural types and the Airflow group (a heading, then External flow)
         texts = [panel.type_combo.itemText(i) for i in range(panel.type_combo.count())]
-        self.assertEqual(texts, ["Static stress", "Modal frequencies", "Structural buckling", "Thermal", "Thermal stress"])
-        self.assertTrue(all(panel.type_combo.model().item(i).isEnabled() for i in range(5)))
+        self.assertEqual(texts, ["Static stress", "Modal frequencies", "Structural buckling", "Thermal", "Thermal stress",
+                                 "— Airflow —", "External flow"])
+        self.assertTrue(all(panel.type_combo.model().item(i).isEnabled() for i in (0, 1, 2, 3, 4, 6)))
+        self.assertFalse(panel.type_combo.model().item(5).isEnabled())
         self.assertTrue(panel.modal_box.isHidden() and panel.buckling_box.isHidden() and panel.thermal_box.isHidden())
+        self.assertTrue(panel.air_box.widget.isHidden())
         # a part without a material warns and the mesh size is the default
         self.assertIn("no material", panel.material_warn.text())
         self.assertAlmostEqual(panel.size_spin.value(), sim.default_mesh_size(self.box), places=3)

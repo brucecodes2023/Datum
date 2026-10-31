@@ -81,6 +81,7 @@ STUDY_TYPES = (
     ("buckling", "Structural buckling", True),
     ("thermal", "Thermal", True),
     ("thermal_stress", "Thermal stress", True),
+    ("external_flow", "External flow", True),  # the Airflow group (SIM-06, bruceworx_cfd)
 )
 
 SUPPORT_TYPES = ("Fem::ConstraintFixed", "Fem::ConstraintDisplacement", "Fem::ConstraintTransform",
@@ -855,6 +856,14 @@ def new_study(doc, plan):
         raise StudyError(f"{plan.study_type} studies are planned, not built yet")
     if plan.model is None or not is_model(plan.model):
         raise StudyError("the study needs a body or part with solids")
+    if plan.study_type == "external_flow":  # airflow studies have no CalculiX members (bruceworx_cfd)
+        import bruceworx_cfd as cfd
+
+        try:
+            analysis = cfd.new_airflow_study(doc, plan.model, plan.name, plan.options)
+        except cfd.CfdError as exc:
+            raise StudyError(str(exc)) from exc
+        return {"analysis": analysis, "solver": None, "material": None, "mesh": None, "shape": None}
     values = plan.material or card(plan.material_uuid)
     analysis = ObjectsFem.makeAnalysis(doc, "Study")
     analysis.Label = f"Study: {plan.name}"
@@ -938,11 +947,6 @@ def active_study(doc, selection=None):
     return found[-1] if found else None
 
 
-def is_self_weight(obj):
-    """FEM's Self weight is a Python constraint (TypeId Fem::ConstraintPython), with no faces: it loads the whole model."""
-    return obj.TypeId == "Fem::ConstraintSelfWeight" or getattr(getattr(obj, "Proxy", None), "Type", "") == "Fem::ConstraintSelfWeight"
-
-
 def members(analysis):
     """The study's members by role: solver, material(s), mesh, supports, loads, others, results."""
     out = {"solver": None, "materials": [], "mesh": None, "supports": [], "loads": [], "others": [], "results": []}
@@ -960,7 +964,7 @@ def members(analysis):
             out["results"].append(obj)
         elif tid in SUPPORT_TYPES:
             out["supports"].append(obj)
-        elif tid in LOAD_TYPES or is_self_weight(obj):
+        elif tid in LOAD_TYPES:
             out["loads"].append(obj)
         elif obj.isDerivedFrom("Fem::Constraint"):
             out["others"].append(obj)
@@ -1050,6 +1054,10 @@ def precheck(analysis):
     """
     issues = []
     kind = study_kind(analysis)
+    if kind == "external_flow":
+        import bruceworx_cfd as cfd
+
+        return [(level, text) for level, text in cfd.study_precheck(analysis)[0] if level != "info"]
     prestressed = kind == "modal" and bool(getattr(analysis, "Prestressed", False))
     thermal_kind = kind in ("thermal", "thermal_stress")
     if thermal_kind:
@@ -1125,7 +1133,7 @@ def precheck(analysis):
             issues.append(("warning", "The loads are ignored: a plain modal study finds the free vibration "
                                       "(Prestressed stiffens the modes with them)"))
     for obj in m["supports"] + m["loads"] + m["others"]:
-        if _references_empty(obj) and not is_self_weight(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
+        if _references_empty(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
             issues.append(("error", f"{obj.Label}: no faces, edges or vertices chosen"))
         if obj.TypeId == "Fem::ConstraintForce" and not _value(obj, "Force"):
             issues.append(("error", f"{obj.Label}: the force is zero"))
@@ -1530,6 +1538,12 @@ def summary(analysis):
         "result": None,
         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    if out["type"] == "external_flow":
+        try:
+            out["airflow"] = __import__("json").loads(analysis.CfdSummary or "null")
+        except ValueError:
+            out["airflow"] = None
+        return out
     if out["type"] in ("modal", "buckling"):
         import bruceworx_sim_eigen as eigen
 
@@ -1686,6 +1700,19 @@ def report_source(data, figures=()):
         import bruceworx_sim_eigen as eigen
 
         lines += eigen.report_preamble(part)
+    if data.get("type") == "external_flow":
+        import bruceworx_cfd as cfd
+
+        lines += [r"\begin{document}", rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",
+                  rf"{{\small\color{{black!60}} Vector Labs simulation report, {e(data['date'])}}}", ""]
+        if data.get("airflow"):
+            lines.append(cfd.report_section(data["airflow"]))
+        else:
+            lines.append("Not run yet.")
+        lines += _report_precheck(data.get("issues") or [])
+        lines += ["", r"\vfill{\small\color{black!60} Incompressible steady RANS (OpenFOAM simpleFoam, "
+                  r"$k$--$\omega$ SST or laminar); forces from the wall pressure and shear.}", r"\end{document}", ""]
+        return "\n".join(lines)
     heat = data.get("thermal")
     if heat:
         import bruceworx_sim_thermal as thermal

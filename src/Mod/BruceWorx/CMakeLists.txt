@@ -164,6 +164,9 @@ SET(BruceWorx_SRCS
     bruceworx_sim_eigen.py
     bruceworx_sim_thermal.py
     TestBruceWorxSimCore.py
+    bruceworx_cfd.py
+    bruceworx_cfd_gui.py
+    TestBruceWorxCfd.py
     bruceworx_sim_gui.py
     TestBruceWorxSimulation.py
     BruceWorx_NewStudy.svg
