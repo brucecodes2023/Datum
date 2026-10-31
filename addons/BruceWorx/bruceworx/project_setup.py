@@ -329,8 +329,9 @@ def plan_numbers(plan: Plan, vault_root: str, program: str, drawings: bool = Tru
     source = JsonNumberSource(vault_setup.numbering_path(vault_root))
     data = copy.deepcopy(source._load())
     types = vault_setup._vault_document_types(source, data)
-    codes = {kind: vault_setup.document_type_for("part" if kind == "cots" else kind, types) for kind in KINDS}
-    codes[DRAWING_KIND] = vault_setup.document_type_for(DRAWING_KIND, types)
+    codes = {kind: vault_setup.document_type_for_item("part" if kind == "cots" else kind, types, data)
+             for kind in KINDS}
+    codes[DRAWING_KIND] = vault_setup.document_type_for_item(DRAWING_KIND, types, data)
     lib_source = lib_data = lib_program = lib_code = None
     if library_root:
         lib_source = JsonNumberSource(vault_setup.numbering_path(library_root))
@@ -339,7 +340,7 @@ def plan_numbers(plan: Plan, vault_root: str, program: str, drawings: bool = Tru
         if programs:
             lib_program = programs[0]
             lib_types = vault_setup._vault_document_types(lib_source, lib_data)
-            lib_code = vault_setup.document_type_for("part", lib_types)
+            lib_code = vault_setup.document_type_for_item("part", lib_types, lib_data)
     for node in order_of_work(plan):
         if node.kind == "cots" and lib_program:
             code = lib_code

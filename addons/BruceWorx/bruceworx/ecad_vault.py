@@ -444,7 +444,7 @@ def plan_import(vault, source: str, description: str = "", program: str = "", do
     program = numbering.normalize_program(program) if program else (programs[0] if programs else "")
     types = vault_setup._vault_document_types(numbers, numbers._load())
     code = (numbering.normalize_document_type(document_type) if document_type
-            else vault_setup.document_type_for("part", types))
+            else vault_setup.document_type_for_item("part", types, numbers._load()))
     files = project_files(source, exclude)
     return {"part_number": pdm.strip_revision(numbers.preview(program, code)) if program else "",
             "description": (description or "").strip() or title_of(project) or project.stem,
@@ -497,7 +497,7 @@ def import_project(vault, source: str, comment: str, description: str = "", manu
     program = numbering.normalize_program(program) if program else programs[0]
     types = vault_setup._vault_document_types(numbers, data)
     code = (numbering.normalize_document_type(document_type) if document_type
-            else vault_setup.document_type_for("part", types))
+            else vault_setup.document_type_for_item("part", types, data))
     key = pdm.strip_revision(numbers.preview(program, code))
     if key in vault.items:
         raise ValueError(f"{key} is already an item in the vault")

@@ -637,8 +637,9 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
             source = JsonNumberSource(vault_setup.numbering_path(root))
             data = source._load()
             types = vault_setup._vault_document_types(source, data)
-            codes = {k: vault_setup.document_type_for("part" if k == "cots" else k, types) for k in ps.KINDS}
-            codes["drawing"] = vault_setup.document_type_for("drawing", types)
+            codes = {k: vault_setup.document_type_for_item("part" if k == "cots" else k, types, data)
+                     for k in ps.KINDS}
+            codes["drawing"] = vault_setup.document_type_for_item("drawing", types, data)
             lib_source = lib_program = lib_part_code = None
             if lib_vault is not None:
                 lib_source = JsonNumberSource(vault_setup.numbering_path(lib_vault.root))
@@ -646,8 +647,8 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
                 programs = list((lib_data.get("programs") or {}).keys())
                 if programs:
                     lib_program = programs[0]
-                    lib_part_code = vault_setup.document_type_for(
-                        "part", vault_setup._vault_document_types(lib_source, lib_data))
+                    lib_part_code = vault_setup.document_type_for_item(
+                        "part", vault_setup._vault_document_types(lib_source, lib_data), lib_data)
             numbers, dwg_numbers, cots_pns = {}, {}, set()
             for node in order:
                 if node.kind == "cots" and lib_program:
@@ -808,7 +809,8 @@ def new_drawing_item(vault, work, pn, units=None, insert_views=False, vault_root
         units = projects[0].units if len(projects) == 1 else vault_units(root)
     program = vault_setup.program_of(pn, root)
     source = JsonNumberSource(vault_setup.numbering_path(root))
-    code = vault_setup.document_type_for("drawing", vault_setup._vault_document_types(source, source._load()))
+    data = source._load()
+    code = vault_setup.document_type_for_item("drawing", vault_setup._vault_document_types(source, data), data)
     staging = os.path.join(root, vault_setup.STAGING_DIR, f"drawing-{uuid.uuid4().hex[:8]}")
     os.makedirs(staging, exist_ok=True)
     try:

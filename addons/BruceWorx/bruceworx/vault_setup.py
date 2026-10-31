@@ -72,6 +72,7 @@ DEFAULT_FIRST_PARENT = 1001
 LEGACY_FIRST_REVISION = "A"
 VAULT_PARENT_NAME = "BruceWorx Vaults"
 NUMBERING_FILE = "numbering.json"
+ASSEMBLIES_AS_PARTS = "assemblies_as_parts"  # numbering.json key (PDM-12): assemblies get the Part code
 DOCUMENT_TYPES_FILE = "document_types.json"
 PROPERTIES_FILE = "part_properties.json"
 STAGING_DIR = ".import"
@@ -114,6 +115,7 @@ class NumberingSetup:
     programs: list = field(default_factory=lambda: [ProgramSetup(DEFAULT_PROGRAM)])
     document_types: dict = field(default_factory=lambda: dict(DEFAULT_DOCUMENT_TYPES))
     first_parent: int = DEFAULT_FIRST_PARENT
+    assemblies_as_parts: bool = False  # PDM-12: an assembly takes the Part document type
 
 
 @dataclass
@@ -351,7 +353,7 @@ def numbering_data(setup: NumberingSetup) -> dict:
             "description": getattr(program, "description", "") or "",
             "counters": {dt: {"next_parent": int(setup.first_parent), "parents": {}} for dt in codes},
         }
-    return {
+    data = {
         "source": "json",
         "format": numbering.PART_NUMBER_FORMAT,
         "document_types_file": DOCUMENT_TYPES_FILE,
@@ -359,6 +361,9 @@ def numbering_data(setup: NumberingSetup) -> dict:
         "first_parent": int(setup.first_parent),
         "programs": programs,
     }
+    if setup.assemblies_as_parts:
+        data[ASSEMBLIES_AS_PARTS] = True
+    return data
 
 
 def document_types_data(setup: NumberingSetup) -> dict:
@@ -593,7 +598,8 @@ def existing_key(text: str) -> str | None:
         return None
 
 
-def scan_for_import(folder: str, recursive: bool = True, document_types: dict | None = None) -> list:
+def scan_for_import(folder: str, recursive: bool = True, document_types: dict | None = None,
+                    assemblies_as_parts: bool = False) -> list:
     """ImportCandidates for the .FCStd files under folder, read from Document.xml (no FreeCAD).
 
     Hidden folders and vault folders (holding a ``*.bwvault``) are not
@@ -616,10 +622,11 @@ def scan_for_import(folder: str, recursive: bool = True, document_types: dict | 
                 if not name.startswith(".") and (name.lower().endswith(".fcstd") or _BACKUP_RE.search(name)):
                     paths.append(os.path.join(current, name))
     hashes = {}
-    return [_candidate(path, hashes, document_types) for path in sorted(paths)]
+    return [_candidate(path, hashes, document_types, assemblies_as_parts) for path in sorted(paths)]
 
 
-def _candidate(path: str, hashes: dict, document_types: dict | None = None) -> ImportCandidate:
+def _candidate(path: str, hashes: dict, document_types: dict | None = None,
+               assemblies_as_parts: bool = False) -> ImportCandidate:
     """One file's ImportCandidate (scan_for_import); hashes (sha256 -> path) finds repeats."""
     from bruceworx.pdm_folder import sha256_of  # noqa: PLC0415
 
@@ -653,7 +660,8 @@ def _candidate(path: str, hashes: dict, document_types: dict | None = None) -> I
     else:
         hashes[digest] = path
     if document_types:
-        candidate.document_type = document_type_for(candidate.kind, document_types)
+        candidate.document_type = document_type_for_item(
+            candidate.kind, document_types, {ASSEMBLIES_AS_PARTS: assemblies_as_parts})
     return candidate
 
 
@@ -667,6 +675,16 @@ def document_type_for(kind: str, document_types: dict) -> str:
         if name.strip().lower() == kind:
             return code
     return codes[0][0]
+
+
+def document_type_for_item(kind: str, document_types: dict, data: dict | None = None) -> str:
+    """The document type code a new number of ``kind`` takes (PDM-12): :func:`document_type_for`,
+    except that an assembly takes the Part code when the vault's numbering data (numbering.json,
+    as loaded) says ``assemblies_as_parts``. Drawings keep their own type. Every path that picks a
+    code for a new number goes through here, so the setting holds everywhere."""
+    if kind == "assembly" and (data or {}).get(ASSEMBLIES_AS_PARTS):
+        kind = "part"
+    return document_type_for(kind, document_types)
 
 
 def _vault_document_types(source, data: dict) -> dict:
@@ -776,7 +794,7 @@ def plan_numbers(candidates: list, vault_root: str, program: str, document_types
             continue
         try:
             if not candidate.document_type:
-                candidate.document_type = document_type_for(candidate.kind, types)
+                candidate.document_type = document_type_for_item(candidate.kind, types, data)
             candidate.proposed_part_number = source._issue(
                 data, program, candidate.document_type, None, None, write=True)[0]
         except (KeyError, ValueError) as exc:
@@ -900,7 +918,7 @@ def _import_one(vault, source, candidate, program, types, writer, staging, numbe
             raise _Skip(f"{key} is already an item in the vault")
         number = candidate.existing_part_number
     else:
-        number = source.allocate(program, candidate.document_type or document_type_for(kind, types))
+        number = source.allocate(program, candidate.document_type or document_type_for_item(kind, types, source._load()))
         candidate.document_type = numbering.parse_part_number(number)["document_type"]
         key = pdm.strip_revision(number)
     candidate.proposed_part_number = number
@@ -1009,7 +1027,7 @@ def new_item(vault, kind: str, description: str, make_file, program: str = "", d
     program = numbering.normalize_program(program) if program else programs[0]
     types = _vault_document_types(source, data)
     code = (numbering.normalize_document_type(document_type) if document_type
-            else document_type_for("part" if kind == "cots" else kind, types))
+            else document_type_for_item("part" if kind == "cots" else kind, types, data))
     key = pdm.strip_revision(source.preview(program, code))
     if key in vault.items:
         raise ValueError(f"{key} is already an item in the vault")
@@ -1160,6 +1178,7 @@ class VaultSettings:
     properties: list = field(default_factory=list)  # part_properties.json entries
     retired: dict = field(default_factory=lambda: {t: set() for t in CSV_TABLES})  # table -> codes
     standards: dict = field(default_factory=dict)  # drawing standards: setting -> text; {} leaves them alone
+    assemblies_as_parts: bool | None = None  # PDM-12; None leaves the vault's setting alone
 
 
 def _flag(text):
@@ -1567,6 +1586,8 @@ def load_settings(vault_root: str) -> VaultSettings:
         settings.document_types[code] = str(entry.get("name", ""))
         if entry.get("retired"):
             settings.retired["document_type"].add(code)
+    if (data or {}).get(ASSEMBLIES_AS_PARTS):  # None (unset) reads as off and is left alone on save
+        settings.assemblies_as_parts = True
     layer = _properties_raw(root) or {}
     for entry in layer.get("properties") or []:
         settings.properties.append(dict(entry))
@@ -1837,6 +1858,11 @@ def save_settings(vault_root: str, new: VaultSettings) -> None:
         data = {"source": "json", "format": numbering.PART_NUMBER_FORMAT, "document_types_file": DOCUMENT_TYPES_FILE,
                 "first_parent": DEFAULT_FIRST_PARENT, "programs": {}}
     data.setdefault("first_parent", first_parent_of(data))
+    if new.assemblies_as_parts is not None:
+        if new.assemblies_as_parts:
+            data[ASSEMBLIES_AS_PARTS] = True
+        else:
+            data.pop(ASSEMBLIES_AS_PARTS, None)
     programs = data.setdefault("programs", {})
     first = int(data["first_parent"])
     revision = None  # only an older P/N-REV file gives its programs a revision
