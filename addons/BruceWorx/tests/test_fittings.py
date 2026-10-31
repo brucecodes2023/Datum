@@ -138,6 +138,12 @@ class LayoutTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ft.layout(ft.PTC, "Straight", "10 mm", "M5")
 
+    def test_mcmaster_rows_are_verified_or_approximate(self):
+        for key, item in ft.MCMASTER.items():
+            self.assertTrue(item.part_number, key)
+        self.assertEqual(ft.dimensions_source(ft.PTC, "Elbow", "6 mm", "1/8 BSPP"),
+                         "McMaster-Carr" if ft.mcmaster_item(ft.PTC, "Elbow", "6 mm", "1/8 BSPP") else "approximate")
+
     def test_words(self):
         self.assertEqual(ft.describe(ft.PTC, "Elbow", "6 mm", "1/8 BSPP"),
                          "Push-to-connect male elbow, 6 mm tube x 1/8 BSPP")

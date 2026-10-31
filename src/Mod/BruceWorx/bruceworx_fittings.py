@@ -349,6 +349,29 @@ def describe(part, lay):
         part.Description = lay.description
     part.AutoDescription = lay.description
     part.FittingCode = lay.code
+    _vendor_data(part, lay)
+
+
+def _vendor_data(part, lay):
+    """McMaster-Carr part number, manufacturer and MPN when the table has a verified row for this
+    fitting; the dimensions source says whether the numbers are McMaster's or approximate."""
+    from bruceworx import fittings as ft
+
+    if "DimensionsSource" not in part.PropertiesList:
+        part.addProperty("App::PropertyString", "DimensionsSource", "BruceWorx", "McMaster-Carr or approximate")
+    key = (lay.family, lay.style, lay.size, lay.thread)
+    part.DimensionsSource = ft.dimensions_source(*key)
+    if "Vendor" in part.PropertiesList and not part.Vendor:
+        part.Vendor = ft.MCMASTER_VENDOR  # the fittings are bought there; the P/N is typed in the panel
+    item = ft.mcmaster_item(*key)
+    if item is None:
+        return
+    values = {"Vendor": ft.MCMASTER_VENDOR, "VendorPartNumber": item.part_number,
+              "Manufacturer": item.manufacturer, "ManufacturerPartNumber": item.mpn}
+    for name, value in values.items():
+        if name not in part.PropertiesList:
+            part.addProperty("App::PropertyString", name, "BruceWorx", name)
+        setattr(part, name, value)
 
 
 def make_fitting(doc=None, family="Push-to-connect", style="Straight", size="6 mm", thread=None, placement=None,

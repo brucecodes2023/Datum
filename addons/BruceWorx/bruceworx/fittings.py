@@ -179,6 +179,35 @@ COMPRESSION_SIZES = {s.name: s for s in (
     CompressionSize("12 mm", 12.0, 22.0, 20.0),
 )}
 
+# McMaster-Carr data (30 Oct): a row per (family, style, size, thread) that was checked against
+# McMaster's own page. Rows carry the McMaster part number, the manufacturer and MPN where
+# McMaster lists them, and the dimensions read from the drawing. mcmaster.com serves no part-level
+# data to a script (category and filter pages only), so nothing could be verified and the table is
+# empty: every fitting keeps the approximate catalogue-style numbers above. Add rows as you look
+# them up, e.g.  ("Push-to-connect", "Elbow", "6 mm", "1/8 BSPP"):
+#     McMasterItem("<part number>", manufacturer="<as listed>", mpn="<as listed>")
+MCMASTER_VENDOR = "McMaster-Carr"
+
+
+@dataclass(frozen=True)
+class McMasterItem:
+    part_number: str
+    manufacturer: str = ""
+    mpn: str = ""
+
+
+MCMASTER = {}
+
+
+def mcmaster_item(family, style, size, thread_name=""):
+    """The verified McMaster row for a fitting, or None (dimensions are then approximate)."""
+    return MCMASTER.get((family, style, size, thread_name))
+
+
+def dimensions_source(family, style, size, thread_name=""):
+    return "McMaster-Carr" if mcmaster_item(family, style, size, thread_name) else "approximate"
+
+
 # Threaded (pipe) fittings: centre to face of an elbow or tee, by thread size.
 THREADED_CENTRE = {"1/8": 12.0, "1/4": 15.0, "3/8": 18.0, "1/2": 22.0}
 

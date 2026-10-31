@@ -225,3 +225,25 @@ names, mates, connector labels, terminals, engagement) is on the objects.
   \item \textbf{Placing a fitting} keeps its heading but not a chosen one: add a rotate-about-the-port step in the
         Fitting panel (e.g.\ 90$^\circ$ buttons), or is rotating it afterwards enough?
 \end{enumerate}
+
+\paragraph{Answers (30 Oct).}
+\begin{enumerate}[nosep]
+  \item \textbf{Terminals in the Assembly BOM}: no code; they stay in the vault BOM and the terminal list.
+  \item \textbf{Manufacturer and MPN on every vault BOM line}: done (\code{ad09771d}).
+  \item \textbf{Strip length at a pin}: in the wire's cut length and the from-to list (\code{12dac1e0}).
+  \item \textbf{Fittings from McMaster-Carr}: you said not to download the library, so the size tables stay
+        and stay flagged approximate. Every fitting now has Vendor \emph{McMaster-Carr} and a
+        \textbf{McMaster P/N} field in the Fitting panel (stored in \code{VendorPartNumber}; the BOM reads it
+        as the ordering number when no manufacturer P/N is set). \code{DimensionsSource} on the part says
+        \emph{approximate} or \emph{McMaster-Carr}. \code{fittings.MCMASTER} holds verified rows (P/N,
+        manufacturer, MPN); it is empty. I tried \code{mcmaster.com} search and category pages: they return
+        filter lists (tube OD 3--16\,mm, 1/8--3/4 pipe, BSPP/NPT/metric) but no part numbers, dimensions or
+        manufacturer, and a product-page fetch came back empty, so nothing could be verified and no number was
+        invented. Coverage: push-to-connect (4, 6, 8, 10, 12\,mm; 5/32, 1/4, 3/8\,in), compression (1/8--1/2\,in;
+        4--12\,mm) and barbs (1/8--1/2\,in; 3--12\,mm): \textbf{0 rows verified}; you look up the P/N (and
+        dimensions if they matter) by hand for each fitting you use. NPT and BSPP threads still come from
+        B1.20.1 and ISO 228-1.
+  \item \textbf{Rotate about the port}: the Fitting panel has $\circlearrowleft$/$\circlearrowright$ 90$^\circ$
+        buttons and a free angle; an existing fitting turns in place (\code{c95f90cf}).
+\end{enumerate}
+

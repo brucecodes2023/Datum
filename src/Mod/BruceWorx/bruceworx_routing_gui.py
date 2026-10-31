@@ -1258,6 +1258,11 @@ class FittingPanel:
         self.pn.setPlaceholderText("vault P/N (optional)")
         self.pn.editingFinished.connect(slot(self._changed))
         grid.addRow("Part number", self.pn)
+        self.mcm = QtWidgets.QLineEdit()
+        self.mcm.setObjectName("fittingMcMaster")
+        self.mcm.setPlaceholderText("McMaster-Carr P/N, e.g. 5779K16")
+        self.mcm.editingFinished.connect(slot(self._changed))
+        grid.addRow("McMaster P/N", self.mcm)
         turn = QtWidgets.QHBoxLayout()
         self.left = QtWidgets.QPushButton("⟲ 90°")
         self.right = QtWidgets.QPushButton("⟳ 90°")
@@ -1298,6 +1303,7 @@ class FittingPanel:
         self._fill("Size", ft.sizes(b.Family), b.Size)
         self._fill("Thread", ft.threads(b.Family, b.Style, b.Size) or [ft.NO_THREAD], b.Thread)
         self.pn.setText(str(getattr(self.fitting, "PartNumber", "") or ""))
+        self.mcm.setText(str(getattr(self.fitting, "VendorPartNumber", "") or ""))
 
     def _changed(self, *_args):
         if self._building:
@@ -1315,6 +1321,10 @@ class FittingPanel:
                               None if family_changed else c["Size"], None if family_changed else c["Thread"])
             if "PartNumber" in self.fitting.PropertiesList and self.fitting.PartNumber != self.pn.text().strip():
                 self.fitting.PartNumber = self.pn.text().strip()
+            if "VendorPartNumber" in self.fitting.PropertiesList:
+                if self.fitting.VendorPartNumber != self.mcm.text().strip():
+                    self.fitting.VendorPartNumber = self.mcm.text().strip()
+                self.fitting.Vendor = "McMaster-Carr"
             if self.pick is None and abs(self.angle.value()) > 1e-9:
                 mount = bf.mount_port(self.fitting).getGlobalPlacement()  # an existing fitting turns in place
                 self.pick = (mount.Base, mount.Rotation.multVec(App.Vector(0, 0, -1)), self.fitting.Placement)
