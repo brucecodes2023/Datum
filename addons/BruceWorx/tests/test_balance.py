@@ -110,9 +110,16 @@ class BalanceTests(unittest.TestCase):
         assert r.offset == approx(0.0, abs=1e-9)
 
 
+    def test_acceptance_offset_is_amber(self):
+        # roadmap ROB-04: X-frame, arm 115 mm (diagonal 230 mm), CG 2.45 mm off: 2.1 % of the arm, amber by default
+        r = b.analyse(388.1, (2.45, 0, 0), quad(115.0))
+        assert r.arm == approx(115.0) and r.offset == approx(2.45)
+        assert r.offset_pct == approx(100 * 2.45 / 115.0, rel=1e-6)
+        assert [c.level for c in r.checks if c.name == "CG offset"] == [b.AMBER]
+
     def test_offset_and_low_tw_are_flagged(self):
-        r = b.analyse(400.0, (6.0, 0, 0), quad(), 0)  # 6 mm of a 230 mm diagonal = 2.6 %
-        assert r.level == b.AMBER and r.offset_pct == approx(600 / 230, rel=1e-6)
+        r = b.analyse(400.0, (4.0, 0, 0), quad(), 0)  # 4 mm of a 115 mm arm = 3.5 %
+        assert r.level == b.AMBER and r.offset_pct == approx(400 / 115, rel=1e-6)
         far = b.analyse(400.0, (14.0, 0, 0), quad())
         assert far.level == b.RED
         heavy = b.analyse(3000.0, (0, 0, 0), quad())  # T/W 1.87

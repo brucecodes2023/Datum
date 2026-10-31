@@ -231,18 +231,17 @@ class BalanceTests(Fixture):
             self.assertTrue(path.endswith(".csv"))
 
     def test_acceptance_offset_battery_is_flagged(self):
-        # The figure's drone: 5 mm battery offset puts the CG 2.45 mm off the thrust centre. That is 1.07 % of the
-        # 230 mm motor diagonal, under the 2 % amber default, so the default offset check reads ok and the
-        # share spread shows it; a 1 % limit (or the real model with the battery 12 mm forward) flags it.
+        # The figure's drone: 5 mm battery offset puts the CG 2.45 mm off the thrust centre. Measured against the
+        # 115 mm arm (half the 230 mm diagonal) that is 2.1 %, over the 2 % amber default, so the check flags it.
         asm = self._drone(5.0)
         report = mr.build_report(self.doc, [asm])
         result, notes = mr.balance_of(report)
         self.assertEqual(notes, [])
         self.assertAlmostEqual(result.offset, 2.45, delta=0.005)
-        self.assertAlmostEqual(result.offset_pct, 100 * 2.45 / 230.0, delta=0.005)
-        tight, _ = mr.balance_of(report, limits={"offset_amber": 1.0})
-        self.assertEqual(tight.level, "amber")
-        self.assertIn("CG offset", [c.name for c in tight.checks if c.level == "amber"])
+        self.assertAlmostEqual(result.arm, 115.0, delta=0.005)
+        self.assertAlmostEqual(result.offset_pct, 100 * 2.45 / 115.0, delta=0.005)
+        self.assertEqual([c.level for c in result.checks if c.name == "CG offset"], ["amber"])
+        self.assertEqual(result.level, "amber")
         shares = [m.share for m in result.motors]
         self.assertAlmostEqual(sum(shares), 388.1, delta=0.05)
         self.assertGreater(max(shares) / min(shares), 1.05)  # the front motors carry more

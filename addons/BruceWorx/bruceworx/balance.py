@@ -24,7 +24,7 @@ USABLE = 0.8
 DEFAULTS = {
     "tw_amber": 2.0,
     "tw_red": 1.5,
-    "offset_amber": 2.0,  # % of the motor diagonal
+    "offset_amber": 2.0,  # % of the arm length
     "offset_red": 5.0,
     "hover_amber": 60.0,  # % throttle
     "hover_red": 80.0,
@@ -165,8 +165,12 @@ def project(points, axis):
     return [(sum(p[k] * u[k] for k in range(3)), sum(p[k] * v[k] for k in range(3))) for p in points]
 
 
-def diagonal(points2):
-    return max((math.dist(a, b) for a in points2 for b in points2), default=0.0)
+def arm_length(points2):
+    """Mean distance of the motor points from their centre (half the diagonal of a square X-frame)."""
+    n = len(points2)
+    cx = sum(p[0] for p in points2) / n
+    cy = sum(p[1] for p in points2) / n
+    return sum(math.dist(p, (cx, cy)) for p in points2) / n
 
 
 def hover_shares(weight, points2, dc):
@@ -221,7 +225,7 @@ class Balance:
     thrust_max: float
     tw: float | None
     offset: float
-    diagonal: float
+    arm: float
     offset_pct: float
     hover_throttle: float | None  # % where each motor gives mg/n on its own table (the highest), None above a table
     peak_throttle: float | None  # % of the busiest motor at its actual hover share
@@ -251,8 +255,8 @@ def analyse(mass_g, cg, motors, capacity_mah=0.0, thresholds=None):
     ct = (sum(p[0] for p in pts) / n, sum(p[1] for p in pts) / n)
     dc = (c_m[0] - ct[0], c_m[1] - ct[1])
     e = math.hypot(*dc)
-    diag = diagonal(pts)
-    pct = 100.0 * e / diag if diag > 0 else 0.0
+    arm = arm_length(pts)
+    pct = 100.0 * e / arm if arm > 0 else 0.0
     shares, solved = hover_shares(mass_g, pts, dc)
     results, total_current, throttles, missing = [], 0.0, [], []
     for (name, _p, _a, table), share in zip(motors, shares):
@@ -283,8 +287,8 @@ def analyse(mass_g, cg, motors, capacity_mah=0.0, thresholds=None):
         checks.append(Check("Thrust to weight", level, f"T/W {tw:.2f} (amber below {th['tw_amber']:g}, red below "
                                                        f"{th['tw_red']:g})"))
     level = RED if pct > th["offset_red"] else AMBER if pct > th["offset_amber"] else OK
-    checks.append(Check("CG offset", level, f"CG is {e:.2f} mm off the thrust centre, {pct:.2f} % of the motor "
-                                            f"diagonal {diag:.0f} mm (amber above {th['offset_amber']:g} %, red above "
+    checks.append(Check("CG offset", level, f"CG is {e:.2f} mm off the thrust centre, {pct:.2f} % of the arm length "
+                                            f"{arm:.0f} mm (amber above {th['offset_amber']:g} %, red above "
                                             f"{th['offset_red']:g} %)"))
     if not solved:
         checks.append(Check("Trim", RED, "the motors cannot trim this CG offset (fewer than three, or in a line)"))
@@ -294,5 +298,5 @@ def analyse(mass_g, cg, motors, capacity_mah=0.0, thresholds=None):
         level = RED if peak > th["hover_red"] else AMBER if peak > th["hover_amber"] else OK
         checks.append(Check("Hover throttle", level, f"busiest motor hovers at {peak:.0f} % throttle "
                                                       f"(amber above {th['hover_amber']:g} %)"))
-    return Balance(mass_g, mass_g, thrust_max, tw, e, diag, pct, hover_throttle, peak,
+    return Balance(mass_g, mass_g, thrust_max, tw, e, arm, pct, hover_throttle, peak,
                    hover_current, flight_time_min(capacity_mah, hover_current), results, checks, solved)
