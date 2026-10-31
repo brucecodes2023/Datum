@@ -1,0 +1,44 @@
+%======================================================================
+\subsection{Flexible sub-assemblies with routed items --- Built, 30 Oct}\label{sec:flexsub-built}
+%======================================================================
+
+Answer W11 of the flexible-wire plan (\S\ref{sec:rou-flex}) is built: a sub-assembly inserted \emph{flexible} now
+brings its route paths, wires, hoses, pipes and bundles into the parent, and they follow the parts the parent moves.
+
+\paragraph{What you can do now.} Insert a sub-assembly with \code{Rigid=False}. Its routed items appear inside the
+\code{AssemblyLink} next to the links to its parts. Their attachments are re-pointed at those links, so a wire
+between two pins stretches or reshapes when the parent's joints (or you) move one housing. Edit the wire in the
+sub-assembly's file (gauge, colour, a new wire, a deleted one) and the parent follows on the next update. Make the
+link rigid again and the copies go; make it flexible again and they return.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{Copies, not links.} An \code{App::Link} to a wire shows the source's shape at the source's place and
+        cannot carry other attachments, so it can never follow a part the parent moves. A copy is an ordinary routed
+        object that recomputes in the parent from its own attachments. Each copy has a hidden \code{FlexSource}
+        property (the source's name).
+  \item \textbf{Split of work.} The C++ side (\code{AssemblyLink.cpp}, \code{[BW]}) stops linking routed items as if
+        they were parts (they are \code{Part::FeaturePython} with \code{BendOK}, so the old code made a static
+        \code{App::Link} to each), leaves copies alone when it prunes the group, and calls
+        \code{bruceworx\_flexsub.sync(link, \{name: link\}, assembly)} after every update. The copying is Python
+        (\file{bruceworx\_flexsub.py}), so it follows whatever properties the routing classes grow; without the
+        BruceWorx module the call is silent.
+  \item \textbf{Re-pointing.} An attachment \code{(object, sub)} below a component becomes
+        \code{(link to the component, path from the component + sub)}: \code{(HA, "Pin1.")} becomes
+        \code{(LHA, "Pin1.")}, a frame inside the part becomes \code{(LHA, "Pin1.")} too. One outside the
+        sub-assembly is dropped and the point stays free.
+  \item \textbf{Properties.} Editable values are copied when they differ; outputs (read-only, \code{RoutePoints},
+        the shape) are the copy's own. A path's free points follow the source, the attached ones are re-read from the
+        links. Materials and links are never copied (they would touch the copy at every update).
+  \item \textbf{Known edge.} Until the parent's solver or you place the links, both housings sit at the origin and a
+        wire between them cannot be swept: one console error at insert, gone at the first placement.
+\end{itemize}
+
+\paragraph{Tests.} \file{TestBruceWorxFlexSub.py}, 4 headless tests with the sub-assembly in its own file: copies
+made and attachments re-pointed (and the source untouched); moving a housing in the parent moves the copy's end
+exactly and reshapes the wire; gauge changes, new and deleted wires are synced; rigid removes and flexible restores;
+save, reload, no doubling and still following. Not done: the battery check on a vault copy (the harness there needs
+the rope solver, ROU-08, to be worth running).
+
+\paragraph{Open.} Copies are rebuilt from the source; a value typed on a copy is overwritten at the next update. Say
+if you want a per-copy override list.

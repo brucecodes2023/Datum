@@ -36,6 +36,7 @@
 #include <Base/Rotation.h>
 #include <Base/Tools.h>
 #include <Base/Interpreter.h>
+#include <CXX/Objects.hxx>
 
 #include <Mod/Part/App/PartFeature.h>
 #include <Mod/Part/App/TopoShape.h>
@@ -311,6 +312,50 @@ void AssemblyLink::updateContents()
     purgeTouched();
 }
 
+// [BW] Routed items (route paths, wires, hoses, pipes, bundles: Part::FeaturePython with a BendOK
+// property) are not linked like parts; bruceworx_flexsub copies them into a flexible AssemblyLink.
+static bool isRoutedItem(App::DocumentObject* obj)
+{
+    return obj && obj->getTypeId().getName() == std::string("Part::FeaturePython")
+        && obj->getPropertyByName("BendOK") != nullptr;
+}
+
+static bool isRoutedCopy(App::DocumentObject* obj)
+{
+    return obj && obj->getPropertyByName("FlexSource") != nullptr;
+}
+
+// [BW] Hand the component map to bruceworx_flexsub.sync(link, {name: link}, assembly), which makes,
+// updates and removes the routed copies. Silent when the BruceWorx module is not installed.
+void AssemblyLink::synchronizeRoutedItems(AssemblyObject* assembly)
+{
+    Base::PyGILStateLocker lock;
+    PyObject* module = PyImport_ImportModule("bruceworx_flexsub");
+    if (!module) {
+        PyErr_Clear();
+        return;
+    }
+    try {
+        Py::Module mod(module, true);
+        Py::Dict map;
+        for (const auto& [src, lnk] : objLinkMap) {
+            if (src && lnk && src->getNameInDocument()) {
+                map.setItem(src->getNameInDocument(), Py::asObject(lnk->getPyObject()));
+            }
+        }
+        Py::Callable sync(mod.getAttr("sync"));
+        Py::Tuple args(3);
+        args.setItem(0, Py::asObject(getPyObject()));
+        args.setItem(1, map);
+        args.setItem(2, Py::asObject(assembly->getPyObject()));
+        sync.apply(args);
+    }
+    catch (Py::Exception&) {
+        Base::PyException e;
+        e.reportException();
+    }
+}
+
 void AssemblyLink::synchronizeComponents()
 {
     App::Document* doc = getDocument();
@@ -355,7 +400,10 @@ void AssemblyLink::synchronizeComponents()
         assemblyGroup.begin(),
         assemblyGroup.end(),
         std::back_inserter(topLevelComponents),
-        [&children](App::DocumentObject* obj) { return children.find(obj) == children.end(); }
+        [&children](App::DocumentObject* obj) {
+            // [BW] routed items are copied by synchronizeRoutedItems, not linked
+            return children.find(obj) == children.end() && !isRoutedItem(obj);
+        }
     );
 
     // We check if a component needs to be added to the AssemblyLink
@@ -491,10 +539,17 @@ void AssemblyLink::synchronizeComponents()
             && !obj->isDerivedFrom<App::Link>()) {
             continue;
         }
+        if (isRoutedCopy(obj)) {
+            continue;  // [BW] owned by synchronizeRoutedItems
+        }
         if (validLinks.find(obj) == validLinks.end()) {
             doc->removeObject(obj->getNameInDocument());
         }
     }
+
+    // [BW] Flexible: copy the sub-assembly's routed items with attachments re-pointed at the links.
+    // Rigid: remove those copies.
+    synchronizeRoutedItems(assembly);
 }
 
 namespace

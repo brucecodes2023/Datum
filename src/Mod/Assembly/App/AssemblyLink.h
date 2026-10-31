@@ -75,6 +75,8 @@ public:
     void updateParentJoints();
 
     void synchronizeComponents();
+    // [BW] routed items of a flexible sub-assembly (bruceworx_flexsub)
+    void synchronizeRoutedItems(AssemblyObject* assembly);
     void synchronizeJoints();
     void handleJointReference(
         App::DocumentObject* joint,
