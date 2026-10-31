@@ -112,7 +112,7 @@ class TestStudy(unittest.TestCase):
         with self.assertRaises(sim.StudyError):
             sim.new_study(self.doc, sim.StudyPlan(study_type="fatigue", model=self.box))
         self.assertEqual([k for k, _l, ok in sim.STUDY_TYPES if ok],
-                         ["static", "modal", "buckling", "thermal", "thermal_stress"])
+                         ["static", "modal", "buckling", "thermal", "thermal_stress", "external_flow"])
         with self.assertRaises(sim.StudyError):  # a static study takes no modal options
             sim.new_study(self.doc, sim.StudyPlan(model=self.box, options={"ModeCount": 3}))
 
