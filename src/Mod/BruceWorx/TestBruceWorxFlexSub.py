@@ -112,7 +112,7 @@ class FlexSubTests(unittest.TestCase):
         lb.Placement = App.Placement(V(100, 30, 20), App.Rotation())
         self.parent.recompute()
         self.assertAlmostEqual((self.end(cpath) - V(100, 30, 20)).Length, 0.0, places=6)
-        self.assertNotAlmostEqual(cwire.Length.Value, length, places=3)
+        self.assertAlmostEqual(cwire.Length.Value, length, places=3)  # a rope keeps its cut length (ROU-08)
         self.assertTrue(cwire.Shape.isValid())
         self.assertNotIn("Invalid", cwire.State)
         # The source wire did not move.
