@@ -59,6 +59,8 @@ TRANSITIONS = (
     ("B1", "set_bom", "PUT /items/{pn}/revisions/{rev}/bom", "WIP revision", "its BOM replaced"),
     ("T13", "set_item_type", "PUT /items/{pn}/type", "part or cots, not Obsolete", "cots or part"),
     ("T15", "set_category", "PUT /items/{pn}/category", "any item, any state", "category set or cleared"),
+    ("T16", "renumber", "POST /items/{pn}/renumber", "any item but In Review, with a reason",
+     "same item under a new number, the old one an alias"),
     ("T14", "add_configuration", "POST /items/{pn}/configurations", "part or assembly, not Obsolete",
      "configuration item sharing its revisions"),
     ("P1", "create_project", "POST /projects", "(new), an assembly item", "project Open, naming its top"),
@@ -213,6 +215,27 @@ class _Lifecycle:
         self.v.retire(PART, "replaced")  # obsolete items can still be filed
         self.v.set_category(PART, "Retired")
         self.assertEqual(self.v.items[PART].category, "Retired")
+
+    def test_T16_renumber(self):
+        other = "LE-01-01002-001"
+        self.v.create_item(PART, description="Housing")
+        self.v.create_item("LE-02-01001-001", "assembly")
+        self.v.set_bom("LE-02-01001-001", [(PART, 2)])
+        with self.assertRaises(LifecycleError):
+            self.v.renumber(PART, other, "")  # a reason is required
+        self.released()
+        self.v.renumber(PART, other, "number rule")  # released items too; nothing else changes
+        self.assertEqual((self.v.items[other].state, self.v.items[other].latest.code), (RELEASED, "A"))
+        self.assertNotIn(PART, self.v.items)
+        self.assertEqual(self.v.bom["LE-02-01001-001"], [(other, 2)])
+        with self.assertRaises(LifecycleError):
+            self.v.renumber(other, PART, "back")  # a former number is not reused
+        with self.assertRaises(LifecycleError):
+            self.v.renumber(other, "LE-02-01001-001", "taken")
+        self.v.create_item(DWG, "drawing", drawing_of=other)
+        self.v.submit(DWG)
+        with self.assertRaises(LifecycleError):
+            self.v.renumber(DWG, "LE-03-01002-001", "in review")
 
     def test_T14_configuration(self):
         self.v.create_item(PART, description="Bracket")

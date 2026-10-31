@@ -83,7 +83,7 @@ LIFECYCLE_OPS = {
     "create_project": ("code", "name", "program", "top", "units", "drawing_profile", "description"),
     "update_project": ("code", "name", "top", "units", "drawing_profile", "description", "status"),
 }
-FILE_OPS = ("checkout", "undo_checkout", "checkin")
+FILE_OPS = ("checkout", "undo_checkout", "checkin", "renumber")  # renumber: PDM-12, see RENUMBER_OP below
 # PDM-12 (31 Oct 2026): ``renumber`` moves an item, its file versions, locks and released files to a new
 # part number, so the folder vault replays it (not pdm.Vault alone): args ``old``, ``new``, ``reason`` and
 # ``files`` ({P/N: {"sha256", "size", "filename"}}, the new file versions it wrote, keyed by the number
