@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import math
 
+from bruceworx_slots import slot
+
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 THEME_PATH = "User parameter:BaseApp/Preferences/MainWindow"
 PREF_NAME = "NavigationPill"
@@ -58,6 +60,7 @@ GLYPHS = {
     "fit": '<path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/>'
     '<rect x="5.5" y="5.5" width="5" height="5" rx="1"/>',
     "grid": '<path d="M2 2h12v12H2zM2 6h12M2 10h12M6 2v12M10 2v12"/>',
+    "gravity": '<path d="M8 2v9M4.5 8 8 11.5 11.5 8M3 14h10"/>',
 }
 
 TOOLTIPS = {
@@ -66,6 +69,7 @@ TOOLTIPS = {
     "zoom": "Zoom: drag up to zoom in, down to zoom out. Esc to stop.",
     "fit": "Fit all",
     "grid": "Ground grid",
+    "gravity": "Gravity",
 }
 
 # Used when the theme is not BruceWorx (BruceWorx.qss carries the real block).
@@ -115,6 +119,15 @@ def style_icon_index(checked, count):
     if checked == 0 and count > 5:
         return 5
     return checked
+
+
+def gravity_button(visible, on):
+    """``(visible, checked, tooltip)`` of the gravity button."""
+    if not visible:
+        return False, False, TOOLTIPS["gravity"]
+    if on:
+        return True, True, "Gravity on: flexible wires sag. Click to switch off (G, V)."
+    return True, False, "Gravity off: flexible wires keep length, bend limit and contacts only. Click to switch on (G, V)."
 
 
 def next_mode(current, clicked):
@@ -394,6 +407,14 @@ def _make_classes():
             grid.clicked.connect(self.toggle_grid)
             layout.addWidget(grid)
 
+            # Gravity of the flexible wires (ROU-08): shown only when the active assembly has some.
+            gravity = self._button("gravity", TOOLTIPS["gravity"])
+            gravity.setCheckable(True)
+            gravity.setIconSize(QtCore.QSize(GLYPH_SIZE, GLYPH_SIZE))
+            gravity.clicked.connect(slot(self.toggle_gravity))
+            gravity.setVisible(False)
+            layout.addWidget(gravity)
+
             for key in ("style", "camera", "section", "measure"):
                 if key in self.buttons:
                     self.buttons[key].setIconSize(QtCore.QSize(ICON_SIZE, ICON_SIZE))
@@ -464,6 +485,7 @@ def _make_classes():
                     self.buttons["style"].setToolTip("Display style: " + label)
                 self._refresh_camera()
                 self.refresh_grid()
+                self.refresh_gravity()
                 self.adjustSize()
                 self.reposition()
             finally:
@@ -499,6 +521,35 @@ def _make_classes():
             button.setChecked(shown)
             button.blockSignals(False)
             button.setToolTip("Ground grid on. Click to hide." if shown else "Ground grid off. Click to show.")
+
+        def refresh_gravity(self):
+            """Shown (and lit when on) while the active assembly has flexible wires."""
+            button = self.buttons.get("gravity")
+            if button is None or not _alive(button):
+                return
+            try:
+                import bruceworx_rope
+
+                visible, on, _assembly = bruceworx_rope.gravity_state()
+                bruceworx_rope.sync_command(on)
+            except Exception:
+                visible, on = False, False
+            visible, checked, tip = gravity_button(visible, on)
+            button.blockSignals(True)
+            button.setChecked(checked)
+            button.blockSignals(False)
+            button.setToolTip(tip)
+            if button.isVisibleTo(self) != visible:
+                button.setVisible(visible)
+                self.adjustSize()
+                self.reposition()
+
+        def toggle_gravity(self):
+            """The same as the Routing ribbon's Gravity command."""
+            import bruceworx_rope
+
+            bruceworx_rope.toggle_gravity()
+            self.refresh_gravity()
 
         def toggle_grid(self):
             import ground_grid
@@ -691,6 +742,7 @@ def _make_classes():
             self.timer.setInterval(0)
             self.timer.timeout.connect(self.sync)
             self.watched_panels = set()
+            self._gravity_pending = False
 
         def schedule(self, *_args):
             self.timer.start()
@@ -746,6 +798,19 @@ def _make_classes():
                     pill.hide()
                     pill.deleteLater()
                 self.forget(key)
+
+        def schedule_gravity(self):
+            """One cheap gravity-button refresh after a recompute (several recomputes in a row count once)."""
+            if self._gravity_pending:
+                return
+            self._gravity_pending = True
+            QtCore.QTimer.singleShot(200, self._refresh_gravity)
+
+        def _refresh_gravity(self):
+            self._gravity_pending = False
+            for pill in list(self.pills.values()):
+                if _alive(pill):
+                    pill.refresh_gravity()
 
         def reposition_all(self):
             for pill in list(self.pills.values()):
@@ -855,8 +920,12 @@ class _DocObserver:
     def slotCreatedDocument(self, _doc):
         _manager.schedule()
 
+    def slotRecomputedDocument(self, _doc):
+        _manager.schedule_gravity()
+
     def slotActivateDocument(self, _doc):
         _manager.schedule()
+        _manager.schedule_gravity()
 
 
 _observer = None

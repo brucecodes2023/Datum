@@ -107,3 +107,17 @@ rope core (8) and the Routing GUI suite (13) pass.
 \paragraph{Answers (30 Oct).} Parts without a joint: add a joint (hinge or slider) to get the drag stop; no
 change to the drag. Wires inside a bundle follow the bundle's rope shape: next round. 14\,ms per drag step with
 proxies is fine; a broad phase waits for larger assemblies.
+
+\paragraph{Gravity toggle (31 Oct).} Gravity is \emph{off} by default (the user's call, so no sag work is done unless
+asked for); a bool \code{BWGravityOn} on the top assembly, beside the axis \code{BWGravity}, switches it, and an
+assembly saved before the switch reads as off. Off, a rope keeps its cut length, bend limit and contacts (the solver
+skips only the gravity step; the push-out direction of a contact is still the gravity axis) and the status reads
+``slack, gravity off''. The switch is the Gravity button in the Routing tab's Items group (shows on/off), a small
+button on the 3D view's navigation pill (lit when on, shown only while the active assembly has flexible wires) and the
+shortcut G, V (free: Draft uses G, R and Sketcher G, A/L/M/Y). It acts on the selected wire's assembly, else the active
+assembly, else the document's only assembly with wires, and recomputes its wires once. Cost: a rope is re-solved only
+when something it depends on changes. FreeCAD recomputes only touched objects and the rope code has no timers or
+observers of its own, so nothing re-solves while idle; in addition a wire touched through a dependency now compares a
+signature (ends, clips, cut length, mechanics, gravity direction and on/off, proxy boxes near it) and keeps its solved
+shape when nothing it depends on moved. Tests: a wire between level pins with gravity off has no sag and the same
+length, a second recompute makes no solver call, switching on solves once.

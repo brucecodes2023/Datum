@@ -46,6 +46,24 @@ class TestPlacement(unittest.TestCase):
         self.assertEqual(nav.place(1000, 600, 260, 34, free_bottom=450)[1], 450 - 12 - 34)
 
 
+class TestGravityButton(unittest.TestCase):
+    def test_hidden_without_rope_wires(self):
+        self.assertEqual(nav.gravity_button(False, True)[:2], (False, False))
+
+    def test_lit_when_on(self):
+        visible, checked, tip = nav.gravity_button(True, True)
+        self.assertEqual((visible, checked), (True, True))
+        self.assertIn("on", tip)
+
+    def test_unlit_when_off(self):
+        visible, checked, tip = nav.gravity_button(True, False)
+        self.assertEqual((visible, checked), (True, False))
+        self.assertIn("off", tip)
+
+    def test_has_a_glyph(self):
+        self.assertIn("gravity", nav.GLYPHS)
+
+
 class TestCamera(unittest.TestCase):
     def test_quaternion_rotates_vectors(self):
         self.assertTrue(close(nav.view_direction(FRONT), (0.0, 1.0, 0.0)))

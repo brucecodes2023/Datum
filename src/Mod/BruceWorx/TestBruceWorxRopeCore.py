@@ -31,9 +31,11 @@ class RopeCoreTests(unittest.TestCase):
     def setUp(self):
         self.doc = App.newDocument("BWRopeCore")
         br.reset_prefs()
+        App.ParamGet(br.PREFS_PATH).SetBool("GravityOn", True)  # gravity is off by default: these tests are about sag
 
     def tearDown(self):
         br.reset_prefs()
+        App.ParamGet(br.PREFS_PATH).RemBool("GravityOn")
         App.closeDocument(self.doc.Name)
 
     def wire(self, **kw):
@@ -90,6 +92,8 @@ class RopeCoreTests(unittest.TestCase):
         wire = br.make_wire(path, gauge="22 AWG", slack=40)
         self.doc.recompute()
         self.assertEqual(asm.BWGravity, "-Z")
+        self.assertFalse(asm.BWGravityOn)  # off unless asked for
+        brope.set_gravity_on(asm, True)
         low = min(p.z for p in wire.RopePoints)
         self.assertLess(low, -10.0)
         brope.set_gravity(asm, "+Y")
@@ -117,6 +121,52 @@ class RopeCoreTests(unittest.TestCase):
         self.assertAlmostEqual(after[-1][0], 104.0, places=6)
         self.assertLess(max(math.dist(a, b) for a, b in zip(before[:-8], after[:-8])), 6.0)
         self.assertAlmostEqual(rope_length(wire), wire.CutLength.Value, delta=wire.CutLength.Value * 1e-3)
+
+
+class GravitySwitchTests(unittest.TestCase):
+    def setUp(self):
+        self.doc = App.newDocument("BWRopeGravity")
+        br.reset_prefs()
+        self.asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        path = br.make_path([(0, 0, 0), (100, 0, 0)], self.doc, mode="Spline", container=self.asm)
+        self.wire = br.make_wire(path, gauge="22 AWG", slack=40)
+
+    def tearDown(self):
+        App.closeDocument(self.doc.Name)
+
+    def test_gravity_off_keeps_length_and_does_not_re_solve(self):
+        self.doc.recompute()
+        self.assertFalse(self.asm.BWGravityOn)
+        cut = self.wire.CutLength.Value
+        self.assertAlmostEqual(rope_length(self.wire), cut, delta=cut * 1e-3)
+        # level pins, no gravity: nothing below the straight line (the bulge is only the bending shape)
+        self.assertLess(min(p.z for p in self.wire.RopePoints), 0.5)
+        self.assertGreater(max(p.z for p in self.wire.RopePoints), -0.5)
+        self.assertEqual(self.wire.RopeStatus, "slack, gravity off")
+        before = brope.SOLVER_CALLS[0]
+        self.wire.touch()  # touched by a dependency, nothing it depends on moved
+        self.doc.recompute()
+        self.doc.recompute()
+        self.assertEqual(brope.SOLVER_CALLS[0], before)
+
+    def test_switching_on_sags_and_recomputes_once(self):
+        self.doc.recompute()
+        before = brope.SOLVER_CALLS[0]
+        brope.set_gravity_on(self.asm, True)
+        self.assertEqual(brope.SOLVER_CALLS[0], before + 1)
+        self.assertLess(min(p.z for p in self.wire.RopePoints), -10.0)
+        self.assertTrue(self.wire.RopeStatus.startswith("sagging"))
+        self.assertEqual(brope.toggle_gravity(self.doc), False)
+        self.assertEqual(brope.toggle_gravity(self.doc), True)
+        self.assertEqual(brope.gravity_state(self.doc)[:2], (True, True))
+
+    def test_state_hidden_without_rope_wires(self):
+        doc = App.newDocument("BWRopeGravityEmpty")
+        try:
+            doc.addObject("Assembly::AssemblyObject", "Assembly")
+            self.assertEqual(brope.gravity_state(doc)[:2], (False, False))
+        finally:
+            App.closeDocument(doc.Name)
 
 
 class RopeDragTests(unittest.TestCase):
@@ -219,6 +269,7 @@ class BatteryTests(unittest.TestCase):
         self.JointObject, self.UtilsAssembly = JointObject, UtilsAssembly
         self.doc = App.openDocument(path)
         self.wires = [self.doc.getObject(n) for n in self.NAMES]
+        brope.set_gravity_on(self.doc.getObject("Assembly"), True)  # the battery wires hang
         self.before = {w.Name: w.Length.Value for w in self.wires}
 
     def tearDown(self):

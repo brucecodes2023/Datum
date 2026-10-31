@@ -74,13 +74,10 @@ def top_assembly(obj):
 
 
 def ensure_gravity_property(obj):
-    """The ``BWGravity`` property on the top assembly of ``obj`` (made when missing); None when there is no assembly."""
+    """The gravity properties on the top assembly of ``obj`` (made when missing); None when there is no assembly."""
     assembly = top_assembly(obj)
-    if assembly is not None and "BWGravity" not in assembly.PropertiesList:
-        assembly.addProperty("App::PropertyEnumeration", "BWGravity", "BruceWorx",
-                             "Direction of gravity for flexible wires (along an axis of this assembly)")
-        assembly.BWGravity = GRAVITY_AXES
-        assembly.BWGravity = "-Z"
+    if assembly is not None:
+        ensure_gravity_property_on(assembly)
     return assembly
 
 
@@ -92,11 +89,53 @@ def set_gravity(assembly, axis):
 
 
 def ensure_gravity_property_on(assembly):
+    """``BWGravity`` (the axis) and ``BWGravityOn`` (False unless asked for: an assembly saved
+    before the switch has no sag work done)."""
     if "BWGravity" not in assembly.PropertiesList:
         assembly.addProperty("App::PropertyEnumeration", "BWGravity", "BruceWorx",
                              "Direction of gravity for flexible wires (along an axis of this assembly)")
         assembly.BWGravity = GRAVITY_AXES
         assembly.BWGravity = "-Z"
+    if "BWGravityOn" not in assembly.PropertiesList:
+        assembly.addProperty("App::PropertyBool", "BWGravityOn", "BruceWorx",
+                             "Flexible wires sag under gravity (off: length, bend limit and contacts only)")
+        assembly.BWGravityOn = False
+
+
+def gravity_on(obj):
+    """Is the gravity term used for ``obj``? The top assembly's ``BWGravityOn`` (False when it has
+    none); with no assembly the preference ``GravityOn`` (default off)."""
+    assembly = top_assembly(obj)
+    if assembly is not None:
+        return bool("BWGravityOn" in assembly.PropertiesList and assembly.BWGravityOn)
+    try:
+        return bool(App.ParamGet(_br().PREFS_PATH).GetBool("GravityOn", False))
+    except Exception:
+        return False
+
+
+def set_gravity_on(assembly, on):
+    """Switch gravity for the wires of ``assembly``; every rope wire inside is recomputed once."""
+    ensure_gravity_property_on(assembly)
+    if bool(assembly.BWGravityOn) == bool(on):
+        return
+    assembly.BWGravityOn = bool(on)
+    for wire in rope_wires(assembly):
+        wire.touch()
+    if assembly.Document is not None:
+        assembly.Document.recompute()
+
+
+def rope_wires(assembly):
+    """The wires, hoses and bundles whose top assembly is ``assembly``."""
+    br = _br()
+    out = []
+    for o in assembly.Document.Objects:
+        if getattr(o, "Proxy", None) is not None and "RopePoints" in o.PropertiesList:
+            top = top_assembly(o)
+            if top is not None and top.Name == assembly.Name:
+                out.append(o)
+    return out
 
 
 def gravity_axis(obj):
@@ -361,9 +400,13 @@ def make_boxes(records, deltas=None, reach=None):
 # One rope item.
 
 
+SOLVER_CALLS = [0]  # how many times a rope was solved (tests, and a way to see idle work)
+
+
 class Result:
     def __init__(self, x, taut, message, strain, ratio, sag):
         self.x, self.taut, self.message, self.strain, self.ratio, self.sag = x, taut, message, strain, ratio, sag
+        self.weight_on = True
 
 
 class RopeItem:
@@ -385,6 +428,7 @@ class RopeItem:
         self.ends = path_ends(self.path)
         self.clips = clip_points(self.path)
         self.gravity = gravity_vector(obj)
+        self.weight_on = gravity_on(obj)
         self.x = None
         self.exclude = {e.owner.Name for e in self.ends if e.owner is not None}
         self.records = None
@@ -397,6 +441,26 @@ class RopeItem:
             return float(obj.Length.Value)
         slack = 1.0 + float(getattr(obj, "Slack", 0)) / 100.0
         return float(path.Length.Value) * slack + self.hidden
+
+    def signature(self):
+        """Everything the solution depends on, rounded: the ends and clips, the cut length, the rope
+        mechanics, gravity (direction and on/off) and the proxy boxes near the wire. None when the
+        proxies cannot be read."""
+        try:
+            def r(v):
+                return tuple(round(float(c), 5) for c in v)
+            ends = [(r(e.point) if e.point is not None else None,
+                     (r(e.lead[0]), r(e.lead[1]), round(float(e.lead[2]), 5)) if e.lead is not None else None)
+                    for e in self.ends]
+            clips = [r(c[1]) for c in self.clips]
+            if self.records is None:
+                self.records = self.neighbour_records()
+            boxes = [(c.Name, r(center), r(half), tuple(r(row) for row in axes))
+                     for c, center, axes, half, _g in self.records]
+            return (ends, clips, round(self.cut, 6), round(self.od, 6), round(self.ei, 6), round(self.q, 9),
+                    round(self.rmin, 6), r(self.gravity), self.weight_on, boxes)
+        except Exception:
+            return None
 
     # ----- state -----
 
@@ -466,7 +530,8 @@ class RopeItem:
             pinned = tuple(nodes)
         self.clip_node_list = nodes
         rope = rp.Rope(x, l0 * (self.n - 1), self.ei, self.q, rmin=self.rmin, radius=self.od / 2 + CLEARANCE,
-                       fixed_start=ks, fixed_end=ke, gravity=self.gravity, pinned=pinned)
+                       fixed_start=ks, fixed_end=ke, gravity=self.gravity, pinned=pinned,
+                       weight_on=self.weight_on)
         return rope
 
     @staticmethod
@@ -522,6 +587,7 @@ class RopeItem:
         boxes = self.boxes(drag_deltas, rope)
         if boxes and state is None and self.stored() is None:
             rp.drape(rope.x, boxes, self.gravity, rope.radius, rope.fixed_start, rope.fixed_end)
+        SOLVER_CALLS[0] += 1
         rp.solve([rope], boxes, max_steps=max_steps, tol=tol)
         message = ""
         if rope.taut:
@@ -531,8 +597,10 @@ class RopeItem:
                 message = f"taut: the ends are {gap - free:.1f} mm further apart than the cut length allows"
             else:
                 message = "taut at this cut length"
-        sag = rp.straight_line_sag(rope.x, self.gravity)
-        return Result(rope.x, rope.taut, message, rope.strain, rope.bend_ratio, sag)
+        sag = rp.straight_line_sag(rope.x, self.gravity) if self.weight_on else 0.0
+        res = Result(rope.x, rope.taut, message, rope.strain, rope.bend_ratio, sag)
+        res.weight_on = self.weight_on
+        return res
 
 
 # ---------------------------------------------------------------------------------------------
@@ -542,6 +610,8 @@ class RopeItem:
 def status_text(res):
     if res.taut:
         return "taut"
+    if not res.weight_on:
+        return "slack, gravity off"
     if res.sag < 0.05:
         return "straight"
     return f"sagging, {res.sag:.1f} mm below the straight line"
@@ -611,6 +681,10 @@ def rope_execute(proxy, obj):
         return False
     try:
         item = RopeItem(obj)
+        sig = item.signature()
+        if sig is not None and getattr(proxy, "_rope_sig", None) == sig and item.stored() is not None \
+                and not obj.Shape.isNull():
+            return True  # touched by a dependency, but nothing this rope depends on moved: keep the solved rope
         res = item.solve()
         if "SlackApplied" in obj.PropertiesList and hasattr(obj, "Slack"):
             if int(obj.SlackApplied) != int(obj.Slack):
@@ -619,7 +693,124 @@ def rope_execute(proxy, obj):
         if abs(float(obj.CutLength.Value) - item.cut) > 1e-9:
             obj.CutLength = item.cut
         proxy.finish(obj, item.cut)
+        proxy._rope_sig = sig
         return True
     except Exception as exc:  # the old path-following wire is better than none
         App.Console.PrintWarning(f"BruceWorx rope: {obj.Label}: {exc}\n")
         return False
+
+
+# ---------------------------------------------------------------------------------------------
+# The Gravity switch (31 Oct): command, shortcut and the target assembly.
+
+COMMAND = "BruceWorx_RouteGravity"
+SHORTCUT = "G, V"  # free: Draft has G, R; Sketcher G, A/L/M/Y; View has G, G
+
+
+def has_rope_wires(assembly):
+    return assembly is not None and bool(rope_wires(assembly))
+
+
+def target_assembly(doc=None, selection=None):
+    """The assembly the Gravity switch acts on: that of the selected wire (or the selected assembly), else the
+    active part's top assembly, else the only assembly of the document that has rope wires. None otherwise."""
+    doc = doc or App.ActiveDocument
+    if doc is None:
+        return None
+    if selection is None:
+        try:
+            import FreeCADGui
+
+            selection = FreeCADGui.Selection.getSelection(doc.Name)
+        except Exception:
+            selection = []
+    for o in selection:
+        if o.TypeId == ASSEMBLY:
+            return o
+        top = top_assembly(o)
+        if top is not None and "RopePoints" in o.PropertiesList:
+            return top
+    try:
+        import FreeCADGui
+
+        active = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("part")
+        if active is not None:
+            top = active if active.TypeId == ASSEMBLY and top_assembly(active) is None else top_assembly(active)
+            top = top or (active if active.TypeId == ASSEMBLY else None)
+            if top is not None:
+                return top
+    except Exception:
+        pass
+    found = [o for o in doc.Objects if o.TypeId == ASSEMBLY and top_assembly(o) is None and has_rope_wires(o)]
+    return found[0] if len(found) == 1 else None
+
+
+def gravity_state(doc=None):
+    """``(visible, on, assembly)`` for the nav pill and the ribbon: visible when the target assembly has rope wires."""
+    assembly = target_assembly(doc)
+    if assembly is None or not has_rope_wires(assembly):
+        return False, False, assembly
+    return True, bool("BWGravityOn" in assembly.PropertiesList and assembly.BWGravityOn), assembly
+
+
+def toggle_gravity(doc=None):
+    """Flip gravity on the target assembly (the wires are recomputed once). Returns the new state, None without a target."""
+    assembly = target_assembly(doc)
+    if assembly is None:
+        return None
+    ensure_gravity_property_on(assembly)
+    set_gravity_on(assembly, not bool(assembly.BWGravityOn))
+    return bool(assembly.BWGravityOn)
+
+
+class _GravityCommand:
+    def GetResources(self):
+        import os
+
+        return {"Pixmap": os.path.join(os.path.dirname(os.path.abspath(__file__)), "BruceWorx_RouteWire.svg"),
+                "MenuText": "Gravity", "Accel": SHORTCUT, "Checkable": True,
+                "ToolTip": "Let the flexible wires sag under gravity (on) or only keep their length, bend limit and "
+                           "contacts (off, saves recompute time). Acts on the active assembly or the selected wire's."}
+
+    def IsActive(self):
+        if App.ActiveDocument is None:
+            return False
+        return True  # cheap: the shown state is synced when a document is activated or recomputed (navpill)
+
+    def Activated(self, index=None):
+        state = toggle_gravity()
+        if state is None:
+            self._sync(False)
+            try:
+                import FreeCADGui
+
+                FreeCADGui.getMainWindow().statusBar().showMessage("Gravity: no assembly with flexible wires to act on.", 5000)
+            except Exception:
+                pass
+            return
+        self._sync(bool(state))
+
+    @staticmethod
+    def _sync(on):  # also called by the nav pill
+        """Make the command's action show the state (a checkable command otherwise flips on its own)."""
+        try:
+            import FreeCADGui
+
+            for action in FreeCADGui.Command.get(COMMAND).getAction():
+                if action.isChecked() != on:
+                    action.blockSignals(True)
+                    action.setChecked(on)
+                    action.blockSignals(False)
+        except Exception:
+            pass
+
+
+def install_gui():
+    import FreeCADGui
+
+    FreeCADGui.addCommand(COMMAND, _GravityCommand())
+
+
+def sync_command(on):
+    """Show ``on`` on the ribbon button and the menu entry."""
+    _GravityCommand._sync(bool(on))

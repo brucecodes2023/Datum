@@ -155,7 +155,8 @@ class Rope:
     radius: float = 0.0
     fixed_start: int = 1
     fixed_end: int = 1
-    gravity: tuple = (0.0, 0.0, -1.0)
+    gravity: tuple = (0.0, 0.0, -1.0)  # direction (also the way a contact pushes a point out)
+    weight_on: bool = True  # False: no gravity term (length, bend limit and contacts still hold)
     pinned: tuple = ()  # interior points held in place (clips: the wire passes through, free to turn)
     # results
     strain: float = 0.0
@@ -340,7 +341,7 @@ def _strain(x, l0, w):
     return np.where(_free_segments(w), err, 0.0).max()
 
 
-def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step_scale=4.0, limit_alpha=1e-9):
+def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step_scale=4.0, limit_alpha=1e-9, g_on=None):
     """Relax the batch ``x`` (B, N, 3) in place. Each outer step moves the free points ``step``
     mm along the unit gravity vectors ``g_dir`` (B, 3) in a way that is first-order compatible with
     the constraints, then restores them with Newton iterations (all lengths and bendings at once);
@@ -374,7 +375,7 @@ def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step
         alpha = ei_q / step
         bend_on = bool((alpha < 1e6).any())
         lam_b[:] = 0.0
-        _newton(x, w, l0, alpha, lam_b, bend_on, free * (g_dir * step[:, None])[:, None, :], lim, limit_alpha)
+        _newton(x, w, l0, alpha, lam_b, bend_on, free * (g_dir * (step if g_on is None else step * g_on)[:, None])[:, None, :], lim, limit_alpha)
         for _ in range(8):
             if _strain(x, l0, w) < 1e-7 and (lim is None or _bend_excess(x, lim) <= 0):
                 break
@@ -410,11 +411,12 @@ def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=6):
         radius = np.array([r.radius for r in group])
         g = np.array([r.gravity for r in group], dtype=float)
         g /= np.maximum(np.linalg.norm(g, axis=-1), 1e-12)[:, None]
+        g_on = np.array([1.0 if r.weight_on else 0.0 for r in group])
         # alpha~ = alpha m / dt^2 with m = q l0 / g, dt^2 = step / g and alpha = l0^3 / EI
         ei_q = q * l0**4 / ei
         dmax = np.where(rmin > 0, l0 * l0 / np.where(rmin > 0, rmin, 1.0), 1e12)
         x0 = x.copy()
-        steps = solve_batch(x, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol)
+        steps = solve_batch(x, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol, g_on=g_on)
         if (rmin > 0).any():
             strain, ratio = measure(x, l0, rmin, w)
             bad = (strain > STRAIN_TOL) | (ratio > 1.0 + 1e-3)
@@ -422,7 +424,7 @@ def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=6):
                 # The hard bend-limit rows can fail (over-determined, or the limit cannot be met): try the
                 # same start with the limit as a stiff spring and keep the better of the two per wire.
                 x1 = x0.copy()
-                solve_batch(x1, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol, limit_alpha=1e-3)
+                solve_batch(x1, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol, limit_alpha=1e-3, g_on=g_on)
                 s1, r1 = measure(x1, l0, rmin, w)
                 worse = (strain + np.maximum(ratio - 1.0, 0.0)) > (s1 + np.maximum(r1 - 1.0, 0.0))
                 take = bad & worse

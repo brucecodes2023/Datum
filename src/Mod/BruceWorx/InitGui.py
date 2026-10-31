@@ -167,6 +167,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx routing commands were not installed: {exc}")
 
 try:
+    import bruceworx_rope
+
+    bruceworx_rope.install_gui()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx gravity switch was not installed: {exc}")
+
+try:
     import bruceworx_toolbars
 
     bruceworx_toolbars.install()

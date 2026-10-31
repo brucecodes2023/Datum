@@ -386,7 +386,8 @@
                 "BruceWorx_RoutePipe",
                 "BruceWorx_RouteHose",
                 "BruceWorx_RouteBundle",
-                "BruceWorx_RouteBendRules"
+                "BruceWorx_RouteBendRules",
+                "BruceWorx_RouteGravity"
               ]
             },
             {
