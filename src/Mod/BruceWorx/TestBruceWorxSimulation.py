@@ -508,7 +508,7 @@ class TestSimulationGui(unittest.TestCase):
         def clean():
             for name in ("SFThresholds", "SFColors", "StressMeasure", "TexPath"):
                 prefs.RemString(name)
-            for name in ("ModalModes", "BucklingModes"):
+            for name in ("ModalModes", "BucklingModes", "MeshWarnNodes", "MeshMaxNodes"):
                 prefs.RemInt(name)
             for name in ("TargetBLF", "MeshDivisor", "NonlinearLoadLimit"):
                 prefs.RemFloat(name)

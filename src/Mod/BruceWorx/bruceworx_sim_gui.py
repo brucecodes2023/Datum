@@ -2377,6 +2377,16 @@ def _make_classes():
             self.divisor.setDecimals(1)
             self.divisor.setToolTip("Default largest element = bounding-box diagonal / this")
             f3.addRow("Mesh size: diagonal /", self.divisor)
+            self.warn_nodes = QtWidgets.QSpinBox()
+            self.warn_nodes.setRange(1000, 100000000)
+            self.warn_nodes.setSingleStep(50000)
+            self.warn_nodes.setToolTip("The pre-check warns when the estimated mesh has more nodes than this")
+            f3.addRow("Mesh warning above (nodes)", self.warn_nodes)
+            self.max_nodes = QtWidgets.QSpinBox()
+            self.max_nodes.setRange(1000, 100000000)
+            self.max_nodes.setSingleStep(100000)
+            self.max_nodes.setToolTip("The pre-check blocks meshing above this; a study can override it (MeshNodeLimit)")
+            f3.addRow("Mesh limit (nodes)", self.max_nodes)
             row = QtWidgets.QHBoxLayout()
             self.tex = QtWidgets.QLineEdit()
             self.tex.setPlaceholderText("automatic: Tectonic in Vector Labs, else latexmk or pdflatex")
@@ -2404,6 +2414,8 @@ def _make_classes():
             self.target.setValue(eigen.default_target())
             self.load_limit.setValue(eigen.default_load_limit())
             self.divisor.setValue(sim.mesh_divisor())
+            self.warn_nodes.setValue(sim.mesh_warn_nodes())
+            self.max_nodes.setValue(sim.mesh_max_nodes())
             self.tex.setText(prefs.GetString(sim.TEX_PREF, ""))
 
         def saveSettings(self):
@@ -2423,6 +2435,8 @@ def _make_classes():
             eigen.save_default_target(self.target.value())
             prefs.SetFloat("NonlinearLoadLimit", self.load_limit.value())
             prefs.SetFloat("MeshDivisor", self.divisor.value())
+            prefs.SetInt("MeshWarnNodes", self.warn_nodes.value())
+            prefs.SetInt("MeshMaxNodes", self.max_nodes.value())
             prefs.SetString(sim.TEX_PREF, self.tex.text().strip())
 
     return {"Panel": Panel, "NewStudyPanel": NewStudyPanel, "StudyPanel": StudyPanel,

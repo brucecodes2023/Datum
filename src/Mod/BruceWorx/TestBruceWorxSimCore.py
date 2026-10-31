@@ -219,6 +219,77 @@ class TestStudy(unittest.TestCase):
         self.assertIn("-pdf", sim.tex_command("latexmk", "/x/latexmk"))
 
 
+class TestMeshEstimate(unittest.TestCase):
+    """The pre-meshing node estimate against what Netgen makes (Moderate, second order)."""
+
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+        self.doc = App.newDocument("SimEstimate")
+        self.prefs = App.ParamGet(sim.SIM_PREFS)
+        for name in ("MeshWarnNodes", "MeshMaxNodes"):
+            self.prefs.RemInt(name)
+            self.addCleanup(self.prefs.RemInt, name)
+
+    def _actual_vs_estimate(self, shape_obj, size):
+        objs = sim.new_study(self.doc, sim.StudyPlan(model=shape_obj, max_size=size))
+        mesh = objs["mesh"]
+        shape = sim.shape_of(shape_obj)
+        estimate = sim.estimate_mesh_nodes(shape.Volume, shape.Area, size, True, "Moderate")
+        actual = sim.mesh_study(objs["analysis"])["nodes"]
+        return estimate, actual, objs
+
+    def test_cube_estimate_within_a_factor_of_two(self):
+        cube = self.doc.addObject("Part::Box", "Cube")
+        cube.Length = cube.Width = cube.Height = 40
+        self.doc.recompute()
+        for size in (8, 5):
+            estimate, actual, _objs = self._actual_vs_estimate(cube, size)
+            self.assertLess(estimate, 2 * actual, (size, estimate, actual))
+            self.assertGreater(estimate, actual / 2, (size, estimate, actual))
+
+    def test_cylinder_estimate_within_a_factor_of_two(self):
+        cyl = self.doc.addObject("Part::Cylinder", "Cyl")
+        cyl.Radius, cyl.Height = 10, 60
+        self.doc.recompute()
+        for size in (8, 5):
+            estimate, actual, _objs = self._actual_vs_estimate(cyl, size)
+            self.assertLess(estimate, 2 * actual, (size, estimate, actual))
+            self.assertGreater(estimate, actual / 2, (size, estimate, actual))
+
+    def test_size_for_nodes_inverts_the_estimate(self):
+        size = sim.mesh_size_for_nodes(64000.0, 9600.0, 100000, True, "Moderate")
+        self.assertLess(abs(sim.estimate_mesh_nodes(64000.0, 9600.0, size, True) - 100000), 1500)
+
+    def test_precheck_warns_then_blocks_and_suggests_a_size(self):
+        cube = self.doc.addObject("Part::Box", "Big")
+        cube.Length = cube.Width = cube.Height = 100
+        self.doc.recompute()
+        objs = sim.new_study(self.doc, sim.StudyPlan(model=cube, max_size=8))
+        analysis, mesh = objs["analysis"], objs["mesh"]
+
+        def size_issues():
+            return [(k, t) for k, t in sim.precheck(analysis) if t.startswith(("Large mesh", "Mesh too large"))]
+
+        self.assertEqual(size_issues(), [])  # about 40 000 nodes
+        self.prefs.SetInt("MeshWarnNodes", 20000)
+        kinds = [k for k, _t in size_issues()]
+        self.assertEqual(kinds, ["warning"])
+        mesh.MaxSize = 2  # about 1.6 million nodes
+        (kind, text), = size_issues()
+        self.assertEqual(kind, "error")
+        self.assertIn("MaxSize", text)
+        suggested = float(re.search(r"MaxSize of ([0-9.]+) mm", text).group(1))
+        shape = sim.shape_of(cube)
+        self.assertLessEqual(sim.estimate_mesh_nodes(shape.Volume, shape.Area, suggested, True), 20000 * 1.02)
+        self.assertFalse(sim.ready(sim.precheck(analysis)))
+        analysis.MeshNodeLimit = 5000000  # the study overrides the hard limit
+        self.assertEqual([k for k, _t in size_issues()], ["warning"])
+        self.prefs.SetInt("MeshMaxNodes", 500000)
+        analysis.MeshNodeLimit = 0
+        self.assertEqual(sim.mesh_max_nodes(analysis), 500000)
+
+
 class TestStressMeasures(unittest.TestCase):
     """S3 (30 Oct): the safety factor divides the study's equivalent stress. Hand-checkable cases:
 

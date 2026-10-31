@@ -446,6 +446,99 @@ def default_mesh_size(obj):
     return max(0.01, shape.BoundBox.DiagonalLength / mesh_divisor())
 
 
+# ----- the mesh-size estimate (30 Oct bug round: Netgen hangs or makes 340k nodes) -----------------------
+#
+# Netgen runs in-process and cannot be interrupted, so the guard is an estimate made before meshing.
+# Fitted to Netgen Moderate on a cube, a cylinder and a plate (h = MaxSize):
+#   tets  ~ max(0.8 * V / (h^3 / (6 sqrt 2)),  5 * f * A / h^2)      volume term, thin/curved surface term
+#   nodes ~ 0.3 * tets (first order), 1.85 * tets (second order: edge nodes)
+# f grows with the fineness (Netgen refines curved surfaces; flat faces hardly change).
+
+MESH_WARN_NODES = 200000
+MESH_MAX_NODES = 1000000
+_SURFACE_FINENESS = {"VeryCoarse": 1.5, "Coarse": 1.5, "Moderate": 1.0, "Fine": 2.3, "VeryFine": 7.0}
+
+
+def mesh_warn_nodes():
+    """The node count above which the pre-check warns (preference MeshWarnNodes, default 200 000)."""
+    try:
+        value = _prefs().GetInt("MeshWarnNodes", 0)
+    except Exception:
+        value = 0
+    return value if value > 0 else MESH_WARN_NODES
+
+
+def mesh_max_nodes(analysis=None):
+    """The node count above which the pre-check blocks meshing: the study's MeshNodeLimit when set,
+    else the preference MeshMaxNodes, default 1 000 000."""
+    if analysis is not None and "MeshNodeLimit" in analysis.PropertiesList and int(analysis.MeshNodeLimit) > 0:
+        return int(analysis.MeshNodeLimit)
+    try:
+        value = _prefs().GetInt("MeshMaxNodes", 0)
+    except Exception:
+        value = 0
+    return value if value > 0 else MESH_MAX_NODES
+
+
+def estimate_mesh_nodes(volume, area, max_size, second_order=True, fineness=DEFAULT_FINENESS):
+    """Estimated Netgen node count for a shape of this volume (mm^3) and surface area (mm^2)."""
+    h = max(float(max_size), 1e-6)
+    by_volume = 0.8 * volume / (h ** 3 / (6.0 * math.sqrt(2.0)))
+    by_surface = 5.0 * _SURFACE_FINENESS.get(fineness, 1.0) * area / (h * h)
+    tets = max(by_volume, by_surface)
+    return int(round(tets * (1.85 if second_order else 0.3)))
+
+
+def mesh_size_for_nodes(volume, area, target, second_order=True, fineness=DEFAULT_FINENESS):
+    """The MaxSize at which the estimate reaches ``target`` nodes (bisection on the estimate)."""
+    lo, hi = 1e-3, 1e6
+    for _ in range(80):
+        mid = math.sqrt(lo * hi)
+        if estimate_mesh_nodes(volume, area, mid, second_order, fineness) > target:
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+def _round_size(value):
+    """Two significant figures, rounded up so the suggestion stays under the target."""
+    if value <= 0:
+        return value
+    scale = 10 ** (math.floor(math.log10(value)) - 1)
+    return math.ceil(value / scale) * scale
+
+
+def mesh_estimate_issues(analysis, mesh):
+    """("warning"|"error", text) for the node count the mesh settings are about to make; [] when fine."""
+    shape_obj = getattr(mesh, "Shape", None)
+    shape = shape_of(shape_obj) if shape_obj is not None else None
+    if shape is None or not shape.Solids:
+        return []
+    volume = sum(solid.Volume for solid in shape.Solids)
+    area = sum(solid.Area for solid in shape.Solids)
+    size = float(mesh.MaxSize)
+    second = bool(mesh.SecondOrder)
+    fineness = str(mesh.Fineness)
+    nodes = estimate_mesh_nodes(volume, area, size, second, fineness)
+    limit, warn = mesh_max_nodes(analysis), min(mesh_warn_nodes(), mesh_max_nodes(analysis))
+    if nodes <= warn:
+        return []
+
+    def suggest(target):
+        return _round_size(mesh_size_for_nodes(volume, area, target, second, fineness))
+
+    def num(value):
+        return f"{value:,}".replace(",", " ")
+
+    if nodes > limit:
+        return [("error", f"Mesh too large: MaxSize {size:g} mm makes about {num(nodes)} nodes, over the limit of "
+                          f"{num(limit)}, and Netgen cannot be stopped once started. Use a MaxSize of "
+                          f"{suggest(warn):g} mm or more, simplify the geometry, or raise the study's MeshNodeLimit")]
+    return [("warning", f"Large mesh: MaxSize {size:g} mm makes about {num(nodes)} nodes, over {num(warn)}. "
+                        f"A MaxSize of {suggest(warn):g} mm or more would stay under")]
+
+
 def mesh_shape_object(doc, model, fuse=False):
     """The object the Netgen mesh takes its shape from: the model, or a compound of a container's bodies.
 
@@ -697,6 +790,9 @@ def ensure_study_properties(analysis):
                              "(Rankine, max |principal|) or Tresca (s1 - s3)")
         analysis.StressMeasure = measure_keys()
         analysis.StressMeasure = default_measure()
+    if "MeshNodeLimit" not in props:
+        analysis.addProperty("App::PropertyInteger", "MeshNodeLimit", "Study",
+                             "[BW] Hard limit on the estimated mesh nodes for this study; 0 = the preference (1 000 000)")
     if "SFThresholds" not in props:
         thresholds, colors = default_bands()
         analysis.addProperty("App::PropertyFloatList", "SFThresholds", "Study",
@@ -966,6 +1062,7 @@ def precheck(analysis):
             issues.append(("warning", f"{len(shape.Solids)} separate solids: they are not joined (contacts are SIM-02)"))
         if not is_meshed(m["mesh"]):
             issues.append(("warning", "Not meshed yet: Solve meshes first"))
+            issues += mesh_estimate_issues(analysis, m["mesh"])
     if model is None and m["mesh"] is None:
         issues.append(("error", "No model: pick a body or part"))
 
