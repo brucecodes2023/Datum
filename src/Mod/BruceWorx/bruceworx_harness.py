@@ -335,7 +335,67 @@ def _replace(container, hpart):
     link = doc.addObject("App::Link", "HarnessLink")
     link.setLink(hpart)
     link.Label = label
+    link.addProperty("App::PropertyBool", LINK_PROP, "BruceWorx", "This link stays at its assembly's origin")
+    setattr(link, LINK_PROP, True)
     if parent is not None:
         parent.addObject(link)
+    lock_link(link)
     doc.recompute()
     return link
+
+
+LINK_PROP = "HarnessAtOrigin"
+LINK_NOTE = "A harness stays at its assembly's origin"
+
+
+def is_harness_link(obj):
+    try:
+        return obj.isDerivedFrom("App::Link") and LINK_PROP in obj.PropertiesList and bool(getattr(obj, LINK_PROP))
+    except Exception:
+        return False
+
+
+def lock_link(link):
+    """The harness link at the parent's origin: identity placement, read-only."""
+    install_guard()
+    link.setPropertyStatus("Placement", "-ReadOnly")
+    if not link.Placement.isIdentity():
+        link.Placement = App.Placement()
+    link.setPropertyStatus("Placement", "ReadOnly")
+
+
+class _Guard:
+    """Puts a harness link back at the origin when something (an assembly solve, a typed value) moves it."""
+
+    busy = False
+
+    def slotChangedObject(self, obj, prop):
+        if prop != "Placement" or self.busy or not is_harness_link(obj) or obj.Placement.isIdentity():
+            return
+        self.busy = True
+        try:
+            lock_link(obj)
+        finally:
+            self.busy = False
+        try:
+            import FreeCADGui as Gui
+
+            Gui.getMainWindow().statusBar().showMessage(LINK_NOTE, 5000)
+        except Exception:
+            pass
+        App.Console.PrintMessage(LINK_NOTE + "\n")
+
+    def slotRestoredDocument(self, doc):
+        for o in doc.Objects:
+            if is_harness_link(o):
+                lock_link(o)
+
+
+_guard = []
+
+
+def install_guard():
+    """Watch the documents for a harness link that is moved (once)."""
+    if not _guard:
+        _guard.append(_Guard())
+        App.addDocumentObserver(_guard[0])

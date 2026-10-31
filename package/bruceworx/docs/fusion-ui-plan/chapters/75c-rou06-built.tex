@@ -58,3 +58,8 @@ row). Routing, Rope, Bom, Workspaces and the slot lint pass. \code{TestBruceWorx
         frames and part sub-elements are. Worth fixing in \code{attachment\_point}.
   \item Connector links in a harness keep their library file links only when that file is open at Make vault item.
 \end{itemize}
+
+\paragraph{31 Oct follow-ups.} After Make vault item the parent's link to the harness is locked at the parent's origin:
+its Placement is identity and read-only, and if it is moved anyway (an assembly solve, a typed value) it is put back to
+identity with the status-bar note ``A harness stays at its assembly's origin''. The cyclic-document DAG warning is
+accepted for now; it is to be fixed later with a one-way link. Test: a placement written to the link is reset.

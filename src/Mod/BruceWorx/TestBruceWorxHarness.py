@@ -136,6 +136,10 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(pn.split("-")[1], "04")  # document type "Cable assembly" of this vault
         self.assertEqual([o for o in self.doc.Objects if o.Name in names], [])
         self.assertIn(link, self.asm.Group)
+        # the link stays at the parent's origin: read-only, and put back when moved anyway
+        self.assertIn("ReadOnly", link.getPropertyStatus("Placement"))
+        link.Placement = App.Placement(V(5, 0, 0), App.Rotation())
+        self.assertTrue(link.Placement.isIdentity())
         # the harness BOM was recorded: the stock item by length, with manufacturer and MPN
         lines = self.vault.bom_of(pn)
         self.assertEqual([(l.child, l.unit, l.mpn) for l in lines], [(stock_pn, "m", "3050 RD005")])
