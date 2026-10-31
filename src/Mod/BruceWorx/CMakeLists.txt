@@ -156,6 +156,7 @@ SET(BruceWorx_SRCS
     BruceWorx_MarkCots.svg
     bruceworx_sim.py
     bruceworx_sim_eigen.py
+    bruceworx_sim_thermal.py
     TestBruceWorxSimCore.py
     bruceworx_sim_gui.py
     TestBruceWorxSimulation.py
