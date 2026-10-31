@@ -102,6 +102,16 @@ def picks_from_selection():
     return out
 
 
+def refuse_copy(obj):
+    """A flexible-sub-assembly copy is edited in its sub-assembly: say so in the status bar, True when refused."""
+    import bruceworx_flexsub as fs
+
+    if not fs.is_copy(obj):
+        return False
+    _gui().getMainWindow().statusBar().showMessage(fs.EDIT_HINT, 5000)
+    return True
+
+
 def selected_paths():
     return [o for o in _gui().Selection.getSelection() if br.is_path(o)]
 
@@ -1560,6 +1570,8 @@ class RoutePathCommand(_Command):
             return
         found = selected_paths()
         if found:
+            if refuse_copy(found[0]):
+                return
             _gui().Control.showDialog(RoutePathPanel(path=found[0]))
             return
         _gui().Control.showDialog(RoutePathPanel(picks=picks_from_selection()))
@@ -1631,6 +1643,8 @@ class ItemCommand(_Command):
             return
         selected = [o for o in _gui().Selection.getSelection() if br.kind_of(o) == self.kind]
         if selected:
+            if refuse_copy(selected[0]):
+                return
             _gui().Control.showDialog(ItemPanel(self.kind, obj=selected[0]))
             return
         path = target_path()
@@ -1791,6 +1805,9 @@ def install():
     if _state["installed"]:
         return
     Gui = _gui()
+    import bruceworx_harness
+
+    bruceworx_harness.install_guard()
     Gui.addCommand("BruceWorx_RoutePath", RoutePathCommand(
         "BruceWorx_RoutePath", "Route Path",
         "A centreline for wires, pipes and hoses: pick vertices, circle centres, faces or datums in the 3D view. "

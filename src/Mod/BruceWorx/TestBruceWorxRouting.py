@@ -285,6 +285,21 @@ class RoutingGuiTests(unittest.TestCase):
         finally:
             shutil.rmtree(folder, ignore_errors=True)
 
+    def test_flexible_copy_is_not_edited_here(self):
+        import bruceworx_flexsub as fs
+
+        path = br.make_path([(0, 0, 20), (30, 0, 25), (60, 0, 10)], self.doc)
+        wire = br.make_wire(path)
+        wire.addProperty("App::PropertyString", fs.PROP, "BruceWorx", "")
+        self.doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(wire)
+        Gui.getMainWindow().statusBar().clearMessage()
+        Gui.runCommand("BruceWorx_RouteWire")
+        self._pump()
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertIn(fs.EDIT_HINT, Gui.getMainWindow().statusBar().currentMessage())
+
     def test_pipe_and_hose_panels_and_cut_list(self):
         path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0), (100, 100, 100)], self.doc, mode="Polyline", radius=20.0)
         self.doc.recompute()
