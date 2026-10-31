@@ -1,0 +1,208 @@
+%======================================================================
+\subsection{BW-SIM-06 plan: airflow with OpenFOAM (31 Oct 2026)}\label{sec:sim06-plan}
+%======================================================================
+
+You asked to start \eref{SIM-06}, which had been left for later. This section sets the scope, the theory and
+the checks against known answers, and ends with your questions. No code is written until you answer them.
+
+\paragraph{What it is for.} For SP-01 and the parts around it, airflow answers four questions that the
+structural and thermal studies cannot:
+\begin{itemize}[nosep]
+  \item \textbf{Prop wash.} How much the propeller wake pushes down on the arms and frame (\emph{download},
+        which costs thrust), and the load it puts on them.
+  \item \textbf{Frame drag} in forward flight at a given speed and pitch.
+  \item \textbf{Cooling.} How much air reaches the ESC, motors and battery, and what heat-transfer coefficient
+        $h$ it gives on each surface.
+  \item \textbf{Feeding the thermal study.} That $h$ replaces the estimated convection presets (still air 10,
+        light airflow 25, prop wash 75\,W/m$^2$K) of \S\ref{sec:sim-thermal-plan}.
+\end{itemize}
+Out of scope: designing propeller blades (modelling the spinning blades themselves), noise, and unsteady
+vortex shedding.
+
+\paragraph{Why not the CfdOF add-on.} The roadmap named CfdOF, the FreeCAD add-on that drives OpenFOAM. It
+lists macOS as ``not widely tested'' and points Mac users to a Docker container. It also leans on cfMesh and
+HiSA, which the native Apple-silicon OpenFOAM build does not ship. Vector Labs already drives CalculiX
+directly from its own study frame (\S\ref{sec:sim01-built}), so CFD follows the same pattern: the study writes
+an OpenFOAM case folder, runs the solver as a separate program, and reads the results back. CfdOF is LGPL and
+its dictionary templates can be borrowed where useful.
+
+\paragraph{OpenFOAM on this Mac.} The \emph{openfoam-app} project (G.~Gerlero) packages the official ESI
+OpenFOAM releases as a native macOS app: OpenFOAM-v2606, Apple silicon, macOS 14 or later, a 268\,MB
+download. It is installable from Homebrew or as a zip, and is started with
+\file{OpenFOAM-v2606.app/Contents/Resources/etc/openfoam}. It includes everything this plan uses:
+\code{blockMesh}, \code{snappyHexMesh}, \code{simpleFoam}, the actuator-disk source, \code{foamToVTK}, and MPI
+for parallel runs. OpenFOAM is GPL-3. Like CalculiX, it runs as a separate program, so Vector Labs' own
+licence is unaffected. Bundling it means shipping its licence and a pointer to its source (question O1).
+
+%----------------------------------------------------------------------
+\subsubsection*{Theory}
+
+\paragraph{The flow equations.} A drone flies far below Mach~0.3, so the air is treated as incompressible.
+The steady Reynolds-averaged Navier--Stokes (RANS) equations for the mean velocity $\mathbf u$ and pressure $p$
+are
+\[
+  \nabla\cdot\mathbf u=0,\qquad
+  (\mathbf u\cdot\nabla)\mathbf u=-\frac{1}{\rho}\nabla p
+   +\nabla\cdot\bigl[(\nu+\nu_t)(\nabla\mathbf u+\nabla\mathbf u^{\mathsf T})\bigr]+\frac{\mathbf f}{\rho},
+\]
+with $\nu$ the air's viscosity and $\nu_t$ the turbulent viscosity. $\nu_t$ comes from the $k$--$\omega$ SST
+model, the usual choice for flow around bodies that separates. $\mathbf f$ is a body force per unit volume,
+used for the propellers below. \code{simpleFoam} solves these equations with the SIMPLE pressure--velocity
+iteration until the residuals and the force on the body stop changing. Air properties come from the study's
+temperature and altitude (standard atmosphere): $\rho=1.204$\,kg/m$^3$ and $\nu=1.51\times10^{-5}$\,m$^2$/s
+at 20\,$^\circ$C at sea level.
+
+\paragraph{Propellers as actuator disks.} The spinning blades are not modelled. Each propeller becomes a thin
+disk of area $A=\pi D^2/4$ and thickness $t$ that adds momentum to the air. By momentum theory, a disk with
+thrust $T$ in hover accelerates the air through it to the induced velocity, and the far wake to twice that:
+\[
+  v_i=\sqrt{\frac{T}{2\rho A}},\qquad v_{\text{wake}}=2v_i,\qquad
+  \mathbf f=\frac{T}{A\,t}\,\hat{\mathbf n}\quad\text{inside the disk.}
+\]
+In forward flight at speed $V$, $T=2\rho A\,v_i\,\lvert\mathbf V+v_i\hat{\mathbf n}\rvert$ is solved for $v_i$.
+The thrust per motor comes from the \eref{ROB-04} thrust table at the hover throttle, which the
+Mass \& Balance panel already computes (\S\ref{sec:rob0304-plan}), so the wake matches the drone's real
+weight. Swirl, a tangential force from the motor torque $Q$, is an option. OpenFOAM provides the disk as the
+\code{actuationDiskSource} option on a cell zone made from the motor's \code{ThrustAxis}.
+
+\paragraph{Heat transfer from the flow.} For cooling, the first step is one-way and cheap. The flow is solved
+with the heated surfaces held at a reference temperature $T_w$. The solver reports the wall heat flux $q''$
+on each face, and the study turns it into a surface coefficient
+\[
+  h=\frac{q''}{T_w-T_\infty}.
+\]
+These per-face $h$ values are written out as a \emph{convection map}, which the thermal study reads in place
+of a preset. The temperature of solid and air solved together (conjugate heat transfer, OpenFOAM's
+\code{chtMultiRegionFoam}) is more exact but much slower, and is left for later (question O2).
+
+\paragraph{Mesh.} \code{blockMesh} fills a box of hexahedral cells sized from the model's bounding box; the
+box and refinements are sketched in Fig.~\ref{fig:sim06-domain}. \code{snappyHexMesh} then cuts the model out
+of the box. The model is exported as STL, one file per part, so forces can be reported per part. Cells are
+refined near the walls and inside each propeller disk and its wake, and thin cell layers are added along the
+walls. On the walls, wall functions are used: the first cell sits at a dimensionless wall distance
+$y^+\approx30$--$300$, which needs far fewer cells than resolving the boundary layer. The pre-check estimates
+$y^+$ from the speed and the cell size. Presets: coarse about 0.3\,M cells, medium 1\,M, fine 3\,M, run in
+parallel on the performance cores. Run times will be measured on the benchmarks, not promised here.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[scale=0.85,font=\small]
+  % domain
+  \draw[thick] (-5,-4.6) rectangle (5,2.2);
+  \node[anchor=north west] at (-5,2.2) {domain (from the bounding box)};
+  % refinement box
+  \draw[dashed,bwdark] (-3.3,-3.8) rectangle (3.3,1.0);
+  \node[bwdark,anchor=south east] at (3.3,1.0) {refinement};
+  % frame
+  \fill[gray!60] (-2.4,-0.12) rectangle (2.4,0.12);
+  \fill[gray!80] (-0.7,-0.35) rectangle (0.7,0.35);
+  % disks
+  \foreach \x in {-2.1,2.1}{
+    \fill[red!60] (\x-0.85,0.32) rectangle (\x+0.85,0.42);
+    % stream tube contracting
+    \draw[blue!60] (\x-0.85,0.37) .. controls (\x-0.75,-1.2) .. (\x-0.6,-3.6);
+    \draw[blue!60] (\x+0.85,0.37) .. controls (\x+0.75,-1.2) .. (\x+0.6,-3.6);
+    \draw[->,blue!70,thick] (\x,0.1) -- (\x,-1.0) node[right] {$v_i$};
+    \draw[->,blue!70,thick] (\x,-2.4) -- (\x,-3.6) node[right] {$2v_i$};
+  }
+  \node[red!70!black] at (-2.1,0.75) {disk $T$};
+  \node at (0,0.75) {frame};
+  \draw[->] (-4.6,1.4) -- (-3.8,1.4) node[right] {$\mathbf V$ (forward flight)};
+  \node[anchor=south] at (0,-4.6) {outlet};
+\end{tikzpicture}
+\caption{Prop-wash study in hover. Each propeller is a red actuator disk with thrust $T$ from the thrust
+table. The wake contracts and speeds up from $v_i$ at the disk to $2v_i$ downstream, and strikes the arms. The
+refinement box keeps the cells fine around the frame and the wake. In forward flight the free stream $\mathbf
+V$ enters at the side.}
+\label{fig:sim06-domain}
+\end{figure}
+
+\paragraph{Convergence.} A run is converged when the residuals fall below $10^{-4}$, the force on each part
+changes less than 0.5\,\% over the last 200 iterations, and the mass flow in matches the mass flow out to
+within 0.5\,\%. The report states all three. Mesh independence comes from running the coarse and the medium
+mesh: when the forces differ by more than 5\,\%, the report says so and suggests the fine mesh.
+
+%----------------------------------------------------------------------
+\subsubsection*{The workflow}
+
+New Study gains an \emph{Airflow} group with three types.
+\begin{description}[nosep,font=\normalfont\bfseries]
+  \item[External flow.] Frame drag at a speed and an angle of attack. Outputs: drag and lift per part, the
+        coefficients $C_d$ and $C_l$ on a reference area you choose, surface pressure, and the flow on a plane.
+  \item[Prop wash.] Hover or forward flight, with a disk on each motor that has a \code{ThrustAxis} and a
+        thrust from the \eref{ROB-04} table. Outputs: the download on each part as a percentage of the total
+        thrust, plus the wall pressure on the arms.
+  \item[Cooling.] Openings, inlets or fans (a fixed flow rate or a prop-wash disk) and the heated surfaces.
+        Outputs: the air speed at each part and the convection map for the thermal study.
+\end{description}
+\begin{itemize}[nosep]
+  \item \textbf{Setup:} air (temperature and altitude), the free stream, the domain size (automatic, which
+        you can change) and the mesh preset.
+  \item \textbf{Pre-check:} watertight parts, an estimate of the cell count and of $y^+$, and a disk on
+        every marked motor.
+  \item \textbf{Run:} in the background, with a live residual and force plot and a Stop button.
+  \item \textbf{Results:} read through \code{foamToVTK} into FreeCAD's FEM result pipeline: cut planes,
+        streamlines, surface pressure and the forces table. When ParaView is installed, an \emph{Open in
+        ParaView} button opens the case there.
+  \item \textbf{Report:} the \LaTeX{} report gains an airflow section with the setup, convergence and force
+        tables.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{Benchmarks (as in \eref{SIM-05})}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Pipe, laminar & Air at 20\,$^\circ$C, $D=10$\,mm, mean speed 0.5\,m/s ($Re=331$). Fully developed pressure
+  gradient $\mathrm dp/\mathrm dx=32\mu U/D^2=2.91$\,Pa/m, measured past the entrance length
+  ($0.05\,Re\,D\approx0.17$\,m); accepts 2\,\%.\\
+Sphere drag & $Re=100$. The correlation of Schiller and Naumann, $C_d=\frac{24}{Re}(1+0.15Re^{0.687})=1.09$;
+  accepts 5\,\%.\\
+Actuator disk & Hover, $T=1$\,N, $D=76$\,mm: $v_i=\sqrt{T/2\rho A}=9.57$\,m/s at the disk (mean across it)
+  and 19.1\,m/s in the far wake; accepts 5\,\% at the disk and 10\,\% in the wake (momentum theory ignores
+  mixing).\\
+Flat plate, heated & Air at 5\,m/s along a 50\,mm plate, laminar: $Re_L=1.66\times10^4$,
+  $\bar h=\frac{k}{L}\,0.664\,Re_L^{1/2}Pr^{1/3}=39$\,W/m$^2$K; accepts 10\,\%.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Build order.} Each phase is one Sonnet agent, tested against its benchmark before the next starts.
+\begin{enumerate}[nosep]
+  \item The case writer and runner, external flow and the results view (pipe and sphere benchmarks).
+  \item Actuator disks and the prop-wash study, linked to the thrust tables (disk benchmark).
+  \item Cooling and the convection map used by the thermal study (flat-plate benchmark).
+  \item Wall pressure as a load on a static study (question O7).
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\paragraph{Questions for you.}
+\begin{enumerate}[label=O\arabic*.]
+  \item \textbf{Getting OpenFOAM.} (a) Bundle it inside Vector Labs, like CalculiX and Tectonic: one download,
+        always the tested version, but the app grows by about 270\,MB zipped and more unpacked. (b) Use an
+        installed \emph{OpenFOAM.app}: the study finds it, and if none is installed it offers an
+        \emph{Install OpenFOAM\ldots} button (Homebrew or the download). \emph{Recommendation:} (b), with the
+        tested version pinned and a warning on any other version, so the app stays lean.
+  \item \textbf{First study types.} Prop wash and external flow first, then cooling with the convection map;
+        the full solid-and-air temperature solution (conjugate heat transfer) later.
+        \emph{Recommendation:} yes.
+  \item \textbf{Propellers.} Actuator disks with thrust from the \eref{ROB-04} thrust table at hover (or a
+        typed thrust), and swirl from the torque as an option, off by default. Modelling the spinning blades
+        themselves is out of scope. \emph{Recommendation:} yes.
+  \item \textbf{Turbulence.} $k$--$\omega$ SST by default, laminar as an option for slow, small flows (the pre-check
+        suggests it below $Re\approx2000$). \emph{Recommendation:} yes.
+  \item \textbf{Mesh.} \code{snappyHexMesh} with the coarse, medium and fine presets and an automatic domain,
+        all editable. \emph{Recommendation:} yes.
+  \item \textbf{Results.} Inside Vector Labs (planes, streamlines, surface pressure, forces table), plus
+        \emph{Open in ParaView} when it is installed. \emph{Recommendation:} yes.
+  \item \textbf{Linking to the other studies.} (a) The convection map feeds the thermal study. (b) The wall
+        pressure becomes a load on a static study (for example, the arms under prop wash).
+        \emph{Recommendation:} both, (a) first.
+  \item \textbf{Where cases live.} The OpenFOAM case folders go in \file{\textasciitilde/Library/Caches/Vector
+        Labs/cfd/}, one per study, kept until you clear them. The document stores only the setup and the
+        result summary; a re-run rebuilds the case. Runs use all performance cores.
+        \emph{Recommendation:} yes.
+  \item \textbf{Acceptance.} The four benchmarks above, each run in CI at the coarse preset.
+        \emph{Recommendation:} yes.
+\end{enumerate}

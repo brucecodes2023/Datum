@@ -297,10 +297,10 @@ EPICS = [
       "(new)",
       "Cantilever, plate with hole, Euler column, beam modes vs closed form.",
       "All benchmarks within stated tolerance in CI."),
-    E("SIM-06", "CFD / airflow (later)", "M5", "To do", ["SIM-01"],
+    E("SIM-06", "CFD / airflow", "M5", "To do", ["SIM-01", "ROB-04"],
       "(new)",
-      "Prop wash and enclosure cooling via CfdOF/OpenFOAM.",
-      "Deferred; scope set when started."),
+      "Prop wash and enclosure cooling with OpenFOAM. 31 Oct: started at your request; OpenFOAM (openfoam-app, native Apple silicon) driven directly by the study frame instead of CfdOF (macOS untested, needs Docker). External flow, prop wash with actuator disks from the ROB-04 thrust tables, cooling with a convection map for the thermal study. Plan: chapter 'SIM-06 plan', questions O1-O9 open.",
+      "Pipe, sphere, actuator-disk and flat-plate benchmarks within tolerance in CI."),
     # Manufacturing -------------------------------------------------------
     E("MFG-01", "3D-print prep", "M3", "To do", ["MOD-11"],
       "(new)",
