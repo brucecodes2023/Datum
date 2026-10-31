@@ -275,5 +275,31 @@ class TestImportJob(unittest.TestCase):
         self.assertEqual(ws.linked_files(stand), [plate + ".FCStd"])
 
 
+class TestAssembliesAsPartsBox(unittest.TestCase):
+    """PDM-12: Vault Settings has Number assemblies as parts, saved in the vault's numbering.json."""
+
+    def test_the_box_shows_toggles_and_saves_the_setting(self):
+        import shutil
+
+        from bruceworx import vault_setup as vs
+
+        tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-wiz-aap-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        vault = vs.create_vault(vs.VaultSetup(name="Lib", folder=os.path.join(tmp, "vault")), actor="bruce@mac")
+        panel = wiz._make_classes()["SettingsPanel"](vault.root)
+        self.addCleanup(panel.release)
+        self.assertFalse(panel.assemblies_as_parts.isChecked())
+        self.assertFalse(panel.current_settings().assemblies_as_parts)
+        panel.assemblies_as_parts.setChecked(True)
+        self.assertTrue(panel.save())
+        self.assertTrue(vs.load_settings(vault.root).assemblies_as_parts)
+        again = wiz._make_classes()["SettingsPanel"](vault.root)
+        self.addCleanup(again.release)
+        self.assertTrue(again.assemblies_as_parts.isChecked())
+        again.assemblies_as_parts.setChecked(False)
+        self.assertTrue(again.save())
+        self.assertFalse(vs.load_settings(vault.root).assemblies_as_parts)
+
+
 if __name__ == "__main__":
     unittest.main()

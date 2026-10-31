@@ -2087,6 +2087,14 @@ def _make_classes():
             self.builder.add_page(REV_KEY, revision_page())
             self.builder.select("program")
             lay.addWidget(self.builder)
+            # PDM-12: an assembly takes the Part document type (a library part that moves is still a part).
+            self.assemblies_as_parts = QtWidgets.QCheckBox("Number assemblies as parts")
+            self.assemblies_as_parts.setToolTip(
+                "New assemblies take the Part document type (01) instead of the Assembly type, in every place "
+                "that numbers an item: import, New Part in Vault, projects and the KiCad and connector imports. "
+                "The item stays an assembly. Numbers already given do not change (Renumber changes one).")
+            self.assemblies_as_parts.toggled.connect(lambda _on: self.changed())
+            lay.addWidget(self.assemblies_as_parts)
             self._csv_buttons(lay)
             self.numbering_issues = IssueList()
             lay.addWidget(self.numbering_issues)
@@ -2178,6 +2186,8 @@ def _make_classes():
                                retired=name in retired.get("property", ()))
             self.programs.select_first()
             self.types.select_first()
+            if hasattr(self, "assemblies_as_parts"):
+                self.assemblies_as_parts.setChecked(bool(getattr(settings, "assemblies_as_parts", False)))
 
         def current_settings(self):
             programs, p_retired, _i = self.programs.pairs("program code")
@@ -2189,6 +2199,7 @@ def _make_classes():
                 properties=fixed + custom,
                 retired={"program": p_retired, "document_type": t_retired, "property": props_retired},
                 standards=self.drawing.texts() if hasattr(self, "drawing") else {},
+                assemblies_as_parts=self.assemblies_as_parts.isChecked(),
             )
 
         def apply_settings(self, loaded):

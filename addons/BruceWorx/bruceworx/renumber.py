@@ -97,15 +97,13 @@ def cross_vault_users(vault, part_number: str) -> list:
     return out
 
 
-def plan(vault, part_number: str, new: str = "", document_type: str = "", workspace=None) -> dict:
-    """What renumbering ``part_number`` to ``new`` (default: the next free number) would do, and what
-    stops it: ``{"old", "new", "suggested", "state", "linkers", "cross_vault", "problems"}``. Nothing is
-    written. The reason is checked by :func:`renumber`, not here (the dialog asks for it separately)."""
-    old = vault.resolve(part_number)
+def check_number(vault, old: str, new: str = "", document_type: str = "") -> tuple:
+    """``(new, suggested, problems)`` for giving ``old`` the number ``new`` (blank: the next free one):
+    the number in the vault's format, and what stops it that does not need the files (a number that is
+    taken or a former one, a KiCad item, a configuration, an item in review). Cheap: the dialog asks
+    on every keystroke."""
+    item = vault.items[old]
     problems = []
-    item = vault.items.get(old)
-    if item is None:
-        raise LifecycleError(f"{part_number} is not an item in this vault")
     typed = str(new or "").strip()
     suggested = not typed
     try:
@@ -124,19 +122,31 @@ def plan(vault, part_number: str, new: str = "", document_type: str = "", worksp
         problems.append(f"{old} is a KiCad project item; renumbering those is not supported yet")
     if item.latest.state == pdm.IN_REVIEW:
         problems.append(f"{old} is in review; finish the review first")
-    if new and new != old and new in vault.items:
+    if new == old:
+        problems.append(f"{old} already has that number")
+    elif new and new in vault.items:
         problems.append(f"{new} is already an item in this vault")
     elif new and new in vault.model.aliases:
         problems.append(f"{new} was the number of {vault.model.aliases[new]}; a former number is not reused")
-    elif new == old:
-        problems.append(f"{old} already has that number")
-    found = [] if problems and item.configuration_of else linkers(vault, old)
+    return new, suggested, problems
+
+
+def plan(vault, part_number: str, new: str = "", document_type: str = "", cross: bool = True) -> dict:
+    """What renumbering ``part_number`` to ``new`` (default: the next free number) would do, and what
+    stops it: ``{"old", "new", "suggested", "state", "linkers", "cross_vault", "problems"}``. Nothing is
+    written. The reason is checked by :func:`renumber`, not here (the dialog asks for it separately).
+    ``cross=False`` leaves out the other vaults (reading them replays their journals)."""
+    old = vault.resolve(part_number)
+    if old not in vault.items:
+        raise LifecycleError(f"{part_number} is not an item in this vault")
+    new, suggested, problems = check_number(vault, old, new, document_type)
+    found = [] if vault.items[old].configuration_of else linkers(vault, old)
     for pn in [old] + found:
         holder = vault.locks.get(pn)
         if holder:
             problems.append(f"{pn} is checked out by {holder}; renumbering needs it checked in")
-    return {"old": old, "new": new, "suggested": suggested, "state": item.state, "linkers": found,
-            "cross_vault": cross_vault_users(vault, old), "problems": problems}
+    return {"old": old, "new": new, "suggested": suggested, "state": vault.items[old].state, "linkers": found,
+            "cross_vault": cross_vault_users(vault, old) if cross else [], "problems": problems}
 
 
 def default_writer(path: str, part_number: str, revision: str) -> None:

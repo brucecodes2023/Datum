@@ -353,7 +353,7 @@ def matches(row, kind="all", query=""):
     elif kind in FILTER_TYPES and row.get("item_type") not in FILTER_TYPES[kind]:
         return False
     words = (query or "").lower().split()
-    text = " ".join(str(row.get(k, "")) for k in ("part_number", "display", "description")).lower()
+    text = " ".join(str(row.get(k, "")) for k in ("part_number", "display", "description", "former")).lower()
     for word in words:
         key, sep, value = word.partition(":")
         found = query_word_matches(row, key, value) if sep and value else None
@@ -1073,6 +1073,138 @@ def break_lock(pn=None, parent=None):
     return ok
 
 
+def affected_documents(s, plan):
+    """The open documents Renumber would replace (PDM-12): the work copies of the item and of every file
+    linking it, as ``[(P/N, document)]``."""
+    out = []
+    for pn in [plan["old"]] + list(plan["linkers"]):
+        doc = document_for(s.work.path(pn))
+        if doc is not None:
+            out.append((pn, doc))
+    return out
+
+
+def renumber_summary(plan, documents=()):
+    """The text under the Renumber dialog's fields: what will be rewritten, who else uses the number,
+    and what stops it."""
+    old, new = plan["old"], plan["new"] or "the new number"
+    lines = [f"{old}'s file is stored as {new}.FCStd with its PartNumber written; the revision, state and "
+             "geometry stay as they are."]
+    if plan["linkers"]:
+        lines.append(f"Links are re-pointed in {len(plan['linkers'])} file(s), as new versions of their current "
+                     "revision: " + ", ".join(plan["linkers"]))
+    for other in plan["cross_vault"]:
+        lines.append(f"In {other['vault']}: {', '.join(other['items'])} link the old file name. They resolve "
+                     "through this vault's former numbers and are re-pointed at their next check-in.")
+    if documents:
+        lines.append("Open documents are closed first: " + ", ".join(pn for pn, _doc in documents))
+    lines += [f"Cannot renumber: {text}" for text in plan["problems"]]
+    return "\n\n".join(lines)
+
+
+def _renumber_dialog(s, pn, plan, documents, answers=None):
+    """(new number, reason) from the Renumber dialog, or None when cancelled (or refused, when
+    ``answers`` {"new", "reason"} stand in for the typing so a script can run it without showing it)."""
+    from PySide import QtWidgets
+
+    from bruceworx import renumber
+
+    dialog = QtWidgets.QDialog(_window())
+    dialog.setWindowTitle("Renumber")
+    form = QtWidgets.QFormLayout(dialog)
+    form.addRow("Item", QtWidgets.QLabel(f"{_display(s, pn)}  ·  {plan['state']}"))
+    number = QtWidgets.QLineEdit(plan["new"])
+    number.setPlaceholderText("the next free number")
+    form.addRow("New number", number)
+    reason = QtWidgets.QLineEdit()
+    reason.setPlaceholderText("why (required); recorded in the activity log")
+    form.addRow("Reason", reason)
+    summary = QtWidgets.QLabel()
+    summary.setWordWrap(True)
+    summary.setMinimumWidth(460)
+    form.addRow(summary)
+    buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+    ok = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+    ok.setText("Renumber")
+    form.addRow(buttons)
+    state = {"new": plan["new"]}
+
+    def update(*_args):
+        typed = number.text().strip()
+        found, _suggested, problems = renumber.check_number(s.vault, pn, typed)
+        shown = dict(plan, new=found, problems=problems + [p for p in plan["problems"] if "checked out" in p])
+        state["new"] = found
+        summary.setText(renumber_summary(shown, documents))
+        ok.setEnabled(bool(found) and not shown["problems"] and bool(reason.text().strip()))
+
+    number.textChanged.connect(update)
+    reason.textChanged.connect(update)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    if answers is not None:
+        number.setText(answers.get("new", plan["new"]))
+        reason.setText(answers.get("reason", ""))
+        update()
+        return (state["new"], reason.text().strip()) if ok.isEnabled() else None
+    update()
+    if dialog.exec() != QtWidgets.QDialog.Accepted:
+        return None
+    return state["new"], reason.text().strip()
+
+
+def renumber_item(pn=None, new=None, reason=None, answers=None):
+    """Renumber... (PDM-12): give the item a new part number, with the reason in the activity log.
+
+    Suggests the next free number (the typed one is checked), shows what will be rewritten and the
+    users in other vaults, asks to close the affected open documents and refuses while one has unsaved
+    changes. ``new`` and ``reason`` (or ``answers`` {"new", "reason", "close"}) let a script run it
+    without dialogs. Returns the new part number, or "" when nothing was renumbered."""
+    import FreeCAD
+
+    from bruceworx import renumber
+
+    s = session()
+    pn = pn or current_target()
+    if s is None or not pn:
+        return ""
+    answers = dict(answers or {})
+    if new is not None:
+        answers["new"] = new
+    if reason is not None:
+        answers["reason"] = reason
+    pn = s.vault.resolve(pn)
+    try:
+        plan = renumber.plan(s.vault, pn, answers.get("new", ""))
+    except Exception as exc:
+        _message("Renumber", str(exc), "warning")
+        return ""
+    documents = affected_documents(s, plan)
+    dirty = [doc.Label for _pn, doc in documents if _gui_modified(doc)]
+    if dirty:
+        _message("Renumber", "Save or close these documents first, they have unsaved changes:\n\n"
+                 + "\n".join(dirty), "warning")
+        return ""
+    scripted = bool(answers)  # a script answers for the dialog and the questions
+    picked = _renumber_dialog(s, pn, plan, documents, answers if scripted else None)
+    if picked is None:
+        return ""
+    new, reason = picked
+    if documents and not scripted:
+        names = ", ".join(doc.Label for _pn, doc in documents)
+        if not _ask("Renumber", f"Renumbering closes {names}. Close them now?", "Close and Renumber", "Cancel"):
+            return ""
+    for _pn, doc in documents:
+        FreeCAD.closeDocument(doc.Name)
+    ok, result = _run("Renumber", renumber.renumber, s.vault, pn, reason, new, "", None, None, s.work)
+    if not ok:
+        return ""
+    changed(refresh=True)
+    _console(f"BruceWorx vault: renumbered {pn} -> {result['new']}", "msg")
+    if not scripted:
+        _message("Renumber", f"{pn} is now {result['new']}. The old number still finds it.")
+    return result["new"]
+
+
 def _load(path):
     import FreeCADGui
 
@@ -1234,8 +1366,8 @@ def _new_part_dialog(s):
     def update(*_args):
         word = kind.currentText().lower()
         try:
-            types = vault_setup._vault_document_types(source, source._load())
-            code = vault_setup.document_type_for(word, types)
+            data = source._load()
+            code = vault_setup.document_type_for_item(word, vault_setup._vault_document_types(source, data), data)
             from bruceworx import pdm
 
             number.setText(f"{pdm.strip_revision(source.preview(program.currentText(), code))}  ·  WIP 01")
@@ -1766,6 +1898,10 @@ def _active_approve(s, pn, st):
     return item is not None and item.state == IN_REVIEW and item.released is None
 
 
+def _active_renumber(s, pn, st):
+    return pn in s.vault.model.items
+
+
 def _active_break(s, pn, st):
     return bool(s.vault.locks)
 
@@ -1795,6 +1931,9 @@ COMMANDS = (
     ("BruceWorx_VaultApprove", "Approve…", "Approve the revision in review with the release checklist: it "
      "is released as A.",
      "released", "ok", approve, _active_approve, ""),
+    ("BruceWorx_VaultRenumber", "Renumber…", "Give this item a new part number. The old number keeps "
+     "finding it; every change is recorded in the activity log.", "pencil", "secondary", renumber_item,
+     _active_renumber, ""),
     ("BruceWorx_VaultBreakLock", "Break Lock…", "Release a lock nobody can release normally (a crash, a "
      "lost Mac). Recorded in the journal.", "unlock", "error", lambda: break_lock(), _active_break, ""),
     ("BruceWorx_VaultOpen", "Open from Vault", "Open the file from the vault's working folder; read-only "
@@ -1807,7 +1946,8 @@ NEW_PART_COMMAND = "BruceWorx_VaultNewPart"
 # The right-click menus (Browser, Vault panel): in this order, None is a separator.
 CONTEXT_COMMANDS = ("BruceWorx_VaultCheckOut", "BruceWorx_VaultCheckIn", "BruceWorx_VaultUndoCheckOut",
                     "BruceWorx_VaultGetLatest", "BruceWorx_VaultGetRevision", None, "BruceWorx_VaultSubmit",
-                    "BruceWorx_VaultApprove", None, "BruceWorx_VaultOpen", "BruceWorx_VaultShowInPanel")
+                    "BruceWorx_VaultApprove", "BruceWorx_VaultRenumber", None, "BruceWorx_VaultOpen",
+                    "BruceWorx_VaultShowInPanel")
 
 
 def _icon_name(kind, colour):
@@ -2475,6 +2615,7 @@ def _make_classes():
                         "description": st.description, "state": st.state, "code": st.code,
                         "item_type": st.item_type, "status_text": text, "status_role": role,
                         "category": getattr(s.vault.items.get(pn), "category", ""),
+                        "former": " ".join(s.vault.former_numbers(pn)),  # PDM-12: search finds the old number
                         "sha": last.sha256 if last else "", "object": os.path.join(s.root, last.object_name)
                         if last else "", "at": last.at if last else "", "active": pn == active,
                     }

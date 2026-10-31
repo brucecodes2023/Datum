@@ -208,6 +208,21 @@ class TestPanelRows(unittest.TestCase):
         self.assertFalse(vc.matches(part, "all", "door"))
         self.assertTrue(vc.matches(part, "all", "-03"))
 
+    def test_search_finds_a_former_number(self):
+        row = {"part_number": "STD-01-01190-001", "display": "STD-01-01190-001-01", "description": "Battery",
+               "item_type": "assembly", "code": vc.UP_TO_DATE, "former": "STD-02-01001-001"}
+        self.assertTrue(vc.matches(row, "all", "STD-02-01001"))
+        self.assertFalse(vc.matches(dict(row, former=""), "all", "STD-02-01001"))
+
+    def test_renumber_summary_names_the_rewrites_and_the_blockers(self):
+        plan = {"old": "STD-02-01001-001", "new": "STD-01-01190-001", "linkers": ["BW-02-01001-001"],
+                "cross_vault": [{"vault": "Projects", "folder": "/x", "items": ["BW-02-01009-001"]}],
+                "problems": ["BW-02-01001-001 is checked out by alex@mbp; renumbering needs it checked in"]}
+        text = vc.renumber_summary(plan, [("BW-02-01001-001", None)])
+        for part in ("STD-01-01190-001.FCStd", "re-pointed in 1 file", "In Projects: BW-02-01009-001",
+                     "closed first: BW-02-01001-001", "Cannot renumber: BW-02-01001-001 is checked out"):
+            self.assertIn(part, text)
+
     def test_size_text(self):
         self.assertEqual(vc.size_text(512), "512 bytes")
         self.assertEqual(vc.size_text(2_500_000), "2.5 MB")
@@ -363,6 +378,91 @@ class TestNewPartInVault(unittest.TestCase):
         # an assembly takes the assembly document type; the parts' counter goes on
         self.assertEqual(vc.new_part("assembly", "Arm", open_it=False), "LE-02-01001-001")
         self.assertEqual(vc.new_part("part", "Second", open_it=False), "LE-01-01002-001")
+
+
+class TestRenumberInVault(unittest.TestCase):
+    """PDM-12: Renumber... in a GUI FreeCAD: the setting numbers an assembly as a part, the dialog's
+    checks, unsaved documents refuse, and the file in the vault carries the new PartNumber."""
+
+    def setUp(self):
+        import shutil
+
+        import FreeCAD
+        from bruceworx import vault_setup as vs
+
+        self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-renum-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        setup = vs.VaultSetup(name="Lib", folder=os.path.join(self.tmp, "vault"),
+                              numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("STD")],
+                                                          assemblies_as_parts=True))
+        self.ref = vs.create_vault(setup, actor="bruce@mac").ref_path
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        prefs.SetString("VaultPath", self.ref)
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+        self.FreeCAD = FreeCAD
+        from unittest import mock
+
+        self.messages = []  # a refusal shows a message box, which would wait for a click
+        patch = mock.patch.object(vc, "_message", lambda title, text, kind="information": self.messages.append(text))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def tearDown(self):
+        for name, doc in list(self.FreeCAD.listDocuments().items()):
+            if doc.FileName.startswith(self.tmp):
+                self.FreeCAD.closeDocument(name)
+
+    def test_assembly_takes_the_part_code_then_renumbers_with_its_file(self):
+        pn = vc.new_part("assembly", "Battery", open_it=False)
+        self.assertEqual(pn, "STD-01-01001-001")  # the setting: an assembly is numbered as a part
+        s = vc.session()
+        self.assertEqual(s.vault.items[pn].item_type, "assembly")
+        s.work.undo_checkout(pn)
+        # no reason: nothing happens
+        self.assertEqual(vc.renumber_item(pn, answers={"new": "STD-01-05000-001"}), "")
+        self.assertIn(pn, s.vault.items)
+        # a number that is taken is refused by the dialog's checks
+        other = vc.new_part("part", "Plate", open_it=False)
+        s.work.undo_checkout(other)
+        self.assertEqual(vc.renumber_item(pn, new=other, reason="r"), "")
+        new = vc.renumber_item(pn, new="STD-01-05000-001", reason="library items are numbered as parts")
+        self.assertEqual(new, "STD-01-05000-001")
+        s = vc.session()
+        self.assertEqual(s.vault.resolve(pn), new)
+        self.assertEqual(s.vault.items[new].item_type, "assembly")
+        self.assertEqual(s.vault.items[new].latest.code, "01")
+        version = s.vault.latest_version(new)
+        self.assertEqual(version.filename, new + ".FCStd")
+        path = s.vault.fetch(new, os.path.join(self.tmp, "out"))
+        doc = self.FreeCAD.openDocument(path, hidden=True)
+        try:
+            from bruceworx import freecad_io
+
+            self.assertEqual(freecad_io.main_object(doc).PartNumber, new)
+        finally:
+            self.FreeCAD.closeDocument(doc.Name)
+        self.assertTrue(any(e.op == "renumber" for e in s.vault.events))
+        row = [r for r in s.vault.status()["items"] if r["part_number"] == new][0]
+        self.assertEqual(row["former"], [pn])
+
+    def test_unsaved_changes_refuse_and_a_clean_document_is_closed(self):
+        pn = vc.new_part("part", "Plate")
+        s = vc.session()
+        s.work.checkin(pn, "first")
+        doc = vc.document_for(s.work.path(pn))
+        self.assertIsNotNone(doc)
+        import FreeCADGui
+
+        FreeCADGui.getDocument(doc.Name).Modified = True
+        self.assertEqual(vc.renumber_item(pn, new="STD-01-05000-001", reason="r"), "")
+        self.assertIn("unsaved changes", self.messages[-1])
+        self.assertIn(pn, s.vault.items)
+        vc._set_unmodified(doc)
+        self.assertEqual(vc.renumber_item(pn, new="STD-01-05000-001", reason="r"), "STD-01-05000-001")
+        self.assertIsNone(vc.document_for(s.work.path(pn)))
+        self.assertFalse(os.path.exists(s.work.path(pn)))  # the read-only copy under the old name is gone
+        self.assertTrue(os.path.exists(s.work.path("STD-01-05000-001")))
 
 
 class _FakePrefs:
