@@ -241,3 +241,17 @@ Fig.~\ref{fig:sim01-built}, which blurred each band edge across one element.}
   \item \textbf{The study PDF in the vault} (follow-up 4): an \code{attachments} field on check-in, or the newest report
         attached at Approve and Release ECO? Either is a PDM change; which session should make it?
 \end{enumerate}
+
+\paragraph{Answers (30 Oct).}
+\begin{enumerate}[nosep]
+  \item \textbf{Higher modes:} move the check to a slender bar and compare with Euler--Bernoulli
+        (\code{4c6a5313}); the thick bar stays checked against Timoshenko.
+  \item \textbf{Knee criterion:} report the load at an optional displacement limit you set for the nonlinear
+        collapse run (\code{2d87a5a2}).
+  \item \textbf{Nonlinear load limit:} a setting, default $1.5\,\lambda_1$ (\code{2d87a5a2}).
+  \item \textbf{Excitation harmonics:} add the $2\times$ blade-pass band (\code{5ec45ae4}).
+  \item \textbf{Study PDF in the vault:} offered as attachments at Approve and Release ECO, not on check-in.
+        The panels tick the newest \code{<part number>\_<study>\_report.pdf} files beside the work copy
+        (\code{bruceworx.sim\_reports}); \code{vault approve -{}-attach-reports} does the same on the command line.
+        Commit: see \code{git log} subject ``SIM-01: study reports offered as attachments''.
+\end{enumerate}

@@ -129,6 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="approve: why release an assembly whose components are not all released")
     vault.add_argument("--attach", action="append", default=[], metavar="FILE",
                        help="approve, reject: a file to attach (copied into the vault); repeat for more")
+    vault.add_argument("--attach-reports", action="store_true",
+                       help="approve: also attach the item's simulation study reports (<pn>_<study>_report.pdf "
+                            "beside its work copy; bruceworx.sim_reports)")
     vault.add_argument("--actor", default="", help="Who is acting (default: user@host)")
     # init: numbering and company properties (vault_setup); without them init makes a bare vault.
     vault.add_argument("--program", default="", help="init: program codes, e.g. BW,LE; import: the program")
@@ -605,7 +608,14 @@ def _vault_review(vault, args, payload):
         payload["dry_run"] = bool(args.dry_run)
         emit(payload)
         return 1 if blockers else 0
-    vault.approve(pn, note=note, checklist=checklist, attachments=args.attach)
+    attachments = list(args.attach)
+    if getattr(args, "attach_reports", False):  # SIM-01 / PDM-05 (30 Oct): the study reports go with the release
+        from bruceworx import sim_reports  # noqa: PLC0415
+
+        reports = [p for p in sim_reports.item_reports(ws, pn) if p not in attachments]
+        payload["attached_reports"] = [os.path.basename(p) for p in reports]
+        attachments += reports
+    vault.approve(pn, note=note, checklist=checklist, attachments=attachments)
     rc.lock_released(ws, [pn])
     return None
 

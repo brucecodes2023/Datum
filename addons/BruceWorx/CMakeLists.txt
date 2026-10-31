@@ -30,6 +30,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/pdm.py
     bruceworx/pdm_folder.py
     bruceworx/release_check.py
+    bruceworx/sim_reports.py
     bruceworx/sources.py
     bruceworx/step_export.py
     bruceworx/tree.py
@@ -90,6 +91,7 @@ INSTALL(
         bruceworx/pdm.py
         bruceworx/pdm_folder.py
         bruceworx/release_check.py
+        bruceworx/sim_reports.py
         bruceworx/sources.py
         bruceworx/step_export.py
         bruceworx/tree.py

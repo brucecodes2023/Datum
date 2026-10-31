@@ -458,6 +458,46 @@ class TestSimulationGui(unittest.TestCase):
         self.assertIn("not saved", page.note.text())
         self.assertEqual(sim.default_bands()[0], [1.0, 3.0])
 
+    def test_approve_and_release_offer_the_study_reports(self):
+        """Answer 5 (30 Oct): Approve and Release ECO tick the item's study reports as attachments."""
+        import types
+
+        try:
+            from bruceworx import pdm_workspace
+            from bruceworx.pdm_folder import FolderVault
+        except ImportError:
+            self.skipTest("hooks add-on not installed")
+        import bruceworx_changes as ch
+
+        tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-reports-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        pn = "BW-01-01001-001"
+        vault = FolderVault.init(os.path.join(tmp, "v"), "Reports", actor="bruce@mac")
+        vault.create_item(pn, "part", "Bracket")
+        work = pdm_workspace.Workspace(vault)
+        vault.checkout(pn)
+        os.makedirs(os.path.dirname(work.path(pn)), exist_ok=True)
+        with open(work.path(pn), "w") as handle:
+            handle.write("model")
+        vault.checkin(pn, work.path(pn), comment="first")
+        vault.submit(pn)
+        report = os.path.join(os.path.dirname(work.path(pn)), pn + "_Bracket_report.pdf")
+        with open(report, "wb") as handle:
+            handle.write(b"%PDF-1.5")
+        s = types.SimpleNamespace(vault=vault, work=work, invalidate=lambda: None)
+        panel = ch._classes()["ApprovePanel"](s, pn)
+        self.assertEqual(panel.files.count(), 1)
+        self.assertIn(pn + "_Bracket_report.pdf (", panel.files.item(0).text())
+        self.assertEqual(panel.attachments(), [report])
+        from PySide import QtCore
+
+        panel.files.item(0).setCheckState(QtCore.Qt.Unchecked)  # untick: not attached
+        self.assertEqual(panel.attachments(), [])
+        panel.files.add_file(report)
+        self.assertEqual(panel.attachments(), [report])
+        self.assertEqual(ch._reports(s, [pn, pn]), [report])
+        panel.finish()
+
     def test_ribbon_commands_in_the_fem_workbench(self):
         import FreeCADGui as Gui
 

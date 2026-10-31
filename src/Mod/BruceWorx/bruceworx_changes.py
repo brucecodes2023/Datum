@@ -769,6 +769,16 @@ def _html(text):
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _reports(s, pns):
+    """The study reports beside the items' work copies (bruceworx.sim_reports); [] when it cannot look."""
+    try:
+        from bruceworx import sim_reports
+
+        return sim_reports.offered(s.work, pns)
+    except Exception:  # noqa: BLE001 -- an attachment offer is never a reason not to release
+        return []
+
+
 def _make_classes():
     from PySide import QtCore, QtGui, QtWidgets
 
@@ -816,6 +826,50 @@ def _make_classes():
         if on_change is not None:
             edit.textChanged.connect(on_change)
         return edit
+
+    def report_box(paths):
+        """(box, list) of release attachments: the items' simulation study reports, ticked (SIM-01 / PDM-05,
+        30 Oct: bruceworx.sim_reports), and Add… for any other file. ticked_files(list) reads it."""
+        from bruceworx import sim_reports
+
+        files = box("Attachments")
+        fl = QtWidgets.QVBoxLayout(files)
+        lst = QtWidgets.QListWidget()
+        lst.setObjectName("bwChangeAttachments")
+        fixed_height(lst, 64)
+
+        def add(path, text=None):
+            it = QtWidgets.QListWidgetItem(text or os.path.basename(path))
+            it.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsUserCheckable)
+            it.setCheckState(QtCore.Qt.Checked)
+            it.setData(QtCore.Qt.UserRole, path)
+            it.setToolTip(path)
+            lst.addItem(it)
+
+        for path in paths:
+            add(path, sim_reports.label(path))
+        fl.addWidget(lst)
+        row = QtWidgets.QHBoxLayout()
+        more = QtWidgets.QPushButton("Add…")
+
+        def add_files(*_a):
+            chosen, _f = QtWidgets.QFileDialog.getOpenFileNames(_window(), "Attach files")
+            for path in chosen or ():
+                add(path)
+
+        more.clicked.connect(add_files)
+        row.addWidget(more)
+        row.addStretch(1)
+        fl.addLayout(row)
+        fl.addWidget(hint(("The study reports of these files (Simulation) are ticked: they go into the vault with "
+                           "the release record, so the release package carries them." if paths else
+                           "No study report beside these files.") + " Ticked files are copied in, never changed."))
+        lst.add_file = add
+        return files, lst
+
+    def ticked_files(lst):
+        return [lst.item(i).data(QtCore.Qt.UserRole) for i in range(lst.count())
+                if lst.item(i).checkState() == QtCore.Qt.Checked]
 
     def mark(state):
         lab = QtWidgets.QLabel(MARKS[state])
@@ -1027,9 +1081,13 @@ def _make_classes():
             self.status.setObjectName("bwVaultIssue")
             self.status.setProperty("level", "warning")
             nl.addWidget(self.status)
-            self.form = [first, checks, notes]
+            files, self.files = report_box(_reports(s, [pn]))
+            self.form = [first, checks, notes, files]
             self.update_ok()
             QtCore.QTimer.singleShot(0, lambda: vc._alive(self.note) and self.note.setFocus())
+
+        def attachments(self):
+            return ticked_files(self.files)
 
         def problems(self):
             return rc.blockers(self.checklist.lines, self.note.toPlainText())
@@ -1039,7 +1097,7 @@ def _make_classes():
                 self.update_ok()
                 return False
             ok, _r = self.run("Approve", self.s.vault.approve, self.pn, note=self.note.toPlainText().strip(),
-                              checklist=self.checklist.record())
+                              checklist=self.checklist.record(), attachments=self.attachments())
             if not ok:
                 return False
             rc.lock_released(self.s.work, [self.pn])  # released means read-only, on disk too
@@ -1425,8 +1483,12 @@ def _make_classes():
             self.status.setObjectName("bwVaultIssue")
             self.status.setProperty("level", "warning")
             nl.addWidget(self.status)
-            self.form.append(notes)
+            files, self.files = report_box(_reports(s, eco.items))
+            self.form += [notes, files]
             self.update_ok()
+
+        def attachments(self):
+            return ticked_files(self.files)
 
         def submit(self, pn):
             if self.s.vault.locks.get(pn):
@@ -1458,7 +1520,8 @@ def _make_classes():
                 return False
             checklists = {pn: cl.record() for pn, cl in self.checklists.items()}
             ok, _r = self.run("Release ECO", self.s.vault.release_eco, self.number,
-                              note=self.note.toPlainText().strip(), checklists=checklists)
+                              note=self.note.toPlainText().strip(), checklists=checklists,
+                              attachments=self.attachments())
             if not ok:
                 return False
             rc.lock_released(self.s.work, self.eco.items)
