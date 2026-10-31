@@ -220,6 +220,7 @@ def _renumber_file(vault, old, new, staging, writer, fingerprint_of):
     os.makedirs(os.path.dirname(staged), exist_ok=True)
     shutil.copyfile(original, staged)
     writer(staged, new, vault.items[old].latest.code)
+    clear_link_errors(staged)  # the writer opened the copy away from its parts: FreeCAD saved "Link not restored"
     from bruceworx.connector_library import restore_view_data  # noqa: PLC0415
 
     restore_view_data(original, staged)
