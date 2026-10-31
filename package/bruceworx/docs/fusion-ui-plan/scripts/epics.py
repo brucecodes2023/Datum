@@ -339,7 +339,7 @@ EPICS = [
       "(new, 30 Oct)",
       "Connectors and fittings are parts with Pin/Port frames (LCS + pin name, gauge range, terminal P/N; port type, size, straight length). Paths attach to a pin or port and leave along it; wires fill From/To and pins from them; terminals go to the BOM; mating pairs. Geometry from KiCad 3D models and pads where they exist, parametric fittings from size tables. Plan: 'BW-ROU next' (questions C1-C3, F1-F2).",
       "A JST-XH 3-pin to XT30 harness fills its from-to list from the picks alone; a 6 mm tube leaves a push-to-connect fitting straight for its minimum length."),
-    E("ROU-06", "Harness as a vault item", "M5", "In progress", ["ROU-05", "PDM-04"],
+    E("ROU-06", "Harness as a vault item", "M5", "Done", ["ROU-05", "PDM-04"],
       "(new, 30 Oct)",
       "Harness container routed in context, Make vault item saves it out under its own P/N with cross-document attachments; wire, tube, hose and sleeving as stock items; the flattened BOM sums length per stock item with scrap and optional rounding to a purchase unit. Plan: 'BW-ROU next' (questions V1-V3).",
       "Two harnesses in a product list '22 AWG red PVC, 1.1 m (incl. 10 % scrap)' once in the purchasing BOM."),
