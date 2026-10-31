@@ -1,0 +1,77 @@
+%======================================================================
+\subsection{BW-SIM-05 validation --- Built, 31 Oct: structural and thermal set}\label{sec:sim-validation-built}
+%======================================================================
+
+Built to \S\ref{sec:sim-validation-plan} with your answers V1--V7. Commits \code{11028561} and \code{46f8056d}.
+
+\paragraph{What there is.}
+\begin{itemize}[nosep]
+  \item \textbf{Cases.} \file{Resources/Validation/cases.json} holds 13 cases. Each entry has the parameters, the
+        reference values with units, the tolerance, the citation and the licence.
+  \item \textbf{Builders.} \file{bruceworx\_validation\_cases.py} builds each geometry and its loads, and holds
+        the closed forms.
+  \item \textbf{Runner and report.} \file{bruceworx\_validation.py} runs a set and writes the report.
+  \item \textbf{Command.} \emph{Simulation $\rightarrow$ Validation} (ribbon group ``Validation'') runs the fast or
+        slow set in a headless child process with progress, and compiles the \LaTeX{} report through the bundled
+        Tectonic: reference, result, error and mark per case, the citation, and the mesh-convergence plots for
+        the slow set.
+  \item \textbf{CFD hook.} The CFD cases attach through \code{"cfd": []} and \code{register\_runner}.
+  \item \textbf{Run times.} The fast set takes 21\,s and runs as \code{TestBruceWorxValidation} (25 tests); the slow
+        set takes about 4\,min.
+  \item \textbf{A fix found on the way.} FEM's \emph{Self weight} now counts as a load in the pre-check
+        (\code{11028561}).
+\end{itemize}
+
+\paragraph{Results (fast set, coarse meshes).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXrrl@{}}
+\toprule
+Case & Quantity, reference & Result & Error & Mark\\
+\midrule
+B-ST1 LE10 & $\sigma_{yy}$ at D, $-5.38$\,MPa & $-5.341$ & 0.73\,\% & pass\\
+B-ST2 SSLV07 & six displacements and stresses, e.g.\ $w_B=-1.7217\times10^{-6}$\,m & exact & 0.00\,\% & pass\\
+B-ST3 SSLV301 & $u_r(C)=-1.552\times10^{-3}$\,m; $\sigma_{zz}$ at $2R$, 145.55\,MPa & & 0.66, 1.63\,\% & pass\\
+B-MO1 FV52 & modes 4--10, 45.897--206.19\,Hz & 43.58--197.96 & $-9.1$\,\% & \textbf{gap}\\
+B-MO2 SDLV401 & free sphere, 2470.35--2614.30\,Hz & & 0.28\,\% & pass\\
+B-MO3 SDLV100 & $f_{1..5}=56.84$--1145.41\,Hz & & 0.35\,\% & pass\\
+B-BU1 SSLV139 & thick plate, simply supported, 2779.9\,N/mm (derived) & 2734.3 & $-1.64$\,\% & pass\\
+B-TH1 TPLV06 & 30.625, 32.500, 28.482\,$^\circ$C & & 0.02\,\% & pass\\
+B-TH2 TPLV304 & 20.329\,$^\circ$C & 20.333 & 0.02\,\% & pass\\
+B-TT1 TTLV01 & 22 temperatures, 400--2400\,s & & 2.48\,\% & pass\\
+G-TS1 thick cylinder & $\sigma_\theta$, $\sigma_z$ $-220.3/+139.7$\,MPa & & 0.53\,\% & pass\\
+G-PM1 beam in tension & 146.76, 437.9\,Hz & & 0.98\,\% & pass\\
+G-NB1 bowed column & $\lambda_{cr}=1.7272$, bow 0.0990\,mm & & 0.45\,\% & pass\\
+\bottomrule
+\end{tabularx}
+\end{center}
+On the finest slow-set mesh every case is within 1.5\,\%, except B-MO1.
+
+\paragraph{Corrections and derivations.}
+\begin{itemize}[nosep]
+  \item \textbf{LE10 sign.} The target is $-5.38$\,MPa, compressive. COMSOL's model documentation states it with
+        the sign, and FeenoX computes $-5.380$.
+  \item \textbf{SSLV07.} The table was filled from the manual's \S3.3, which uses $g=9.81$.
+  \item \textbf{SSLV301.} Its reference is beam theory. At the clamped root the tetrahedra give a stress
+        concentration that never converges to 169.8\,MPa, so the root value is shown for information only,
+        and the case is marked on $\sigma_{zz}$ at $2R$ from the same formula.
+  \item \textbf{SDLV100.} Modes 4 and 5 were added from the SAMCEF column. The manual gives no Poisson ratio,
+        and $\nu=0.3$ was used.
+  \item \textbf{SSLV139.} The manual's clamped rim, with rotation held and radial motion free, cannot be held by
+        a solid. The case is therefore simply supported, with $F=k^2D/R^2$ and $k^2=4.198$ from
+        $xJ_0(x)=(1-\nu)J_1(x)$, plus a shear correction. The same derivation for the clamped edge reproduces the
+        manual's 2668.315 to 0.013\,\%.
+  \item \textbf{TTLV01.} $D=0.2$\,m is the diameter. The exact series stored with the case agrees with the
+        manual's chart readings to within their stated uncertainty.
+\end{itemize}
+
+\paragraph{Open.}
+\begin{itemize}[nosep]
+  \item \textbf{B-MO1 (FV52) stays a gap.} Its tolerance is unchanged, and a 12\,\% guard catches regressions. With
+        $u_z=0$ on the bottom edges, the bending modes converge 5--9\,\% below the targets, while the in-plane
+        mode matches to 0.01\,\%. Other supports give 3--4\,\% low. The original NAFEMS boundary condition still
+        has to be found.
+  \item \textbf{TTLV01 at 1000\,s.} The result at 1000\,s is missing from the loaded results when the time step
+        is 10 or 5\,s; an FRD import quirk that has not been investigated.
+  \item \textbf{Still to come.} The CFD cases come with \eref{SIM-06}, and your own part tests (V5) after them.
+\end{itemize}
