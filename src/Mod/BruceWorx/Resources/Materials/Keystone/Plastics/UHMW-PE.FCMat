@@ -41,4 +41,7 @@ BruceWorx:
   YieldBasis: "tensile stress at yield, ISO 527 (UHMW-PE has no sharp yield point)"
   Brittle: false
   Elongation: "350 %"
+  HeatDeflectionTemperature: "46.7 C"
+  HDTBasis: "ASTM D648, 1.8 MPa"
+  HDTSource: "Mitsubishi Chemical TIVAR 1000 data sheet"
   Source: "Mitsubishi Chemical TIVAR 1000 (ISO 527); tensile strength at break from ASTM D638 sheet"

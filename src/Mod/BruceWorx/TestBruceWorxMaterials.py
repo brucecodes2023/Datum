@@ -83,6 +83,22 @@ class TestKeystoneLibrary(unittest.TestCase):
                 if c["brittle"]:
                     self.assertEqual(c["yield"], c["uts"])
 
+    def test_heat_deflection_temperature_on_plastics_and_printed_cards(self):
+        """Thermal studies band the temperature against it: every plastic and printed card has one (TPU: none,
+        the data sheet says N/A), with its basis and source; metals and composites have none."""
+        for c in self.cards:
+            with self.subTest(card=c["name"]):
+                if c["family"] in ("Plastics", "Printed") and not c["name"].startswith("TPU"):
+                    self.assertTrue(30 < c["hdt"] < 250, c["hdt"])
+                    self.assertTrue(c["hdt_basis"] and c["hdt_source"])
+                    self.assertEqual(km.hdt_of(c["uuid"]), c["hdt"])
+                else:
+                    self.assertIsNone(c["hdt"])
+        by_name = {c["name"]: c for c in self.cards}
+        self.assertEqual(by_name["PETG printed"]["hdt"], 65)  # Bambu TDS, ISO 75 at 1.8 MPa
+        self.assertEqual(by_name["PLA printed"]["hdt"], 54)
+        self.assertLess(by_name["PLA printed"]["hdt"], by_name["PC printed"]["hdt"])
+
     def test_every_card_has_a_colour(self):
         for uuid in km.CARDS:
             mat = self.mm.getMaterial(uuid)

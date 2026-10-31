@@ -142,6 +142,19 @@ def extra(uuid):
         return (yaml.safe_load(fh) or {}).get("BruceWorx", {}) or {}
 
 
+_HDT_CACHE = {}
+
+
+def hdt_of(uuid):
+    """The heat deflection temperature (deg C) a plastic or printed card records, or None (metals,
+    composites and TPU have none). The Keystone cards give the value at the heavier load (1.8 MPa)."""
+    if uuid not in CARDS:
+        return None
+    if uuid not in _HDT_CACHE:
+        _HDT_CACHE[uuid] = _leading_number(extra(uuid).get("HeatDeflectionTemperature"))
+    return _HDT_CACHE[uuid]
+
+
 def _leading_number(text):
     try:
         return float(str(text).split()[0])
@@ -152,7 +165,7 @@ def _leading_number(text):
 def values(mat):
     """The engineering values of a Keystone Materials.Material as a dict:
     density kg/m^3, E/G/yield/uts MPa, nu, elongation %, k W/m/K, cp J/kg/K,
-    alpha 1/K, plus basis, brittle, source and (printed) z_strength MPa."""
+    alpha 1/K, hdt (heat deflection temperature, deg C, plastics and printed), plus basis, brittle, source and (printed) z_strength MPa."""
 
     def get(name):
         try:
@@ -181,6 +194,9 @@ def values(mat):
         "brittle": bool(block.get("Brittle", False)),
         "source": block.get("Source", ""),
         "z_strength": _leading_number(block.get("ZTensileStrength")),
+        "hdt": _leading_number(block.get("HeatDeflectionTemperature")),
+        "hdt_basis": block.get("HDTBasis", ""),
+        "hdt_source": block.get("HDTSource", ""),
     }
     return out
 

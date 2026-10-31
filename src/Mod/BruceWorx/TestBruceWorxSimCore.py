@@ -108,10 +108,11 @@ class TestStudy(unittest.TestCase):
         self.assertIs(m["mesh"], mesh)
         self.assertEqual(m["materials"], [objs["material"]])
 
-    def test_planned_study_types_are_refused(self):
+    def test_unknown_study_types_are_refused(self):
         with self.assertRaises(sim.StudyError):
-            sim.new_study(self.doc, sim.StudyPlan(study_type="thermal", model=self.box))
-        self.assertEqual([k for k, _l, ok in sim.STUDY_TYPES if ok], ["static", "modal", "buckling"])
+            sim.new_study(self.doc, sim.StudyPlan(study_type="fatigue", model=self.box))
+        self.assertEqual([k for k, _l, ok in sim.STUDY_TYPES if ok],
+                         ["static", "modal", "buckling", "thermal", "thermal_stress"])
         with self.assertRaises(sim.StudyError):  # a static study takes no modal options
             sim.new_study(self.doc, sim.StudyPlan(model=self.box, options={"ModeCount": 3}))
 
@@ -871,6 +872,225 @@ class TestBucklingBenchmarks(unittest.TestCase):
             self.assertTrue(out["pdf"] and os.path.isfile(out["pdf"]), out["message"])
         App.Console.PrintMessage(f"\n[nonlinear buckling] collapse {collapse:.4f} = {collapse / lam1:.3f} lambda1 "
                                  f"({curve['basis']}), {len(curve['factors'])} increments\n")
+
+import bruceworx_sim_thermal as thermal  # noqa: E402
+
+
+class TestThermalParts(unittest.TestCase):
+    """Thermal and thermal-stress studies without a solve: setup, pre-check, bands, curves, report source."""
+
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+
+    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Keystone PETG printed: heat deflection temperature 65 C
+
+    def study(self, kind="thermal", options=None, material=None, uuid=""):
+        doc = App.newDocument("Th")
+        box = doc.addObject("Part::Box", "Block")
+        doc.recompute()
+        plan = sim.StudyPlan(name="T", model=box, material=dict(material or thermal.ALUMINIUM), max_size=5.0,
+                             study_type=kind, options=options, material_uuid=uuid)
+        objs = sim.new_study(doc, plan)
+        return doc, box, objs["analysis"]
+
+    def test_types_available_and_initial_temperature_made(self):
+        types = {key: ok for key, _l, ok in sim.STUDY_TYPES}
+        self.assertTrue(types["thermal"] and types["thermal_stress"])
+        _doc, _box, an = self.study()
+        self.assertEqual(len(thermal.thermal_objects(an)["initial"]), 1)
+        solver = sim.members(an)["solver"]
+        self.assertEqual((solver.AnalysisType, solver.ThermoMechType, solver.ThermoMechSteadyState),
+                         ("thermomech", "pure heat transfer", True))
+        _doc, _box, an2 = self.study("thermal_stress")
+        self.assertEqual(sim.members(an2)["solver"].ThermoMechType, "uncoupled")
+
+    def test_precheck_needs_a_boundary_and_the_material_numbers(self):
+        _doc, box, an = self.study()
+        errors = [t for k, t in sim.precheck(an) if k == "error"]
+        self.assertTrue(any("temperature or convection boundary" in t for t in errors), errors)
+        self.assertFalse(any("support" in t.lower() or "No load" in t for t in errors), errors)
+        thermal.add_convection(an, [(box, "Face1")], 25.0)
+        self.assertEqual([t for k, t in sim.precheck(an) if k == "error" and "ccx" not in t], [])
+        # thermal stress: alpha and supports; a transient run: rho and cp
+        _d, box2, stress = self.study("thermal_stress", material=dict(thermal.ALUMINIUM, alpha=None))
+        thermal.add_temperature(stress, [(box2, "Face1")], 50.0)
+        errors = [t for k, t in sim.precheck(stress) if k == "error"]
+        self.assertTrue(any("alpha" in t for t in errors) and any("No support" in t for t in errors), errors)
+        _d, box3, trans = self.study(options={"Transient": True}, material=dict(thermal.ALUMINIUM, cp=None, k=None))
+        thermal.add_temperature(trans, [(box3, "Face1")], 50.0)
+        errors = [t for k, t in sim.precheck(trans) if k == "error"]
+        self.assertTrue(any("conductivity" in t for t in errors) and any("specific heat" in t for t in errors), errors)
+
+    def test_transient_settings_are_checked(self):
+        with self.assertRaises(sim.StudyError):
+            self.study(options={"Transient": True, "EndTime": 10.0, "TimeStep": 20.0})
+        with self.assertRaises(sim.StudyError):
+            self.study(options={"Transient": True, "EndTime": 1e6, "TimeStep": 1.0})
+        with self.assertRaises(sim.StudyError):
+            self.study("thermal_stress", options={"Transient": True})
+        _doc, _box, an = self.study(options={"Transient": True, "EndTime": 600.0, "TimeStep": 3.0})
+        solver = sim.members(an)["solver"]
+        self.assertFalse(solver.ThermoMechSteadyState)
+        self.assertEqual(float(solver.TimePeriod.getValueAs("s")), 600.0)
+        self.assertEqual(solver.OutputFrequency, 4)  # 200 steps, 60 results at most
+
+    def test_setup_objects_and_convection_presets(self):
+        _doc, box, an = self.study()
+        self.assertEqual([h for _n, h in thermal.CONVECTION_PRESETS], [10.0, 25.0, 75.0])
+        thermal.add_convection(an, [(box, "Face3")], 75.0, 25.0)
+        thermal.add_heat_flux(an, [(box, "Face4")], 500.0)
+        thermal.add_temperature(an, [(box, "Face1")], 80.0)
+        made = thermal.add_heat_source(an, box, 3.0)
+        objs = thermal.thermal_objects(an)
+        self.assertEqual({k: len(v) for k, v in objs.items()},
+                         {"temperatures": 1, "fluxes": 1, "convections": 1, "sources": 1, "initial": 1})
+        self.assertAlmostEqual(thermal.source_watts(made[0]), 3.0)
+        self.assertAlmostEqual(float(objs["convections"][0].AmbientTemp.getValueAs("K")), 298.15)
+        self.assertEqual(thermal.describe(objs["temperatures"][0]), "80 °C")
+        self.assertIn("h = 75", thermal.describe(objs["convections"][0]))
+        text = [sim._describe(o) for o in sim.members(an)["loads"] + sim.members(an)["others"]]
+        self.assertTrue(any(d["value"] == "3 W" and d["kind"] == "HeatSource" for d in text), text)
+
+    def test_hdt_bands_and_time_to_limit(self):
+        _doc, _box, an = self.study(material=sim.card(self.PETG), uuid=self.PETG)
+        edges, colors = thermal.bands(an)
+        self.assertEqual(edges, [55.0, 65.0])
+        self.assertEqual([thermal.band_index_c(t, edges) for t in (20, 54.9, 55, 64.9, 65, 90)], [0, 0, 1, 1, 2, 2])
+        an.TempMargin = 5.0
+        an.HDTLimit = 100.0
+        self.assertEqual(thermal.bands(an)[0], [95.0, 100.0])
+        self.assertEqual(thermal.hdt_limit(an)[1], "set on the study")
+        an.HDTLimit = 0.0
+        self.assertIn("PETG printed", thermal.hdt_limit(an)[1])
+        an.HDTLimit = 100.0
+        self.assertAlmostEqual(thermal.time_to_limit([0, 10, 20, 30], [20, 40, 60, 80], 50.0), 15.0)
+        self.assertEqual(thermal.time_to_limit([0, 10], [70, 80], 50.0), 0)
+        self.assertIsNone(thermal.time_to_limit([0, 10], [20, 30], 50.0))
+        _doc, _box, bare = self.study()
+        self.assertEqual(thermal.bands(bare)[0], [])
+
+    def test_fin_theory(self):
+        m, tip, q = thermal.fin_theory(167.0, 25.0, 100.0, 10.0, 80.0, 20.0)
+        self.assertAlmostEqual(m, 7.738, places=3)
+        self.assertAlmostEqual(tip, 65.64, places=2)
+        self.assertAlmostEqual(q, 5.03, places=2)
+
+    def test_report_source_of_a_thermal_study(self):
+        _doc, box, an = self.study(material=sim.card(self.PETG), uuid=self.PETG)
+        thermal.add_convection(an, [(box, "Face1")], 25.0)
+        an.ThermalSummary = ('{"steps": 3, "times": [0, 5, 10], "max": [20, 50, 70], "min": [20, 40, 60], "transient": true, '
+                             '"tmax": 70, "tmin": 20, "hot_node": 4, "tmax_time": 10, "probe_node": 7, "probe_point": [0, 0, 0], '
+                             '"probe_how": "the centre", "probe_distance": 0.5, "hot_curve": [20, 50, 70], "probe_curve": [20, 40, 60], '
+                             '"limit": 65, "limit_how": "set", "margin": 10, "time_to_limit": 8.5, '
+                             '"balance": {"terms": [["Heat source", 3.0], ["Convection", -2.9]], "in": 3.0, "out": 2.9, '
+                             '"residual": 0.1, "relative": 0.033}}')
+        an.Transient = True
+        source = sim.report_source(dict(sim.summary(an), type="thermal"))
+        for needle in (r"\usepackage{pgfplots}", "Time to reach the limit", "8.5", "Heat balance", "above the limit",
+                       "Temperature against time", "Conductivity"):
+            self.assertIn(needle, source)
+
+
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestThermalBenchmarks(unittest.TestCase):
+    """SIM-05: bar conduction, a fin, one-way thermal stress and a cooling block against closed forms."""
+
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+        self.tmp = tempfile.mkdtemp(prefix="bw-thermal-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def face_mean(self, result, axis, value):
+        mesh = result.Mesh.FemMesh
+        temps = [t for n, t in zip(result.NodeNumbers, result.TempC) if abs(getattr(mesh.getNodeById(n), axis) - value) < 1e-6]
+        return sum(temps) / len(temps)
+
+    def test_bar_conduction(self):
+        _doc, objs, theory = thermal.conduction_bar()
+        analysis = objs["analysis"]
+        result = sim.solve(analysis, working_dir=self.tmp)
+        data = thermal.stored(analysis)
+        mesh = result.Mesh.FemMesh
+        mids = [t for n, t in zip(result.NodeNumbers, result.TempC) if abs(mesh.getNodeById(n).x - 50.0) < 0.2]
+        self.assertTrue(mids)
+        for t in mids:
+            self.assertLess(abs(t - theory["mid"]) / theory["mid"], 0.02, t)
+        self.assertAlmostEqual(data["tmin"], 20.0, places=2)
+        self.assertAlmostEqual(data["tmax"], 100.0, places=2)
+        balance = data["balance"]
+        self.assertLess(abs(balance["in"] - theory["Q"]) / theory["Q"], 0.02, balance)
+        self.assertLess(balance["relative"], 0.02, balance)
+        App.Console.PrintMessage(f"\n[bar] mid {sum(mids) / len(mids):.3f} C (theory 60), Q {balance['in']:.4f} W (13.36)\n")
+
+    def test_fin(self):
+        _doc, objs, theory = thermal.fin()
+        analysis = objs["analysis"]
+        result = sim.solve(analysis, working_dir=self.tmp)
+        tip = self.face_mean(result, "x", 100.0)
+        self.assertLess(abs(tip - theory["tip"]) / theory["tip"], 0.02, (tip, theory))
+        balance = thermal.stored(analysis)["balance"]
+        out = balance["out"]  # the convection integrated over the faces
+        self.assertLess(abs(out - theory["Q"]) / theory["Q"], 0.02, (out, theory))
+        self.assertLess(balance["relative"], 0.02, balance)
+        App.Console.PrintMessage(f"\n[fin] tip {tip:.3f} C ({theory['tip']:.3f}), Q out {out:.4f} W ({theory['Q']:.4f})\n")
+
+    def test_thermal_stress_free_and_held(self):
+        _doc, objs, theory = thermal.heated_steel_bar()
+        analysis = objs["analysis"]
+        result = sim.solve(analysis, working_dir=self.tmp)
+        mesh = result.Mesh.FemMesh
+        grow = [v.x for n, v in zip(result.NodeNumbers, result.DisplacementVectors) if abs(mesh.getNodeById(n).x - 100.0) < 1e-6]
+        growth = sum(grow) / len(grow)
+        self.assertLess(abs(growth - theory["growth"]) / theory["growth"], 0.02, growth)
+        free_stress = max(result.vonMises)
+        self.assertLess(free_stress, 0.05 * 126.0, free_stress)  # free to grow: (almost) no stress
+        close_all()
+        # held at both ends: a 300 mm bar, so the clamped ends (which also hold the sideways growth) are 15 widths away
+        _doc, objs, theory = thermal.heated_steel_bar(length=300.0, held=True, max_size=4.0)
+        analysis = objs["analysis"]
+        result = sim.solve(analysis, working_dir=self.tmp)
+        mesh = result.Mesh.FemMesh
+        mid = [s for n, s in zip(result.NodeNumbers, result.NodeStressXX) if abs(mesh.getNodeById(n).x - 150.0) < 3.0]
+        stress = sum(mid) / len(mid)
+        self.assertLess(abs(stress - theory["stress"]) / abs(theory["stress"]), 0.02, (stress, theory))
+        self.assertIsNotNone(result.MinSafetyFactor)
+        App.Console.PrintMessage(f"\n[thermal stress] growth {growth:.5f} mm (0.060), held {stress:.2f} MPa (-126)\n")
+
+    def test_transient_cooling_block(self):
+        _doc, objs, lumped, tau = thermal.cooling_block(step=3.0, end=600.0)
+        analysis = objs["analysis"]
+        sim.solve(analysis, working_dir=self.tmp)
+        data = thermal.stored(analysis)
+        self.assertTrue(data["transient"])
+        self.assertLessEqual(data["steps"], thermal.MAX_OUTPUTS + 2)
+        worst = 0.0
+        for t, hi, lo in zip(data["times"], data["max"], data["min"]):
+            theory = lumped(t)
+            worst = max(worst, abs(hi - theory) / theory, abs(lo - theory) / theory)
+        self.assertLess(worst, 0.02, worst)
+        self.assertAlmostEqual(data["max"][-1], lumped(data["times"][-1]), delta=0.02 * lumped(600.0))
+        # the probe curve and the hottest node's curve are there; a limit at 40 C is reached on the way down? no: it cools
+        self.assertEqual(len(data["hot_curve"]), data["steps"])
+        analysis.HDTLimit = 50.0
+        times = data["times"]
+        reached = thermal.time_to_limit(times, data["max"][::-1], 50.0)  # reversed: a warm-up shape, just the helper
+        self.assertIsNotNone(reached)
+        App.Console.PrintMessage(f"\n[cooling block] worst relative error {100 * worst:.2f} % over {data['steps']} steps (tau {tau:.0f} s)\n")
+
+    def test_report_of_a_solved_study_compiles(self):
+        _doc, objs, theory = thermal.fin()
+        analysis = objs["analysis"]
+        sim.solve(analysis, working_dir=self.tmp)
+        out = sim.write_report(analysis, folder=self.tmp, compile=bool(sim.find_tex()[0]))
+        with open(out["tex"], encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("Heat balance", text)
+        self.assertIn("Hottest point", text)
+        if sim.find_tex()[0]:
+            self.assertTrue(out["pdf"] and os.path.isfile(out["pdf"]), out["message"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -73,14 +73,14 @@ DEFAULT_MEASURE = "vonMises"
 DEFAULT_SF_THRESHOLDS = (1.0, 2.0)
 DEFAULT_SF_COLORS = ("#D91C1C", "#F2A007", "#3FA34D")
 
-# (key, label, available). The frame carries every type; static, modal and buckling run (modal and
-# buckling: bruceworx_sim_eigen, 30 Oct).
+# (key, label, available). The frame carries every type; all five run (modal and buckling:
+# bruceworx_sim_eigen, thermal and thermal stress: bruceworx_sim_thermal, 30 Oct).
 STUDY_TYPES = (
     ("static", "Static stress", True),
     ("modal", "Modal frequencies", True),
     ("buckling", "Structural buckling", True),
-    ("thermal", "Thermal", False),
-    ("thermal_stress", "Thermal stress", False),
+    ("thermal", "Thermal", True),
+    ("thermal_stress", "Thermal stress", True),
 )
 
 SUPPORT_TYPES = ("Fem::ConstraintFixed", "Fem::ConstraintDisplacement", "Fem::ConstraintTransform",
@@ -205,6 +205,29 @@ def _density_kg_m3(value):
         return None
 
 
+def _number_in(value, unit):
+    """A Quantity (or a string) in ``unit``, or None."""
+    try:
+        if isinstance(value, str):
+            import FreeCAD
+
+            value = FreeCAD.Units.Quantity(value)
+        number = float(value.getValueAs(unit))
+        return None if number != number else number
+    except Exception:
+        return None
+
+
+def _card_hdt(uuid):
+    """The heat deflection temperature (deg C) a Keystone card records in its BruceWorx block, or None."""
+    try:
+        import bruceworx_materials
+
+        return bruceworx_materials.hdt_of(uuid)
+    except Exception:
+        return None
+
+
 def card_values(material):
     """The engineering values of a Materials.Material: E and nu in MPa, yield, UTS, density."""
     props = set(getattr(material, "PhysicalProperties", []) or [])
@@ -226,6 +249,10 @@ def card_values(material):
         "yield": _quantity_mpa(value("YieldStrength")),
         "uts": _quantity_mpa(value("UltimateTensileStrength")),
         "density": _density_kg_m3(value("Density")),
+        "k": _number_in(value("ThermalConductivity"), "W/m/K"),
+        "cp": _number_in(value("SpecificHeat"), "J/kg/K"),
+        "alpha": _number_in(value("ThermalExpansionCoefficient"), "1/K"),
+        "hdt": _card_hdt(getattr(material, "UUID", "")),
     }
 
 
@@ -328,6 +355,13 @@ def fem_material_dict(values, base=None):
         data["YieldStrength"] = f"{values['yield']:.6g} MPa"
     if values.get("uts"):
         data["UltimateTensileStrength"] = f"{values['uts']:.6g} MPa"
+    # the thermal numbers CalculiX needs for the thermal studies (SIM-01, 30 Oct)
+    if values.get("k"):
+        data["ThermalConductivity"] = f"{values['k']:.6g} W/m/K"
+    if values.get("cp"):
+        data["SpecificHeat"] = f"{values['cp']:.6g} J/kg/K"
+    if values.get("alpha"):
+        data["ThermalExpansionCoefficient"] = f"{values['alpha'] * 1e6:.6g} um/m/K"
     return data
 
 
@@ -412,13 +446,22 @@ def default_mesh_size(obj):
     return max(0.01, shape.BoundBox.DiagonalLength / mesh_divisor())
 
 
-def mesh_shape_object(doc, model):
-    """The object the Netgen mesh takes its shape from: the model, or a compound of a container's bodies."""
+def mesh_shape_object(doc, model, fuse=False):
+    """The object the Netgen mesh takes its shape from: the model, or a compound of a container's bodies.
+
+    fuse (the thermal studies): the bodies are fused, so touching bodies share one conforming mesh and
+    heat flows across their contact as if bonded (a contact conductance comes with SIM-02)."""
     if "Shape" in getattr(model, "PropertiesList", ()):
         return model
     bodies = [b for b in _bodies(model) if is_model(b)]
     if len(bodies) == 1:
         return bodies[0]
+    if fuse:
+        compound = doc.addObject("Part::MultiFuse", f"{model.Name}_Fused")
+        compound.Label = f"{model.Label} (bodies, bonded)"
+        compound.Shapes = bodies
+        doc.recompute()
+        return compound
     compound = doc.addObject("Part::Compound", f"{model.Name}_Compound")
     compound.Label = f"{model.Label} (bodies)"
     compound.Links = bodies
@@ -689,6 +732,13 @@ def _add_study_properties(analysis, plan):
             eigen.apply_options(analysis, plan.options)
         except eigen.EigenError as exc:
             raise StudyError(str(exc)) from exc
+    elif plan.study_type in ("thermal", "thermal_stress"):
+        import bruceworx_sim_thermal as thermal
+
+        try:
+            thermal.apply_options(analysis, plan.options)
+        except thermal.ThermalError as exc:
+            raise StudyError(str(exc)) from exc
     elif plan.options:
         raise StudyError(f"a {plan.study_type} study takes no options")
 
@@ -706,7 +756,7 @@ def new_study(doc, plan):
 
     available = {key for key, _label, ok in STUDY_TYPES if ok}
     if plan.study_type not in available:
-        raise StudyError(f"{plan.study_type} studies are planned, not built yet; static, modal and buckling run today")
+        raise StudyError(f"{plan.study_type} studies are planned, not built yet")
     if plan.model is None or not is_model(plan.model):
         raise StudyError("the study needs a body or part with solids")
     values = plan.material or card(plan.material_uuid)
@@ -728,6 +778,12 @@ def new_study(doc, plan):
         import bruceworx_sim_eigen as eigen
 
         eigen.configure_solver(analysis, solver)
+    thermal_study = plan.study_type in ("thermal", "thermal_stress")
+    if thermal_study:
+        import bruceworx_sim_thermal as thermal
+
+        thermal.make_initial_temperature(doc, analysis)
+        thermal.configure_solver(analysis, solver)
 
     material = ObjectsFem.makeMaterialSolid(doc, "Material")
     if usable(values):
@@ -737,7 +793,7 @@ def new_study(doc, plan):
         material.Label = "Material (none chosen)"
     analysis.addObject(material)
 
-    shape = mesh_shape_object(doc, plan.model)
+    shape = mesh_shape_object(doc, plan.model, fuse=thermal_study)
     mesh = ObjectsFem.makeMeshNetgenLegacy(doc, "Mesh")
     mesh.Label = f"Mesh: {plan.model.Label}"
     mesh.Shape = shape
@@ -894,6 +950,9 @@ def precheck(analysis):
     issues = []
     kind = study_kind(analysis)
     prestressed = kind == "modal" and bool(getattr(analysis, "Prestressed", False))
+    thermal_kind = kind in ("thermal", "thermal_stress")
+    if thermal_kind:
+        import bruceworx_sim_thermal as thermal
     m = members(analysis)
     model = getattr(analysis, "Model", None) if "Model" in analysis.PropertiesList else None
     if m["mesh"] is None:
@@ -922,51 +981,56 @@ def precheck(analysis):
             elif kind == "modal":
                 if not _density_kg_m3(data.get("Density")):
                     issues.append(("error", f"{mat.Label}: no density: a modal study needs the mass"))
+            elif thermal_kind:
+                issues += thermal.material_issues(mat.Label, data, analysis)
             elif kind == "static" and not _quantity_mpa(data.get("YieldStrength")):
                 if _quantity_mpa(data.get("UltimateTensileStrength")):
                     issues.append(("warning", f"{mat.Label}: no yield strength; the safety factor uses the ultimate tensile strength"))
                 else:
                     issues.append(("warning", f"{mat.Label}: no yield or ultimate strength; no safety factor"))
 
-    if not m["supports"]:
-        if kind == "modal" and not prestressed:
-            issues.append(("warning", "No supports: a free-free study; the first 6 modes are rigid-body modes "
-                                      "(below 1 Hz), skipped in the table and reported"))
-        elif prestressed:
-            issues.append(("error", "No support: the static step of a prestressed modal study needs one"))
-        else:
-            issues.append(("error", "No support: add a Fixed or Displacement constraint, or the model moves as a rigid body"))
-    else:
-        fixed_axes = set()
-        for sup in m["supports"]:
-            if sup.TypeId == "Fem::ConstraintFixed":
-                fixed_axes |= {"x", "y", "z"}
-            elif sup.TypeId == "Fem::ConstraintDisplacement":
-                for axis in "xyz":
-                    if not getattr(sup, f"{axis}Free", True):
-                        fixed_axes.add(axis)
+    if kind != "thermal":  # a thermal study has no structure to hold
+        if not m["supports"]:
+            if kind == "modal" and not prestressed:
+                issues.append(("warning", "No supports: a free-free study; the first 6 modes are rigid-body modes "
+                                          "(below 1 Hz), skipped in the table and reported"))
+            elif prestressed:
+                issues.append(("error", "No support: the static step of a prestressed modal study needs one"))
             else:
-                fixed_axes |= {"x", "y", "z"}
-        if fixed_axes != {"x", "y", "z"}:
-            missing = ", ".join(sorted({"x", "y", "z"} - fixed_axes))
-            issues.append(("warning", f"The supports leave {missing} free: rigid-body motion is likely"))
-    if not m["loads"]:
-        if kind == "buckling":
-            issues.append(("error", "No load: a buckling study needs a load (it is the reference load)"))
-        elif prestressed:
-            issues.append(("error", "No load: a prestressed modal study needs the loads to prestress with"))
-        elif kind != "modal":
-            issues.append(("error", "No load: add a Force or Pressure"))
-    elif kind == "modal" and not prestressed:
-        issues.append(("warning", "The loads are ignored: a plain modal study finds the free vibration "
-                                  "(Prestressed stiffens the modes with them)"))
+                issues.append(("error", "No support: add a Fixed or Displacement constraint, or the model moves as a rigid body"))
+        else:
+            fixed_axes = set()
+            for sup in m["supports"]:
+                if sup.TypeId == "Fem::ConstraintFixed":
+                    fixed_axes |= {"x", "y", "z"}
+                elif sup.TypeId == "Fem::ConstraintDisplacement":
+                    for axis in "xyz":
+                        if not getattr(sup, f"{axis}Free", True):
+                            fixed_axes.add(axis)
+                else:
+                    fixed_axes |= {"x", "y", "z"}
+            if fixed_axes != {"x", "y", "z"}:
+                missing = ", ".join(sorted({"x", "y", "z"} - fixed_axes))
+                issues.append(("warning", f"The supports leave {missing} free: rigid-body motion is likely"))
+        if not m["loads"]:
+            if kind == "buckling":
+                issues.append(("error", "No load: a buckling study needs a load (it is the reference load)"))
+            elif prestressed:
+                issues.append(("error", "No load: a prestressed modal study needs the loads to prestress with"))
+            elif kind == "static":
+                issues.append(("error", "No load: add a Force or Pressure"))
+        elif kind == "modal" and not prestressed:
+            issues.append(("warning", "The loads are ignored: a plain modal study finds the free vibration "
+                                      "(Prestressed stiffens the modes with them)"))
     for obj in m["supports"] + m["loads"] + m["others"]:
-        if _references_empty(obj) and obj.TypeId != "Fem::ConstraintSelfWeight":
+        if _references_empty(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
             issues.append(("error", f"{obj.Label}: no faces, edges or vertices chosen"))
         if obj.TypeId == "Fem::ConstraintForce" and not _value(obj, "Force"):
             issues.append(("error", f"{obj.Label}: the force is zero"))
         if obj.TypeId == "Fem::ConstraintPressure" and not _value(obj, "Pressure"):
             issues.append(("error", f"{obj.Label}: the pressure is zero"))
+    if thermal_kind:
+        issues += thermal.boundary_issues(analysis, m)
     if m["solver"] is None:
         issues.append(("error", "No solver: New Study makes a CalculiX solver"))
     if not find_ccx():
@@ -1003,6 +1067,11 @@ def prepare_solve(analysis, working_dir=None, progress=None):
     ensure_ccx_pref()
     _purge_results(analysis)
     eigen = None
+    thermal = None
+    if study_kind(analysis) in ("thermal", "thermal_stress"):
+        import bruceworx_sim_thermal as thermal
+
+        thermal.configure_solver(analysis, m["solver"])
     if study_kind(analysis) in ("modal", "buckling"):
         import bruceworx_sim_eigen as eigen
 
@@ -1023,6 +1092,8 @@ def prepare_solve(analysis, working_dir=None, progress=None):
             eigen.patch_input(analysis, fea.inp_file_name)  # prestressed modal: the perturbation step
         except eigen.EigenError as exc:
             raise StudyError(str(exc)) from exc
+    if thermal is not None:
+        thermal.patch_input(analysis, fea.inp_file_name)  # heat flow printed at the fixed temperatures, output rate
     return fea
 
 
@@ -1069,6 +1140,13 @@ def finish_solve(fea, progress=None):
     results = members(analysis)["results"]
     if not results:
         raise StudyError("CalculiX wrote no results (see the Report view)")
+    if study_kind(analysis) in ("thermal", "thermal_stress"):
+        import bruceworx_sim_thermal as thermal
+
+        try:
+            return thermal.finish(analysis, fea)
+        except thermal.ThermalError as exc:
+            raise StudyError(str(exc)) from exc
     result = results[-1]
     add_safety_factor(result, analysis)
     return result
@@ -1097,6 +1175,10 @@ def solve(analysis, working_dir=None, progress=None):
     return result
 
 
+def values_hdt(uuid):
+    return _card_hdt(uuid) if uuid else None
+
+
 def study_material(analysis):
     """card_values for the study: the card it was set up with, else the FEM material's own numbers."""
     uuid = getattr(analysis, "MaterialUUID", "") if "MaterialUUID" in analysis.PropertiesList else ""
@@ -1111,6 +1193,10 @@ def study_material(analysis):
             "yield": _quantity_mpa(data.get("YieldStrength")),
             "uts": _quantity_mpa(data.get("UltimateTensileStrength")),
             "density": _density_kg_m3(data.get("Density")),
+            "k": _number_in(data.get("ThermalConductivity"), "W/m/K"),
+            "cp": _number_in(data.get("SpecificHeat"), "J/kg/K"),
+            "alpha": _number_in(data.get("ThermalExpansionCoefficient"), "1/K"),
+            "hdt": values_hdt(uuid),
         }
         if usable(values):
             return values
@@ -1282,6 +1368,7 @@ def probe(result, point):
         "von_mises": result.vonMises[i] if i < len(result.vonMises) else None,
         "displacement": result.DisplacementLengths[i] if i < len(result.DisplacementLengths) else None,
         "safety_factor": sf[i] if i < len(sf) else None,
+        "temperature": (result.Temperature[i] - 273.15) if i < len(getattr(result, "Temperature", []) or []) else None,
     }
 
 
@@ -1301,6 +1388,13 @@ def _describe(obj):
     elif obj.TypeId == "Fem::ConstraintDisplacement":
         locked = [a for a in "xyz" if not getattr(obj, f"{a}Free", True)]
         value = "locked " + ", ".join(locked) if locked else "nothing locked"
+    elif obj.TypeId in ("Fem::ConstraintTemperature", "Fem::ConstraintHeatflux", "Fem::ConstraintInitialTemperature") or (
+            obj.TypeId == "Fem::ConstraintPython" and "TotalPower" in obj.PropertiesList):
+        import bruceworx_sim_thermal as thermal
+
+        value = thermal.describe(obj)
+        if obj.TypeId == "Fem::ConstraintPython":
+            kind = "HeatSource"
     return {"label": obj.Label, "kind": kind, "where": where, "value": value}
 
 
@@ -1339,6 +1433,10 @@ def summary(analysis):
 
         out["eigen"] = eigen.summary_part(analysis)
         return out
+    if out["type"] in ("thermal", "thermal_stress"):
+        import bruceworx_sim_thermal as thermal
+
+        out["thermal"] = thermal.summary_part(analysis)
     result = latest_result(analysis)
     if result is not None:
         out["result"] = result_extrema(result)
@@ -1436,6 +1534,10 @@ def report_tex(analysis, images=None, folder=None, data=None):
     os.makedirs(paths["dir"], exist_ok=True)
     figures = []
     wanted = FIGURES
+    if data.get("thermal"):
+        import bruceworx_sim_thermal as thermal
+
+        wanted = thermal.figures_for(data["thermal"])
     if data.get("eigen"):
         import bruceworx_sim_eigen as eigen
 
@@ -1482,6 +1584,11 @@ def report_source(data, figures=()):
         import bruceworx_sim_eigen as eigen
 
         lines += eigen.report_preamble(part)
+    heat = data.get("thermal")
+    if heat:
+        import bruceworx_sim_thermal as thermal
+
+        lines += thermal.report_preamble(heat)
     lines += [
         r"\begin{document}",
         rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",
@@ -1499,16 +1606,22 @@ def report_source(data, figures=()):
         lines.append(r"\begin{tabular}{@{}ll@{}}")
         for label, key, unit in (("Card", "name", ""), ("Library", "library", ""), ("Young's modulus $E$", "E", "MPa"),
                                  (r"Poisson's ratio $\nu$", "nu", ""), (r"Yield strength $\sigma_y$", "yield", "MPa"),
-                                 ("Ultimate tensile strength", "uts", "MPa"), ("Density", "density", r"kg/m$^3$")):
+                                 ("Ultimate tensile strength", "uts", "MPa"), ("Density", "density", r"kg/m$^3$"),
+                                 ("Conductivity $k$", "k", "W/m/K"), ("Specific heat $c_p$", "cp", "J/kg/K"),
+                                 (r"Expansion $\alpha$", "alpha", "1/K"), ("Heat deflection temp.", "hdt", r"$^\circ$C")):
+            if key in ("k", "cp", "alpha", "hdt") and not heat:
+                continue
             value = mat.get(key)
+            if key == "alpha" and value:
+                value, unit = value * 1e6, r"$\mu$m/m/K"
             if value not in (None, ""):
                 label_tex = label if "$" in label else e(label)
                 lines.append(rf"{label_tex} & {_tex_value(value, 4, unit) if unit else e(_fmt(value, 4))}\\")
         knock = "" if data["knockdown"] == 1 else f", knockdown {data['knockdown']:g}"
-        if not part:
+        if not part and not (heat and data["type"] == "thermal"):
             lines.append(rf"Allowable stress & {_tex_value(data['allowable'], 4, 'MPa')} ({e(data['basis'])}{e(knock)})\\")
         lines.append(r"\end{tabular}")
-        if not part and data["allowable"] and "ultimate" in (data["basis"] or ""):
+        if not part and not (heat and data["type"] == "thermal") and data["allowable"] and "ultimate" in (data["basis"] or ""):
             lines.append(r"\par\textbf{Note:} the card has no yield strength, so the safety factor divides the "
                          r"ultimate tensile strength. It says how far the part is from breaking, not from yielding; "
                          r"pick a card with a yield strength (the Keystone library has them) for a yield check.")
@@ -1544,6 +1657,13 @@ def report_source(data, figures=()):
         lines += _report_precheck(data.get("issues") or [])
         lines += ["", r"\vfill{\small\color{black!60} " + eigen.report_footer(part) + "}", r"\end{document}", ""]
         return "\n".join(lines)
+    if heat:
+        lines += thermal.report_results(heat, e)
+        if data["type"] == "thermal":
+            lines += _report_figures(figures, bool(heat.get("data")))
+            lines += _report_precheck(data.get("issues") or [])
+            lines += ["", r"\vfill{\small\color{black!60} " + thermal.report_footer(heat) + "}", r"\end{document}", ""]
+            return "\n".join(lines)
     lines += ["", r"\section*{Results}"]
     if res:
         lines.append(r"\begin{tabular}{@{}ll@{}}")

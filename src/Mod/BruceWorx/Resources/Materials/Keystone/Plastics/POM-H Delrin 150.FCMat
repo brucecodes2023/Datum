@@ -41,4 +41,7 @@ BruceWorx:
   YieldBasis: "tensile stress at yield (= tensile strength), ISO 527"
   Brittle: false
   Elongation: "40 %"
+  HeatDeflectionTemperature: "95 C"
+  HDTBasis: "ISO 75, 1.8 MPa, typical of Delrin homopolymer (check the data sheet)"
+  HDTSource: "DuPont Delrin typical"
   Source: "DuPont Delrin 150 NC010 product data (ISO 527)"

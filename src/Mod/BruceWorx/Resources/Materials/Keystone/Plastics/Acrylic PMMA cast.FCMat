@@ -41,4 +41,7 @@ BruceWorx:
   YieldBasis: "brittle, no yield: the tensile strength is used"
   Brittle: true
   Elongation: "5.5 %"
+  HeatDeflectionTemperature: "95 C"
+  HDTBasis: "ISO 75, 1.8 MPa, typical of cast acrylic (check the data sheet)"
+  HDTSource: "Roehm PLEXIGLAS GS typical"
   Source: "Roehm PLEXIGLAS GS (cast) typical"

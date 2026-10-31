@@ -45,4 +45,7 @@ BruceWorx:
   ZTensileStrength: "32 MPa"
   ZYoungsModulus: "1960 MPa"
   ZElongation: "4.7 %"
+  HeatDeflectionTemperature: "84 C"
+  HDTBasis: "ISO 75, 1.8 MPa (0.45 MPa: 87 C)"
+  HDTSource: "Bambu Lab TDS (ABS)"
   Source: "Bambu Lab TDS (ABS)"

@@ -41,4 +41,7 @@ BruceWorx:
   YieldBasis: "tensile stress at yield, ASTM D638"
   Brittle: false
   Elongation: "110 %"
+  HeatDeflectionTemperature: "125 C"
+  HDTBasis: "ISO 75, 1.8 MPa, typical of polycarbonate sheet (check the data sheet)"
+  HDTSource: "SABIC Lexan / Covestro Makrolon typical"
   Source: "SABIC Lexan 9030 / Covestro Makrolon GP sheet typical"

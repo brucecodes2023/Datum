@@ -41,4 +41,7 @@ BruceWorx:
   YieldBasis: "tensile stress at yield (= tensile strength), ASTM D638"
   Brittle: false
   Elongation: "40 %"
+  HeatDeflectionTemperature: "110 C"
+  HDTBasis: "ASTM D648, 1.8 MPa (0.45 MPa: 158 C)"
+  HDTSource: "Ensinger TECAFORM AH natural"
   Source: "Ensinger TECAFORM AH natural (ASTM D638) / Boedeker typical"

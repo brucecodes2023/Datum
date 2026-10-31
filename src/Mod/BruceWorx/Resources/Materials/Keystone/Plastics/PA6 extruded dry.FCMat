@@ -41,5 +41,8 @@ BruceWorx:
   YieldBasis: "tensile stress at yield, dry as moulded, ISO 527"
   Brittle: false
   Elongation: "50 %"
+  HeatDeflectionTemperature: "70 C"
+  HDTBasis: "ISO 75, 1.8 MPa, typical of Ertalon 6 SA (check the data sheet)"
+  HDTSource: "Mitsubishi Chemical Ertalon 6 SA typical"
   Conditioned: "yield 45 MPa, E 1425 MPa (23 C / 50 % RH)"
   Source: "Mitsubishi Chemical Ertalon 6 SA (ISO 527, dry)"

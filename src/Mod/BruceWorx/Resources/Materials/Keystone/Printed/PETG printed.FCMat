@@ -45,4 +45,7 @@ BruceWorx:
   ZTensileStrength: "39 MPa"
   ZYoungsModulus: "1120 MPa"
   ZElongation: "5.7 %"
+  HeatDeflectionTemperature: "65 C"
+  HDTBasis: "ISO 75, 1.8 MPa (0.45 MPa: 69 C)"
+  HDTSource: "Bambu Lab TDS (PETG Basic)"
   Source: "Bambu Lab TDS (PETG Basic)"
