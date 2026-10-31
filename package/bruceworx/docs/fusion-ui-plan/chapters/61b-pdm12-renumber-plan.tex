@@ -1,0 +1,114 @@
+%======================================================================
+\subsection{BW-PDM-12 --- Plan: renumber an item, and library assemblies numbered as parts (31 Oct 2026)}\label{sec:pdm12-plan}
+%======================================================================
+
+\begin{epic}{PDM-12}{Renumber, and assemblies numbered as parts}{M3}{\stProg}{(new, 31 Oct)}
+Give a vault item a new part number, with every change recorded in the activity log. Add a per-vault setting that
+gives assemblies the Part document type. Standard Libraries turns it on, so the battery becomes an \code{STD-01}
+number.
+\end{epic}
+
+\paragraph{Why.} The OVONIC battery was imported as an assembly, because its plug moves and its leads are routed
+wires. The vault therefore numbered it \code{STD-02-01001-001}, using the Assembly document type. You said that
+\emph{any standard part should be STD-01 regardless if it's an assembly, because it gets imported into assemblies
+to be a part}. The vault has no way to change a number today: \code{retire} needs a released revision, and nothing
+renames an item. You asked for both: the rule, and renumbering (``add the vault renaming functionality'').
+
+\paragraph{This changes an approved rule.} The data model (Figure~\ref{fig:pdm-model}, \eref{PDM-02}) says the
+P/N ``belongs to the Item and never changes''. With Renumber, the item keeps one identity and its numbers become a
+history. The current number is its P/N; the former ones are aliases that still find it. Nothing is renamed silently:
+every renumber is a journal line, with a reason, an actor and a time.
+
+\paragraph{Your answers (31 Oct).}
+\begin{itemize}[nosep]
+  \item \textbf{What can be renumbered:} released items as well, ``but track all changes in the activity log''.
+  \item \textbf{Where:} the Vault panel (right-click, \emph{Renumber\ldots}) and the command line.
+  \item \textbf{The STD-01 rule:} a per-vault setting, \emph{Number assemblies as parts}, rather than retiring the
+        Assembly type in Standard Libraries.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{A. The setting: Number assemblies as parts}
+
+A switch in Vault Settings, stored in the vault's \file{numbering.json} (\code{"assemblies\_as\_parts": true}). It
+is off in a new vault and on in Standard Libraries. When it is on, every place that picks a document type for a new
+number gives an assembly the \emph{Part} code: import, \emph{New Part in Vault}, project setup, the KiCad import,
+the connector library and Renumber's suggestion. All of them call one helper,
+\code{vault\_setup.document\_type\_for\_item(kind, types, data)}, instead of \code{document\_type\_for} directly.
+Drawings keep their own type (03). The item stays an assembly in the vault (its BOM, its tree); only the number
+changes. The command line gets \code{bw-hooks vault settings -{}-assemblies-as-parts on|off}.
+
+%----------------------------------------------------------------------
+\subsubsection*{B. Renumber}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[>=Stealth, node distance=4mm,
+  box/.style={draw=bwblue!70,fill=bwblue!5,rounded corners=2pt,align=center,font=\scriptsize,inner sep=4pt,text width=3.1cm},
+  note/.style={font=\tiny\color{bwgrey},align=left}]
+\node[box] (ask) {\textbf{Renumber\ldots}\\new number (next free, or typed)\\reason (required)};
+\node[box,right=8mm of ask] (check) {\textbf{Checks}\\not checked out, not in review,\\number free and valid};
+\node[box,right=8mm of check] (files) {\textbf{Files}\\item: P/N written\\every file linking it: link\\re-pointed (new objects)};
+\node[box,below=6mm of files] (op) {\textbf{One journal line}\\\code{renumber} old $\to$ new,\\reason, new file versions};
+\node[box,left=8mm of op] (model) {\textbf{Replay}\\item, versions, BOMs, drawings,\\ECRs/ECOs, projects re-keyed;\\old number kept as alias};
+\node[box,left=8mm of model] (see) {\textbf{Seen as}\\activity: ``renumbered A $\to$ B''\\search by the old number\\history keeps both};
+\draw[->] (ask) -- (check); \draw[->] (check) -- (files); \draw[->] (files) -- (op); \draw[->] (op) -- (model);
+\draw[->] (model) -- (see);
+\end{tikzpicture}
+\caption{Renumber: one journal operation carries the new number, the reason and the file versions it made.}
+\end{figure}
+
+\paragraph{What it does.}
+\begin{enumerate}[nosep]
+  \item \textbf{The number.} By default the vault's next free number in the item's program, with the document type
+        the setting gives. A typed number is accepted if it is valid in the vault's format and is not an item or a
+        former number of one.
+  \item \textbf{Checks.} The item and every file that links it must not be checked out by anyone, and the item must
+        not be in review. Any state is allowed otherwise: WIP, released or obsolete, as you chose. A reason is
+        required.
+  \item \textbf{Files.} The item's latest file gets the new \code{PartNumber} and is stored as
+        \file{\textless new\textgreater.FCStd}. The latest file of every item that links it gets the link re-pointed:
+        its parent assemblies, its drawings and its configuration rows. These are \emph{renumber versions}. They are
+        new file versions of the item's current revision, with the same revision code and the same state. Only the
+        identity changed, never the geometry: the geometry fingerprint, where there is one, must stay the same, or
+        the renumber is refused.
+  \item \textbf{One journal line.} \code{renumber} carries the old and new numbers, the reason, the actor and time,
+        and the new file versions (P/N $\to$ SHA-256). The file objects are written first, so a crash leaves only
+        unused objects, never a half-renumbered vault.
+  \item \textbf{Replay.} The item, its versions, locks, BOM lines (as parent and as child, in every revision),
+        \code{drawing\_of}, \code{configuration\_of}, ECR/ECO item lists, project tops, category and item type move
+        to the new number. The old number becomes an \emph{alias}: \code{vault.resolve(pn)} answers with the current
+        number, and chained renumbers resolve to the last one.
+\end{enumerate}
+
+\paragraph{Where it shows.}
+\begin{itemize}[nosep]
+  \item \textbf{Activity log} (vault dashboard): ``renumbered \code{STD-02-01001-001} $\to$
+        \code{STD-01-01190-001}: \textit{reason}''. The detail lists every file version the renumber wrote.
+  \item \textbf{Item history:} a line in the revision history, and ``was \code{STD-02-01001-001}'' under the
+        number in the Vault panel and the Properties.
+  \item \textbf{Search:} typing an old number finds the item, marked ``renumbered from \ldots''. Command-line
+        commands accept old numbers too, and say what they resolved to.
+  \item \textbf{Older revisions} still link the old file names. \emph{Get Revision} rewrites them through the
+        aliases, so an old assembly opens with today's files.
+  \item \textbf{Work folders:} a read-only work copy under the old name is replaced by the new one at the next
+        refresh. Open documents are closed first: the GUI asks, and refuses while one has unsaved changes.
+\end{itemize}
+
+\paragraph{Other vaults.} Projects link Standard Libraries parts across vaults. Renumbering a library part lists
+the items in the other vaults beside it whose latest file still links the old name, before you confirm. Those links
+resolve through the library's aliases when the project file opens, and are re-pointed at that item's next
+check-in, as the check-in's existing re-linking (\code{LinkFix}) does today.
+
+\paragraph{Not in the first version.} KiCad items (folder items, ECD-05): Renumber refuses them, with a message,
+until the project inside the folder can be renamed safely.
+
+\paragraph{Tests.} Model: replay of renumber in every state; refusals (checked out, in review, number taken, alias
+taken, bad format); BOMs, drawings and configurations re-keyed; chained renumbers; aliases. Folder vault: the new
+file versions, links re-pointed, a crash before the journal line leaves the vault as it was. Workspace: an old work
+copy replaced; Get Revision through aliases. Dashboard: the activity line. GUI: the dialog's checks and the
+suggested number. Setting: every numbering path honours it.
+
+\paragraph{First use.} With the setting on in Standard Libraries, renumber the battery assembly
+\code{STD-02-01001-001} to the next \code{STD-01} number, with the reason ``library items are numbered as parts
+(31 Oct)''.
