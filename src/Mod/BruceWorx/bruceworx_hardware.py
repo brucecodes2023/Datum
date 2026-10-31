@@ -714,6 +714,9 @@ def make_fastener_file(path, pn, ftype, diameter, length, description, vault_roo
         App.closeDocument(doc.Name)
 
 
+HARDWARE_CATEGORY = "Hardware"
+
+
 def ensure_cots_item(s, ftype, diameter, length=None, program=""):
     """The vault part number of this fastener, made (numbered, its file checked in as WIP 01)
     when the vault has none; recorded in the vault's hardware.json. ``s``: the vault client's
@@ -733,7 +736,8 @@ def ensure_cots_item(s, ftype, diameter, length=None, program=""):
         def make(path, number):
             make_fastener_file(path, number, ftype, diameter, length, description, s.root)
 
-        pn = vault_setup.new_item(s.vault, "cots", description, make, program)
+        # A new bolt is filed under the Vault panel's "Hardware" category (an existing item keeps its own).
+        pn = vault_setup.new_item(s.vault, "cots", description, make, program, category=HARDWARE_CATEGORY)
         made = True
     hw.record(catalogue, key, pn, description, source="Fasteners",
               standard=hw._standard(hw._type_code(ftype)), size=diameter,

@@ -476,6 +476,9 @@ class FastenersAddonTests(Tmp):
         item = s.vault.items[pn12]
         self.assertEqual((item.item_type, item.description), ("cots", "Socket head cap screw ISO 4762 M3x12"))
         self.assertIsNotNone(s.vault.latest_version(pn12))
+        self.assertEqual(item.category, "Hardware")  # new bolts go in the Hardware category
+        self.assertEqual(s.vault.items["LE-01-01001-001"].category, "")  # an existing item is left as it was
+        self.assertEqual(s.vault.categories().get("Hardware"), 1)
         asm_doc.recompute()
         target = link.getLinkedObject(True)
         self.assertEqual((target.PartNumber, target.ItemType, target.HardwareKey),
