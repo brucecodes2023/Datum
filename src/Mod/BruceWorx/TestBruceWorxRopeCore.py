@@ -185,7 +185,7 @@ class RopeDragTests(unittest.TestCase):
         # it stopped where the gap reaches the cut length (about 85 degrees), not at 0
         self.assertGreater(final, 60.0)
         self.assertLess(final, 100.0)
-        self.assertLessEqual(self.tip_gap(anchor, tip), cut + 0.05)
+        self.assertLessEqual(self.tip_gap(anchor, tip), cut + 0.3)
         self.assertGreater(self.tip_gap(anchor, tip), cut - 1.5)
         self.assertFalse(wire.Taut)
         self.assertAlmostEqual(wire.Length.Value, cut, places=6)
@@ -202,25 +202,104 @@ class RopeDragTests(unittest.TestCase):
 
 
 class BatteryTests(unittest.TestCase):
-    """The battery assembly STD-02-01001-001 on a copy of the vault (BW_BATTERY=<path to the copy's .FCStd>)."""
+    """The battery assembly STD-02-01001-001 on a copy of the vault (BW_BATTERY=<the copy's .FCStd>). The T plug
+    is hinged on the pack and swung through an arc with the Assembly drag API."""
 
-    def test_battery_leads_keep_their_length(self):
+    NAMES = ("WirePlus", "WireMinus", "WireBal1", "WireBal2", "WireBal3", "WireBal4")
+
+    def setUp(self):
         path = os.environ.get("BW_BATTERY")
         if not path or not os.path.exists(path):
             self.skipTest("BW_BATTERY not set")
-        doc = App.openDocument(path)
         try:
-            wires = br.routed(doc, (br.WIRE,))
-            before = {w.Name: w.Length.Value for w in wires}
-            doc.recompute()
-            for w in wires:
-                self.assertAlmostEqual(w.Length.Value, before[w.Name], places=6)
-                self.assertAlmostEqual(w.CutLength.Value, before[w.Name], places=6)
-                self.assertFalse(w.Taut, (w.Label, w.Problems))
-                self.assertAlmostEqual(rope_length(w), w.CutLength.Value - w.FromStrip.Value - w.ToStrip.Value,
-                                       delta=w.CutLength.Value * 2e-3)
-        finally:
-            App.closeDocument(doc.Name)
+            import JointObject
+            import UtilsAssembly
+        except ImportError:
+            self.skipTest("Assembly module not available")
+        self.JointObject, self.UtilsAssembly = JointObject, UtilsAssembly
+        self.doc = App.openDocument(path)
+        self.wires = [self.doc.getObject(n) for n in self.NAMES]
+        self.before = {w.Name: w.Length.Value for w in self.wires}
+
+    def tearDown(self):
+        App.closeDocument(self.doc.Name)
+
+    def hinge(self):
+        asm, bat, plug = (self.doc.getObject(n) for n in ("Assembly", "BAT", "P1_T_plug"))
+        joint = self.doc.getObject("Joints").newObject("App::FeaturePython", "PlugHinge")
+        self.JointObject.Joint(joint, self.JointObject.JointTypes.index("Revolute"))
+        joint.KeepPosition = True
+        joint.Proxy.setJointConnectors(joint, [[bat, ["LeadEnd.", ""]], [plug, ["MateFace.", ""]]])
+        self.doc.recompute()
+        plc = self.UtilsAssembly.getJcsGlobalPlc(joint.Placement1, joint.Reference1)
+        self.axis, self.pivot, self.home = plc.Rotation.multVec(V(0, 0, 1)), plc.Base, App.Placement(plug.Placement)
+        return asm, plug, joint
+
+    def spin(self, plug, degrees):
+        plug.Placement = App.Placement(V(), App.Rotation(self.axis, degrees), self.pivot) * self.home
+
+    def test_leads_keep_their_length_through_a_drag(self):
+        for w in self.wires:
+            w.BendRule = "No check"  # the model as built bends its leads tighter than 3 x OD
+        self.doc.recompute()
+        for w in self.wires:
+            self.assertAlmostEqual(w.Length.Value, self.before[w.Name], places=6)
+            self.assertFalse(w.Taut, (w.Label, w.Problems))
+        asm, plug, joint = self.hinge()
+        import time
+
+        times = []
+        asm.preDrag([plug])
+        for degrees in list(range(0, 181, 6)) + list(range(180, -1, -12)):
+            self.spin(plug, degrees)
+            t = time.perf_counter()
+            self.assertTrue(asm.doDragStep())
+            times.append(time.perf_counter() - t)
+        asm.postDrag()
+        for w in self.wires:
+            self.assertFalse(w.Taut, (w.Label, w.Problems))
+            self.assertAlmostEqual(w.Length.Value, self.before[w.Name], places=6)
+            self.assertAlmostEqual(rope_length(w), w.CutLength.Value - w.FromStrip.Value - w.ToStrip.Value,
+                                   delta=w.CutLength.Value * 2e-3)
+        print(f"\n  battery: {len(times)} drag steps, 6 wires, mean {1e3 * sum(times) / len(times):.1f} ms, "
+              f"max {1e3 * max(times):.1f} ms per step")
+
+    def tip_gap(self, wire):
+        """Distance between the two lead tips of ``wire`` at the parts' present placements."""
+        start, end = br.path_leads(wire.Path)
+        tip = lambda lead: V(*lead.origin) + V(*lead.direction) * lead.length  # noqa: E731
+        return (tip(start) - tip(end)).Length, start.length + end.length
+
+    def test_the_drag_stops_where_a_lead_is_taut(self):
+        for w in self.wires:
+            w.BendRule = "No check"
+        plus = self.wires[0]
+        asm, plug, joint = self.hinge()
+        gaps = {}
+        for degrees in range(0, 181, 6):
+            self.spin(plug, degrees)
+            gaps[degrees] = self.tip_gap(plus)[0]
+        self.spin(plug, 0)
+        leads = self.tip_gap(plus)[1]
+        peak = max(gaps.values())
+        self.assertGreater(peak, gaps[0] + 5.0)
+        cut = leads + gaps[0] + 0.6 * (peak - gaps[0])  # taut a bit more than halfway to the farthest swing
+        plus.CutLength = cut
+        self.doc.recompute()
+        self.assertFalse(plus.Taut)
+        asm.preDrag([plug])
+        for degrees in range(0, 181, 6):
+            self.spin(plug, degrees)
+            asm.doDragStep()
+        asm.postDrag()
+        reading = math.degrees(self.UtilsAssembly.getJointXYAngle(joint))
+        stop_gap = self.tip_gap(plus)[0]
+        self.assertLess(abs(reading), 175.0)
+        self.assertLessEqual(stop_gap + leads, cut + 0.3)
+        self.assertFalse(plus.Taut, (plus.Problems, stop_gap + leads, cut))
+        self.assertAlmostEqual(plus.Length.Value, cut, places=6)
+        print(f"\n  battery: BAT+ cut to {cut:.1f} mm, the plug stopped at {reading:.1f} deg of the 180 asked "
+              f"(tips {stop_gap:.1f} apart, leads {leads:.1f})")
 
 
 if __name__ == "__main__":

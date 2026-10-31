@@ -256,7 +256,7 @@ def _collide(x, w, boxes, radius, g_dir=None):
     return hit
 
 
-def _newton(x, w, l0, alpha, lam_b, bending=True, dx0=None, dmax=None):
+def _newton(x, w, l0, alpha, lam_b, bending=True, dx0=None, dmax=None, limit_alpha=1e-9):
     """One global XPBD iteration: all length constraints (alpha = 0) and all bending constraints
     at once. Bending is the vector constraint ``C = d_j = x_{j-1} - 2 x_j + x_{j+1}`` (3 per node,
     compliance ``alpha``, smooth and linear, so no direction is left unresisted); with ``dmax`` (B,)
@@ -291,7 +291,7 @@ def _newton(x, w, l0, alpha, lam_b, bending=True, dx0=None, dmax=None):
         if dmax is not None:
             viol = mag > (0.98 * dmax)[:, None]
             if viol.any():
-                a_j = np.where(viol, 1e-9, a_j)
+                a_j = np.where(viol, limit_alpha, a_j)
                 unit = cb / np.where(mag > 1e-12, mag, 1.0)[..., None]
                 target = unit * (0.98 * dmax)[:, None, None] * viol[..., None]
         if target is not None:
@@ -340,7 +340,7 @@ def _strain(x, l0, w):
     return np.where(_free_segments(w), err, 0.0).max()
 
 
-def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step_scale=4.0):
+def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step_scale=4.0, limit_alpha=1e-9):
     """Relax the batch ``x`` (B, N, 3) in place. Each outer step moves the free points ``step``
     mm along the unit gravity vectors ``g_dir`` (B, 3) in a way that is first-order compatible with
     the constraints, then restores them with Newton iterations (all lengths and bendings at once);
@@ -356,21 +356,33 @@ def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step
     scale = step_scale
     lam_b = np.zeros((x.shape[0], x.shape[1] - 2, 3))
     lim = None if unlimited else dmax
+    if lim is not None:
+        # A first layout that is far past the bend limit: tighten the limit step by step (each wire's
+        # worst bend less 10 % a time) so the hard rows are never badly over-determined.
+        alpha0 = ei_q / (scale * l0)
+        for _ in range(60):
+            worst = np.linalg.norm(x[:, :-2] - 2 * x[:, 1:-1] + x[:, 2:], axis=-1).max(axis=-1)
+            if (worst <= lim * 1.001).all():
+                break
+            lim_t = np.maximum(lim, worst * 0.9)
+            for _ in range(3):
+                _newton(x, w, l0, alpha0, lam_b, bool((alpha0 < 1e6).any()), None, lim_t, limit_alpha)
+            lam_b[:] = 0.0
     for done in range(1, max_steps + 1):
         before = x.copy()
         step = scale * l0
         alpha = ei_q / step
         bend_on = bool((alpha < 1e6).any())
         lam_b[:] = 0.0
-        _newton(x, w, l0, alpha, lam_b, bend_on, free * (g_dir * step[:, None])[:, None, :], lim)
+        _newton(x, w, l0, alpha, lam_b, bend_on, free * (g_dir * step[:, None])[:, None, :], lim, limit_alpha)
         for _ in range(8):
             if _strain(x, l0, w) < 1e-7 and (lim is None or _bend_excess(x, lim) <= 0):
                 break
-            _newton(x, w, l0, alpha, lam_b, bend_on, None, lim)
+            _newton(x, w, l0, alpha, lam_b, bend_on, None, lim, limit_alpha)
         for _ in range(12 if boxes else 0):  # contacts and lengths take turns until both hold
             if not _collide(x, w, boxes, radius - 1e-3, g_dir) and _strain(x, l0, w) < 1e-6:
                 break
-            _newton(x, w, l0, alpha, lam_b, bend_on, None, lim)
+            _newton(x, w, l0, alpha, lam_b, bend_on, None, lim, limit_alpha)
         if _strain(x, l0, w) > 1e-5:
             scale = max(scale * 0.5, 0.05)
         else:
@@ -380,7 +392,7 @@ def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step
     return done
 
 
-def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=1):
+def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=6):
     """Solve ``ropes`` (a list of :class:`Rope`) in place and fill their results. Ropes with the
     same point count go through the solver together. ``max_steps`` caps the gravity steps (a drag
     uses a handful from the last shape); afterwards ``settle`` length-only passes remove what strain
@@ -401,7 +413,20 @@ def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=1):
         # alpha~ = alpha m / dt^2 with m = q l0 / g, dt^2 = step / g and alpha = l0^3 / EI
         ei_q = q * l0**4 / ei
         dmax = np.where(rmin > 0, l0 * l0 / np.where(rmin > 0, rmin, 1.0), 1e12)
+        x0 = x.copy()
         steps = solve_batch(x, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol)
+        if (rmin > 0).any():
+            strain, ratio = measure(x, l0, rmin, w)
+            bad = (strain > STRAIN_TOL) | (ratio > 1.0 + 1e-3)
+            if bad.any():
+                # The hard bend-limit rows can fail (over-determined, or the limit cannot be met): try the
+                # same start with the limit as a stiff spring and keep the better of the two per wire.
+                x1 = x0.copy()
+                solve_batch(x1, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol, limit_alpha=1e-3)
+                s1, r1 = measure(x1, l0, rmin, w)
+                worse = (strain + np.maximum(ratio - 1.0, 0.0)) > (s1 + np.maximum(r1 - 1.0, 0.0))
+                take = bad & worse
+                x[take] = x1[take]
         for _ in range(settle):
             _newton(x, w, l0, np.zeros(x.shape[0]), None, False)
         strain, ratio = measure(x, l0, rmin, w)

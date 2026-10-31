@@ -116,6 +116,11 @@ class RopeDragCheck:
             out[name] = assembly_plc.multiply(plc.multiply(base.inverse())).multiply(inverse)
         return out
 
+    @staticmethod
+    def _worry(res):
+        """How far a result is from fine: the strain plus the bend ratio over the limit."""
+        return float(res.strain) + max(float(res.ratio) - 1.0, 0.0)
+
     # ----- the three calls -----
 
     def pre_drag(self, assembly, parts):
@@ -141,6 +146,7 @@ class RopeDragCheck:
             item.exclude = {e.owner.Name for e in item.ends if e.owner is not None}
             item.records = brope.box_records(obj, item.exclude)
             item.state = item.stored()
+            item.base = self._worry(item.solve(state=item.state, max_steps=6, tol=0.02))  # where it starts
             item.touch_names = set(item.exclude) | {t.Name for _i, _p, t in item.clips if t is not None}
             self.items.append(item)
         self._show()
@@ -156,7 +162,9 @@ class RopeDragCheck:
             if not moved and not moving_box and item.state is not None:
                 continue
             res = item.solve(drag_deltas=deltas, state=item.state, max_steps=10, tol=0.02)
-            if res.taut:
+            # refused when it is taut or bent past the limit and worse than where the drag began (a wire
+            # that is already too tight is not frozen: only a step that tightens it further is refused)
+            if res.taut and self._worry(res) > item.base + 1e-4:
                 ok = False
                 self.last_message = f"{item.obj.Label}: {res.message}"
                 continue
