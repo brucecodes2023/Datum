@@ -52,3 +52,9 @@ boundaries, to within the solver's tolerance.
   \item \textbf{Parts in contact.} An ESC on a mount is two bodies. Treat touching faces as perfectly bonded for
         now (a contact conductance comes with \eref{SIM-02})? \emph{Recommendation:} yes.
 \end{enumerate}
+
+\paragraph{Your answers (30 Oct).} H2--H5 as recommended. H1: \textbf{transient now} as well: a
+\code{*HEAT TRANSFER} step with time increments from an initial temperature, needing $\rho$ and $c_p$ (on every
+Keystone card); results per time step with a temperature-versus-time plot at the hottest node and at a probe,
+and the time to reach the HDT limit. Benchmark: a small aluminium block cooling in air ($Bi\ll1$), lumped
+$T(t)=T_\infty+(T_0-T_\infty)\,e^{-hAt/\rho c_pV}$, within 2\,\%.
