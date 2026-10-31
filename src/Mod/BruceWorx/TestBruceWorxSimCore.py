@@ -731,6 +731,24 @@ class TestModalBenchmarks(unittest.TestCase):
             "\n[modal benchmark] f = " + ", ".join(f"{x:.1f}" for x in f) + f" Hz; Euler-Bernoulli {eb[0]:.1f}, "
             f"{eb[1]:.0f}, {eb[2]:.0f}; Timoshenko {tim[0]:.1f}, {tim[1]:.0f}, {tim[2]:.0f}\n")
 
+    def test_slender_cantilever_euler_bernoulli(self):
+        """Answer 1 (30 Oct): on a 300 x 10 x 10 mm bar (L/h = 30) the higher modes follow Euler-Bernoulli,
+        checked with the plan's tolerances (f1, f2 3 %, f3 8 %)."""
+        doc, objs, _theory = sim.cantilever(length=300.0, name="Slender", study_type="modal", divisor=60.0,
+                                            options={"ModeCount": 10})
+        analysis = objs["analysis"]
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.modal_rows(analysis)
+        eb = [eigen.euler_bernoulli(b, 300, 210000, 7850, 10, 10) for b in eigen.CANTILEVER_BETA_L]
+        f = [r["frequency"] for r in rows]
+        found = []
+        for target, tolerance in zip(eb, (0.03, 0.03, 0.08)):
+            nearest = min(f, key=lambda x: abs(x - target))
+            found.append(nearest)
+            self.assertLess(abs(nearest - target) / target, tolerance, (target, f))
+        App.Console.PrintMessage("\n[slender cantilever] f = " + ", ".join(f"{x:.1f}" for x in found)
+                                 + " Hz; Euler-Bernoulli " + ", ".join(f"{x:.1f}" for x in eb) + "\n")
+
     def test_free_free_bar(self):
         doc, objs, theory = eigen.free_bar()
         analysis = objs["analysis"]
