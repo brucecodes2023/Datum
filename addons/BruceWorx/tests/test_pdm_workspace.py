@@ -296,6 +296,15 @@ class ICloudTests(unittest.TestCase):
         self.assertEqual(self.work.make_local(ASSY), sorted([self.work.path(ASSY), self.work.path(PART)]))
         self.assertEqual(len(asked), 2)  # nothing left to download
 
+    def test_make_local_fetches_parts_never_fetched(self):
+        """Opening an assembly whose parts have no work copy yet gets them read-only (30 Oct)."""
+        self.add_item(PART)
+        self.add_item(ASSY, "assembly", links=(PART + ".FCStd", "Missing.FCStd"))
+        self.work.get_latest(ASSY)
+        self.assertFalse(os.path.exists(self.work.path(PART)))
+        self.assertEqual(self.work.make_local(ASSY), sorted([self.work.path(ASSY), self.work.path(PART)]))
+        self.assertEqual(self.work.status(PART).code, ws.UP_TO_DATE)
+
     def test_evicted_work_copy_keeps_its_status_and_is_downloaded_to_check_out(self):
         self.add_item(PART)
         self.work.checkout(PART)

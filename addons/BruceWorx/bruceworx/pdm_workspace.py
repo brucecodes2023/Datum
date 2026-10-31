@@ -457,7 +457,9 @@ class Workspace:
     def make_local(self, pn: str) -> list:
         """Download the work copy of pn and every file it links (transitively) before it opens.
 
-        Goes one link level at a time, so each level is one request. Returns the paths read.
+        Goes one link level at a time, so each level is one request. A linked vault item with no work
+        copy yet is fetched read-only (Get Latest), so an assembly opens with its parts (30 Oct).
+        Returns the paths read.
         """
         level, seen = [self.path(pn)], set()
         while level:
@@ -468,10 +470,22 @@ class Workspace:
             for path in level:
                 for link in linked_files(path):
                     real = resolve_link(path, link)
-                    if real not in seen and (os.path.exists(real) or icloud_placeholder(real)):
+                    if real in seen:
+                        continue
+                    if not (os.path.exists(real) or icloud_placeholder(real)):
+                        self._fetch_missing(real)
+                    if os.path.exists(real) or icloud_placeholder(real):
                         nxt.append(real)
             level = nxt
         return sorted(seen)
+
+    def _fetch_missing(self, real: str) -> None:
+        """Get Latest for a linked file that is a vault item's missing work copy; else nothing."""
+        if self.read_only or os.path.dirname(real) != os.path.realpath(self.root):
+            return
+        item = os.path.splitext(os.path.basename(real))[0]
+        if item in self.vault.model.items and self.vault.versions.get(item) and not self.is_folder(item):
+            self.get_latest(item)
 
     def made_from(self, pn: str) -> dict:
         """What the work copy of ``pn`` was made from (PDM-09): for every vault item its file links,

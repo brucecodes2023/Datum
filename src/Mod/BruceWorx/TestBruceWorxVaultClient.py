@@ -401,6 +401,16 @@ class TestVaultCategories(unittest.TestCase):
         plain = {p: dict(r, category="") for p, r in self.rows().items()}
         self.assertEqual(vc.group_by_category(self.nodes(), plain), (self.nodes(), 0))
 
+    def test_loose_parts_sit_level_with_the_assemblies(self):
+        """Parts no assembly uses join their category, or Uncategorized, beside the assemblies (30 Oct)."""
+        nodes = [{"pn": "C", "qty": None, "children": [{"pn": "A", "qty": 1, "children": []}]},
+                 {"pn": None, "group": vc.LOOSE, "qty": None,
+                  "children": [{"pn": p, "qty": None, "children": []} for p in ("B", "E")]}]
+        out, _hidden = vc.group_by_category(nodes, self.rows())
+        self.assertEqual([n.get("category") for n in out], ["Connectors", ""])
+        self.assertEqual([c["pn"] for c in out[0]["children"]], ["B"])
+        self.assertEqual([c["pn"] for c in out[1]["children"]], ["C", "E"])  # no "Not in an assembly" node
+
     def test_choices_are_remembered_per_vault(self):
         g = _FakePrefs()
         vc.save_category_prefs("/v/one", {"Connectors"}, {"Seals"}, g)

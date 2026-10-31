@@ -260,6 +260,7 @@ def query_word_matches(row, key, value):
 
 
 UNCATEGORIZED = "Uncategorized"
+LOOSE = "Not in an assembly"  # vault_trees.LOOSE: the group of parts no assembly uses
 CATEGORY_PREF = "VaultCategories"  # JSON in Preferences/BruceWorx: {vault root: {"hidden": [...], "collapsed": [...]}}
 
 
@@ -299,7 +300,8 @@ def category_counts(rows):
 def group_by_category(nodes, rows, hidden=(), show_hidden=False):
     """The tree's top level cut into one group node per category: named groups A-Z, then
     Uncategorized. A top-level group node ("Not in an assembly", "Other files") is opened up: its
-    categorized items join their category's group, the rest stay in it, inside Uncategorized.
+    categorized items join their category's group. Uncategorized parts no assembly uses sit in
+    Uncategorized level with the assemblies (30 Oct); what is left of any other group stays in it.
     Groups in ``hidden`` are left out unless ``show_hidden`` (a search), in which case they are kept
     and marked. When no item has a category the nodes come back as they were.
     Returns (nodes, number of items hidden)."""
@@ -315,8 +317,9 @@ def group_by_category(nodes, rows, hidden=(), show_hidden=False):
             buckets.setdefault(category(node), []).append(node)
             continue
         left = []
+        loose = node.get("group") == LOOSE
         for child in node["children"]:
-            if category(child):
+            if category(child) or loose:
                 buckets.setdefault(category(child), []).append(child)
             else:
                 left.append(child)
