@@ -1,0 +1,56 @@
+%======================================================================
+\subsection{Vault item categories --- Built 30 Oct}\label{sec:categories-built}
+%======================================================================
+
+You asked for the connectors to sit in a category of their own so they can be hidden when not needed. A vault item
+now carries an optional \emph{category}, a plain label such as \code{Connectors} or \code{Terminals \& seals}. It
+is organisation only: the part number, revision and lifecycle state do not change.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{Vault panel.} When any item has a category, the tree groups by it: named categories A--Z, then
+        \emph{Uncategorized}. Each group header is a fold (the usual arrow) and shows its item count. Parts that no
+        assembly uses and are uncategorized keep their ``Not in an assembly'' group, inside Uncategorized. A vault
+        with no categories looks exactly as before.
+  \item \textbf{Hide.} The \textbf{Categories} button beside the sort button lists every category with a checkbox
+        (ticked = shown) and \textbf{Show all}; right-click on a group header offers Hide or Show of that
+        category. The count line says how many items sit in hidden categories.
+  \item \textbf{Remembered.} Hidden and folded groups are kept per vault (by its folder) in the Keystone
+        preferences (\code{VaultCategories}), so they are the same next time.
+  \item \textbf{Search} looks through hidden categories as well (their group appears, marked ``hidden''), so a part
+        number you type is always found. A hidden category does not hide a connector that an assembly's BOM uses:
+        it stays under that assembly.
+  \item \textbf{New Part in Vault} has an optional Category field (editable list, the vault's own categories as
+        suggestions). \code{vault\_setup.new\_item(..., category=)} records it right after the item is created.
+  \item \textbf{Command line.} \code{bw-hooks vault set-category PN... --category NAME}, or
+        \code{--from-csv FILE} (columns \code{part\_number,category}); \code{--dry-run} shows what would change;
+        \code{bw-hooks vault categories} lists the categories with counts. Items already in the category are left
+        alone (no journal line); unknown part numbers are reported.
+\end{itemize}
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item The category may be set in any lifecycle state, obsolete included: filing a retired connector away is
+        exactly the use. Nothing is written to the revision history; the journal line is the record. Up to 60
+        characters; blank clears it.
+  \item Only an item's own category counts, and only at the top of the tree. A connector inside an assembly's BOM
+        stays visible there whatever its category.
+  \item The 181 imported connector-library items are filed by their role: Terminal, Seal and Wedgelock as
+        \emph{Terminals \& seals} (22), the rest as \emph{Connectors} (159); the nine items outside the list stay
+        Uncategorized. The CSV is \file{~/Developer/vault-backups/connector-categories-20261030.csv}.
+\end{itemize}
+
+\paragraph{Every Keystone needs this code.} Categories are a new journal operation, \code{set\_category}. A Keystone
+built before this change that opens a vault containing such a line reports the line as a problem and ignores it
+(the vault still opens and nothing else changes), but it will not show the categories. Update every copy that
+opens the shared vault before filing items; the operation is also in \file{docs/pdm-openapi.yaml}.
+
+\paragraph{Tests.} Contract tests for the model and the folder vault (set, clear, replay, an old journal without the
+operation, unknown item, obsolete item, over-long name), CLI tests (dry run, batch, counts), and GUI tests for
+grouping, hiding, search through hidden categories and the remembered choice (\code{TestBruceWorxVaultClient}); the
+connection lint passes. The batch was proven on a copy of the Standard Libraries journal: 181 set, a second run
+0 set and 181 unchanged.
+
+\paragraph{Open.} The fastener COTS creator (Insert Fastener) and the connector importer file nothing by themselves
+yet; the importer will call \code{vault\_setup.set\_categories}. Should Insert Fastener put new bolts in a
+\emph{Hardware} category?
