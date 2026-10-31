@@ -120,6 +120,7 @@
                 "Assembly_InsertNewPart",
                 "BruceWorx_InsertBoard",
                 "Assembly_ToggleGrounded",
+                "Assembly_CreateJointFixed",
                 "Assembly_CreateJointCylindrical",
                 "Assembly_CreateJointBall",
                 "Assembly_CreateJointDistance",
