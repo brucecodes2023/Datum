@@ -391,6 +391,13 @@
               ]
             },
             {
+              "caption": "Harness",
+              "commands": [
+                "BruceWorx_RouteHarness",
+                "BruceWorx_RouteMakeVaultItem"
+              ]
+            },
+            {
               "caption": "Reports",
               "commands": [
                 "BruceWorx_RouteFromTo",

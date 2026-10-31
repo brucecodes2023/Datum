@@ -135,6 +135,24 @@ def bom_csv(vault, pn, revision=None, flattened=False) -> str:
                                r["state"], r["note"]) for r in rows])
 
 
+def purchasing_rows(vault, pn, revision=None, info=None) -> list:
+    """What to buy for one product (BW-ROU-06): the flattened BOM's metered lines (stock material summed over every
+    harness and quantity) with the scrap allowance and the purchase-unit rounding of each stock item. ``info`` is
+    {P/N: {"scrap", "unit"}} or a callable; None reads the stock items' files (bruceworx.stock.info_from_vault)."""
+    from bruceworx import stock
+
+    flat = [r for r in bom_rows(vault, pn, revision, flattened=True) if r.get("unit")]
+    if info is None:
+        info = stock.info_from_vault(vault, [r["part_number"] for r in flat if r["part_number"] in vault.items])
+    return stock.purchasing_rows(flat, info)
+
+
+def purchasing_csv(vault, pn, revision=None, info=None) -> str:
+    from bruceworx import stock
+
+    return _csv(stock.PURCHASING_COLUMNS, stock.purchasing_cells(purchasing_rows(vault, pn, revision, info)))
+
+
 def where_used_csv(rows) -> str:
     """``rows``: release_check.where_used rows."""
     return _csv(WHERE_USED_COLUMNS, [
@@ -154,8 +172,9 @@ def outbox_csv(rows) -> str:
     return _csv(OUTBOX_COLUMNS, out)
 
 
-def default_csv_name(pn, revision, flattened=False) -> str:
-    return f"{pdm.display_part_number(pn, revision)}-BOM{'-flat' if flattened else ''}.csv"
+def default_csv_name(pn, revision, flattened=False, purchasing=False) -> str:
+    kind = "-purchasing" if purchasing else "-flat" if flattened else ""
+    return f"{pdm.display_part_number(pn, revision)}-BOM{kind}.csv"
 
 
 def write_text(path, text) -> str:

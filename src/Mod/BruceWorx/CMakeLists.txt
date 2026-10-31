@@ -40,10 +40,13 @@ SET(BruceWorx_SRCS
     bruceworx_routing_gui.py
     bruceworx_routing_ports.py
     bruceworx_fittings.py
+    bruceworx_stock.py
+    bruceworx_harness.py
     TestBruceWorxRoutingCore.py
     TestBruceWorxRopeCore.py
     TestBruceWorxFlexSub.py
     TestBruceWorxRouting.py
+    TestBruceWorxHarness.py
     TestBruceWorxConnectorLibrary.py
     BruceWorx_RoutePath.svg
     BruceWorx_RouteFrame.svg
@@ -55,6 +58,8 @@ SET(BruceWorx_SRCS
     BruceWorx_RoutePipe.svg
     BruceWorx_RouteHose.svg
     BruceWorx_RouteBundle.svg
+    BruceWorx_RouteHarness.svg
+    BruceWorx_RouteMakeVaultItem.svg
     BruceWorx_RouteFromTo.svg
     BruceWorx_RouteCutList.svg
     BruceWorx_RouteBendRules.svg

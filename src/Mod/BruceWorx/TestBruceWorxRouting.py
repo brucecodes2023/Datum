@@ -104,7 +104,7 @@ class RoutingGuiTests(unittest.TestCase):
 
         design = ws.workspace(ws.load(), "Design")
         tab = next(t for t in design["tabs"] if t["name"] == "Routing")
-        self.assertEqual([g["caption"] for g in tab["groups"]], ["Path", "Parts", "Items", "Reports"])
+        self.assertEqual([g["caption"] for g in tab["groups"]], ["Path", "Parts", "Items", "Harness", "Reports"])
         listed = [c for g in tab["groups"] for c in g["commands"] + g.get("more", [])]
         commands = Gui.listCommands()
         for name in self.rg.COMMANDS:
@@ -112,6 +112,26 @@ class RoutingGuiTests(unittest.TestCase):
             self.assertIn(name, listed)
         for name in self.rg.COMMANDS:
             self.assertTrue(os.path.exists(os.path.join(self.rg.HERE, name + ".svg")), name)
+
+    def test_harness_command_and_the_stock_row(self):
+        import bruceworx_harness as bh
+
+        path = br.make_path([(0, 0, 0), (40, 10, 5), (80, 0, 0)], self.doc, radius=5.0)
+        wire = br.make_wire(path, gauge="22 AWG")
+        self.doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(wire)
+        Gui.runCommand("BruceWorx_RouteHarness")
+        self._pump()
+        found = bh.harnesses(self.doc)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].HarnessType, "Cable assembly")
+        self.assertIs(bh.harness_of(wire), found[0])
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(wire)
+        panel = self._run("BruceWorx_RouteWire")  # the Stock material row is there (enabled when a vault is open)
+        self.assertEqual(panel.stock.itemText(0), "(none)")
+        Gui.Control.closeDialog()
 
     # ----- route path panel -----
 
@@ -286,6 +306,7 @@ class RoutingGuiTests(unittest.TestCase):
         self.assertEqual(pipe.Bends, 2)
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(path)
+        App.ParamGet(br.PREFS_PATH).SetBool("GravityOn", True)  # no assembly: the preference (off by default)
         panel = self._run("BruceWorx_RouteHose")
         panel.fields["OD"].setValue(10.0)
         panel.fields["ID"].setValue(6.0)

@@ -373,9 +373,16 @@ class RoutePath:
 
     def setup(self, obj):
         _add(obj, "App::PropertyVectorList", "Points", "Route points in the document frame")
-        _add(obj, "App::PropertyLinkSubList", "Attachments",
+        # Global scope (ROU-06): a path in a Harness container follows geometry outside the container.
+        _add(obj, "App::PropertyLinkSubListGlobal", "Attachments",
              "Geometry a point follows: a vertex, a circular edge (its centre), a face (its centre) or an object (its origin)")
-        _add(obj, "App::PropertyStringList", "AttachedTo", "Per attachment: point index, object name, sub-element", hidden=True)
+        _add(obj, "App::PropertyStringList", "AttachedTo",
+             "Per attachment: point index, object name, sub-element (\"x:\" before the name: it is in XAttachments)",
+             hidden=True)
+        _add(obj, "App::PropertyXLinkSubList", "XAttachments",
+             "Geometry in another file a point follows (a harness saved as its own vault item routes in the context of "
+             "its parent assembly); the points keep their last solved positions when the other file is not open",
+             hidden=True)
         _add(obj, "App::PropertyEnumeration", "Mode", "Spline through the points, or straight segments with tangent arcs")
         obj.Mode = MODES
         _add(obj, "App::PropertyLength", "BendRadius", "Centreline bend radius of the arcs in Polyline mode", 10.0)
@@ -481,15 +488,24 @@ def set_attachments(obj, attachments):
     """``attachments``: ``[(index, obj, sub)]``. ``Attachments`` holds the links (so the path
     recomputes when a part moves; FreeCAD groups a PropertyLinkSubList by object, so the order
     is not kept there) and ``AttachedTo`` the ``index|object|sub`` triples in order."""
-    links, text = [], []
+    links, text, external = [], [], []
     for index, target, sub in attachments:
         if target is None:
             continue
         target, sub = rebase(obj, target, sub)
+        if target.Document is not obj.Document:  # ROU-06: in another file, kept as a cross-document link
+            external.append((target, [sub or ""]))
+            text.append(f"{int(index)}|x:{target.Name}|{sub or ''}")
+            continue
         links.append((target, [sub or ""]))
         text.append(f"{int(index)}|{target.Name}|{sub or ''}")
     obj.Attachments = links
     obj.AttachedTo = text
+    if external or "XAttachments" in obj.PropertiesList:
+        if "XAttachments" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyXLinkSubList", "XAttachments", GROUP, "Geometry in another file a point follows")
+            obj.setEditorMode("XAttachments", 2)
+        obj.XAttachments = external
 
 
 def _ancestors(obj):
@@ -508,7 +524,8 @@ def rebase(path, target, sub):
     the root itself would be a dependency cycle. The point stays the same."""
     ancestors = {a.Name for a in _ancestors(path)}
     names = (sub or "").split(".")
-    while target is not None and target.Name in ancestors and len(names) > 1 and names[0]:
+    while (target is not None and target.Document is path.Document and target.Name in ancestors
+           and len(names) > 1 and names[0]):
         try:
             child = target.getSubObjectList(names[0] + ".")[-1]
         except Exception:
@@ -523,12 +540,19 @@ def attachments_of(obj):
     """``[(index, obj, sub)]`` of a path (``set_attachments`` reversed)."""
     out = []
     doc = obj.Document
+    foreign = {}
+    for link in (obj.XAttachments if "XAttachments" in obj.PropertiesList else []) or []:
+        try:
+            if link[0] is not None:
+                foreign[link[0].Name] = link[0]
+        except Exception:
+            continue
     for entry in obj.AttachedTo:
         try:
             index, name, sub = entry.split("|", 2)
         except ValueError:
             continue
-        target = doc.getObject(name)
+        target = foreign.get(name[2:]) if name.startswith("x:") else doc.getObject(name)
         if target is not None:
             out.append((int(index), target, sub))
     return out
@@ -680,6 +704,13 @@ class _Routed:
             _add(obj, "App::PropertyFloat", "QuantityPer", "Quantity of the unit per occurrence (metres)", 0.0,
                  group="BruceWorx", readonly=True)
             obj.setEditorMode("QuantityUnit", 1)
+            # ROU-06: the stock material this is cut from (a vault item); the BOM walker reads these.
+            _add(obj, "App::PropertyString", "StockItem", "Part number of the Stock material vault item this is cut from",
+                 group="BruceWorx")
+            _add(obj, "App::PropertyString", "Manufacturer", "Manufacturer of the stock material (printed on the BOM)",
+                 group="BruceWorx")
+            _add(obj, "App::PropertyString", "ManufacturerPartNumber",
+                 "Manufacturer's part number of the stock material (what is ordered)", group="BruceWorx")
         finally:
             self._quiet = False
 

@@ -29,6 +29,11 @@ Commands (registered by :func:`install`, listed in workspaces.json):
   size tables, placed on the selection (a face, a hole edge or another port: the fitting's thread
   or first port faces it), live; the P/N can be typed.
 
+* ``BruceWorx_RouteHarness`` / ``BruceWorx_RouteMakeVaultItem`` (ROU-06): group the selected wires, tubes,
+  hoses and connector links in a Harness container; save a Harness out as its own vault item (bruceworx_harness).
+  Each wire, tube and hose panel has a *Stock material* row: pick the vault item it is cut from, or make one
+  from the item's properties (manufacturer, MPN, scrap, purchase unit; bruceworx_stock).
+
 Every Qt signal to a bound method goes through ``slot`` (bruceworx_slots). The selection observer
 is not a Qt signal: FreeCAD calls its methods directly.
 """
@@ -46,7 +51,7 @@ RED = "<span style='color:#c0392b'>{}</span>"
 COMMANDS = ("BruceWorx_RoutePath", "BruceWorx_RouteAddPoint", "BruceWorx_RouteClip", "BruceWorx_RouteWire",
             "BruceWorx_RoutePipe", "BruceWorx_RouteHose", "BruceWorx_RouteBundle", "BruceWorx_RouteFromTo",
             "BruceWorx_RouteCutList", "BruceWorx_RouteBendRules", "BruceWorx_RouteFrame", "BruceWorx_RouteFitting",
-            "BruceWorx_RouteTerminals")
+            "BruceWorx_RouteTerminals", "BruceWorx_RouteHarness", "BruceWorx_RouteMakeVaultItem")
 _state = {"installed": False, "panel": None}
 
 
@@ -507,6 +512,7 @@ class ItemPanel:
             spin.setToolTip("Any length: longer than the route and it sags, shorter and it pulls taut. It never stretches.")
             grid.addRow("Cut length", spin)
         self._rule_rows(QtWidgets, grid)
+        self._stock_rows(QtWidgets, grid)
         layout.addLayout(grid)
         self.status = QtWidgets.QLabel("")
         self.status.setObjectName("routeItemStatus")
@@ -538,6 +544,116 @@ class ItemPanel:
         self.minimum.setSpecialValueText("no check")
         self.minimum.valueChanged.connect(slot(self._minimum_changed))
         grid.addRow("Min bend radius", self.minimum)
+
+    # ----- stock material (ROU-06) -----
+
+    def _stock_session(self):
+        try:
+            import bruceworx_vaultclient
+
+            return bruceworx_vaultclient.session()
+        except Exception:
+            return None
+
+    def _stock_rows(self, QtWidgets, grid):
+        """Stock material: the vault item this is cut from (its length is summed on the purchasing BOM)."""
+        self.stock_rows = []
+        self.stock = QtWidgets.QComboBox()
+        self.stock.setObjectName("routeStockItem")
+        self.stock.setToolTip("The Stock material vault item this is cut from: ordered by its manufacturer and MPN")
+        self.stock_new = QtWidgets.QPushButton("New…")
+        self.stock_new.setToolTip("Make a Stock material item from this item's properties (gauge and colour, "
+                                  "tube size, hose size)")
+        line = QtWidgets.QHBoxLayout()
+        line.addWidget(self.stock, 1)
+        line.addWidget(self.stock_new)
+        grid.addRow("Stock material", line)
+        self._fill_stock()
+        self.stock.currentIndexChanged.connect(slot(self._stock_chosen))
+        self.stock_new.clicked.connect(slot(self._stock_make))
+
+    def _fill_stock(self):
+        import bruceworx_stock as bs
+        from bruceworx import stock
+
+        building, self._building = getattr(self, "_building", False), True
+        try:
+            self.stock.clear()
+            self.stock.addItem("(none)", None)
+            s = self._stock_session()
+            if s is None:
+                self.stock.setEnabled(False)
+                self.stock_new.setEnabled(False)
+                self.stock.setToolTip("Open a vault to pick or make stock material")
+                return
+            kind, key, _description = bs.stock_of(self.obj)
+            self.stock_rows = stock.list_stock(s.vault, kind)
+            current = self.obj.StockItem
+            for row in self.stock_rows:
+                text = f"{row['description']}  ·  {row['manufacturer']} {row['mpn']}".rstrip(" ·")
+                self.stock.addItem(f"{text}  ({row['pn']})", row)
+                if row["pn"] == current:
+                    self.stock.setCurrentIndex(self.stock.count() - 1)
+        finally:
+            self._building = building
+
+    def _stock_chosen(self, *_args):
+        if self._building:
+            return
+        import bruceworx_stock as bs
+
+        row = self.stock.currentData()
+        if row:
+            bs.assign_item(self.obj, row)
+        else:
+            bs.assign(self.obj, "", "", "")
+        self.doc.recompute()
+
+    def _stock_make(self):
+        """New stock material from the item's properties: ask for what the properties do not say."""
+        import bruceworx_stock as bs
+        from bruceworx import stock
+
+        s = self._stock_session()
+        if s is None:
+            return
+        _QtCore, _QtGui, QtWidgets = _qt()
+        kind, key, description = bs.stock_of(self.obj)
+        dialog = QtWidgets.QDialog(self.form)
+        dialog.setWindowTitle(f"New stock material — {description}")
+        form = QtWidgets.QFormLayout(dialog)
+        maker = QtWidgets.QLineEdit(self.obj.Manufacturer)
+        mpn = QtWidgets.QLineEdit(self.obj.ManufacturerPartNumber)
+        scrap = QtWidgets.QDoubleSpinBox()
+        scrap.setRange(0.0, 100.0)
+        scrap.setSuffix(" %")
+        scrap.setValue(stock.DEFAULT_SCRAP)
+        unit = QtWidgets.QDoubleSpinBox()
+        unit.setRange(0.0, 100000.0)
+        unit.setSuffix(" m")
+        unit.setSpecialValueText("exact length")
+        unit.setToolTip("Spool or stick length bought, e.g. 30 m; the purchasing BOM rounds up to whole units")
+        form.addRow("Manufacturer", maker)
+        form.addRow("MPN", mpn)
+        form.addRow("Scrap allowance", scrap)
+        form.addRow("Purchase unit", unit)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if not dialog.exec_():
+            return
+        if not mpn.text().strip():
+            self.status.setText(RED.format("A stock item needs the manufacturer's part number: that is what is ordered."))
+            return
+        try:
+            pn, made = bs.make_from_item(s, self.obj, maker.text().strip(), mpn.text().strip(), scrap.value(),
+                                         unit.value())
+        except Exception as exc:
+            self.status.setText(RED.format(_html(exc)))
+            return
+        self._fill_stock()
+        self.status.setText(f"{'Made' if made else 'Found'} {_html(pn)}: {_html(description)}")
 
     def _show_rule(self):
         """The rule widgets from the object (after a recompute the radius is the rule's)."""
@@ -1541,6 +1657,59 @@ class BundleCommand(_Command):
         _console(f"{bundle.Label}: {len(wires)} wires, OD {bundle.OD.Value:.2f} mm")
 
 
+class HarnessCommand(_Command):
+    """Group the selected wires, tubes, hoses and connector links in a Harness container (ROU-06)."""
+
+    def Activated(self):
+        import bruceworx_harness as bh
+
+        doc = App.ActiveDocument
+        chosen = [o for o in _gui().Selection.getSelection() if not bh.is_harness(o)]
+        if not chosen:
+            _message("Select the wires, tubes or hoses (and the connector links) that make up the harness.")
+            return
+        doc.openTransaction("Harness")
+        try:
+            container = bh.make_harness(doc, chosen)
+        except Exception as exc:
+            doc.abortTransaction()
+            _message(str(exc))
+            return
+        doc.commitTransaction()
+        _console(f"{container.Label}: {container.HarnessType}, {len(bh.contents(container))} objects")
+
+
+class MakeVaultItemCommand(_Command):
+    """Save the selected Harness out as its own vault item and link it into the assembly (ROU-06)."""
+
+    def Activated(self):
+        import bruceworx_harness as bh
+        import bruceworx_vaultclient as vc
+
+        doc = App.ActiveDocument
+        selected = [bh.harness_of(o) for o in _gui().Selection.getSelection()]
+        found = [h for h in selected if h is not None] or bh.harnesses(doc)
+        if len(found) != 1:
+            _message("Select the Harness to save as a vault item.")
+            return
+        container = found[0]
+        s = vc.session()
+        if s is None:
+            _message("Open a vault first (Preferences > BruceWorx, or the Start page).")
+            return
+        _QtCore, _QtGui, QtWidgets = _qt()
+        text, ok = QtWidgets.QInputDialog.getText(_gui().getMainWindow(), "Make vault item", "Harness description:",
+                                                  text=container.Label)
+        if not ok or not text.strip():
+            return
+        try:
+            pn, link = bh.make_vault_item(container, s, text.strip())
+        except Exception as exc:
+            _message(str(exc), "Make vault item")
+            return
+        _console(f"{text.strip()}: vault item {pn}, linked in {link.Document.Label}")
+
+
 class FromToCommand(_Command):
     def Activated(self):
         doc = App.ActiveDocument
@@ -1638,6 +1807,14 @@ def install():
         "BruceWorx_RouteHose", "Hose", "A flexible hose on the selected path: ID, OD, minimum bend radius, slack.", br.HOSE))
     Gui.addCommand("BruceWorx_RouteBundle", BundleCommand(
         "BruceWorx_RouteBundle", "Bundle", "Group the selected wires (or every wire on the path) into a bundle with a combined OD."))
+    Gui.addCommand("BruceWorx_RouteHarness", HarnessCommand(
+        "BruceWorx_RouteHarness", "Harness",
+        "Group the selected wires, tubes, hoses and connector links in a Harness container (Cable assembly or Tube "
+        "assembly) in the assembly; its stock material already counts on the assembly BOM."))
+    Gui.addCommand("BruceWorx_RouteMakeVaultItem", MakeVaultItemCommand(
+        "BruceWorx_RouteMakeVaultItem", "Make vault item",
+        "Save the selected Harness as its own vault item under a new part number (category Harnesses) and link it "
+        "into the assembly. Its paths keep following the parts of this assembly while both files are open."))
     Gui.addCommand("BruceWorx_RouteFromTo", FromToCommand(
         "BruceWorx_RouteFromTo", "From-to list", "CSV: wire, signal, gauge, colour, from, to, length."))
     Gui.addCommand("BruceWorx_RouteCutList", CutListCommand(

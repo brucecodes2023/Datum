@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- the harness saved out as a vault item: a cylinder (the vault) with an arrow in -->
+  <ellipse cx="38" cy="16" rx="18" ry="7" fill="#ffffff" stroke="#2b2f36" stroke-width="3"/>
+  <path d="M20 16 V46 C20 50 28 54 38 54 C48 54 56 50 56 46 V16" fill="none" stroke="#2b2f36" stroke-width="3"/>
+  <path d="M20 31 C20 35 28 39 38 39 C48 39 56 35 56 31" fill="none" stroke="#2b2f36" stroke-width="3"/>
+  <path d="M4 32 H26 M18 24 L27 32 L18 40" fill="none" stroke="#1f6feb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

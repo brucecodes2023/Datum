@@ -1,0 +1,60 @@
+%======================================================================
+\subsection{BW-ROU-06 --- Built, 30 Oct: the harness as a vault item, stock material, the purchasing BOM}\label{sec:rou06-built}
+%======================================================================
+
+Step~2 of the routing plan (\S\ref{sec:rou-next-plan}) with your answers V1--V3, built as \file{bruceworx\_harness.py},
+\file{bruceworx\_stock.py}, \file{bruceworx/stock.py} (FreeCAD-free maths) and changes to \file{bruceworx\_routing.py},
+\file{bruceworx\_bom.py}, \file{bruceworx/bom.py} and the Routing tab.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{Harness} (Routing tab, new \emph{Harness} group) groups the selected wires, tubes, hoses, bundles (with
+        their route paths) and connector links in an \code{App::Part} with \code{HarnessType} (\emph{Cable assembly}, or
+        \emph{Tube assembly} when only tubes and hoses are selected) inside the assembly. The vault BOM walker reads
+        through it, so the parent's BOM already lists the stock material by length and the terminals.
+  \item \textbf{Make vault item} saves the container as its own file under a new P/N (vault assembly, category
+        \emph{Harnesses}, the document type named like the \code{HarnessType} when the vault has one), records its BOM,
+        and replaces the container in the parent by an \code{App::Link} to it. The routed objects are copied; a path
+        point attached to a part of the parent becomes a cross-document link (\code{XAttachments},
+        \code{App::PropertyXLinkSubList}). With both files open, moving a part re-routes the harness; opened alone
+        (parent file gone) the harness keeps its last solved points and still totals itself.
+  \item \textbf{Stock material.} Every wire, tube and hose panel has a \emph{Stock material} row: pick the vault item
+        it is cut from or \emph{New\ldots}, which makes one from the item's properties ("Wire, 22 AWG, red, PVC",
+        "Tube, 8 x 1, Nylon", "Hose, 6 x 10") asking for Manufacturer, MPN, scrap (default 10\,\%) and purchase unit
+        (optional, e.g.\ 30\,m). It is a COTS vault item, category \emph{Stock material}, \code{QuantityUnit} m; an
+        item with the same key is found again, not numbered twice. The routed item stores the P/N, manufacturer and MPN.
+  \item \textbf{Purchasing BOM.} The Bill of Materials dialog has a \emph{Purchasing} view (and CSV): the flattened
+        metered lines, summed over all harnesses and quantities, with
+        $L_{\text{buy}}=\lceil (1+s)\sum n_kL_k/L_{\text{unit}}\rceil L_{\text{unit}}$ (no rounding without a purchase
+        unit). Every line prints Manufacturer and MPN.
+\end{itemize}
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item Scrap and purchase unit live in the stock item's file (read from its \code{Document.xml}, no FreeCAD needed),
+        not in the journal, because the vault BOM line has no field for them and \code{pdm.py} was not mine to extend.
+  \item The harness is made in two steps: the file is staged with snapshot points, then checked out into the
+        workspace and given its cross-document links there, because FreeCAD stores a link relative to the file it is
+        saved in. A harness therefore has two versions (01 snapshot, 02 linked) until the first real check-in.
+  \item New paths use \code{App::PropertyLinkSubListGlobal} for \code{Attachments}, so a path in a Harness container
+        may follow geometry outside it (a local-scope link gave an ``out of the allowed scope'' warning).
+\end{itemize}
+
+\paragraph{Tests.} \file{addons/BruceWorx/tests/test_bom.py} (scrap and rounding maths, sums over harnesses and
+quantities, CSV with Manufacturer and MPN, \code{Document.xml} reader); headless \file{TestBruceWorxHarness.py} on a
+scratch vault (container; Make vault item; a moved part re-routes the harness; the harness opened alone; two harnesses
+of ``22 AWG red PVC'' with 10\,\% scrap and a 30\,m spool); GUI \file{TestBruceWorxRouting.py} (Harness command, Stock
+row). Routing, Rope, Bom, Workspaces and the slot lint pass. \code{TestBruceWorxFlexSub} fails on
+\code{test\_flexible\_copies\_and\_follows} with and without these changes (a rope has a fixed cut length, so its
+\code{Length} no longer changes when a part moves); I did not touch it.
+
+\paragraph{Open questions.}
+\begin{itemize}[nosep]
+  \item Parent and harness link each other, a cycle between documents: FreeCAD logs \emph{``getDependentDocuments: the
+        graph must be a DAG''} on closing, though recompute and save worked. Is that acceptable, or should the parent
+        hold the harness only through the vault BOM?
+  \item The harness link must stay at the parent's origin (its paths are in the parent's frame). Should it be locked?
+  \item A path attached to a bare App::Link's origin (sub empty) is not resolved (Links have no global placement); pin
+        frames and part sub-elements are. Worth fixing in \code{attachment\_point}.
+  \item Connector links in a harness keep their library file links only when that file is open at Make vault item.
+\end{itemize}

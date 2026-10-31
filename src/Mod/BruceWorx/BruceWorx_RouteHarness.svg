@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a harness: wires and connectors grouped in a box -->
+  <rect x="5" y="9" width="54" height="46" rx="6" fill="none" stroke="#2b2f36" stroke-width="3" stroke-dasharray="7 4"/>
+  <path d="M12 24 C 26 24, 28 32, 38 32 H52" fill="none" stroke="#c0392b" stroke-width="4" stroke-linecap="round"/>
+  <path d="M12 40 C 26 40, 28 32, 38 32" fill="none" stroke="#1f6feb" stroke-width="4" stroke-linecap="round"/>
+  <rect x="48" y="25" width="8" height="14" rx="2" fill="#ffffff" stroke="#2b2f36" stroke-width="2.5"/>
+</svg>

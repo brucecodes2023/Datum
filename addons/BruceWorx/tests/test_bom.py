@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bruceworx import bom  # noqa: E402
 from bruceworx import pdm  # noqa: E402
 from bruceworx import pdm_workspace as pw  # noqa: E402
+from bruceworx import stock  # noqa: E402
 from bruceworx import release_check as rc  # noqa: E402
 from bruceworx.pdm_folder import FolderVault  # noqa: E402
 
@@ -144,3 +145,76 @@ class ViewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+HARN1 = "LE-02-02011-001"
+HARN2 = "LE-02-02012-001"
+WIRE = "STD-01-01002-005"
+SLEEVE = "STD-01-01002-006"
+
+
+class PurchasingTests(unittest.TestCase):
+    """BW-ROU-06: stock material summed over harnesses x quantities, scrap and purchase-unit rounding."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bw-purch-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        v = self.v = FolderVault.init(os.path.join(self.tmp, "vault"), "Purch", actor="me@mac")
+        for pn, kind, text in ((TOP, "assembly", "Drone"), (HARN1, "assembly", "Motor harness"),
+                               (HARN2, "assembly", "Battery harness"), (WIRE, "cots", "Wire 22 AWG red PVC"),
+                               (SLEEVE, "cots", "Sleeving 3 mm")):
+            v.create_item(pn, kind, text)
+        wire = {"unit": "m", "manufacturer": "Alpha Wire", "mpn": "3050 RD005"}
+        v.set_bom(HARN1, [{"child": WIRE, "qty": 1.25, "find": 1, **wire},
+                          {"child": SLEEVE, "qty": 0.5, "find": 2, "unit": "m", "mpn": "SL-3"}])
+        v.set_bom(HARN2, [{"child": WIRE, "qty": 0.75, "find": 1, **wire}])
+        v.set_bom(TOP, [(HARN1, 2, 1), (HARN2, 1, 2)])
+
+    def test_buy_length_maths(self):
+        self.assertAlmostEqual(stock.buy_length(3.25), 3.575)  # 10 % default scrap, nothing rounded
+        self.assertAlmostEqual(stock.buy_length(3.25, 0), 3.25)
+        self.assertEqual(stock.buy_length(3.25, 10, 30), 30)  # one 30 m spool
+        self.assertEqual(stock.buy_length(27.4, 10, 30), 60)  # 30.14 m needs two
+        self.assertEqual(stock.buy_length(27.0, 10, 30), 30)  # 29.7 m: exactly under one spool
+        self.assertEqual(stock.buy_length(0, 10, 30), 0)
+
+    def test_lengths_sum_across_harnesses_and_quantities(self):
+        rows = bom.purchasing_rows(self.v, TOP, info={WIRE: {"scrap": 10.0, "unit": 0.0}})
+        by = {r["part_number"]: r for r in rows}
+        self.assertAlmostEqual(by[WIRE]["used"], 2 * 1.25 + 0.75)  # 3.25 m
+        self.assertAlmostEqual(by[WIRE]["buy"], 3.575)
+        self.assertEqual((by[WIRE]["manufacturer"], by[WIRE]["mpn"]), ("Alpha Wire", "3050 RD005"))
+        self.assertAlmostEqual(by[SLEEVE]["used"], 1.0)
+        self.assertAlmostEqual(by[SLEEVE]["buy"], 1.1)  # not in info: default scrap, no rounding
+        spool = bom.purchasing_rows(self.v, TOP, info={WIRE: {"scrap": 10.0, "unit": 30.0}})
+        self.assertEqual({r["part_number"]: r["buy"] for r in spool}[WIRE], 30)
+
+    def test_csv_prints_manufacturer_and_mpn(self):
+        text = bom.purchasing_csv(self.v, TOP, info={WIRE: {"scrap": 10.0, "unit": 30.0}})
+        self.assertEqual(text.splitlines()[0], ",".join(stock.PURCHASING_COLUMNS))
+        self.assertIn(f"{WIRE},Wire 22 AWG red PVC,Alpha Wire,3050 RD005,3.25 m,10 %,30 m,30 m", text)
+        self.assertEqual(bom.default_csv_name(TOP, "A", purchasing=True), f"{TOP}-A-BOM-purchasing.csv")
+
+    def test_count_lines_are_not_stock(self):
+        rows = stock.purchasing_rows([{"part_number": "X", "total": 4, "unit": ""},
+                                      {"part_number": WIRE, "total": 2.0, "unit": "m"}])
+        self.assertEqual([r["part_number"] for r in rows], [WIRE])
+
+    def test_read_stock_from_fcstd_xml(self):
+        import zipfile
+
+        xml = ("<Document><ObjectData><Object name='Part'><Properties Count='1'><Property name='Label' type='x'>"
+               "<String value='a'/></Property></Properties></Object><Object name='Stock'><Properties>"
+               "<Property name='StockKind' type='App::PropertyString'><String value='Wire'/></Property>"
+               "<Property name='ScrapPercent' type='App::PropertyFloat'><Float value='12.5'/></Property>"
+               "<Property name='PurchaseUnit' type='App::PropertyFloat'><Float value='30'/></Property>"
+               "<Property name='ManufacturerPartNumber' type='App::PropertyString'><String value='M1'/></Property>"
+               "</Properties></Object></ObjectData></Document>")
+        path = os.path.join(self.tmp, "w.FCStd")
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("Document.xml", xml)
+        got = stock.read_stock(path)
+        self.assertEqual((got["StockKind"], got["ScrapPercent"], got["PurchaseUnit"], got["ManufacturerPartNumber"]),
+                         ("Wire", 12.5, 30.0, "M1"))
+        self.assertEqual(stock.read_stock(os.path.join(self.tmp, "none.FCStd")), {})
+        self.assertEqual(stock.stock_key("Wire", "22 AWG", " Red", "PVC"), "wire|22 awg|red|pvc")

@@ -93,6 +93,18 @@ def _target(obj):
     return obj, 1
 
 
+def is_harness(obj):
+    """[BW] ROU-06: a Harness container (an App::Part with a HarnessType): its contents are lines of the file, not
+    one line for the container."""
+    return _type(obj, "App::Part") and "HarnessType" in getattr(obj, "PropertiesList", ())
+
+
+def _stock_keys(target):
+    """[BW] ROU-06: a routed item cut from a Stock material vault item is that item's line (its length, summed)."""
+    pn = str(getattr(target, "StockItem", "") or "").strip()
+    return [pn] if pn else []
+
+
 def _is_line(obj):
     if getattr(getattr(obj, "Proxy", None), "Type", "") == "BruceWorx::RoutePath":
         return False  # [BW] ROU-04: a route centreline is construction, not an item
@@ -219,8 +231,12 @@ def walk(doc, imported=None) -> list:
                     continue
                 if target is top:
                     continue
-                rows.append(_maker(_metered({"keys": [], "name": f"{target.Label} (in this file)", "qty": mult * count},
-                                            target), target))
+                if is_harness(target):  # [BW] ROU-06: routed here, not made a vault item yet
+                    if target.Name not in seen:
+                        visit(list(target.Group), mult * count, seen | {target.Name})
+                    continue
+                row = {"keys": _stock_keys(target), "name": f"{target.Label} (in this file)", "qty": mult * count}
+                rows.append(_maker(_metered(row, target), target))
                 rows.extend(_extras(target, mult * count))  # [BW] ROU-05: terminals
                 continue
             name = os.path.basename(getattr(target.Document, "FileName", "") or "") or target.Document.Label
@@ -439,10 +455,14 @@ def _make_classes():
             row.addWidget(self.revision)
             self.indented = QtWidgets.QRadioButton("Indented")
             self.flat = QtWidgets.QRadioButton("Flattened")
+            self.buy = QtWidgets.QRadioButton("Purchasing")  # [BW] ROU-06
+            self.buy.setToolTip("Stock material summed over every harness and quantity, with scrap and the "
+                                "purchase-unit rounding: what to order")
             self.indented.setChecked(True)
             row.addSpacing(12)
             row.addWidget(self.indented)
             row.addWidget(self.flat)
+            row.addWidget(self.buy)
             row.addStretch(1)
             lay.addLayout(row)
             self.list = tree(bom.BOM_COLUMNS)
@@ -457,6 +477,7 @@ def _make_classes():
             lay.addWidget(buttons)
             self.revision.currentIndexChanged.connect(self.fill)
             self.indented.toggled.connect(self.fill)
+            self.buy.toggled.connect(self.fill)
             self.fill()
 
         def code(self):
@@ -469,6 +490,17 @@ def _make_classes():
                 self.hint.setText("No BOM recorded yet: check the assembly in to record one.")
                 return
             flat = self.flat.isChecked()
+            if self.buy.isChecked():  # [BW] ROU-06
+                from bruceworx import stock
+
+                self.list.setHeaderLabels(list(stock.PURCHASING_COLUMNS))
+                for cells in stock.purchasing_cells(bom.purchasing_rows(self.s.vault, self.pn, code)):
+                    QtWidgets.QTreeWidgetItem(self.list, list(cells))
+                for i in range(self.list.columnCount()):
+                    self.list.resizeColumnToContents(i)
+                self.hint.setText("Buy = (1 + scrap) x the summed length, up to whole purchase units; "
+                                  "the manufacturer and MPN are what to order.")
+                return
             rows = bom.bom_rows(self.s.vault, self.pn, code, flattened=flat)
             if flat:
                 self.list.setHeaderLabels(list(bom.FLAT_COLUMNS))
@@ -500,6 +532,10 @@ def _make_classes():
             code = self.code()
             if code:
                 flat = self.flat.isChecked()
+                if self.buy.isChecked():  # [BW] ROU-06
+                    _save_csv(self, bom.default_csv_name(self.pn, code, purchasing=True),
+                              bom.purchasing_csv(self.s.vault, self.pn, code))
+                    return
                 _save_csv(self, bom.default_csv_name(self.pn, code, flat),
                           bom.bom_csv(self.s.vault, self.pn, code, flattened=flat))
 

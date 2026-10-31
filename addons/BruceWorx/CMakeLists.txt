@@ -54,6 +54,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/balance.py
     bruceworx/rope.py
     bruceworx/fittings.py
+    bruceworx/stock.py
     bruceworx/connector_library.py
     config/document_types.json
     config/numbering.example.json
@@ -118,6 +119,7 @@ INSTALL(
         bruceworx/balance.py
         bruceworx/rope.py
         bruceworx/fittings.py
+        bruceworx/stock.py
         bruceworx/connector_library.py
     DESTINATION Mod/BruceWorxHooks/bruceworx
 )
