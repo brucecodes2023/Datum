@@ -251,6 +251,10 @@ def query_word_matches(row, key, value):
     if key == "change":
         return row.get("item_type") == "change" and value in (str(row.get("state", "")).lower(),
                                                               str(row.get("kind", "")).lower())
+    if key == "program":
+        from bruceworx import vault_trees
+
+        return vault_trees.program_code(row.get("part_number")) == value.upper()
     return None
 
 
@@ -494,6 +498,49 @@ class Session:
 
     def fetched(self, pn):
         return self.work.state.get("items", {}).get(pn, {}).get("fetched", "")
+
+
+def neighbour_places(root):
+    """(name, folder) for this vault and the others beside it, or []."""
+    if not str(root or "").strip():
+        return []
+    try:
+        from bruceworx import vault_setup
+
+        return vault_setup.neighbour_vaults(root)
+    except Exception:
+        return []
+
+
+def other_places(root):
+    """(name, folder) for the vaults beside this one, not including it."""
+    current = os.path.abspath(root) if str(root or "").strip() else ""
+    if not current:
+        return []
+    return [(name, os.path.abspath(folder)) for name, folder in neighbour_places(root)
+            if os.path.abspath(folder) != current]
+
+
+def use_place(folder):
+    """Open another vault beside the current one (Projects or Standard Libraries)."""
+    folder = os.path.abspath(folder)
+    current = os.path.abspath(_prefs().GetString("VaultPath", "").strip() or folder)
+    if folder != current:
+        _prefs().SetString("VaultPath", folder)
+
+
+def add_place_actions(menu, root):
+    """Checkable entries for the vaults beside this one. Returns how many were added."""
+    places = neighbour_places(root)
+    if len(places) < 2:
+        return 0
+    current = os.path.abspath(root)
+    for name, folder in places:
+        act = menu.addAction(name)
+        act.setCheckable(True)
+        act.setChecked(os.path.abspath(folder) == current)
+        act.triggered.connect(lambda _c=False, f=folder: use_place(f))
+    return len(places)
 
 
 def session():
@@ -2161,6 +2208,16 @@ def _make_classes():
             self.cloud = QtWidgets.QLabel()
             self.name = QtWidgets.QLabel("Vault")
             self.name.setObjectName("bwVaultName")
+            self.places = QtWidgets.QToolButton()
+            self.places.setObjectName("bwVaultTool")
+            self.places.setText("▾")
+            self.places.setToolTip("Projects or Standard Libraries")
+            self.places.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            self.places.setCursor(QtCore.Qt.PointingHandCursor)
+            self.places_menu = QtWidgets.QMenu(self.places)
+            self.places.setMenu(self.places_menu)
+            self.places_menu.aboutToShow.connect(self._fill_places)
+            self.places.hide()
             self.sync = QtWidgets.QLabel("")
             self.sync.setObjectName("bwVaultSync")
             self.refresh_button = QtWidgets.QToolButton()
@@ -2176,10 +2233,19 @@ def _make_classes():
             self.more.setMenu(self.more_menu)
             head.addWidget(self.cloud)
             head.addWidget(self.name)
+            head.addWidget(self.places)
             head.addWidget(self.sync, 1)
             head.addWidget(self.refresh_button)
             head.addWidget(self.more)
             tl.addLayout(head)
+            self.place_box = QtWidgets.QWidget()
+            self.place_box.setObjectName("bwVaultPlaces")
+            self.place_rows = QtWidgets.QVBoxLayout(self.place_box)
+            self.place_rows.setContentsMargins(0, 0, 0, 0)
+            self.place_rows.setSpacing(2)
+            self._place_sig = None
+            self.place_box.hide()
+            tl.addWidget(self.place_box)
             self.search = QtWidgets.QLineEdit()
             self.search.setObjectName("bwVaultSearch")
             self.search.setPlaceholderText("Search part number or description")
@@ -2340,9 +2406,13 @@ def _make_classes():
             s = _state["session"]
             if s is None:
                 self.name.setText("No vault open")
+                self.places.hide()
+                self._fill_place_rows("")
                 self.sync.setText("")
                 return
             self.name.setText(s.name)
+            self.places.setVisible(len(neighbour_places(s.root)) > 1)
+            self._fill_place_rows(s.root)
             missing = len(s.vault.missing_objects())
             if missing:
                 text = f"{missing} file{'s' if missing != 1 else ''} still downloading"
@@ -2625,6 +2695,35 @@ def _make_classes():
             self.list.setCurrentIndex(index)
             menu = build_item_menu(self, row["part_number"], in_panel=True)
             menu.exec(self.list.viewport().mapToGlobal(pos))
+
+        def _fill_places(self):
+            self.places_menu.clear()
+            s = _state["session"]
+            if s is not None:
+                add_place_actions(self.places_menu, s.root)
+
+        def _fill_place_rows(self, root):
+            """One row under the vault name for each vault beside it."""
+            others = other_places(root)
+            sig = tuple(others)
+            if sig == self._place_sig:
+                return
+            self._place_sig = sig
+            lay = self.place_rows
+            while lay.count():
+                widget = lay.takeAt(0).widget()
+                if widget is not None:
+                    widget.deleteLater()
+            self.place_box.setVisible(bool(others))
+            for name, folder in others:
+                button = QtWidgets.QPushButton(name, self.place_box)
+                button.setObjectName("bwVaultPlace")
+                button.setCursor(QtCore.Qt.PointingHandCursor)
+                button.setFlat(True)
+                button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                button.setToolTip(f"Open {name}")
+                button.clicked.connect(lambda _c=False, f=folder: use_place(f))
+                lay.addWidget(button)
 
         def fill_more(self):
             self.more_menu.clear()

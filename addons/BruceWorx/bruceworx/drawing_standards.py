@@ -283,7 +283,7 @@ def vault_name(vault_root: str) -> str:
     """The name in the vault's ref file, else the folder name."""
     root = root_of(vault_root)
     try:
-        refs = sorted(n for n in os.listdir(root) if n.endswith(".bwvault"))
+        refs = sorted(n for n in os.listdir(root) if n.endswith(".bwvault") and not n.startswith("._"))
         if refs:
             with open(os.path.join(root, refs[0]), encoding="utf-8") as handle:
                 name = str(json.load(handle).get("name") or "").strip()

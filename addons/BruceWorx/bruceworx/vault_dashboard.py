@@ -12,8 +12,7 @@ No FreeCAD import; nothing here writes (the workspace is opened read-only).
 
 Decisions (plan questions, 24 Oct): "me" is every actor with the same user part (bruce@mac and
 bruce@mbp are one person; locks stay per Mac). Everyone's locks and activity show. The feed covers
-14 days by default and hides check-outs, undone check-outs and BOM records unless show_all. Until
-PDM-09 records projects, top assemblies stand in, and the section is hidden above 12 of them.
+14 days by default and hides check-outs, undone check-outs and BOM records unless show_all. A project is a program, the first field of the part number, named from numbering.json.
 """
 
 from __future__ import annotations
@@ -155,51 +154,36 @@ def closures(vault, tops, bom=None) -> dict:
 
 
 def projects(vault) -> dict:
-    """{"label", "total", "hidden", "rows": [...]}; each row rolls up its closure and the drawings
-    of everything in it: each item counts once, whatever its quantity. The rows are the vault's open
-    projects (PDM-09, each at its top assembly, with "code", "name" and "units"); a vault without
-    projects shows its top assemblies instead, hidden above MAX_PROJECTS of them."""
-    bom = vault.bom
-    recorded = [p for p in (getattr(vault, "projects", None) or {}).values()
-                if p.status == "Open" and p.top in vault.items]
-    if recorded:
-        tops = sorted({p.top for p in recorded})
-        out = {"label": "project", "total": len(recorded), "hidden": False, "rows": []}
-    else:
-        tops = top_assemblies(vault, bom)
-        out = {"label": "top assembly", "total": len(tops), "hidden": len(tops) > MAX_PROJECTS, "rows": []}
-    if out["hidden"] or not tops:
-        return out
-    by_top = {}
-    for project in recorded:
-        by_top.setdefault(project.top, project)
-    drawings = {}
-    for pn, item in vault.items.items():
-        if item.drawing_of:
-            drawings.setdefault(item.drawing_of, []).append(pn)
+    """{"label", "total", "hidden", "rows"}: one row per program, the first field of the part number.
+
+    The name comes from the vault's numbering.json. A program listed there with no parts yet is still
+    a row. Every item of the program counts once, drawings included."""
+    from bruceworx import vault_trees as vt
+
+    names = vt.program_names(getattr(vault, "root", "") or "")
+    codes = set(names)
+    for pn in vault.items:
+        code = vt.program_code(pn)
+        if code:
+            codes.add(code)
     rows = []
-    for top, members in closures(vault, tops, bom).items():
-        dwgs = {d for pn in members for d in drawings.get(pn, ())}
-        everything = members | dwgs
+    for code in sorted(codes):
+        pns = [pn for pn in vault.items if vt.program_code(pn) == code]
+        drawing_count = sum(1 for pn in pns if vault.items[pn].item_type == "drawing")
         states = dict.fromkeys(pdm.STATES, 0)
-        for pn in everything:
+        for pn in pns:
             states[vault.items[pn].state] += 1
-        item = vault.items[top]
-        latest = vault.latest_version(top) if hasattr(vault, "latest_version") else None
-        open_ecos = sorted(eco.number for eco in vault.ecos.values()
+        name = names.get(code) or ""
+        everything = set(pns)
+        open_ecos = sorted(eco.number for eco in getattr(vault, "ecos", {}).values()
                            if eco.status == "Open" and set(eco.items) & everything)
-        project = by_top.get(top)
         rows.append({
-            "part_number": top, "description": item.description, "revision": item.latest.code,
-            "display": pdm.display_part_number(top, item.latest.code), "state": item.state,
-            "items": len(everything), "drawings": len(dwgs), "states": states, "ecos": open_ecos,
-            "at": latest.at if latest else "",
-            "code": project.code if project else "", "name": project.name if project else "",
-            "units": project.units if project else "",
+            "program": code, "part_number": code, "code": code,
+            "name": name or code, "description": f"{code}  {name}".strip() if name else code,
+            "display": code, "revision": "", "state": "", "units": "",
+            "items": len(pns), "drawings": drawing_count, "states": states, "ecos": open_ecos, "at": "",
         })
-    rows.sort(key=lambda r: (r["at"], r["part_number"]), reverse=True)
-    out["rows"] = rows
-    return out
+    return {"label": "program", "total": len(rows), "hidden": False, "rows": rows}
 
 
 # ----- My work --------------------------------------------------------------------------------------

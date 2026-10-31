@@ -41,7 +41,7 @@ def _walk(root):
     for current, dirs, files in os.walk(root):
         dirs.sort()
         for name in sorted(files):
-            if name in SKIP_NAMES or name.endswith(".tmp"):
+            if name in SKIP_NAMES or name.startswith("._") or name.endswith(".tmp"):
                 continue
             yield os.path.join(current, name)
 
@@ -119,7 +119,11 @@ def move_vault(plan: MovePlan, progress=None) -> str:
             rel = os.path.relpath(path, plan.source)
             dest = os.path.join(staging, rel)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.copy2(path, dest)  # keeps read-only work files read-only
+            shutil.copyfile(path, dest)  # no xattrs: exFAT rejects them (Invalid argument)
+            try:
+                os.chmod(dest, os.stat(path).st_mode)
+            except OSError:
+                pass
             if sha256_of(dest) != sha256_of(path):
                 raise OSError(f"{rel} did not copy correctly")
             done += os.path.getsize(path)
@@ -140,5 +144,5 @@ def move_vault(plan: MovePlan, progress=None) -> str:
 
 def ref_in(folder: str) -> str:
     """The ref file of the vault in folder (for setting BruceWorx/VaultPath to the new place)."""
-    names = [n for n in os.listdir(folder) if n.endswith(REF_SUFFIX)]
+    names = [n for n in os.listdir(folder) if n.endswith(REF_SUFFIX) and not n.startswith("._")]
     return os.path.join(folder, names[0]) if names else ""

@@ -2,9 +2,9 @@
 """The right panel's Vault tab (BW-PDM-09, plan section 3; built 26 Oct 2026): List | Structure.
 
 The tab is registered with bruceworx_rightpanel ("BWVault"). It shows one root at a time, picked at
-the top: a project (PDM-09) or any assembly; the picker follows the Browser when an assembly of the
-vault is selected there. Vault browsing stays on the Start page (the user's 25 Oct decision): both
-views here are scoped to the root.
+the top. Projects come first: one per program, the first field of the part number. Assemblies follow.
+The picker follows the Browser onto that assembly's program. Vault browsing stays on the Start page
+(the user's 25 Oct decision): both views here are scoped to the root.
 
 * Structure: the product tree, one level at a time (lazy), rows from the per-revision BOM (PDM-06)
   or, until one is recorded, from the checked-in file's links, marked "from links". Columns: the
@@ -162,7 +162,7 @@ def _make_classes():
             tl.addLayout(head)
             self.root = QtWidgets.QComboBox()
             self.root.setObjectName("bwStructureRoot")
-            self.root.setToolTip("The project or assembly shown; follows an assembly selected in the Browser")
+            self.root.setToolTip("Projects, from the program at the start of the part number, then assemblies")
             self.root.currentIndexChanged.connect(self._root_picked)
             tl.addWidget(self.root)
             chips = QtWidgets.QHBoxLayout()
@@ -281,12 +281,16 @@ def _make_classes():
             roots = pt.roots(s.vault, self.structure)
             self.root.blockSignals(True)
             self.root.clear()
-            for r in roots:
-                self.root.addItem(r["text"], r)
-            wanted = next((i for i in range(self.root.count()) if self.root.itemData(i)["key"] == self.root_key), -1)
-            if wanted < 0 and self.root.count():
-                wanted = 0
-                self.root_key = self.root.itemData(0)["key"]
+            self._fill_root_menu(roots)
+            wanted = next((i for i in range(self.root.count())
+                           if isinstance(self.root.itemData(i), dict) and self.root.itemData(i).get("key") == self.root_key), -1)
+            if wanted < 0:
+                for i in range(self.root.count()):
+                    data = self.root.itemData(i)
+                    if isinstance(data, dict) and data.get("key"):
+                        wanted = i
+                        self.root_key = data["key"]
+                        break
             self.root.setCurrentIndex(wanted)
             self.root.blockSignals(False)
             if not roots:
@@ -304,9 +308,37 @@ def _make_classes():
                 return vault_trees.file_links(path)
             return vault_trees._links_of(s.vault, pn) if s is not None else {}
 
+        def _heading(self, text):
+            """A disabled row that names a section of the picker. It cannot be selected."""
+            self.root.addItem(text, None)
+            model = self.root.model()
+            item = model.item(self.root.count() - 1) if hasattr(model, "item") else None
+            if item is not None:
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled & ~QtCore.Qt.ItemIsSelectable)
+
+        def _fill_root_menu(self, roots):
+            programs = [r for r in roots if r.get("kind") == "program"]
+            assemblies = [r for r in roots if r.get("kind") == "assembly"]
+            if programs:
+                self._heading("Projects")
+                for r in programs:
+                    self.root.addItem(r["text"], r)
+            if assemblies:
+                self._heading("Assemblies")
+                for r in assemblies:
+                    self.root.addItem(r["text"], r)
+
+        def _root_pns(self, root):
+            if not root:
+                return []
+            members = root.get("members")
+            if members:
+                return list(members)
+            return [root["pn"]] if root.get("pn") else []
+
         def current_root(self):
             data = self.root.currentData()
-            return data if isinstance(data, dict) else None
+            return data if isinstance(data, dict) and data.get("key") else None
 
         def show_empty(self, text, button):
             self.empty_text.setText(text)
@@ -331,7 +363,7 @@ def _make_classes():
             self.rows = {}
             if root is None or self.tree is None:
                 return
-            pn = root["pn"]
+            pns = self._root_pns(root)
             s = self.session()
             units = root.get("units") or ""
             try:
@@ -342,23 +374,51 @@ def _make_classes():
                 default = "mm"
             self.badge.setText(units)
             self.badge.setVisible(bool(units) and units != default)
-            counts = self.tree.counts(pn)
+            if not pns:
+                self.list.hide()
+                self.foot.hide()
+                for b in self.chips.values():
+                    b.setVisible(False)
+                self.empty_text.setText(f"{root['text']} has no parts yet.")
+                self.empty_button.setVisible(True)
+                self.empty.show()
+                self.root.setVisible(True)
+                self.update_button.setEnabled(False)
+                return
+            counts = {key: 0 for key, _text in pt.CHIPS}
+            for pn in pns:
+                below = self.tree.counts(pn)
+                for key, _text in pt.CHIPS:
+                    counts[key] += below.get(key, 0) + (1 if self.tree.matches(pn, key) else 0)
             for key, text in pt.CHIPS:
-                n = counts.get(key, 0) + (1 if self.tree.matches(pn, key) else 0)
-                self.chips[key].setText(chip_text(text, n))
+                self.chips[key].setText(chip_text(text, counts[key]))
             chip = None if self.chip == "all" else self.chip
+            stale = []
+            for pn in pns:
+                for drawing in self.tree.out_of_date(pn):
+                    if drawing not in stale:
+                        stale.append(drawing)
             if self.view == "structure":
                 self.list.setRootIsDecorated(True)
-                row = self.tree.row(pn)
-                items = self._items(row)
-                self.model.appendRow(items)
-                self._add_children(items[0], pn, chip)
-                self.list.expand(items[0].index())
+                for pn in pns:
+                    row = self.tree.row(pn)
+                    items = self._items(row)
+                    self.model.appendRow(items)
+                    self._add_children(items[0], pn, chip)
+                    self.list.expand(items[0].index())
             else:
                 self.list.setRootIsDecorated(False)
-                for row in self.tree.flat(pn, chip):
-                    self.model.appendRow(self._items(row))
-            self.update_button.setEnabled(bool(self.tree.out_of_date(pn)))
+                seen = set()
+                for pn in pns:
+                    rows = [self.tree.row(pn)] + self.tree.flat(pn, chip)
+                    for row in rows:
+                        if row["pn"] in seen:
+                            continue
+                        if chip and not self.tree.shows(row["pn"], chip):
+                            continue
+                        seen.add(row["pn"])
+                        self.model.appendRow(self._items(row))
+            self.update_button.setEnabled(bool(stale))
 
         def _items(self, row):
             pn = row["pn"]
@@ -419,9 +479,10 @@ def _make_classes():
                 self.fill()
 
         def set_root(self, key):
-            """Show a root by its key ("project:CODE" or "assembly:P/N"); True when it is there."""
+            """Show a root by its key ("program:CODE" or "assembly:P/N"); True when it is there."""
             for i in range(self.root.count()):
-                if self.root.itemData(i)["key"] == key:
+                data = self.root.itemData(i)
+                if isinstance(data, dict) and data.get("key") == key:
                     if self.root.currentIndex() != i:
                         self.root.setCurrentIndex(i)  # fills
                     else:
@@ -443,16 +504,18 @@ def _make_classes():
                 pn = ""
             if not pn:
                 return
-            key = "assembly:" + pn
-            projects = [r for r in self._roots() if r["pn"] == pn and r["project"]]
-            if projects:
-                key = projects[0]["key"]
+            from bruceworx import vault_trees
+
+            code = vault_trees.program_code(pn)
+            program = next((r for r in self._roots() if r.get("kind") == "program" and r.get("project") == code), None)
+            key = program["key"] if program else "assembly:" + pn
             if key != self.root_key:
                 self.pinned = False
                 self.set_root(key)
 
         def _roots(self):
-            return [self.root.itemData(i) for i in range(self.root.count())]
+            return [data for i in range(self.root.count())
+                    if isinstance(data := self.root.itemData(i), dict) and data.get("key")]
 
         # --- actions
         def pn_at(self, index):
@@ -510,19 +573,24 @@ def _make_classes():
                     break
 
         def open_root(self):
-            root = self.current_root()
-            if root is not None:
-                _vc().open_from_vault(root["pn"])
+            pns = self._root_pns(self.current_root())
+            if len(pns) == 1:
+                _vc().open_from_vault(pns[0])
 
         def show_bom(self):
-            root = self.current_root()
-            if root is not None:
-                self._bom().bill_of_materials(root["pn"])
+            pns = self._root_pns(self.current_root())
+            if len(pns) == 1:
+                self._bom().bill_of_materials(pns[0])
 
         def update_drawings(self, drawings=None):
             root = self.current_root()
             if drawings is None:
-                drawings = self.tree.out_of_date(root["pn"]) if root is not None and self.tree is not None else []
+                drawings = []
+                if root is not None and self.tree is not None:
+                    for pn in self._root_pns(root):
+                        for drawing in self.tree.out_of_date(pn):
+                            if drawing not in drawings:
+                                drawings.append(drawing)
             if not drawings:
                 _vc()._message("Update drawings", "Every drawing under this root is current.")
                 return

@@ -156,6 +156,19 @@ def _now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="microseconds")
 
 
+def _named(folder: str, suffix: str) -> list:
+    """Names in ``folder`` ending in ``suffix``, skipping exFAT AppleDouble sidecars (``._name``)."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return []
+    return sorted(n for n in names if n.endswith(suffix) and not n.startswith("._"))
+
+
+def _ref_names(folder: str) -> list:
+    return _named(folder, REF_SUFFIX)
+
+
 def find_ref_file(path: str) -> str:
     """Accept the ref file itself or the vault folder."""
     path = os.path.abspath(path)
@@ -163,7 +176,7 @@ def find_ref_file(path: str) -> str:
         return path
     if not os.path.isdir(path):
         raise FileNotFoundError(path)
-    refs = sorted(n for n in os.listdir(path) if n.endswith(REF_SUFFIX))
+    refs = _ref_names(path)
     if not refs:
         raise VaultFormatError(f"{path} has no {REF_SUFFIX} file")
     # A sync service may have duplicated the ref file; all copies are identical.
@@ -199,7 +212,7 @@ class FolderVault:
     def init(cls, folder: str, name: str, actor: str | None = None) -> "FolderVault":
         folder = os.path.abspath(folder)
         os.makedirs(folder, exist_ok=True)
-        if any(n.endswith(REF_SUFFIX) for n in os.listdir(folder)):
+        if _ref_names(folder):
             raise VaultFormatError(f"{folder} already holds a vault")
         safe = _ACTOR_SAFE.sub("-", name).strip("-") or "vault"
         ref = {
@@ -265,7 +278,7 @@ class FolderVault:
         """
         folder = os.path.join(self.root, JOURNAL)
         try:
-            names = sorted(n for n in os.listdir(folder) if n.endswith(".jsonl"))
+            names = _named(folder, ".jsonl")
         except OSError:
             names = []
         if set(self._offsets) - set(names):
@@ -327,9 +340,7 @@ class FolderVault:
         events: dict[str, Event] = {}
         if not os.path.isdir(folder):
             return []
-        for name in sorted(os.listdir(folder)):
-            if not name.endswith(".jsonl"):
-                continue
+        for name in _named(folder, ".jsonl"):
             path = os.path.join(folder, name)
             try:
                 inode = os.stat(path).st_ino
@@ -658,9 +669,7 @@ class FolderVault:
         """Every released BOM sent to the outbox (all devices), oldest first, one per key."""
         folder = os.path.join(self.root, OUTBOX)
         found = {}
-        for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else ():
-            if not name.endswith(".jsonl"):
-                continue
+        for name in _named(folder, ".jsonl") if os.path.isdir(folder) else ():
             with open(os.path.join(folder, name), encoding="utf-8") as handle:
                 text = handle.read()
             for line in text.split("\n")[: None if text.endswith("\n") else -1]:

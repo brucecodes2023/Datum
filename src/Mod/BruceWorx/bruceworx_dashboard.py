@@ -5,8 +5,9 @@ With a vault open, the Start page's main area has two tabs: the vault's dashboar
 while a vault is open) and Recent files (the files on this Mac; the default when no vault is
 open). The dashboard shows vault items only, never local files:
 
-* header: the vault's name, sync state ("Up to date · read 1 min ago"), where it lives, who you
-  are in it, its units; Import Files..., Vault panel, New Project... (PDM-09; greyed until then)
+* header: the vault's name, one row for each vault beside it (Standard Libraries next to
+  Vector), sync state ("Up to date · read 1 min ago"), where it lives, who you are in it, its
+  units; Import Files..., Vault panel, New Project... (PDM-09; greyed until then)
 * tiles: parts, assemblies, drawings and bought items by lifecycle state
 * Projects (top assemblies until PDM-09 records projects), My work (3 rows per queue),
   Changes (open ECRs and ECOs), Activity (folded, 7/14/30 days), Vault health
@@ -518,10 +519,33 @@ def classes():
             head.setSpacing(8)
             names = QtWidgets.QVBoxLayout()
             names.setSpacing(2)
+            title = QtWidgets.QHBoxLayout()
+            title.setSpacing(2)
             self.name = label("", "bwDashName", self)
+            self.places = QtWidgets.QToolButton(self)
+            self.places.setObjectName("bwDashButton")
+            self.places.setText("▾")
+            self.places.setToolTip("Projects or Standard Libraries")
+            self.places.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            self.places.setCursor(QtCore.Qt.PointingHandCursor)
+            self.places_menu = QtWidgets.QMenu(self.places)
+            self.places.setMenu(self.places_menu)
+            self.places_menu.aboutToShow.connect(self._fill_places)
+            self.places.hide()
+            title.addWidget(self.name)
+            title.addWidget(self.places, 0, QtCore.Qt.AlignVCenter)
+            title.addStretch(1)
+            names.addLayout(title)
+            self.place_box = QtWidgets.QWidget(self)
+            self.place_box.setObjectName("bwDashPlaces")
+            self.place_rows = QtWidgets.QVBoxLayout(self.place_box)
+            self.place_rows.setContentsMargins(0, 0, 0, 0)
+            self.place_rows.setSpacing(2)
+            self._place_sig = None
+            self.place_box.hide()
+            names.addWidget(self.place_box)
             self.sync = label("", "bwDashSync", self)
             self.sync.setTextFormat(QtCore.Qt.RichText)
-            names.addWidget(self.name)
             names.addWidget(self.sync)
             head.addLayout(names, 1)
             self.import_button = self._button("Import Files…", "bwDashButton", self._import)
@@ -636,9 +660,45 @@ def classes():
             return svg_pixmap(kind, colour, size, self.devicePixelRatioF())
 
         # data
+        def _fill_places(self):
+            self.places_menu.clear()
+            import bruceworx_vaultclient as vc
+
+            root = (self.snap or {}).get("root") or ""
+            vc.add_place_actions(self.places_menu, root)
+
+        def _fill_place_rows(self, root):
+            """One row under the vault name for each vault beside it."""
+            import bruceworx_vaultclient as vc
+
+            others = vc.other_places(root)
+            sig = tuple(others)
+            if sig == self._place_sig:
+                return
+            self._place_sig = sig
+            lay = self.place_rows
+            while lay.count():
+                widget = lay.takeAt(0).widget()
+                if widget is not None:
+                    widget.deleteLater()
+            self.place_box.setVisible(bool(others))
+            for name, folder in others:
+                button = QtWidgets.QPushButton(name, self.place_box)
+                button.setObjectName("bwDashPlace")
+                button.setCursor(QtCore.Qt.PointingHandCursor)
+                button.setFlat(True)
+                button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                button.setToolTip(f"Open {name}")
+                button.clicked.connect(lambda _c=False, f=folder: vc.use_place(f))
+                lay.addWidget(button)
+
         def fill(self, snap, checked_seconds=None):
             self.snap = snap
             self.name.setText(snap.get("name", ""))
+            import bruceworx_vaultclient as vc
+
+            self.places.setVisible(len(vc.neighbour_places(snap.get("root") or "")) > 1)
+            self._fill_place_rows(snap.get("root") or "")
             self.update_header(checked_seconds)
             project = has_new_project()
             self.project_button.setEnabled(project)
@@ -729,19 +789,23 @@ def classes():
             label_text = "Top assemblies" if projects.get("label") == "top assembly" else "Projects"
             card.title.setText(label_text)
             card.count.setText(str(projects["total"]) if projects["total"] else "")
-            card.set_link("All assemblies ›", lambda: open_filtered("assemblies"))
+            if projects.get("label") == "program":
+                card.set_link("All files ›", open_panel)
+            else:
+                card.set_link("All assemblies ›", lambda: open_filtered("assemblies"))
             if projects["hidden"]:
                 card.body.addWidget(self._note(
                     f"{projects['total']} assemblies are not used by another one. They show here once the "
                     "assemblies' BOMs are recorded (check them in), or as projects once PDM-09 is in."))
                 return
             if not projects["rows"]:
-                card.body.addWidget(self._note("No assemblies yet. A project's top assembly shows here with how "
-                                               "much of it is released."))
+                card.body.addWidget(self._note(
+                    "No programs yet. A project is the first part of a part number, set in Vault Settings."))
                 return
             for i, row in enumerate(projects["rows"]):
-                r = Click("bwDashRow", lambda pn=row["part_number"]: open_filtered("all", pn, pn), card,
-                          f"{row['display']}: show it in the Files tab")
+                query = f"program:{row['program']}" if row.get("program") else row["part_number"]
+                r = Click("bwDashRow", lambda q=query, pn=row["part_number"]: open_filtered("all", q, pn), card,
+                          f"{row['description']}: show its files")
                 r.setProperty("first", i == 0)
                 h = QtWidgets.QHBoxLayout(r)
                 h.setContentsMargins(16, 9, 16, 9)
@@ -756,21 +820,26 @@ def classes():
                 names.addWidget(label(row["description"] or row["part_number"], "bwDashRowName", r))
                 names.addWidget(label(project_sub(row), "bwDashRowSub", r))
                 h.addLayout(names, 3)
-                bar = StateBar(self.colours, 8, r)
-                bar.set_counts(row["states"])
-                bar.setMinimumWidth(120)
-                h.addWidget(bar, 2)
-                main, sub = project_text(row)
                 right = QtWidgets.QVBoxLayout()
                 right.setSpacing(1)
-                done = row["states"].get("Released", 0)
-                m = label(f"<b>{done} of {row['items']}</b> released", "bwDashRowRight", r)
-                m.setTextFormat(QtCore.Qt.RichText)
-                m.setAlignment(QtCore.Qt.AlignRight)
-                right.addWidget(m)
-                s = label(sub, "bwDashRowSub", r)
-                s.setAlignment(QtCore.Qt.AlignRight)
-                right.addWidget(s)
+                if not row.get("items"):
+                    note = label("No parts yet", "bwDashRowSub", r)
+                    note.setAlignment(QtCore.Qt.AlignRight)
+                    right.addWidget(note)
+                else:
+                    bar = StateBar(self.colours, 8, r)
+                    bar.set_counts(row["states"])
+                    bar.setMinimumWidth(120)
+                    h.addWidget(bar, 2)
+                    _main, sub = project_text(row)
+                    done = row["states"].get("Released", 0)
+                    m = label(f"<b>{done} of {row['items']}</b> released", "bwDashRowRight", r)
+                    m.setTextFormat(QtCore.Qt.RichText)
+                    m.setAlignment(QtCore.Qt.AlignRight)
+                    right.addWidget(m)
+                    s = label(sub, "bwDashRowSub", r)
+                    s.setAlignment(QtCore.Qt.AlignRight)
+                    right.addWidget(s)
                 h.addLayout(right, 2)
                 card.body.addWidget(r)
 

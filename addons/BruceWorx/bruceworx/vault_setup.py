@@ -207,7 +207,7 @@ def _ancestors(path: str) -> list:
 
 def _vault_refs(folder: str) -> list:
     try:
-        return sorted(n for n in os.listdir(folder) if n.endswith(REF_SUFFIX))
+        return sorted(n for n in os.listdir(folder) if n.endswith(REF_SUFFIX) and not n.startswith("._"))
     except OSError:
         return []
 
@@ -490,6 +490,43 @@ def root_of(path: str) -> str:
 def numbering_path(vault_root: str) -> str:
     """The vault's numbering.json (for gui.gui_config_path when a vault is open)."""
     return os.path.join(root_of(vault_root), NUMBERING_FILE)
+
+
+LIBRARY_DIR = "Standard Libraries"
+
+
+def library_beside(project_root: str) -> str:
+    """The Standard Libraries vault next to a project vault (``Vault/Projects`` beside
+    ``Vault/Standard Libraries``), or "" when that neighbour is not a vault."""
+    parent = os.path.dirname(os.path.abspath(root_of(project_root)))
+    candidate = os.path.join(parent, LIBRARY_DIR)
+    if os.path.isdir(candidate) and _vault_refs(candidate):
+        return candidate
+    return ""
+
+
+def neighbour_vaults(vault_root: str) -> list:
+    """``(name, folder)`` for every vault in the same parent folder, this one first.
+
+    Projects and Standard Libraries sit side by side under ``Vault/``. The dashboard
+    uses this list to switch; a vault with no neighbour is a one-item list."""
+    from bruceworx import drawing_standards
+
+    root = os.path.abspath(root_of(vault_root))
+    parent = os.path.dirname(root)
+    found = []
+    try:
+        names = os.listdir(parent)
+    except OSError:
+        names = []
+    for name in names:
+        if name.startswith("."):
+            continue
+        folder = os.path.join(parent, name)
+        if os.path.isdir(folder) and _vault_refs(folder):
+            found.append((drawing_standards.vault_name(folder), os.path.abspath(folder)))
+    found.sort(key=lambda item: (item[1] != root, item[0].lower()))
+    return found
 
 
 def properties_path(vault_root: str) -> str:

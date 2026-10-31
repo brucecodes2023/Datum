@@ -138,7 +138,7 @@ class TestAcceptance(_Vault):
         self.assertEqual(tree.children(pn["Shop cart"])[0]["source"], "bom")  # the writer records each assembly's BOM
         self.assertEqual([l.as_dict() for l in v.bom_of(pn["Frame"])],
                          [{"child": pn["Side rail"], "qty": 2, "rev": "01"}, {"child": pn["Cross bar"], "qty": 1, "rev": "01"}])
-        self.assertEqual(pt.roots(v, s)[0]["key"], "project:SHOP-CART")
+        self.assertEqual(pt.roots(v, s)[0]["key"], "program:" + vt.program_code(pn["Shop cart"]))  # projects by program
         self.assertEqual(pt.roll_up(s["bom"], pn["Shop cart"])[pn["Side rail"]], 4)
         # no staging, no backups left behind
         self.assertFalse(os.path.exists(os.path.join(v.root, ".import")))
@@ -229,7 +229,8 @@ class TestAcceptance(_Vault):
         self.assertEqual(v.projects[report.project].units, "mm")
         s = vt.structure(v)
         self.assertEqual(pt.roll_up(s["bom"], pn["Bench"]), {pn["Seat"]: 1, pn["Back"]: 1, pn["Slat"]: 5, leg: 4})
-        self.assertEqual(len(pt.roots(v, s)), 2 + 4)  # two projects, then every assembly (Base, Bench, Seat, Back)
+        rows = pt.roots(v, s)  # programs first (both projects number under one), then every assembly
+        self.assertEqual([r["kind"] for r in rows], ["program"] * (len(rows) - 4) + ["assembly"] * 4)
         # Create drawing (the Structure view's row menu): a numbered drawing, WIP 01, made from the item
         self.assertEqual(len(v.drawings_of(leg)), 1)
         number = bp.new_drawing_item(v, self.work, leg, units="mm")
@@ -296,6 +297,7 @@ class TestStructureTab(_Vault):
         import bruceworx_structure as bs
         import bruceworx_vaultclient as vc
         from bruceworx import product_tree as pt
+        from bruceworx import vault_trees as vt
 
         _plan, report = self.create()
         pn = {name: number for name, number, _kind in report.items}
@@ -307,7 +309,7 @@ class TestStructureTab(_Vault):
         self.addCleanup(vc._open_session, before)
         tab = bs.classes()(None)
         try:
-            self.assertTrue(tab.set_root("project:SHOP-CART"))
+            self.assertTrue(tab.set_root("program:" + vt.program_code(pn["Shop cart"])))
             self.assertEqual(tab.model.rowCount(), 1)
             top = tab.model.item(0, 0)
             self.assertEqual(top.data(bs.PN_ROLE), pn["Shop cart"])
@@ -322,7 +324,7 @@ class TestStructureTab(_Vault):
             self.assertEqual(tab.chips["needs_drawing"].text(), "Needs a drawing")
             self.assertTrue(tab.badge.isHidden() or tab.badge.text() == "in")  # inch vault, inch project: no badge
             tab.set_view("list")
-            self.assertEqual(tab.model.rowCount(), 5)  # every item under the cart once
+            self.assertEqual(tab.model.rowCount(), 6)  # the cart, then every item under it once
             tab.set_chip("out_of_date")
             self.assertEqual(tab.model.rowCount(), 0)
         finally:

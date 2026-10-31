@@ -73,12 +73,12 @@ class CountsAndProjects(_Vault):
     def test_project_rolls_up_each_item_once_with_drawings(self):
         self.structure()
         projects = vd.projects(self.vault)
-        self.assertEqual((projects["total"], projects["hidden"]), (1, False))
+        self.assertEqual((projects["label"], projects["total"], projects["hidden"]), ("program", 1, False))
         row = projects["rows"][0]
-        self.assertEqual(row["part_number"], TOP)
-        # TOP, SUB, PART, BOLT (once, though used 48 times) and PART's drawing; NUT is not in it.
-        self.assertEqual((row["items"], row["drawings"]), (5, 1))
-        self.assertEqual(row["states"], {"WIP": 3, "In Review": 1, "Released": 1, "Obsolete": 0})
+        self.assertEqual(row["program"], "DM")
+        # Every DM item once, including NUT, which no assembly uses.
+        self.assertEqual((row["items"], row["drawings"]), (6, 1))
+        self.assertEqual(row["states"], {"WIP": 4, "In Review": 1, "Released": 1, "Obsolete": 0})
 
     def test_memoised_closure_matches_explode(self):
         self.structure()
@@ -86,25 +86,25 @@ class CountsAndProjects(_Vault):
         for top in (TOP, SUB):
             self.assertEqual(closure[top], {top} | set(self.vault.explode(top)))
 
-    def test_recorded_projects_replace_the_top_assemblies(self):
-        """PDM-09: once the journal names projects, the section lists them, whatever the top count."""
+    def test_programs_group_every_item_whatever_the_top_count(self):
+        """A project is the program, the first field of the part number, not each top assembly."""
         self.structure()
         for i in range(vd.MAX_PROJECTS + 1):
             self.vault.create_item(f"DM-02-0{2000 + i}-001", "assembly")
-        self.vault.create_project("CART", "Shop cart", "DM", TOP, units="in")
+        self.vault.create_item("LE-01-01001-001", "part", "Arm link")
         projects = vd.projects(self.vault)
-        self.assertEqual((projects["label"], projects["total"], projects["hidden"]), ("project", 1, False))
-        row = projects["rows"][0]
-        self.assertEqual((row["part_number"], row["code"], row["name"], row["units"]), (TOP, "CART", "Shop cart", "in"))
-        self.assertEqual((row["items"], row["drawings"]), (5, 1))
-        self.vault.update_project("CART", status="Closed")
-        self.assertEqual(vd.projects(self.vault)["label"], "top assembly")
+        self.assertEqual((projects["label"], projects["hidden"]), ("program", False))
+        self.assertEqual([r["program"] for r in projects["rows"]], ["DM", "LE"])
+        dm = projects["rows"][0]
+        self.assertEqual(dm["items"], 6 + vd.MAX_PROJECTS + 1)
+        self.assertEqual(projects["rows"][1]["items"], 1)
 
-    def test_many_tops_hide_the_section(self):
+    def test_many_assemblies_stay_one_program(self):
         for i in range(vd.MAX_PROJECTS + 1):
             self.vault.create_item(f"DM-02-0{2000 + i}-001", "assembly")
         projects = vd.projects(self.vault)
-        self.assertEqual((projects["total"], projects["hidden"], projects["rows"]), (13, True, []))
+        self.assertEqual((projects["total"], projects["hidden"]), (1, False))
+        self.assertEqual(projects["rows"][0]["items"], vd.MAX_PROJECTS + 1)
 
 
 class MyWorkTests(_Vault):
@@ -293,7 +293,8 @@ class GeneratedVaultBudget(unittest.TestCase):
             best = took if best is None else min(best, took)
         self.assertLess(best, 0.1)
         self.assertEqual(sum(t["total"] for t in snap["tiles"]), 500)
-        self.assertEqual((snap["projects"]["total"], snap["projects"]["hidden"]), (3, False))
+        self.assertEqual((snap["projects"]["total"], snap["projects"]["hidden"]), (1, False))
+        self.assertEqual(snap["projects"]["rows"][0]["program"], "VX")
         self.assertTrue(all(len(q["rows"]) <= vd.QUEUE_ROWS for q in snap["my_work"]["queues"]))
         self.assertLess(len(json.dumps({k: v for k, v in snap.items() if k != "parts"})), 32000)  # about 20 kB, 50 feed lines
 

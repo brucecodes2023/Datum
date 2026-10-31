@@ -108,6 +108,22 @@ class TestFileTree(unittest.TestCase):
         self.assertTrue({"LE-02-01002-001", "LE-01-01003-001"} <= set(every(tree)))
 
 
+class TestPrograms(unittest.TestCase):
+    def test_program_is_the_first_field(self):
+        self.assertEqual(vt.program_code("LE-01-01001-001"), "LE")
+        self.assertEqual(vt.program_code("le-02-01001-001-A"), "LE")
+        self.assertEqual(vt.program_code("not a number"), "")
+
+    def test_a_part_used_by_its_program_is_not_a_second_root(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01003-001": 1, "LE-01-01009-001": 1,
+                                                   "LE-01-01008-001": 3}})
+        s = dict(s)
+        s["items"] = dict(s["items"])
+        s["items"]["OW-01-01001-001"] = {"type": "part", "description": "Deck", "obsolete": False}
+        self.assertEqual(vt.program_roots(s, "LE"), ["LE-02-01002-001"])
+        self.assertEqual(vt.program_roots(s, "OW"), ["OW-01-01001-001"])
+
+
 class TestFileLinks(unittest.TestCase):
     def test_links_and_arrays_are_counted(self):
         tmp = tempfile.mkdtemp(prefix="bw-trees-")

@@ -78,6 +78,37 @@ def sheet_for(units, settings=None):
     return sheet or "ANSI_B_Landscape"
 
 
+def library_root(project_root) -> str:
+    """Where bought parts are filed: BruceWorx/LibraryPath, else the Standard Libraries vault
+    beside this project vault."""
+    try:
+        import FreeCAD
+
+        path = FreeCAD.ParamGet(PREFS_PATH).GetString("LibraryPath", "").strip()
+        if path and os.path.isdir(os.path.expanduser(path)):
+            return os.path.expanduser(path)
+    except Exception:
+        pass
+    try:
+        from bruceworx import vault_setup
+
+        return vault_setup.library_beside(project_root)
+    except Exception:
+        return ""
+
+
+def _library_vault(root):
+    path = library_root(root)
+    if not path:
+        return None
+    try:
+        from bruceworx.pdm_folder import FolderVault
+
+        return FolderVault(path)
+    except Exception:
+        return None
+
+
 def vault_units(root) -> str:
     """The vault's default units (drawing_standards.json), "mm" when unknown."""
     try:
@@ -538,7 +569,7 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
     pdm_workspace.Workspace. ``progress(text, done, total)`` may return False to stop (before anything
     is in the vault; after the numbers are taken it runs to the end)."""
     from bruceworx import numbering, pdm, product_tree, project_setup as ps, vault_setup
-    from bruceworx.pdm_workspace import clear_link_errors, rewrite_links
+    from bruceworx.pdm_workspace import Workspace, clear_link_errors, rewrite_links
     from bruceworx.sources import JsonNumberSource
 
     if not plan.ok:
@@ -547,6 +578,10 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
     program = numbering.normalize_program(options.program)
     units = "in" if str(options.units).lower().startswith("in") else "mm"
     root = vault.root
+    lib_vault = _library_vault(root)
+    if lib_vault is not None and os.path.abspath(lib_vault.root) == os.path.abspath(root):
+        lib_vault = None
+    lib_work = Workspace(lib_vault) if lib_vault is not None else None
     order = ps.order_of_work(plan)
     drawings = [n for n in order if n.wants_drawing]
     total = len(order) + len(drawings) * 2 + len(order) + 3
@@ -558,8 +593,14 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
 
     def work_path(pn):
         path = work.path(pn)
-        if not os.path.exists(path) and vault.latest_version(pn) is not None:
+        if os.path.exists(path):
+            return path
+        if vault.latest_version(pn) is not None:
             work.get_latest(pn)
+            return work.path(pn)
+        if lib_work is not None and lib_vault.latest_version(pn) is not None:
+            lib_work.get_latest(pn)
+            return lib_work.path(pn)
         return path
 
     try:
@@ -598,9 +639,22 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
             types = vault_setup._vault_document_types(source, data)
             codes = {k: vault_setup.document_type_for("part" if k == "cots" else k, types) for k in ps.KINDS}
             codes["drawing"] = vault_setup.document_type_for("drawing", types)
-            numbers, dwg_numbers = {}, {}
+            lib_source = lib_program = lib_part_code = None
+            if lib_vault is not None:
+                lib_source = JsonNumberSource(vault_setup.numbering_path(lib_vault.root))
+                lib_data = lib_source._load()
+                programs = list((lib_data.get("programs") or {}).keys())
+                if programs:
+                    lib_program = programs[0]
+                    lib_part_code = vault_setup.document_type_for(
+                        "part", vault_setup._vault_document_types(lib_source, lib_data))
+            numbers, dwg_numbers, cots_pns = {}, {}, set()
             for node in order:
-                numbers[node.key] = pdm.strip_revision(source.allocate(program, codes[node.kind]))
+                if node.kind == "cots" and lib_program:
+                    numbers[node.key] = pdm.strip_revision(lib_source.allocate(lib_program, lib_part_code))
+                    cots_pns.add(numbers[node.key])
+                else:
+                    numbers[node.key] = pdm.strip_revision(source.allocate(program, codes[node.kind]))
             for node in drawings:
                 dwg_numbers[node.key] = pdm.strip_revision(source.allocate(program, codes["drawing"]))
             # number the files while their links still resolve (stems in staging, work copies in work/),
@@ -629,7 +683,13 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
             def mapper(old):
                 base = os.path.basename(old)
                 if base in renamed:
-                    return renamed[base]
+                    new_base = renamed[base]
+                    pn = new_base[:-6] if new_base.lower().endswith(".fcstd") else new_base
+                    # ponytail: library files live in the sibling vault; the link is relative from the
+                    # project work folder, which is where this assembly is checked out.
+                    if pn in cots_pns and lib_work is not None:
+                        return os.path.relpath(lib_work.path(pn), work.root)
+                    return new_base
                 stem = base[:-6] if base.lower().endswith(".fcstd") else base
                 return base if base != old and stem in vault.items else None  # a work copy: by name alone
 
@@ -640,7 +700,8 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
         done += 1
         _say(progress, "Checking in", done, total)
         for node in order:
-            vault.create_item(numbers[node.key], node.kind, node.name)
+            home = lib_vault if numbers[node.key] in cots_pns else vault
+            home.create_item(numbers[node.key], node.kind, node.name)
         for node in drawings:
             vault.create_item(dwg_numbers[node.key], "drawing", f"Drawing of {node.name}", drawing_of=numbers[node.key])
         top_pn = numbers[plan.root.key]
@@ -665,17 +726,20 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
 
         for node in order:
             pn = numbers[node.key]
+            home = lib_vault if pn in cots_pns else vault
             try:
                 extras = {}
                 if node.kind in ("part", "cots"):
                     print_ = fingerprint_of_file(final[node.key])
                     if print_:
                         extras["fingerprint"] = print_
-                vault.checkout(pn)
+                if pn in cots_pns and pn not in vault.items:
+                    vault.create_item(pn, "cots", node.name)  # catalog row; the file is in the library
+                home.checkout(pn)
                 try:
-                    version = vault.checkin(pn, final[node.key], comment=ps.comment_for(node, options.name), **extras)
+                    version = home.checkin(pn, final[node.key], comment=ps.comment_for(node, options.name), **extras)
                 except Exception:
-                    vault.undo_checkout(pn)
+                    home.undo_checkout(pn)
                     raise
                 if node.kind == "assembly":  # the structure as typed is this revision's BOM (PDM-06), as a check-in records it
                     vault.set_bom(pn, [(pn_of(child), qty) for child, qty in node.children], revision="01",
@@ -702,7 +766,14 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
             except Exception as exc:  # noqa: BLE001
                 report.failed.append((f"drawing of {node.name}", str(exc) or type(exc).__name__))
         # work copies, read-only, so the links resolve when the top opens
-        for pn in [p for _n, p, _k in report.items] + [p for _n, p in report.drawings]:
+        for _name, pn, _kind in report.items:
+            try:
+                target_vault, target_work = (lib_vault, lib_work) if pn in cots_pns else (vault, work)
+                if target_vault is not None and target_vault.latest_version(pn) is not None:
+                    target_work.get_latest(pn)
+            except Exception as exc:  # noqa: BLE001
+                report.failed.append((pn, f"checked in, but no work copy: {exc}"))
+        for _name, pn in report.drawings:
             try:
                 if vault.latest_version(pn) is not None:
                     work.get_latest(pn)
@@ -944,7 +1015,8 @@ def _make_classes():
         def _build_structure(self):
             w = box("Structure", ":/icons/document-new.svg")
             w.layout().addWidget(hint("One line per item, two spaces per level; x2 is the quantity per parent; "
-                                      "'cots' marks a bought part; a P/N reuses a vault item. The same name twice "
+                                      "'cots' marks a bought part (filed in Standard Libraries when that vault is "
+                                      "next to this one); a P/N reuses a vault item. The same name twice "
                                       "is one item used twice."))
             self.text = QtWidgets.QPlainTextEdit()
             self.text.setObjectName("bwProjectStructure")
@@ -1025,10 +1097,10 @@ def _make_classes():
             program = self.program.currentData() or "BW"
             if plan.root is not None:
                 try:
-                    ps.plan_numbers(plan, self.root, program)
+                    ps.plan_numbers(plan, self.root, program, library_root=library_root(self.root))
                 except Exception as exc:  # noqa: BLE001 -- shown, not raised
                     plan.issues.append(ps.Issue("error", f"No numbers: {exc}"))
-            ps.check(plan, self.s.vault, program, _retired(self.root))
+            ps.check(plan, self.s.vault, program, _retired(self.root), _library_vault(self.root))
             self.plan = plan
             self.fill_preview(plan)
             self.setup_buttons()

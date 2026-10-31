@@ -353,18 +353,41 @@ def roll_up(bom, root) -> dict:
 
 
 def roots(vault, s) -> list:
-    """What the root picker offers: the open projects first (each at its top), then every assembly
-    that is not obsolete. Rows {"key", "text", "pn", "project", "units"}."""
-    out = []
+    """What the root picker offers. Projects come first, one per program: the first field of the
+    part number (``LE`` in ``LE-02-01001-001``), named from the vault's numbering.json. Then every
+    assembly that is not obsolete. A project row's ``members`` are the items that head that
+    program's tree. Rows {"key", "text", "pn", "members", "project", "units", "kind"}."""
+    from bruceworx import vault_trees as vt
+
+    names = vt.program_names(getattr(vault, "root", "") or "")
+    codes = set(names)
+    for pn in s["items"]:
+        code = vt.program_code(pn)
+        if code:
+            codes.add(code)
+    units = {}
     for project in (getattr(vault, "projects", None) or {}).values():
-        if project.status == "Open" and project.top in s["items"]:
-            out.append({"key": "project:" + project.code, "text": f"{project.name} ({project.code})",
-                        "pn": project.top, "project": project.code, "units": project.units})
+        if getattr(project, "status", "") == "Open" and getattr(project, "program", ""):
+            units.setdefault(project.program, getattr(project, "units", "") or "")
+    out = []
+    for code in sorted(codes):
+        name = names.get(code) or ""
+        members = vt.program_roots(s, code)
+        out.append({
+            "key": "program:" + code,
+            "text": f"{code}  {name}".strip() if name else code,
+            "pn": members[0] if len(members) == 1 else "",
+            "members": members,
+            "project": code,
+            "units": units.get(code, ""),
+            "kind": "program",
+        })
     for pn in sorted(s["items"]):
         info = s["items"][pn]
         if info["type"] == "assembly" and not info.get("obsolete"):
             text = f"{info['display']}  {info['description']}".strip()
-            out.append({"key": "assembly:" + pn, "text": text, "pn": pn, "project": "", "units": ""})
+            out.append({"key": "assembly:" + pn, "text": text, "pn": pn, "members": [pn],
+                        "project": "", "units": "", "kind": "assembly"})
     return out
 
 

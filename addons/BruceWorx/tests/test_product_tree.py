@@ -227,13 +227,20 @@ class TreeTests(Cart):
         t = pt.Tree(v, s, holds_page=lambda pn: False)
         self.assertEqual(t.row(SUB)["source"], "links")
 
-    def test_roots_list_projects_then_assemblies(self):
+    def test_roots_list_programs_then_assemblies(self):
         self.build()
         self.v.create_project("CART", "Shop cart", "DM", TOP, units="in")
+        with open(os.path.join(self.v.root, "numbering.json"), "w", encoding="utf-8") as handle:
+            handle.write('{"programs": {"DM": {"description": "Demo"}, "OW": {"description": "Overwatch"}}}')
         found = pt.roots(self.v, vt.structure(self.v))
-        self.assertEqual(found[0], {"key": "project:CART", "text": "Shop cart (CART)", "pn": TOP, "project": "CART",
-                                    "units": "in"})
-        self.assertEqual([r["pn"] for r in found[1:]], [TOP, SUB])
+        self.assertEqual([r["kind"] for r in found], ["program", "program", "assembly", "assembly"])
+        self.assertEqual(found[0]["key"], "program:DM")
+        self.assertEqual(found[0]["text"], "DM  Demo")
+        self.assertEqual(found[0]["members"], [TOP])  # the rest sit under the cart
+        self.assertEqual(found[0]["units"], "in")
+        self.assertEqual(found[1]["key"], "program:OW")
+        self.assertEqual(found[1]["members"], [])
+        self.assertEqual([r["pn"] for r in found[2:]], [TOP, SUB])
         self.assertEqual(pt.where_used_text(vt.structure(self.v)["bom"], vt.structure(self.v), RAIL),
                          f"used in {SUB}-01")
 

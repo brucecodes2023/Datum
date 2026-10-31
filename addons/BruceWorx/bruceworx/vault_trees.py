@@ -12,6 +12,7 @@ before BOMs were recorded still shows its structure.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import zipfile
@@ -158,3 +159,62 @@ def file_tree(s) -> list:
 
 def _owner(s, drawing):
     return next((owner for owner, dwgs in s["drawings"].items() if drawing in dwgs), None)
+
+
+# ----- programs (the first field of the part number) -----------------------------------------------
+
+
+def program_code(part_number: str) -> str:
+    """The program, the first field of a part number (``LE`` in ``LE-01-01001-001``). "" when it is not one."""
+    text = str(part_number or "").strip()
+    if not text:
+        return ""
+    try:
+        from bruceworx import numbering
+
+        return numbering.parse_part_number(pdm.strip_revision(text))["program"]
+    except ValueError:
+        return ""
+
+
+def program_names(root: str) -> dict:
+    """{code: description} from the vault's numbering.json. A missing or retired program is left out."""
+    path = os.path.join(root or "", "numbering.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    from bruceworx import numbering
+
+    out = {}
+    for code, entry in (data.get("programs") or {}).items():
+        if not isinstance(entry, dict) or entry.get("retired"):
+            continue
+        try:
+            key = numbering.normalize_program(code)
+        except ValueError:
+            continue
+        out[key] = str(entry.get("description") or "")
+    return out
+
+
+def program_roots(s, code: str) -> list:
+    """The items that head a program's tree: not a drawing, not obsolete, and not used by an
+    assembly of the same program (that assembly shows them)."""
+    used = set()
+    for parent, lines in s["bom"].items():
+        if program_code(parent) != code:
+            continue
+        for child, _qty in lines:
+            if program_code(child) == code:
+                used.add(child)
+    out = []
+    for pn in sorted(s["items"]):
+        if program_code(pn) != code or pn in used:
+            continue
+        info = s["items"][pn]
+        if info["type"] == "drawing" or info.get("obsolete"):
+            continue
+        out.append(pn)
+    return out

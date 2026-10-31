@@ -276,19 +276,21 @@ def parse_structure(text: str) -> Plan:
 # ----- checks against the vault ------------------------------------------------------------------
 
 
-def check(plan: Plan, vault=None, program: str = "", retired: dict | None = None) -> Plan:
+def check(plan: Plan, vault=None, program: str = "", retired: dict | None = None, library=None) -> Plan:
     """Check the plan against the vault: reused P/Ns exist and are not obsolete; the program and the
     document types are not retired. ``retired`` is {"program": {codes}, "document_type": {codes}} (from
     vault_setup.load_settings(...).retired). Adds Issues; returns the plan."""
     plan.issues = [i for i in plan.issues if not getattr(i, "_check", False)]
     found = []
     items = getattr(vault, "items", {}) if vault is not None else {}
+    lib_items = getattr(library, "items", {}) if library is not None else {}
     for node in plan.nodes.values():
         if not node.existing:
             continue
-        item = items.get(node.pn) if vault is not None else None
-        if vault is not None and item is None:
-            found.append(Issue("error", f"line {node.lines[0]}: {node.pn} is not an item of this vault", node.lines[0]))
+        item = (items.get(node.pn) if vault is not None else None) or lib_items.get(node.pn)
+        if (vault is not None or library is not None) and item is None:
+            where = "this vault or the standard library" if library is not None else "this vault"
+            found.append(Issue("error", f"line {node.lines[0]}: {node.pn} is not an item of {where}", node.lines[0]))
         elif item is not None:
             if getattr(item, "obsolete", False):
                 found.append(Issue("error", f"line {node.lines[0]}: {node.pn} is obsolete", node.lines[0]))
@@ -314,7 +316,7 @@ def check(plan: Plan, vault=None, program: str = "", retired: dict | None = None
 # ----- the number plan ---------------------------------------------------------------------------
 
 
-def plan_numbers(plan: Plan, vault_root: str, program: str, drawings: bool = True) -> Plan:
+def plan_numbers(plan: Plan, vault_root: str, program: str, drawings: bool = True, library_root: str = "") -> Plan:
     """Fill ``plan.numbers`` and ``plan.drawing_numbers`` as a preview: the vault's numbering is read
     and the reservations simulated on a copy, so nothing is written and consecutive items get
     consecutive numbers. Numbers are flat, one parent each (family numbers collide, plan spike).
@@ -329,7 +331,22 @@ def plan_numbers(plan: Plan, vault_root: str, program: str, drawings: bool = Tru
     types = vault_setup._vault_document_types(source, data)
     codes = {kind: vault_setup.document_type_for("part" if kind == "cots" else kind, types) for kind in KINDS}
     codes[DRAWING_KIND] = vault_setup.document_type_for(DRAWING_KIND, types)
+    lib_source = lib_data = lib_program = lib_code = None
+    if library_root:
+        lib_source = JsonNumberSource(vault_setup.numbering_path(library_root))
+        lib_data = copy.deepcopy(lib_source._load())
+        programs = list((lib_data.get("programs") or {}).keys())
+        if programs:
+            lib_program = programs[0]
+            lib_types = vault_setup._vault_document_types(lib_source, lib_data)
+            lib_code = vault_setup.document_type_for("part", lib_types)
     for node in order_of_work(plan):
+        if node.kind == "cots" and lib_program:
+            code = lib_code
+            plan.document_types[node.key] = code
+            plan.numbers[node.key] = pdm.strip_revision(
+                lib_source._issue(lib_data, lib_program, code, None, None, write=True)[0])
+            continue
         code = codes[node.kind]
         plan.document_types[node.key] = code
         plan.numbers[node.key] = pdm.strip_revision(source._issue(data, program, code, None, None, write=True)[0])

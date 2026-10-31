@@ -160,6 +160,30 @@ class VaultTests(unittest.TestCase):
         ps.check(plan, self.vault, "DM", retired={"program": {"DM"}, "document_type": {"03"}})
         self.assertEqual(len(plan.errors), 2)
 
+    def test_bought_parts_take_the_library_numbers(self):
+        lib_setup = vs.VaultSetup(name="Standard Libraries", folder=os.path.join(self.tmp, "Standard Libraries"))
+        lib_setup.numbering.programs = [vs.ProgramSetup("STD", "Standard parts")]
+        library = vs.create_vault(lib_setup, actor="bruce@mac")
+        # sit the project vault beside it, the way Vault/Projects does
+        beside = os.path.join(self.tmp, "Projects")
+        os.rename(self.vault.root, beside)
+        from bruceworx.pdm_folder import FolderVault
+        self.vault = FolderVault(beside)
+        self.assertEqual(vs.library_beside(beside), library.root)
+        places = vs.neighbour_vaults(beside)
+        self.assertEqual(places[0][1], os.path.abspath(beside))
+        self.assertEqual(places[1], ("Standard Libraries", os.path.abspath(library.root)))
+        self.assertEqual(vs.neighbour_vaults(library.root)[1][1], os.path.abspath(beside))
+        plan = ps.parse_structure(CART)
+        ps.plan_numbers(plan, beside, "DM", library_root=library.root)
+        self.assertEqual(plan.numbers["caster 4 in"], "STD-01-01001-001")
+        self.assertEqual(plan.numbers["side rail"], "DM-01-01001-001")
+        self.assertNotIn("caster 4 in", plan.drawing_numbers)
+        library.create_item("STD-01-01001-001", "cots", "Caster")
+        plan = ps.parse_structure("Top\n  STD-01-01001-001 x4\n")
+        ps.check(plan, self.vault, "DM", library=library)
+        self.assertTrue(plan.ok, [i.text for i in plan.issues])
+
     def test_codes_and_stems(self):
         self.assertEqual(ps.project_code("Shop cart (2026)"), "SHOP-CART-2026")
         self.assertEqual(ps.project_code("Shop cart", taken=["SHOP-CART"]), "SHOP-CART-2")
