@@ -644,8 +644,9 @@ class TestEigenStudy(unittest.TestCase):
         self.assertEqual(eigen.excitation_bands(analysis), [])  # off by default
         analysis.ExcitationCheck = True
         analysis.MotorRpmMin, analysis.MotorRpmMax, analysis.BladeCount = 6000.0, 12000.0, 3
-        self.assertEqual(eigen.excitation_bands(analysis),
-                         [("blade pass (3 blades)", 300.0, 600.0), ("1x rpm", 100.0, 200.0)])
+        self.assertEqual(eigen.excitation_bands(analysis),  # answer 4 (30 Oct): 2x blade pass too
+                         [("blade pass (3 blades)", 300.0, 600.0), ("2x blade pass", 600.0, 1200.0),
+                          ("1x rpm", 100.0, 200.0)])
         analysis.ExcitationSource = "FrequencyBand"
         analysis.BandMin, analysis.BandMax = 900.0, 700.0
         self.assertEqual(eigen.excitation_bands(analysis), [("band", 700.0, 900.0)])

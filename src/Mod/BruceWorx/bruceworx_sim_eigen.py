@@ -20,7 +20,7 @@ Modal (``StudyType`` "modal"): K phi = omega^2 M phi, f = omega / 2 pi, with Cal
     without it the frequencies are those of the unloaded part). The input is FreeCAD's static
     input with the density and the second step added (``patch_input``).
   * The excitation check (M3): ``ExcitationCheck`` off by default; ``ExcitationSource`` MotorSpeed
-    (``MotorRpmMin``..``MotorRpmMax`` x ``BladeCount``: the blade-pass band, and the 1x rpm band) or
+    (``MotorRpmMin``..``MotorRpmMax`` x ``BladeCount``: the blade-pass band, twice that, and the 1x rpm band) or
     FrequencyBand (``BandMin``..``BandMax`` Hz). A mode inside a band is amber in the table and the
     report.
 
@@ -141,7 +141,7 @@ def ensure_properties(analysis):
         _add(analysis, "App::PropertyBool", "ExcitationCheck", "Excitation",
              "Mark the modes inside an excitation band amber (off by default)", False)
         if _add(analysis, "App::PropertyEnumeration", "ExcitationSource", "Excitation",
-                "MotorSpeed: rpm range x blade count (blade pass, and 1x rpm); FrequencyBand: a plain band"):
+                "MotorSpeed: rpm range x blade count (blade pass, 2x blade pass, 1x rpm); FrequencyBand: a plain band"):
             analysis.ExcitationSource = list(EXCITATION_SOURCES)
             analysis.ExcitationSource = EXCITATION_SOURCES[0]
         _add(analysis, "App::PropertyFloat", "MotorRpmMin", "Excitation", "Lowest motor speed (rpm)", 3000.0)
@@ -538,7 +538,8 @@ def excitation_bands(analysis):
     blades = max(1, int(_get(analysis, "BladeCount", 2) or 1))
     if hi <= 0:
         return []
-    return [(f"blade pass ({blades} blades)", lo / 60.0 * blades, hi / 60.0 * blades), ("1x rpm", lo / 60.0, hi / 60.0)]
+    return [(f"blade pass ({blades} blades)", lo / 60.0 * blades, hi / 60.0 * blades),
+            ("2x blade pass", 2 * lo / 60.0 * blades, 2 * hi / 60.0 * blades), ("1x rpm", lo / 60.0, hi / 60.0)]
 
 
 def band_of(frequency, bands):
