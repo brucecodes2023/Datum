@@ -156,6 +156,7 @@ class Rope:
     fixed_start: int = 1
     fixed_end: int = 1
     gravity: tuple = (0.0, 0.0, -1.0)
+    pinned: tuple = ()  # interior points held in place (clips: the wire passes through, free to turn)
     # results
     strain: float = 0.0
     bend_ratio: float = 0.0
@@ -176,6 +177,8 @@ class Rope:
         w = np.ones(self.n)
         w[: self.fixed_start] = 0.0
         w[self.n - self.fixed_end :] = 0.0
+        for k in self.pinned:
+            w[k] = 0.0
         return w
 
     def fix(self, start=None, end=None):
@@ -190,10 +193,19 @@ def segment_lengths(x):
     return np.linalg.norm(np.diff(x, axis=-2), axis=-1)
 
 
-def measure(x, l0, rmin):
-    """``(strain, bend_ratio)`` for ``x`` (..., N, 3): largest |len/l0 - 1| and largest second
-    difference over the allowed one (0 when there is no limit)."""
-    strain = np.abs(segment_lengths(x) / l0[..., None] - 1.0).max(axis=-1)
+def _free_segments(w):
+    """Segments with at least one free end: the clamped lead segments keep their own length."""
+    return (w[..., :-1] > 0) | (w[..., 1:] > 0)
+
+
+def measure(x, l0, rmin, w=None):
+    """``(strain, bend_ratio)`` for ``x`` (..., N, 3): largest |len/l0 - 1| over the segments that are
+    not clamped at both ends, and the largest second difference over the allowed one (0 when there is
+    no limit)."""
+    err = np.abs(segment_lengths(x) / l0[..., None] - 1.0)
+    if w is not None:
+        err = np.where(_free_segments(w), err, 0.0)
+    strain = err.max(axis=-1)
     d = np.linalg.norm(x[..., :-2, :] - 2 * x[..., 1:-1, :] + x[..., 2:, :], axis=-1).max(axis=-1)
     dmax = np.where(rmin > 0, l0 * l0 / np.where(rmin > 0, rmin, 1.0), np.inf)
     return strain, np.where(np.isfinite(dmax), d / dmax, 0.0)
@@ -323,8 +335,9 @@ def _bend_excess(x, dmax):
     return float((d - dmax[:, None]).max())
 
 
-def _strain(x, l0):
-    return np.abs(np.linalg.norm(x[:, 1:] - x[:, :-1], axis=-1) / l0[:, None] - 1.0).max()
+def _strain(x, l0, w):
+    err = np.abs(np.linalg.norm(x[:, 1:] - x[:, :-1], axis=-1) / l0[:, None] - 1.0)
+    return np.where(_free_segments(w), err, 0.0).max()
 
 
 def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step_scale=4.0):
@@ -351,14 +364,14 @@ def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step
         lam_b[:] = 0.0
         _newton(x, w, l0, alpha, lam_b, bend_on, free * (g_dir * step[:, None])[:, None, :], lim)
         for _ in range(8):
-            if _strain(x, l0) < 1e-7 and (lim is None or _bend_excess(x, lim) <= 0):
+            if _strain(x, l0, w) < 1e-7 and (lim is None or _bend_excess(x, lim) <= 0):
                 break
             _newton(x, w, l0, alpha, lam_b, bend_on, None, lim)
         for _ in range(12 if boxes else 0):  # contacts and lengths take turns until both hold
-            if not _collide(x, w, boxes, radius - 1e-3, g_dir) and _strain(x, l0) < 1e-6:
+            if not _collide(x, w, boxes, radius - 1e-3, g_dir) and _strain(x, l0, w) < 1e-6:
                 break
             _newton(x, w, l0, alpha, lam_b, bend_on, None, lim)
-        if _strain(x, l0) > 1e-5:
+        if _strain(x, l0, w) > 1e-5:
             scale = max(scale * 0.5, 0.05)
         else:
             scale = min(scale * 1.25, step_scale)
@@ -391,7 +404,7 @@ def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=1):
         steps = solve_batch(x, w, l0, ei_q, dmax, g, boxes, radius, max_steps, tol)
         for _ in range(settle):
             _newton(x, w, l0, np.zeros(x.shape[0]), None, False)
-        strain, ratio = measure(x, l0, rmin)
+        strain, ratio = measure(x, l0, rmin, w)
         for k, rope in enumerate(group):
             rope.x[:] = x[k]
             rope.strain, rope.bend_ratio, rope.steps = float(strain[k]), float(ratio[k]), steps
@@ -408,13 +421,30 @@ def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=1):
 # Layout and lead points.
 
 
-def lead_points(origin, direction, length, l0):
-    """The clamped points of a lead: from ``origin`` along ``direction`` every ``l0``, at least two
-    (so the exit direction is fixed), about ``length`` long."""
+def lead_plan(n, length, lead_a=0.0, lead_b=0.0):
+    """``(ka, kb, l0)``: how many segments of the ``n - 1`` each lead (of length ``lead_a`` / ``lead_b``,
+    0 = no lead) takes, and the segment length ``l0`` of the free part. A lead keeps its own exact
+    length (its points are spaced ``lead / k``); the rest of the cut length is shared by the free segments."""
+    nominal = length / (n - 1)
+    ka = max(1, int(round(lead_a / nominal))) if lead_a > 0 else 0
+    kb = max(1, int(round(lead_b / nominal))) if lead_b > 0 else 0
+    while n - 1 - ka - kb < 1 and (ka > 1 or kb > 1):
+        if ka >= kb:
+            ka -= 1
+        else:
+            kb -= 1
+    free = n - 1 - ka - kb
+    l0 = max(length - lead_a - lead_b, 1e-6) / max(free, 1)
+    return ka, kb, l0
+
+
+def lead_points(origin, direction, length, k):
+    """The ``k + 1`` clamped points of a lead: from ``origin`` along ``direction``, evenly spaced over
+    ``length`` (at least one segment, so the exit direction is fixed)."""
     d = np.asarray(direction, dtype=float)
     d = d / max(np.linalg.norm(d), 1e-12)
-    k = max(1, int(round(length / l0))) if length > 0 else 1
-    return [np.asarray(origin, dtype=float) + d * l0 * i for i in range(k + 1)]
+    k = max(1, int(k))
+    return [np.asarray(origin, dtype=float) + d * (length / k) * i for i in range(k + 1)]
 
 
 def _polyline_resample(pts, m):
@@ -461,11 +491,13 @@ def initial_layout(n, length, guides, start_lead=None, end_lead=None, gravity=(0
 
     A cut length shorter than the guides is spread over them and left taut for the solver to report.
 
-    Returns ``(x, fixed_start, fixed_end)``."""
-    l0 = length / (n - 1)
+    Returns ``(x, fixed_start, fixed_end, l0)``: the rope is then ``Rope(x, l0 * (n - 1), ...)``."""
     guides = [np.asarray(p, dtype=float) for p in guides]
-    head = lead_points(*start_lead[:2], start_lead[2], l0) if start_lead is not None else [guides[0]]
-    tail = lead_points(*end_lead[:2], end_lead[2], l0) if end_lead is not None else [guides[-1]]
+    la = start_lead[2] if start_lead is not None else 0.0
+    lb = end_lead[2] if end_lead is not None else 0.0
+    ka, kb, l0 = lead_plan(n, length, la, lb)
+    head = lead_points(*start_lead[:2], la, ka) if start_lead is not None else [guides[0]]
+    tail = lead_points(*end_lead[:2], lb, kb) if end_lead is not None else [guides[-1]]
     ks, ke = len(head), len(tail)
     m = n - ks - ke + 2  # points between and including the two lead tips
     if m < 2:
@@ -511,7 +543,7 @@ def initial_layout(n, length, guides, start_lead=None, end_lead=None, gravity=(0
         curve = shape(0.5 * (lo + hi))
     pts = _polyline_resample(curve, m)  # equal arc length: the segments start near l0
     x = np.vstack([np.array(head[:-1]).reshape(-1, 3), pts, np.array(tail[:-1]).reshape(-1, 3)[::-1]])
-    return x, ks, ke
+    return x, ks, ke, l0
 
 
 def drape(x, boxes, gravity, radius=0.0, fixed_start=1, fixed_end=1):

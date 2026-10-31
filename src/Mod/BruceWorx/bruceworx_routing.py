@@ -91,6 +91,12 @@ def _bp():
     return bruceworx_routing_ports
 
 
+def _rope():
+    import bruceworx_rope
+
+    return bruceworx_rope
+
+
 def V(p):
     return App.Vector(float(p[0]), float(p[1]), float(p[2]))
 
@@ -677,6 +683,43 @@ class _Routed:
         finally:
             self._quiet = False
 
+    def rope_setup(self, obj, insulation=False):
+        """ROU-08: the properties of a flexible item (wire, hose, bundle)."""
+        _add(obj, "App::PropertyLength", "CutLength",
+             "Length to cut, any value (it need not follow the route: longer sags, shorter pulls taut); nothing stretches. "
+             "Slack edits it", 0.0)
+        _add(obj, "App::PropertyFloat", "StiffnessFactor",
+             "Calibration of the bending stiffness from gauge and insulation (1 = the table; raise it for a stiffer wire)", 1.0)
+        _add(obj, "App::PropertyBool", "Taut", "The cut length is too short for the ends, or the bend is tighter than allowed",
+             False, readonly=True)
+        _add(obj, "App::PropertyString", "Problems", "Why the item is taut or bent too tight", readonly=True)
+        _add(obj, "App::PropertyString", "RopeStatus", "taut, or how far it sags below the straight line", readonly=True)
+        _add(obj, "App::PropertyVectorList", "RopePoints", "The rope's points (document frame): the state a recompute starts from",
+             hidden=True)
+        _add(obj, "App::PropertyIntegerList", "ClipNodes", "Rope points that are clips", hidden=True)
+        _add(obj, "App::PropertyInteger", "SlackApplied", "Slack the cut length includes", hidden=True)
+        if insulation:
+            new = "Insulation" not in obj.PropertiesList
+            _add(obj, "App::PropertyEnumeration", "Insulation",
+                 "Insulation material for the stiffness table (Auto: from the bend rule preset)")
+            if new:
+                obj.Insulation = ["Auto", "PVC", "Silicone"]
+
+    def on_slack(self, obj):
+        """Slack edits the cut length (W2): the length it includes is rescaled."""
+        cut = float(obj.CutLength.Value) if "CutLength" in obj.PropertiesList else 0.0
+        if cut <= 0:
+            return
+        old, new = 1.0 + int(obj.SlackApplied) / 100.0, 1.0 + int(obj.Slack) / 100.0
+        if int(obj.SlackApplied) == int(obj.Slack):
+            return
+        self._quiet = True
+        try:
+            obj.CutLength = cut * new / old
+            obj.SlackApplied = int(obj.Slack)
+        finally:
+            self._quiet = False
+
     def onDocumentRestored(self, obj):
         old = "BendRule" not in obj.PropertiesList
         self.setup(obj)
@@ -698,6 +741,9 @@ class _Routed:
     def onChanged(self, obj, prop):
         """Typing a MinBendRadius makes it a fixed override (0: no check); typing a BendFactor
         switches to Multiple of OD. Not while loading or while execute sets them."""
+        if prop == "Slack" and not getattr(self, "_quiet", False) and not _restoring(obj):
+            self.on_slack(obj)
+            return
         if prop in ("OD", "InsulationOD", "Gauge", "Path") and not getattr(self, "_quiet", False) and not _restoring(obj):
             path = getattr(obj, "Path", None)  # ROU-05: a lead's straight follows the item's OD
             if path is not None and is_path(path) and path_ends(path):
@@ -806,6 +852,7 @@ class Wire(_Routed):
         _add(obj, "App::PropertyStringList", "BomExtras",
              "Counted BOM lines this item brings: P/N|quantity|kind (a terminal and a seal per end on a pin)",
              group="BruceWorx", readonly=True)
+        self.rope_setup(obj, insulation=True)
 
     def od(self, obj):
         od = float(obj.InsulationOD.Value)
@@ -827,12 +874,15 @@ class Wire(_Routed):
             finally:
                 self._quiet = False
         self.apply_rule(obj, od)
-        obj.Shape = sweep(path.Shape.Wires[0], od)
         strips = self.fill_ends(obj, path)
-        length = float(path.Length.Value) * (1.0 + obj.Slack / 100.0) + strips  # ROU-05: wire inside the connectors
-        self.finish(obj, length)
+        if _rope().rope_execute(self, obj):  # ROU-08: a rope of its cut length
+            length = float(obj.Length.Value)
+        else:
+            obj.Shape = sweep(path.Shape.Wires[0], od)
+            length = float(path.Length.Value) * (1.0 + obj.Slack / 100.0) + strips  # ROU-05: wire inside the connectors
+            self.finish(obj, length)
+            self.check(obj, path)
         obj.Mass = rt.wire_mass(obj.Gauge, length, od) / 1000.0  # g -> kg
-        self.check(obj, path)
 
     def fill_ends(self, obj, path):
         """ROU-05: from/to and signal from the pins the path's ends are on, the gauge check and the
@@ -951,11 +1001,14 @@ class Hose(_Routed):
         _add(obj, "App::PropertyLength", "ID", "Bore", 6.0)
         _add(obj, "App::PropertyLength", "OD", "Outer diameter", 10.0)
         _add(obj, "App::PropertyPercent", "Slack", "Length added for movement and fitting", 5)
+        self.rope_setup(obj)
 
     def execute(self, obj):
         path = self.path_of(obj)
         od = float(obj.OD.Value)
         self.apply_rule(obj, od)
+        if _rope().rope_execute(self, obj):  # ROU-08
+            return
         obj.Shape = sweep(path.Shape.Wires[0], od, float(obj.ID.Value))
         inside = sum(engagements(path))  # ROU-05: hose over the barbs at the ends
         self.finish(obj, (float(path.Length.Value) + inside) * (1.0 + obj.Slack / 100.0))
@@ -970,6 +1023,7 @@ class Bundle(_Routed):
         super().setup(obj)
         _add(obj, "App::PropertyLinkList", "Wires", "The wires in this bundle")
         _add(obj, "App::PropertyLength", "OD", "Combined outer diameter (packing factor 1.15)", readonly=True)
+        self.rope_setup(obj)
 
     def migrate(self, obj):
         rt = _rt()
@@ -995,6 +1049,8 @@ class Bundle(_Routed):
         od = rt.bundle_od(diameters) or 1.0
         obj.OD = od
         self.apply_rule(obj, od)
+        if _rope().rope_execute(self, obj):  # ROU-08: one rope with the wires' combined stiffness
+            return
         obj.Shape = sweep(path.Shape.Wires[0], od)
         self.finish(obj, float(path.Length.Value))
         self.check(obj, path)
@@ -1020,7 +1076,9 @@ class ViewProviderRouted:
         obj = vobj.Object
         kind = kind_of(obj)
         try:
-            if kind == WIRE:
+            if getattr(obj, "Taut", False):
+                colour = (0.9, 0.1, 0.1)  # ROU-08: red when the cut length is too short for the ends
+            elif kind == WIRE:
                 colour = tuple(obj.Colour)[:3]
             else:
                 colour = self.COLOURS.get(kind, (0.6, 0.6, 0.6))
@@ -1034,7 +1092,7 @@ class ViewProviderRouted:
             pass
 
     def updateData(self, obj, prop):
-        if prop in ("Colour", "Shape") and getattr(obj, "ViewObject", None) is not None:
+        if prop in ("Colour", "Shape", "Taut") and getattr(obj, "ViewObject", None) is not None:
             self.apply(obj.ViewObject)
 
     def getIcon(self):
@@ -1070,6 +1128,7 @@ def make_wire(path, gauge="22 AWG", insulation_od=0.0, colour=None, signal="", f
     if colour is not None:
         rgb = tuple(float(c) for c in colour)
         obj.Colour = rgb + (0.0,) * (4 - len(rgb))
+    _rope().ensure_gravity_property(obj)
     return obj
 
 
@@ -1270,6 +1329,8 @@ def row_badges(obj, meta, marks):
     try:
         if (is_path(obj) or is_routed(obj)) and "BendOK" in obj.PropertiesList and not obj.BendOK:
             marks = marks + [("bend too tight", "warn")]
+        if is_routed(obj) and getattr(obj, "Taut", False):
+            marks = marks + [("taut", "warn")]  # ROU-08
         if is_routed(obj) and getattr(obj, "Warnings", ""):
             marks = marks + [("gauge", "warn")]  # ROU-05: a pin that does not take this wire
     except Exception:

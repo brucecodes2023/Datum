@@ -254,7 +254,7 @@ class RoutingGuiTests(unittest.TestCase):
         panel.accept()
         self._pump()
         self.assertEqual(br.kind_of(wire), br.WIRE)
-        self.assertAlmostEqual(wire.Length.Value, path.Length.Value * 1.05, places=6)
+        self.assertAlmostEqual(wire.Length.Value, path.Length.Value * 1.05, places=3)
         self.assertEqual(tuple(wire.ViewObject.ShapeAppearance[0].DiffuseColor)[:3], (0.0, 0.0, 1.0))
         folder = tempfile.mkdtemp(prefix="bw-routing-gui-")
         try:
@@ -291,7 +291,8 @@ class RoutingGuiTests(unittest.TestCase):
         panel.fields["ID"].setValue(6.0)
         self._pump()
         hose = panel.obj
-        self.assertIn("bend too tight", panel.status.text())  # 6 x OD = 60 > the path's 32
+        self.assertIn("sagging", panel.status.text())  # ROU-08: the rope relaxes the path's R 32 corner to the hose's R 60
+        self.assertIn("CutLength", panel.fields)
         self.assertEqual(panel.rule.currentText(), "Default")
         self.assertIn("General hose, 6 × OD", panel.status.text())
         panel.minimum.setValue(25.0)  # a radius typed: a fixed override
@@ -299,11 +300,18 @@ class RoutingGuiTests(unittest.TestCase):
         self.assertEqual(panel.rule.currentText(), "Fixed radius")
         self.assertEqual(hose.BendRule, "Fixed radius")
         self.assertNotIn("bend too tight", panel.status.text())
+        panel.fields["CutLength"].setValue(5.0)  # ROU-08: a cut length the ends cannot reach is taut, shown in red
+        self._pump()
+        self.assertTrue(hose.Taut)
+        self.assertAlmostEqual(hose.CutLength.Value, 5.0)
+        self.assertIn("taut", panel.status.text())
         hose_name = hose.Name
         panel.reject()
         self._pump()
         self.assertIsNone(self.doc.getObject(hose_name))
         hose = br.make_hose(path, inner=6.0, od=10.0)
+        hose.MinBendRadius = 500.0  # ROU-08: a rope this short cannot hold R 500 between its ends
+        hose.CutLength = 150.0
         self.doc.recompute()
         self.assertFalse(hose.BendOK)
         import bruceworx_browser

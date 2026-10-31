@@ -35,8 +35,8 @@ def catenary(d, length):
 
 def make(n, length, a, b, lead_a=None, lead_b=None, ei=None, q=None, rmin=0.0, radius=1.8):
     e, w = wire12()
-    x, ks, ke = rope.initial_layout(n, length, [a, b], lead_a, lead_b)
-    return rope.Rope(x, length, ei if ei is not None else e, q if q is not None else w, rmin=rmin, radius=radius,
+    x, ks, ke, l0 = rope.initial_layout(n, length, [a, b], lead_a, lead_b)
+    return rope.Rope(x, l0 * (n - 1), ei if ei is not None else e, q if q is not None else w, rmin=rmin, radius=radius,
                      fixed_start=ks, fixed_end=ke)
 
 

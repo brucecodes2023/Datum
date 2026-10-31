@@ -51,6 +51,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/project_setup.py
     bruceworx/hardware.py
     bruceworx/routing.py
+    bruceworx/rope.py
     bruceworx/fittings.py
     bruceworx/connector_library.py
     config/document_types.json
@@ -113,6 +114,7 @@ INSTALL(
         bruceworx/project_setup.py
         bruceworx/hardware.py
         bruceworx/routing.py
+        bruceworx/rope.py
         bruceworx/fittings.py
         bruceworx/connector_library.py
     DESTINATION Mod/BruceWorxHooks/bruceworx

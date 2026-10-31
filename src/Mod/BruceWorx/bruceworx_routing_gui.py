@@ -480,6 +480,9 @@ class ItemPanel:
                 grid.addRow(label, self.fields[name])
             self.fields["Slack"] = spin = self._spin(QtWidgets, " %", 0, 100)
             grid.addRow("Slack", spin)
+            self.fields["CutLength"] = spin = self._spin(QtWidgets, " mm", 2, 100000)
+            spin.setToolTip("Any length: longer than the route and it sags, shorter and it pulls taut. It never stretches.")
+            grid.addRow("Cut length", spin)
         elif self.kind == br.PIPE:
             self.fields["Size"] = combo = QtWidgets.QComboBox()
             combo.addItems(list(br._rt().TUBE_SIZE_NAMES))
@@ -500,6 +503,9 @@ class ItemPanel:
             grid.addRow("OD", self.fields["OD"])
             self.fields["Slack"] = self._spin(QtWidgets, " %", 0, 100)
             grid.addRow("Slack", self.fields["Slack"])
+            self.fields["CutLength"] = spin = self._spin(QtWidgets, " mm", 2, 100000)
+            spin.setToolTip("Any length: longer than the route and it sags, shorter and it pulls taut. It never stretches.")
+            grid.addRow("Cut length", spin)
         self._rule_rows(QtWidgets, grid)
         layout.addLayout(grid)
         self.status = QtWidgets.QLabel("")
@@ -581,6 +587,8 @@ class ItemPanel:
                 widget.setValue(float(getattr(value, "Value", value)))
             else:
                 widget.setText(str(value))
+        if "CutLength" in self.fields:
+            self._cut_shown = float(self.obj.CutLength.Value)
         if self.kind == br.WIRE:
             self._show_colour()
 
@@ -625,6 +633,8 @@ class ItemPanel:
                 value = widget.value()
                 if name == "Slack":
                     value = int(value)
+                if name == "CutLength" and abs(value - getattr(self, "_cut_shown", value)) < 1e-9:
+                    continue  # untouched: Slack may have changed it
             else:
                 value = widget.text()
             try:
@@ -648,6 +658,13 @@ class ItemPanel:
             self.status.setText(RED.format(_html(exc)))
             return
         self._show_rule()
+        self._building = True  # Slack edits the cut length: show what it came to
+        try:
+            if "CutLength" in self.fields:
+                self._cut_shown = float(obj.CutLength.Value)
+                self.fields["CutLength"].setValue(self._cut_shown)
+        finally:
+            self._building = False
         self.status.setText(self.summary(obj))
 
     @staticmethod
@@ -660,6 +677,11 @@ class ItemPanel:
             text += f" · cut {obj.CutLength.Value:.1f} mm · {obj.Bends} bends"
             if obj.BendTable:
                 text += "<br><tt>" + "<br>".join(_html(line) for line in obj.BendTable.splitlines()) + "</tt>"
+        status = getattr(obj, "RopeStatus", "")
+        if status:  # ROU-08: taut, or how far it sags
+            text += "<br>" + (RED.format(_html(status)) if getattr(obj, "Taut", False) else _html(status))
+            if getattr(obj, "Problems", ""):
+                text += "<br>" + RED.format(_html(obj.Problems))
         if obj.MinBendRadius.Value > 0:
             text += f"<br>min bend R {obj.MinBendRadius.Value:.1f} mm ({_html(obj.BendRuleUsed)})"
         else:

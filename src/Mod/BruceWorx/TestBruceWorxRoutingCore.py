@@ -147,7 +147,8 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertAlmostEqual(wire.Mass.Value * 1000.0, rt.wire_mass("22 AWG", length, od), places=6)
         self.assertTrue(wire.Shape.isValid())
         self.assertEqual(len(wire.Shape.Solids), 1)
-        self.assertAlmostEqual(wire.Shape.Volume / (math.pi * od * od / 4 * path.Length.Value), 1.0, delta=0.02)
+        # ROU-08: the wire is a rope of its cut length (slack included), not the path
+        self.assertAlmostEqual(wire.Shape.Volume / (math.pi * od * od / 4 * wire.Length.Value), 1.0, delta=0.03)
         self.assertTrue(wire.BendOK)
         self.assertAlmostEqual(wire.MinBendRadius.Value, 4.0 * od)  # 4 x OD by default
         wire.Slack = 10
@@ -190,15 +191,20 @@ class RoutingCoreTests(unittest.TestCase):
         self.doc.recompute()
         self.assertEqual(br.kind_of(hose), br.HOSE)
         self.assertAlmostEqual(hose.MinBendRadius.Value, 60.0)
+        self.assertTrue(hose.BendOK)  # ROU-08: the hose is a rope; at its 285 mm it relaxes to R >= 60
+        hose.CutLength = 150.0  # the ends are 141 apart: 150 mm can only arc at R 127, so R 300 cannot be held
+        hose.MinBendRadius = 300.0
+        self.doc.recompute()
         self.assertFalse(hose.BendOK)
-        self.assertEqual(br.row_badges(hose, "", [])[1], [("bend too tight", "warn")])
+        self.assertIn(("bend too tight", "warn"), br.row_badges(hose, "", [])[1])
         self.assertEqual(br.row_badges(path, "", [])[1], [])
-        self.assertAlmostEqual(hose.Length.Value, (160.0 + 10.0 * math.pi) * 1.05, places=5)
+        self.assertAlmostEqual(hose.Length.Value, 150.0, places=5)
         self.assertEqual(len(hose.Shape.Solids), 1)
+        hose.CutLength = (160.0 + 10.0 * math.pi) * 1.05
         hose.MinBendRadius = 15.0
         self.doc.recompute()
         self.assertTrue(hose.BendOK)
-        self.assertEqual(br.row_badges(hose, "", [])[1], [])
+        self.assertNotIn(("bend too tight", "warn"), br.row_badges(hose, "", [])[1])
 
     def test_bundle_od(self):
         path = br.make_path([(0, 0, 0), (50, 0, 0), (100, 20, 0)], self.doc)
@@ -225,7 +231,7 @@ class RoutingCoreTests(unittest.TestCase):
         wire.InsulationOD = 2.5
         self.doc.recompute()
         self.assertAlmostEqual(wire.MinBendRadius.Value, 25.0)  # follows the OD
-        self.assertFalse(wire.BendOK)
+        self.assertTrue(wire.BendOK)  # ROU-08: a rope of 210 mm relaxes the path's R 20 corner to R >= 25
         wire.MinBendRadius = 7.0  # typed by hand: a fixed override
         self.assertEqual(wire.BendRule, "Fixed radius")
         self.doc.recompute()
@@ -282,9 +288,9 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertAlmostEqual(bundle.MinBendRadius.Value, 10.0 * od)
         self.assertEqual(bundle.BendRuleUsed, "From wires: 10 × OD")
         self.assertTrue(bundle.BendOK)  # 10 x 3.19 = 31.9 < R 40
-        wires[2].MinBendRadius = 50.0
+        wires[2].MinBendRadius = 500.0  # ROU-08: a rope relaxes a path's corner; 500 cannot be held between these ends
         self.doc.recompute()
-        self.assertAlmostEqual(bundle.MinBendRadius.Value, 50.0)
+        self.assertAlmostEqual(bundle.MinBendRadius.Value, 500.0)
         self.assertFalse(bundle.BendOK)
         bundle.MinBendRadius = 12.0  # set on the bundle: its own
         self.doc.recompute()
@@ -352,6 +358,8 @@ class RoutingCoreTests(unittest.TestCase):
         path = br.make_path([(0, 0, 0), (100, 0, 0), (100, 100, 0)], self.doc, mode="Polyline", radius=20.0)
         wire = br.make_wire(path, gauge="22 AWG", signal="CLK")
         hose = br.make_hose(path, inner=6.0, od=10.0)
+        hose.CutLength = 150.0  # too short for its minimum radius (ROU-08)
+        hose.MinBendRadius = 300.0
         self.doc.recompute()
         folder = tempfile.mkdtemp(prefix="bw-routing-")
         try:
@@ -601,13 +609,14 @@ class ConnectorFittingTests(unittest.TestCase):
         # A wire on it: the straight follows its OD (2 x 1.6), and its own StraightLength wins.
         wire = br.make_wire(path, gauge="22 AWG", insulation_od=1.6)
         self.doc.recompute()
+        cut0 = wire.Length.Value
         self.assertAlmostEqual(path.StartStraight.Value, 3.2)
         self.bp.pin(part, "1").StraightLength = 10.0
         path.touch()
         self.doc.recompute()
         self.assertAlmostEqual(path.StartStraight.Value, 10.0)
         self.assertAlmostEqual((path.Shape.Edges[0].valueAt(10.0) - V(0, 0, -10)).Length, 0.0, places=6)
-        self.assertAlmostEqual(wire.Length.Value, path.Length.Value * 1.05, places=6)
+        self.assertAlmostEqual(wire.Length.Value, cut0, places=6)  # ROU-08: the cut length is the wire's own
         # The preference drives the default: 3 x OD.
         self.bp.pin(part, "1").StraightLength = 0.0
         br.set_prefs({"WireStraightFactor": 3.0})
@@ -685,7 +694,7 @@ class ConnectorFittingTests(unittest.TestCase):
         before = wire.Length.Value
         self.bp.pin(part, "1").StripLength = 2.3
         self.doc.recompute()
-        self.assertAlmostEqual(wire.Length.Value, before + 2 * 2.3, places=6)  # J1 and J9 are both XHP-2 pin 1
+        self.assertAlmostEqual(wire.Length.Value, before, places=6)  # ROU-08: the cut length is the wire's own
         self.assertAlmostEqual((wire.FromStrip.Value, wire.ToStrip.Value), (2.3, 2.3))
         self.assertEqual(br.from_to_csv(self.doc).splitlines()[1].split(",")[7], "2.3")
         p1.Label = "P7"

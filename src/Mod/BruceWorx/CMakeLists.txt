@@ -34,11 +34,14 @@ SET(BruceWorx_SRCS
     bruceworx_section.py
     bruceworx_slots.py
     bruceworx_routing.py
+    bruceworx_rope.py
+    bruceworx_drag.py
     bruceworx_flexsub.py
     bruceworx_routing_gui.py
     bruceworx_routing_ports.py
     bruceworx_fittings.py
     TestBruceWorxRoutingCore.py
+    TestBruceWorxRopeCore.py
     TestBruceWorxFlexSub.py
     TestBruceWorxRouting.py
     TestBruceWorxConnectorLibrary.py
