@@ -386,6 +386,9 @@ class TestSimulationGui(unittest.TestCase):
         Gui.getDocument(doc.Name).activeView().viewIsometric()
         panel = self.sg.classes()["StudyPanel"](analysis)
         self.assertTrue(panel.nonlinear_check.isChecked())
+        self.assertAlmostEqual(panel.limit_spin.value(), 1.5)
+        panel.disp_limit_spin.setValue(0.5)  # answer 2: reached (about 1.44) before the knee (about 1.54)
+        self.assertAlmostEqual(analysis.CollapseDisplacement, 0.5)
         self.assertTrue(panel.solve(blocking=True))
         self.assertEqual(panel.modes_table.rowCount(), 4)
         self.assertEqual(panel.modes_table.item(0, 2).text(), "λ1")
@@ -394,6 +397,7 @@ class TestSimulationGui(unittest.TestCase):
         self.assertIn("below the target 3", panel.summary.text())
         self.assertIn("non-conservative", panel.summary.text())
         self.assertIn("Nonlinear: collapse at", panel.summary.text())
+        self.assertIn("displacement limit", panel.summary.text())
         panel.target_spin.setValue(1.5)  # lambda_1 = 1.73 passes a target of 1.5: green
         self.assertEqual(panel.modes_table.item(0, 1).foreground().color().name(), eigen.STATUS_COLORS["green"].lower())
         self.assertTrue(panel.save_target_default())
@@ -405,6 +409,7 @@ class TestSimulationGui(unittest.TestCase):
             text = handle.read()
         self.assertEqual(text.count(r"\includegraphics"), 2)
         self.assertIn(r"\begin{axis}", text)
+        self.assertIn("the displacement limit of 0.5", text)
         if sim.find_tex()[0]:
             self.assertTrue(self.sg.wait_for_report(600))
             self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
@@ -418,7 +423,7 @@ class TestSimulationGui(unittest.TestCase):
                 prefs.RemString(name)
             for name in ("ModalModes", "BucklingModes"):
                 prefs.RemInt(name)
-            for name in ("TargetBLF", "MeshDivisor"):
+            for name in ("TargetBLF", "MeshDivisor", "NonlinearLoadLimit"):
                 prefs.RemFloat(name)
 
         clean()
@@ -429,6 +434,8 @@ class TestSimulationGui(unittest.TestCase):
         self.assertEqual(page.thresholds.text(), "1;2")
         self.assertEqual((page.modal_modes.value(), page.buckling_modes.value()), (8, 4))
         self.assertAlmostEqual(page.divisor.value(), 30.0)
+        self.assertAlmostEqual(page.load_limit.value(), 1.5)
+        page.load_limit.setValue(1.8)
         page.thresholds.setText("1;3")
         page.colors.setText("#ff0000;#ffaa00;#00aa00")
         page.measure.setCurrentIndex(page.measure.findData("Tresca"))
@@ -441,6 +448,7 @@ class TestSimulationGui(unittest.TestCase):
         self.assertEqual(sim.default_measure(), "Tresca")
         self.assertEqual((eigen.default_modes("modal"), eigen.default_modes("buckling")), (10, 6))
         self.assertAlmostEqual(eigen.default_target(), 2.0)
+        self.assertAlmostEqual(eigen.default_load_limit(), 1.8)
         self.assertAlmostEqual(sim.default_mesh_size(self.box), self.box.Shape.BoundBox.DiagonalLength / 20.0)
         new_study = self.sg.classes()["NewStudyPanel"](self.doc)
         self.assertEqual(new_study.modal_count.value(), 10)

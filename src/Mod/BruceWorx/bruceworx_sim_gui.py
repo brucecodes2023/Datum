@@ -1145,10 +1145,19 @@ def _make_classes():
                 self.limit_spin.setSuffix(" × λ1")
                 self.limit_spin.setValue(float(a.NonlinearLoadLimit))
                 lay.addRow("Load up to", self.limit_spin)
+                self.disp_limit_spin = QtWidgets.QDoubleSpinBox()
+                self.disp_limit_spin.setRange(0.0, 1.0e5)
+                self.disp_limit_spin.setDecimals(3)
+                self.disp_limit_spin.setSuffix(" mm")
+                self.disp_limit_spin.setSpecialValueText("off (the knee only)")
+                self.disp_limit_spin.setToolTip("The collapse factor is the load at this monitored displacement when "
+                                                "the run reaches it before the knee")
+                self.disp_limit_spin.setValue(float(a.CollapseDisplacement))
+                lay.addRow("Displacement limit", self.disp_limit_spin)
                 self.nonlinear_check.toggled.connect(slot(self._options_changed))
-                for widget in (self.imperfection_spin, self.limit_spin):
+                for widget in (self.imperfection_spin, self.limit_spin, self.disp_limit_spin):
                     widget.valueChanged.connect(slot(self._options_changed))
-                for widget in (self.imperfection_spin, self.limit_spin):
+                for widget in (self.imperfection_spin, self.limit_spin, self.disp_limit_spin):
                     widget.setEnabled(bool(a.Nonlinear))
             return box_
 
@@ -1162,7 +1171,8 @@ def _make_classes():
                 a.Nonlinear = self.nonlinear_check.isChecked()
                 a.ImperfectionAmplitude = self.imperfection_spin.value()
                 a.NonlinearLoadLimit = self.limit_spin.value()
-                for widget in (self.imperfection_spin, self.limit_spin):
+                a.CollapseDisplacement = self.disp_limit_spin.value()
+                for widget in (self.imperfection_spin, self.limit_spin, self.disp_limit_spin):
                     widget.setEnabled(bool(a.Nonlinear))
 
         def _build_modes(self):
@@ -2053,6 +2063,13 @@ def _make_classes():
             f2.addRow("Buckling load factors", self.buckling_modes)
             self.target = target_spin(eigen.default_target())
             f2.addRow("Target buckling load factor", self.target)
+            self.load_limit = QtWidgets.QDoubleSpinBox()
+            self.load_limit.setRange(0.1, 10.0)
+            self.load_limit.setDecimals(2)
+            self.load_limit.setSingleStep(0.1)
+            self.load_limit.setSuffix(" × λ1")
+            self.load_limit.setToolTip("How far the nonlinear buckling run steps the load")
+            f2.addRow("Nonlinear run: load up to", self.load_limit)
             lay.addWidget(eig)
             general = QtWidgets.QGroupBox("Mesh and report")
             f3 = QtWidgets.QFormLayout(general)
@@ -2086,6 +2103,7 @@ def _make_classes():
             self.modal_modes.setValue(eigen.default_modes("modal"))
             self.buckling_modes.setValue(eigen.default_modes("buckling"))
             self.target.setValue(eigen.default_target())
+            self.load_limit.setValue(eigen.default_load_limit())
             self.divisor.setValue(sim.mesh_divisor())
             self.tex.setText(prefs.GetString(sim.TEX_PREF, ""))
 
@@ -2104,6 +2122,7 @@ def _make_classes():
             prefs.SetInt("ModalModes", self.modal_modes.value())
             prefs.SetInt("BucklingModes", self.buckling_modes.value())
             eigen.save_default_target(self.target.value())
+            prefs.SetFloat("NonlinearLoadLimit", self.load_limit.value())
             prefs.SetFloat("MeshDivisor", self.divisor.value())
             prefs.SetString(sim.TEX_PREF, self.tex.text().strip())
 

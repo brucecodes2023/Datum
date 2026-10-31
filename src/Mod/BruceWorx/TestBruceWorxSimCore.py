@@ -572,6 +572,11 @@ class TestEigenParts(unittest.TestCase):
         lam, basis = eigen.collapse_point(curve, False)
         self.assertTrue(1.7 < lam < 2.0, lam)  # slope 1 % of the start: lambda / lambda_cr = 1 - 0.1
         self.assertIn("knee", basis)
+        # answer 2 (30 Oct): a displacement limit counts when it comes first (u = 0.05 at lambda = 2/3)
+        lam_d, basis_d = eigen.collapse_point(curve, False, displacement_limit=0.05)
+        self.assertAlmostEqual(lam_d, 2.0 / 3.0, places=2)
+        self.assertIn("displacement limit", basis_d)
+        self.assertEqual(eigen.collapse_point(curve, False, displacement_limit=50.0), (lam, basis))  # the knee first
         self.assertEqual(eigen.collapse_point([(0.1, 0.5), (0.2, 1.0), (0.3, 1.5)], True)[0], 1.5)  # stiff, stopped
         self.assertIsNone(eigen.collapse_point([(0.1, 0.5), (0.2, 1.0), (0.3, 1.5)], False)[0])
         kept, note = eigen.clean_curve([(0.1, 0.5), (0.3, 1.0), (5.6, 1.7), (-12.0, 1.74), (-10.0, 1.75)])
@@ -658,6 +663,8 @@ class TestEigenStudy(unittest.TestCase):
         self.assertEqual(analysis.ModeCount, 4)
         self.assertAlmostEqual(analysis.TargetLoadFactor, 2.5)  # the preference
         self.assertFalse(analysis.Nonlinear)
+        self.assertAlmostEqual(analysis.NonlinearLoadLimit, 1.5)  # answer 3 (30 Oct)
+        self.assertEqual(analysis.CollapseDisplacement, 0.0)
         self.assertEqual(objs["solver"].AnalysisType, "buckling")
         self.assertEqual(objs["solver"].BucklingFactors, 4)
         texts = [t for k, t in sim.precheck(analysis) if k == "error"]

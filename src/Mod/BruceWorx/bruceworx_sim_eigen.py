@@ -34,10 +34,12 @@ Buckling (``StudyType`` "buckling"): (K + lambda K_G(sigma_0)) psi = 0 with Calc
   * ``Nonlinear`` (B3): a geometrically nonlinear static run (``*STEP, NLGEOM``) on the mesh with an
     imperfection seeded from psi_1, amplitude ``ImperfectionAmplitude`` mm (0 = 1 % of the smallest
     section dimension, see ``section_size``), the load stepped by CalculiX's automatic *STATIC
-    increments up to ``NonlinearLoadLimit`` x lambda_1 (CalculiX has no Riks arc-length method).
+    increments up to ``NonlinearLoadLimit`` x lambda_1 (1.5, preference NonlinearLoadLimit; CalculiX has
+    no Riks arc-length method).
     The collapse load factor is the knee of the curve, where its tangent falls below 1 % of its
-    initial slope (``KNEE_FRACTION``), else the last converged increment when the run stops
-    converging (a limit point). The monitored displacement is the node where psi_1 peaks, along
+    initial slope (``KNEE_FRACTION``), or, when ``CollapseDisplacement`` (mm) is set and comes first,
+    the load at which the monitored displacement reaches it; else the last converged increment when
+    the run stops converging (a limit point). The monitored displacement is the node where psi_1 peaks, along
     psi_1; the curve is cut where the run leaves the equilibrium path (``clean_curve``).
 
 Mode shapes play by moving the result mesh's nodes: u(t) = s phi sin(2 pi t), s such that the largest
@@ -57,7 +59,7 @@ RIGID_MODES = 6
 DEFAULT_TARGET_BLF = 3.0  # B1
 DEFAULT_MODE_SCALE = 0.10  # largest displacement of a played mode / bounding-box diagonal
 IMPERFECTION_FRACTION = 0.01  # B3: 1 % of the smallest section dimension
-NONLINEAR_LOAD_LIMIT = 1.2  # the nonlinear run steps the load up to 1.2 x lambda_1
+NONLINEAR_LOAD_LIMIT = 1.5  # the nonlinear run steps the load up to 1.5 x lambda_1 (30 Oct answer 3; preference)
 KNEE_FRACTION = 0.01  # the knee: the curve's tangent below 1 % of its initial slope
 NONLINEAR_INCREMENT = 0.02  # *STATIC initial and largest increment (fraction of the step)
 EXCITATION_SOURCES = ("MotorSpeed", "FrequencyBand")
@@ -104,6 +106,12 @@ def default_modes(kind):
     name, fallback = ("ModalModes", MODAL_MODES) if kind == "modal" else ("BucklingModes", BUCKLING_MODES)
     value = _prefs().GetInt(name, 0)
     return value if value > 0 else fallback
+
+
+def default_load_limit():
+    """How far the nonlinear run steps the load, in lambda_1: the preference NonlinearLoadLimit, else 1.5."""
+    value = _prefs().GetFloat("NonlinearLoadLimit", 0.0)
+    return value if value > 0 else NONLINEAR_LOAD_LIMIT
 
 
 def save_default_target(value):
@@ -160,7 +168,10 @@ def ensure_properties(analysis):
         _add(analysis, "App::PropertyFloat", "ImperfectionAmplitude", "Buckling",
              "Imperfection amplitude (mm) along mode 1; 0 = 1 % of the smallest section dimension", 0.0)
         _add(analysis, "App::PropertyFloat", "NonlinearLoadLimit", "Buckling",
-             "The nonlinear run steps the load up to this multiple of lambda_1", NONLINEAR_LOAD_LIMIT)
+             "The nonlinear run steps the load up to this multiple of lambda_1", default_load_limit())
+        _add(analysis, "App::PropertyFloat", "CollapseDisplacement", "Buckling",
+             "Optional limit (mm) on the monitored displacement: when the nonlinear run reaches it before the "
+             "knee, the load there is the collapse factor; 0 = off", 0.0)
     else:
         return
     _add(analysis, "App::PropertyFloat", "ModeScale", "Results",
@@ -751,29 +762,45 @@ def prepare_nonlinear(analysis, linear_inp, folder=None):
     with open(inp, "w", encoding="utf-8") as handle:
         handle.write(text)
     direction = vectors[peak_index]
-    return {"dir": folder, "inp": inp, "base": "nonlinear", "monitor": int(monitor),
+    return {"displacement_limit": float(_get(analysis, "CollapseDisplacement", 0.0) or 0.0),
+            "dir": folder, "inp": inp, "base": "nonlinear", "monitor": int(monitor),
             "direction": (direction.x / peak, direction.y / peak, direction.z / peak),
             "amplitude": amplitude, "how": how, "lambda1": lambda1, "limit": limit}
 
 
-def collapse_point(points, stopped, knee=KNEE_FRACTION):
-    """(load factor, basis) of a nonlinear curve [(displacement, load factor)], from 0:
+def collapse_point(points, stopped, knee=KNEE_FRACTION, displacement_limit=0.0):
+    """(load factor, basis) of a nonlinear curve [(displacement, load factor)], from 0; the basis names the
+    criterion that fired:
 
     the knee, the first point after which the tangent d(lambda)/du falls below `knee` times its initial
-    slope; else, when the run stopped early (it stopped converging, or the curve was cut), its last good
-    point; else (None, ...): the curve stays stiff up to the highest load of the run."""
+    slope, or the load at which |u| reaches `displacement_limit` (mm, when set) if that comes first; else,
+    when the run stopped early (it stopped converging, or the curve was cut), its last good point; else
+    (None, ...): the curve stays stiff up to the highest load of the run."""
     pts = [(0.0, 0.0)] + [(abs(u), lam) for u, lam in points]
+    candidates = []
+    if displacement_limit and displacement_limit > 0:
+        for (u0, l0), (u1, l1) in zip(pts, pts[1:]):
+            if u1 >= displacement_limit:
+                lam = l0 + (l1 - l0) * (displacement_limit - u0) / (u1 - u0) if u1 > u0 else l1
+                candidates.append((lam, f"the displacement limit: the monitored displacement reaches "
+                                        f"{displacement_limit:g} mm"))
+                break
+    if len(pts) >= 3:
+        slopes = []
+        for (u0, l0), (u1, l1) in zip(pts, pts[1:]):
+            du = u1 - u0
+            slopes.append((l1 - l0) / du if du > 1e-12 else float("inf"))
+        initial = next((s for s in slopes if math.isfinite(s) and s > 0), None)
+        if initial is not None:
+            for i, slope in enumerate(slopes):
+                if slope < knee * initial:
+                    candidates.append((pts[i][1], f"the knee: the curve's slope falls below {100 * knee:g} % of "
+                                                  "its initial slope"))
+                    break
+    if candidates:
+        return min(candidates, key=lambda c: c[0])
     if len(pts) < 3:
         return (pts[-1][1] if stopped and len(pts) > 1 else None), "too few converged increments"
-    slopes = []
-    for (u0, l0), (u1, l1) in zip(pts, pts[1:]):
-        du = u1 - u0
-        slopes.append((l1 - l0) / du if du > 1e-12 else float("inf"))
-    initial = next((s for s in slopes if math.isfinite(s) and s > 0), None)
-    if initial is not None:
-        for i, slope in enumerate(slopes):
-            if slope < knee * initial:
-                return pts[i][1], f"the knee: the curve's slope falls below {100 * knee:g} % of its initial slope"
     if stopped:
         return pts[-1][1], (stopped if isinstance(stopped, str)
                             else "the last converged increment: the run stopped converging there (a limit point)")
@@ -814,7 +841,8 @@ def finish_nonlinear(analysis, info, returncode=0):
     finished = bool(points) and abs(points[-1][1] - total) < 1e-6 * max(1.0, total)
     diverged = bool(returncode) or not finished
     points, note = clean_curve(points)
-    collapse, basis = collapse_point(points, "the last point on the equilibrium path" if note else diverged)
+    collapse, basis = collapse_point(points, "the last point on the equilibrium path" if note else diverged,
+                                     displacement_limit=info.get("displacement_limit", 0.0))
     if not points:
         basis = "the nonlinear run converged on no increment (see its .sta file)"
     props = result.PropertiesList
@@ -903,6 +931,7 @@ def summary_part(analysis):
             "nonlinear": bool(_get(analysis, "Nonlinear", False)),
             "curve": nonlinear_data(first_buckling_result(analysis)),
             "limit": float(_get(analysis, "NonlinearLoadLimit", NONLINEAR_LOAD_LIMIT) or NONLINEAR_LOAD_LIMIT),
+            "displacement_limit": float(_get(analysis, "CollapseDisplacement", 0.0) or 0.0),
         })
         amplitude, how = imperfection_amplitude(analysis) if out["nonlinear"] else (None, "")
         out["amplitude"], out["how"] = amplitude, how
@@ -1041,6 +1070,10 @@ def report_results(part, escape):
                          rf"{_fmt(curve['amplitude'], 3)}\,mm along mode 1 ({e(curve['how'])}); the load stepped by "
                          rf"CalculiX's automatic increments up to {part['limit']:g}\,$\lambda_1$. Monitored: node {curve['monitor']}, "
                          r"where mode 1 peaks, along mode 1.\par")
+            limit_mm = part.get("displacement_limit") or 0.0
+            lines.append(rf"Criteria: the knee (the slope below {100 * KNEE_FRACTION:g}\,\% of its start)"
+                         + (rf" and the displacement limit of {limit_mm:g}\,mm; the first one reached counts"
+                            if limit_mm else "") + r".\par")
             if curve["collapse"]:
                 ratio = curve["collapse"] / part["first"] if part["first"] else None
                 lines.append(rf"\textbf{{Collapse load factor {_fmt(curve['collapse'], 4)}}}"
@@ -1068,10 +1101,13 @@ def report_results(part, escape):
 
 
 def _collapse_u(curve):
-    for u, lam in zip(curve["displacements"], curve["factors"]):
-        if abs(lam - curve["collapse"]) < 1e-12 * max(1.0, abs(lam)):
-            return u
-    return 0.0
+    """The monitored displacement at the collapse factor, interpolated along the curve."""
+    pts = [(0.0, 0.0)] + list(zip(curve["displacements"], curve["factors"]))
+    target = curve["collapse"]
+    for (u0, l0), (u1, l1) in zip(pts, pts[1:]):
+        if l0 <= target <= l1:
+            return u0 + (u1 - u0) * ((target - l0) / (l1 - l0) if l1 > l0 else 1.0)
+    return pts[-1][0]
 
 
 def report_footer(part):
