@@ -49,7 +49,7 @@ fail() { printf '\033[31m[vectorlabs] %s\033[0m\n' "$*" >&2; exit 1; }
 [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]] || fail "needs macOS on Apple silicon"
 [[ -d "$env/lib" ]] || fail "no pixi environment at $env (run 'pixi install' in the repo)"
 [[ -f "$build/build.ninja" ]] || fail "no configured build at $build (run 'pixi run configure-release')"
-for tool in otool install_name_tool codesign sips iconutil python3 rsync; do
+for tool in otool install_name_tool codesign sips iconutil python3 rsync cc; do
     command -v "$tool" >/dev/null || fail "missing $tool (Xcode command line tools)"
 done
 
@@ -118,14 +118,15 @@ fi
 # executable's parent folder, Contents. macOS sees "Vector Labs.app" (menu bar, Dock, icon) through the
 # bundle's Info.plist; the bundle's own executable, MacOS/"Vector Labs", is a small launcher that first
 # brings over the old Keystone settings (first launch only), then execs the real one.
+# The launcher must be a Mach-O: Launch Services refuses a bundle whose executable is a shell script
+# (open fails with -54), so a tiny C program runs Resources/vectorlabs-migrate.sh and then execs vectorlabs.
 cp -p "$C/bin/FreeCAD" "$C/MacOS/vectorlabs"
-cat > "$C/MacOS/$app_name" <<'LAUNCHER'
+cat > "$C/Resources/vectorlabs-migrate.sh" <<'MIGRATE'
 #!/bin/bash
-# Vector Labs launcher. First launch: copy the Keystone settings folders into the Vector Labs ones
+# Vector Labs first launch: copy the Keystone settings folders into the Vector Labs ones
 # (the Keystone folders stay as a backup) and rewrite the absolute paths inside the copied *.cfg files.
-# Whatever name started this (also the temporary MacOS/Keystone link), the Vector Labs folders are used:
-# the branding.xml ExeName decides the folders, not the name of this file.
-here="$(cd "$(dirname "$0")" && pwd)"
+# Whatever name started the launcher (also the temporary MacOS/Keystone link), the Vector Labs folders are used:
+# the branding.xml ExeName decides the folders, not the name of the executable.
 if [ -z "${FREECAD_USER_HOME:-}" ] && [ -n "${HOME:-}" ]; then
     for kind in "Library/Preferences" "Library/Application Support"; do
         old="$HOME/$kind/Keystone"
@@ -141,9 +142,47 @@ if [ -z "${FREECAD_USER_HOME:-}" ] && [ -n "${HOME:-}" ]; then
         fi
     done
 fi
-exec "$here/vectorlabs" "$@"
+MIGRATE
+chmod +x "$C/Resources/vectorlabs-migrate.sh"
+cat > "$stage/vectorlabs-launcher.c" <<'LAUNCHER'
+/* Vector Labs launcher: run Resources/vectorlabs-migrate.sh (first-launch settings copy), then exec
+   MacOS/vectorlabs with the same arguments. Symlinks to this file (MacOS/Keystone) resolve to the bundle. */
+#include <limits.h>
+#include <mach-o/dyld.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(int argc, char **argv)
+{
+    char exe[PATH_MAX], dir[PATH_MAX], path[PATH_MAX];
+    uint32_t size = sizeof exe;
+    if (_NSGetExecutablePath(exe, &size) != 0 || !realpath(exe, dir)) {
+        fprintf(stderr, "Vector Labs: cannot find its own executable\n");
+        return 1;
+    }
+    char *slash = strrchr(dir, '/');
+    if (slash) *slash = '\0';
+    snprintf(path, sizeof path, "%s/../Resources/vectorlabs-migrate.sh", dir);
+    if (access(path, R_OK) == 0) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            execl("/bin/bash", "bash", path, (char *)NULL);
+            _exit(127);
+        }
+        if (pid > 0) waitpid(pid, NULL, 0);
+    }
+    snprintf(path, sizeof path, "%s/vectorlabs", dir);
+    argv[0] = path;
+    execv(path, argv);
+    perror(path);
+    return 1;
+}
 LAUNCHER
-chmod +x "$C/MacOS/$app_name"
+cc -O2 -Wall -mmacosx-version-min=12.0 -o "$C/MacOS/$app_name" "$stage/vectorlabs-launcher.c" \
+    || fail "the launcher did not compile"
 # Temporary: old scripts and watchers still start MacOS/Keystone (/Applications/Keystone.app is a link to this app).
 ln -sf "$app_name" "$C/MacOS/Keystone"
 
