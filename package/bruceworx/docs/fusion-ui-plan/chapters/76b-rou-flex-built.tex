@@ -103,3 +103,7 @@ rope core (8) and the Routing GUI suite (13) pass.
   \item \textbf{Cost with proxies} is 14\,ms per step for the battery; box tests are plain numpy. A broad phase would bring it
         back to 3\,ms. Worth doing before big assemblies?
 \end{enumerate}
+
+\paragraph{Answers (30 Oct).} Parts without a joint: add a joint (hinge or slider) to get the drag stop; no
+change to the drag. Wires inside a bundle follow the bundle's rope shape: next round. 14\,ms per drag step with
+proxies is fine; a broad phase waits for larger assemblies.
