@@ -41,7 +41,8 @@ APP_NAME = "OpenFOAM-v2606.app"
 TESTED_VERSION = "v2606"
 INSTALL_URL = "https://github.com/gerlero/openfoam-app"
 INSTALL_COMMAND = "brew install gerlero/openfoam/openfoam@2606"
-PARAVIEW_APPS = ("/Applications/ParaView.app", os.path.expanduser("~/Applications/ParaView.app"))
+# Homebrew's cask installs a versioned name (ParaView-6.2.0.app); the newest one wins.
+PARAVIEW_APPS = ("/Applications/ParaView*.app", os.path.expanduser("~/Applications/ParaView*.app"))
 SIM_PREFS = "User parameter:BaseApp/Preferences/Mod/BruceWorx/Sim"
 PREF_PATH = "OpenFOAMPath"
 CACHE_ROOT = os.path.expanduser("~/Library/Caches/Vector Labs/cfd")
@@ -140,10 +141,17 @@ def install_openfoam_action():
 
 
 def paraview_app():
-    for path in PARAVIEW_APPS:
-        if os.path.isdir(path):
-            return path
+    for pattern in PARAVIEW_APPS:
+        found = sorted((p for p in glob.glob(pattern) if os.path.isdir(p)), key=paraview_version, reverse=True)
+        if found:
+            return found[0]
     return None
+
+
+def paraview_version(path):
+    """(6, 2, 0) from .../ParaView-6.2.0.app; () for an unversioned ParaView.app."""
+    m = re.search(r"ParaView-([\d.]+)\.app$", path)
+    return tuple(int(x) for x in m.group(1).split(".") if x) if m else ()
 
 
 def perf_cores():
