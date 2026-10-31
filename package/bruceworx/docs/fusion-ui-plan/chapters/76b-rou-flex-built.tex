@@ -121,3 +121,11 @@ observers of its own, so nothing re-solves while idle; in addition a wire touche
 signature (ends, clips, cut length, mechanics, gravity direction and on/off, proxy boxes near it) and keeps its solved
 shape when nothing it depends on moved. Tests: a wire between level pins with gravity off has no sag and the same
 length, a second recompute makes no solver call, switching on solves once.
+
+\paragraph{31 Oct follow-ups.} The wires of a bundle now take their centreline from the bundle's solved rope: after the
+bundle solves (a recompute or a drag) each member wire is redrawn through the bundle's points and keeps its own cut
+length, with no separate solve; during a drag only the bundle is solved. Bundles have no breakouts yet, so a wire follows
+the bundle between its ends (leads outside the span come with breakouts). The Wire, Pipe, Hose and Route Path commands
+refuse a flexible sub-assembly copy (an object with \code{FlexSource}): the panel does not open and the status bar shows
+``Edit this wire in its sub-assembly''. Tests: a bundle of three wires after a drag step (centrelines within OD/2 of the
+bundle's, cut lengths unchanged) and a command on a copy opening no panel.

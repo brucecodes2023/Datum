@@ -251,6 +251,34 @@ class RopeDragTests(unittest.TestCase):
         print(f"\n  drag stopped at {final:.1f} deg (gap {stop_gap:.2f} of cut {cut:.2f})")
 
 
+    def test_bundle_wires_follow_the_bundle_rope(self):
+        anchor, tip = V(0, 0, 0), V(40, 0, 0)
+        self.turn(120)
+        path = br.make_path([anchor, tip], self.doc, mode="Spline",
+                            attachments=[(0, self.base, vertex_named(self.base, anchor)),
+                                         (1, self.arm, vertex_named(self.arm, tip))], container=self.assembly)
+        wires = [br.make_wire(path, gauge="22 AWG", slack=20) for _i in range(3)]
+        bundle = br.make_bundle(wires, path)
+        self.doc.recompute()
+        cuts = [w.CutLength.Value for w in wires]
+        self.assembly.preDrag([self.arm])
+        for angle in (110, 100, 90):
+            self.turn(angle)
+            self.assembly.doDragStep()
+        self.assembly.postDrag()
+        self.doc.recompute()
+        mine = [(p.x, p.y, p.z) for p in bundle.RopePoints]
+        self.assertGreater(len(mine), 3)
+        for w, cut in zip(wires, cuts):
+            theirs = [(p.x, p.y, p.z) for p in w.RopePoints]
+            self.assertEqual(len(theirs), len(mine))
+            far = max(math.dist(a, b) for a, b in zip(mine, theirs))
+            self.assertLessEqual(far, w.InsulationOD.Value / 2, (w.Label, far))
+            self.assertAlmostEqual(w.CutLength.Value, cut, places=6)
+            self.assertAlmostEqual(w.Length.Value, cut, places=6)
+            self.assertIn("bundle", w.RopeStatus)
+
+
 class BatteryTests(unittest.TestCase):
     """The battery assembly STD-02-01001-001 on a copy of the vault (BW_BATTERY=<the copy's .FCStd>). The T plug
     is hinged on the pack and swung through an arc with the Assembly drag API."""

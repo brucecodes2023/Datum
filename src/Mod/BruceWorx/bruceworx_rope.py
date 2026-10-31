@@ -675,10 +675,64 @@ def sweep_frenet(wire, od, inner=0.0):
     return solid
 
 
+def bundle_of(wire):
+    """The bundle that lists ``wire`` among its Wires, or None."""
+    br = _br()
+    if br.kind_of(wire) != br.WIRE:
+        return None
+    for o in wire.InList:
+        if br.kind_of(o) == br.BUNDLE and any(w.Name == wire.Name for w in o.Wires):
+            return o
+    return None
+
+
+def follow_members(bundle):
+    """31 Oct: the wires of ``bundle`` take its solved centreline (no solve of their own over the shared
+    span; the bundle has no breakouts yet, so it is the whole wire). Each keeps its cut length."""
+    br = _br()
+    pts = [tuple(p) for p in bundle.RopePoints]
+    if len(pts) < 2:
+        return
+    for wire in bundle.Wires:
+        if br.kind_of(wire) != br.WIRE:
+            continue
+        try:
+            item = RopeItem(wire)
+            res = Result(_np().array(pts, dtype=float), bool(bundle.Taut), str(bundle.Problems), 0.0,
+                         0.0 if bundle.BendOK else 2.0, 0.0)
+            res.weight_on = item.weight_on
+            apply_result(wire.Proxy, wire, item, res)
+            wire.RopeStatus = f"in bundle {bundle.Label}"
+            wire.BendOK = bool(bundle.BendOK)
+            if abs(float(wire.CutLength.Value) - item.cut) > 1e-9:
+                wire.CutLength = item.cut
+            wire.Proxy.finish(wire, item.cut)
+            wire.purgeTouched()
+        except Exception as exc:
+            App.Console.PrintWarning(f"BruceWorx rope: {wire.Label} in {bundle.Label}: {exc}\n")
+
+
 def rope_execute(proxy, obj):
     """Solve and draw ``obj`` as a rope. Returns True; False when numpy or the rope fails (the caller falls back to the path)."""
     if not available():
         return False
+    try:
+        if _br().kind_of(obj) == _br().BUNDLE:
+            ok = _rope_execute(proxy, obj)
+            if ok:
+                follow_members(obj)
+            return ok
+        if bundle_of(obj) is not None and len(obj.RopePoints) > 1 and float(obj.CutLength.Value) > 0 \
+                and not obj.Shape.isNull():
+            proxy.finish(obj, float(obj.CutLength.Value))  # drawn by its bundle: only the length follows the cut
+            return True
+        return _rope_execute(proxy, obj)
+    except Exception as exc:
+        App.Console.PrintWarning(f"BruceWorx rope: {obj.Label}: {exc}\n")
+        return False
+
+
+def _rope_execute(proxy, obj):
     try:
         item = RopeItem(obj)
         sig = item.signature()

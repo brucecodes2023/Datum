@@ -136,6 +136,8 @@ class RopeDragCheck:
         for obj in br.routed(doc, (br.WIRE, br.HOSE, br.BUNDLE)):
             if br._container_of(obj) is not assembly and brope.top_assembly(obj) is not assembly:
                 continue
+            if brope.bundle_of(obj) is not None:
+                continue  # a bundle's wire follows the bundle
             try:
                 item = brope.RopeItem(obj)
             except Exception as exc:
