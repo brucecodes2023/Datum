@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "97bc836b-78b5-4975-b617-bcc56dd23d7c"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "Aluminium 7075-T6"
   Description: "High-strength Al-Zn aluminium for stressed CNC parts (UNS A97075, T6/T651). Strengths are sheet minimums (typical: yield 503 MPa, UTS 572 MPa, elongation 11 %)."
   ReferenceSource: "ASTM B209 / MMPDS sheet minimums; ASM/MatWeb typical elastic and thermal values"
   SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=MA7075T6"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Metals"
 Models:
   LinearElastic:

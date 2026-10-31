@@ -30,7 +30,7 @@ GROUP = bruceworx_pack.APPLIED_GROUP  # BaseApp/Preferences/BruceWorx
 SWITCH = "PreferencePack"
 FIRST_RUN_DONE = "FirstRunPackDone"
 # FreeCAD 1.1's Start page opens on a first-start page with a theme picker; dismissing it puts a stock
-# theme over a pack applied before it (Keystone's new profile, 25 Oct). BruceWorx brings its own theme,
+# theme over a pack applied before it (Vector Labs' new profile, 25 Oct). BruceWorx brings its own theme,
 # so a first run marks that page done; a profile it already overwrote is healed once.
 START_GROUP = "BaseApp/Preferences/Mod/Start"
 FIRST_START = "FirstStart2024"

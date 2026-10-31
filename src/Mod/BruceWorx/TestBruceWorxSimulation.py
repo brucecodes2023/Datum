@@ -77,12 +77,12 @@ class TestSimulationGui(unittest.TestCase):
         steel = [c for c in sim.material_cards() if c["name"] == "CalculiX-Steel"][0]
         self.assertTrue(panel.select_material(steel["uuid"]))
         self.assertIn("E 2.1e+05 MPa", panel.material_warn.text())
-        # S1: the Keystone library heads the picker when it is installed, the stock FEM cards after it
+        # S1: the Vector Labs library heads the picker when it is installed, the stock FEM cards after it
         headings = [panel.material_combo.itemText(i) for i in range(panel.material_combo.count())
                     if panel.material_combo.itemText(i).startswith("— ")]
         self.assertIn("— FreeCAD (FEM) —", headings)
-        if any(c["library"] == sim.KEYSTONE_LIBRARY for c in sim.material_cards()):
-            self.assertEqual(headings[0], "— Keystone —")
+        if any(c["library"] == sim.LIBRARY for c in sim.material_cards()):
+            self.assertEqual(headings[0], "— Vector Labs —")
         # S3: the stress measure, von Mises by default
         self.assertEqual(panel.measure_combo.currentData(), "vonMises")
         panel.measure_combo.setCurrentIndex(panel.measure_combo.findData("MaxPrincipal"))
@@ -413,7 +413,7 @@ class TestSimulationGui(unittest.TestCase):
             self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
         panel.release()
 
-    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Keystone PETG printed, heat deflection temperature 65 C
+    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Vector Labs PETG printed, heat deflection temperature 65 C
 
     def test_new_thermal_studies_from_the_panel(self):
         panel = self.sg.classes()["NewStudyPanel"](self.doc)

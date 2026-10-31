@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""The Keystone material library, headless (SIM-01).
+"""The Vector Labs material library, headless (SIM-01).
 
 Every card loads through FreeCAD's Materials API from the library named
-"Keystone" (registered by Init.py), has density, E, nu, yield and UTS with
+"Vector Labs" (registered by Init.py), has density, E, nu, yield and UTS with
 yield <= UTS and 0 < nu < 0.5, a colour and thermal values; the folder and the
-permanent UUID table agree; no Keystone UUID is used by any other card.
+permanent UUID table agree; no Vector Labs UUID is used by any other card.
 """
 
 import glob
@@ -17,18 +17,37 @@ import FreeCAD as App
 import bruceworx_materials as km
 
 
-class TestKeystoneLibrary(unittest.TestCase):
+class TestVectorLabsLibrary(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mm = km.manager()
         cls.cards = km.cards()
 
-    def test_library_registered_as_keystone(self):
+    def test_library_registered_as_vectorlabs(self):
         libraries = {lib[0]: lib[1] for lib in self.mm.MaterialLibraries}
-        self.assertIn("Keystone", libraries)
-        self.assertEqual(os.path.realpath(libraries["Keystone"]), os.path.realpath(km.LIBRARY_DIR))
-        group = App.ParamGet(f"{km.MODULES_PARAM}/Keystone")
+        self.assertIn("Vector Labs", libraries)
+        self.assertEqual(os.path.realpath(libraries["Vector Labs"]), os.path.realpath(km.LIBRARY_DIR))
+        group = App.ParamGet(f"{km.MODULES_PARAM}/Vector Labs")
         self.assertTrue(group.GetBool("ModuleReadOnly", False))
+
+    def test_old_keystone_registration_is_replaced(self):
+        modules = App.ParamGet(km.MODULES_PARAM)
+        old = modules.GetGroup("Keystone")
+        old.SetString("ModuleDir", km.LIBRARY_DIR.replace("VectorLabs", "Keystone"))
+        try:
+            self.assertTrue(km.register_library())
+            self.assertNotIn("Keystone", modules.GetGroups())
+            self.assertIn("Vector Labs", modules.GetGroups())
+        finally:
+            if "Keystone" in modules.GetGroups():
+                modules.RemGroup("Keystone")
+
+    def test_old_document_uuid_still_resolves(self):
+        # A document stores the card's UUID, not the library name or folder (PETG printed, 30 Oct).
+        mat = km.material("b4e991ce-42af-48ad-acbc-40e7f1de3a52")
+        self.assertIsNotNone(mat)
+        self.assertEqual(mat.LibraryName, "Vector Labs")
+        self.assertEqual(mat.UUID, "b4e991ce-42af-48ad-acbc-40e7f1de3a52")
 
     def test_folder_matches_uuid_table(self):
         on_disk = sorted(os.path.relpath(p, km.LIBRARY_DIR).replace(os.sep, "/")
@@ -37,12 +56,12 @@ class TestKeystoneLibrary(unittest.TestCase):
         self.assertEqual(len(set(km.CARDS.values())), len(km.CARDS))
         self.assertEqual(len(km.CARDS), 33)  # 28 (30 Oct) + PETG-CF, ASA-CF, Ti-6Al-4V, 17-4PH, A36
 
-    def test_every_card_loads_from_the_keystone_library(self):
-        in_library = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName == "Keystone"}
+    def test_every_card_loads_from_the_vectorlabs_library(self):
+        in_library = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName == "Vector Labs"}
         self.assertEqual(in_library, set(km.CARDS))
         self.assertEqual(len(self.cards), len(km.CARDS))
         for card in self.cards:
-            self.assertEqual(card["library"], "Keystone", card["name"])
+            self.assertEqual(card["library"], "Vector Labs", card["name"])
             mat = self.mm.getMaterial(card["uuid"])
             self.assertEqual(mat.Name + ".FCMat", os.path.basename(km.CARDS[card["uuid"]]))
 
@@ -57,8 +76,8 @@ class TestKeystoneLibrary(unittest.TestCase):
                         names[uuid] = path
                         break
         self.assertEqual(set(names), set(km.CARDS))
-        others = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName != "Keystone"}
-        self.assertFalse(others & set(km.CARDS), "a Keystone UUID is used by another library's card")
+        others = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName != "Vector Labs"}
+        self.assertFalse(others & set(km.CARDS), "a Vector Labs UUID is used by another library's card")
 
     def test_engineering_values(self):
         for c in self.cards:
@@ -127,10 +146,10 @@ class TestKeystoneLibrary(unittest.TestCase):
         self.assertEqual(km.card("ASA-CF printed")["z_strength"], 30.0)
         self.assertIsNone(km.card("no such material"))
 
-    def test_a_body_with_a_keystone_material_has_mass(self):
+    def test_a_body_with_a_vectorlabs_material_has_mass(self):
         import Part
 
-        doc = App.newDocument("KeystoneMass")
+        doc = App.newDocument("Vector LabsMass")
         try:
             body = doc.addObject("Part::Feature", "Block")
             body.Shape = Part.makeBox(100, 50, 10)

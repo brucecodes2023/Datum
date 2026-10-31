@@ -323,7 +323,7 @@ class DefaultsOnTest(unittest.TestCase):
         self.assertIs(self.store.get(defaults.START_GROUP, defaults.FIRST_START, "bool", True), False)
 
     def test_a_profile_freecads_first_start_overwrote_is_healed_once(self):
-        # Keystone's new profile: pack applied, then the first-start page put FreeCAD Light over it.
+        # Vector Labs' new profile: pack applied, then the first-start page put FreeCAD Light over it.
         self.store.set(defaults.GROUP, pack.APPLIED_NAME, "bool", True)
         self.store.set(defaults.GROUP, defaults.FIRST_RUN_DONE, "bool", True)
         self.store.set(defaults.START_GROUP, defaults.FIRST_START, "bool", False)

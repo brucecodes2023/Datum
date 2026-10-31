@@ -34,12 +34,12 @@ class TestMaterials(unittest.TestCase):
         with_yield = [c for c in cards if c["yield"]]
         self.assertTrue(with_yield)
         self.assertTrue(all(c["library"] for c in cards))
-        # S1 (30 Oct): the Keystone library (yield strengths on every card) first, the stock cards after it
+        # S1 (30 Oct): the Vector Labs library (yield strengths on every card) first, the stock cards after it
         ranks = [sim.library_rank(c["library"]) for c in cards]
         self.assertEqual(ranks, sorted(ranks))
-        keystone = [c for c in cards if c["library"] == sim.KEYSTONE_LIBRARY]
+        keystone = [c for c in cards if c["library"] == sim.LIBRARY]
         if keystone:
-            self.assertEqual(cards[0]["library"], sim.KEYSTONE_LIBRARY)
+            self.assertEqual(cards[0]["library"], sim.LIBRARY)
             self.assertTrue(all(c["yield"] for c in keystone))
         self.assertEqual(sim.library_rank("System"), 2)
 
@@ -183,7 +183,7 @@ class TestStudy(unittest.TestCase):
                 self.assertEqual(handle.read(5), b"%PDF-")
 
     def test_tectonic_seed_covers_the_reports(self):
-        """Follow-up 3 (30 Oct): Keystone's Tectonic cache seed loads every package a report uses, and the run-time
+        """Follow-up 3 (30 Oct): Vector Labs' Tectonic cache seed loads every package a report uses, and the run-time
         copy of a bundled seed into a writable cache."""
         seed = os.path.normpath(os.path.join(App.getHomePath(), "..", "..", "package", "bruceworx", "tectonic-seed", "seed.tex"))
         if not os.path.isfile(seed):
@@ -210,7 +210,7 @@ class TestStudy(unittest.TestCase):
         target = sim.tectonic_cache(home, os.path.join(home, "user"))
         self.assertEqual(target, os.path.join(home, "user"))
         self.assertTrue(os.path.isfile(os.path.join(target, "files", "x")))
-        self.assertTrue(os.path.isfile(os.path.join(target, ".keystone-seed")))
+        self.assertTrue(os.path.isfile(os.path.join(target, ".vectorlabs-seed")))
 
     def test_tex_escape(self):
         self.assertEqual(sim.tex_escape("a_b & 5% #1 {x} ~ ^"), r"a\_b \& 5\% \#1 \{x\} \~{} \^{}")
@@ -883,7 +883,7 @@ class TestThermalParts(unittest.TestCase):
         close_all()
         self.addCleanup(close_all)
 
-    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Keystone PETG printed: heat deflection temperature 65 C
+    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Vector Labs PETG printed: heat deflection temperature 65 C
 
     def study(self, kind="thermal", options=None, material=None, uuid=""):
         doc = App.newDocument("Th")

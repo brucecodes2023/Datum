@@ -380,7 +380,7 @@ def _drawing_current(ws, pn, drawing_line):
 def _interference(ws, pn):
     """Line 7 (ASM-06): the assembly's parts do not overlap, by bruceworx_interference.check_file on
     the work copy (the vault's stored file when there is none). Marked fits are not clashes. Only
-    inside Keystone (the check needs its geometry kernel); the CLI skips it. Never blocks (WARN):
+    inside Vector Labs (the check needs its geometry kernel); the CLI skips it. Never blocks (WARN):
     the plan left blocking to a later answer."""
     item = ws.vault.items[pn]
     line = Line(INTERFERENCE, TEXTS[INTERFERENCE], kind=WARN)
@@ -388,9 +388,9 @@ def _interference(ws, pn):
         line.skipped, line.detail = True, "not an assembly"
         return line
     try:
-        import bruceworx_interference as itf  # noqa: PLC0415 -- Keystone's module, FreeCAD only
+        import bruceworx_interference as itf  # noqa: PLC0415 -- Vector Labs' module, FreeCAD only
     except ImportError:
-        line.skipped, line.detail = True, "checked in Keystone, not here"
+        line.skipped, line.detail = True, "checked in Vector Labs, not here"
         return line
     path = ws.path(pn)
     if not os.path.exists(path):

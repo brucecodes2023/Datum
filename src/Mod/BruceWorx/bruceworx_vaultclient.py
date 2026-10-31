@@ -266,7 +266,7 @@ CATEGORY_PREF = "VaultCategories"  # JSON in Preferences/BruceWorx: {vault root:
 
 def category_prefs(root, group=None):
     """(hidden, collapsed): the category names hidden and the category groups folded in this vault
-    (by its folder), as remembered in the Keystone preferences. "" stands for Uncategorized."""
+    (by its folder), as remembered in the Vector Labs preferences. "" stands for Uncategorized."""
     try:
         group = group if group is not None else _prefs()
         saved = json.loads(group.GetString(CATEGORY_PREF, "{}") or "{}").get(str(root), {})

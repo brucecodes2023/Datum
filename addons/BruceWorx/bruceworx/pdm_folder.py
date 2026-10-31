@@ -87,13 +87,13 @@ FILE_OPS = ("checkout", "undo_checkout", "checkin", "renumber")  # renumber: PDM
 # PDM-12 (31 Oct 2026): ``renumber`` moves an item, its file versions, locks and released files to a new
 # part number, so the folder vault replays it (not pdm.Vault alone): args ``old``, ``new``, ``reason`` and
 # ``files`` ({P/N: {"sha256", "size", "filename"}}, the new file versions it wrote, keyed by the number
-# they have after it). Every Keystone copy must know the operation before the vault uses it; an older
+# they have after it). Every Vector Labs copy must know the operation before the vault uses it; an older
 # one records "unknown operation 'renumber'" as a problem and goes on with the old numbers.
 RENUMBER_OP = "renumber"
 # A check-in may also carry (PDM-09) ``made_from`` (for a drawing: P/N -> the SHA-256 of the version
 # of each file it was made from, its closure C(D)) and ``fingerprint`` (for a part: its geometry,
 # see bruceworx.product_tree). Both are optional and come from the FreeCAD side; a journal without
-# them replays as before. Every Keystone copy must know an operation before the vault uses it.
+# them replays as before. Every Vector Labs copy must know an operation before the vault uses it.
 CHECKIN_EXTRAS = ("made_from", "fingerprint")
 
 

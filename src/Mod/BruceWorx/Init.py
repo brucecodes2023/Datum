@@ -45,15 +45,15 @@ try:
 except Exception as exc:
     FreeCAD.Console.PrintWarning(f"BruceWorx materials were not registered: {exc}\n")
 
-# The Keystone material library (SIM-01: cards with yield strengths), also used headless.
+# The Vector Labs material library (SIM-01: cards with yield strengths), also used headless.
 try:
     import bruceworx_materials
 
     bruceworx_materials.register_library()
 except Exception as exc:
-    FreeCAD.Console.PrintWarning(f"The Keystone material library was not registered: {exc}\n")
+    FreeCAD.Console.PrintWarning(f"The Vector Labs material library was not registered: {exc}\n")
 
-# Simulation (SIM-01): a fresh profile finds the bundled CalculiX (Keystone: Contents/bin/ccx).
+# Simulation (SIM-01): a fresh profile finds the bundled CalculiX (Vector Labs: Contents/bin/ccx).
 try:
     import bruceworx_sim
 

@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "35847d69-da21-4b21-a13e-cd747d89f27f"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "Brass C360 half hard"
   Description: "Free-cutting brass rod (UNS C36000, CuZn36Pb3), half hard: fittings, turned parts."
   ReferenceSource: "CDA / ASM typical (C36000 free-cutting brass, H02)"
   SourceURL: "https://alloys.copper.org/alloy/C36000"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Metals"
 Models:
   LinearElastic:

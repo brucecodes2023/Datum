@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "5dab282d-d097-4a54-9c98-f86ccf188c62"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "UHMW-PE"
   Description: "Ultra-high molecular weight polyethylene (TIVAR 1000): wear strips, guides, low friction. Creeps under load."
   ReferenceSource: "Mitsubishi Chemical TIVAR 1000 (ISO 527); tensile strength at break from ASTM D638 sheet"
   SourceURL: "https://www.polymershapes.com/wp-content/uploads/2020/09/Material_Data_TIVAR_1000_UHMW-PE.pdf"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Plastics"
 Models:
   LinearElastic:

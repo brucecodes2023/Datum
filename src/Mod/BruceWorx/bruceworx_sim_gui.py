@@ -169,7 +169,7 @@ def band_colors(nodes, factors, bands):
 
 
 def _brittle(uuid):
-    """True for a Keystone card marked brittle (acrylic, CFRP, G10: the materials agent's BruceWorx block)."""
+    """True for a Vector Labs card marked brittle (acrylic, CFRP, G10: the materials agent's BruceWorx block)."""
     try:
         import bruceworx_materials
 
@@ -2379,7 +2379,7 @@ def _make_classes():
             f3.addRow("Mesh size: diagonal /", self.divisor)
             row = QtWidgets.QHBoxLayout()
             self.tex = QtWidgets.QLineEdit()
-            self.tex.setPlaceholderText("automatic: Tectonic in Keystone, else latexmk or pdflatex")
+            self.tex.setPlaceholderText("automatic: Tectonic in Vector Labs, else latexmk or pdflatex")
             row.addWidget(self.tex, 1)
             row.addWidget(button("…", self.browse_tex, "Pick a tectonic, latexmk or pdflatex binary"))
             f3.addRow("TeX compiler", row)

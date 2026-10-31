@@ -10,13 +10,13 @@ versions are single objects, so the project is packed into one archive per versi
         keystone-part.json               the part's properties (description, manufacturer, ...)
         thumbnails/Thumbnail.png         KiCad's iso render: the vault thumbnail (the Data
                                          panel reads it from the archive like an .FCStd's)
-        .keystone/<P/N>.FCStd            the board in 3D, made by Keystone from the .kicad_pcb
+        .keystone/<P/N>.FCStd            the board in 3D, made by Vector Labs from the .kicad_pcb
                                          (derived, never checked in, remade when it changes)
         .keystone/<P/N>-light.FCStd      the light model: board and components, no copper or
                                          print layers (for large assemblies; 31 Oct)
 
 The item is an ordinary item (type ``cots`` by default, the Standard Libraries' bought and
-library parts), so journals stay readable by every Keystone; what makes it a KiCad item is its
+library parts), so journals stay readable by every Vector Labs; what makes it a KiCad item is its
 file: a version whose name ends in ``.kicad.zip`` (:func:`is_ecad`). pdm_workspace.Workspace
 treats such an item's work copy as this folder: check-out makes the files writable, check-in
 packs them (:func:`pack`) after refreshing the thumbnail (:func:`prepare_checkin`), Get Latest
@@ -31,7 +31,7 @@ what KiCad writes on its own (``*-backups/``, ``fp-info-cache``, ``*.lck``, ``.h
 ``.keystone/``.
 
 :func:`import_project` makes a new item from a KiCad project folder (``bw-hooks vault
-kicad-import``, Keystone's Import KiCad Project as Standard Part...); :func:`update_project`
+kicad-import``, Vector Labs' Import KiCad Project as Standard Part...); :func:`update_project`
 checks a newer copy of the project in as the next version (``vault kicad-update``);
 :func:`launch` opens a project, schematic or board in KiCad. FreeCAD-free.
 """
@@ -359,7 +359,7 @@ LIGHT_SUFFIX = "-light"
 
 
 def derived_path(folder: str, part_number: str, light: bool = False) -> str:
-    """Where Keystone keeps the board in 3D for this work copy (the full or the light model)."""
+    """Where Vector Labs keeps the board in 3D for this work copy (the full or the light model)."""
     return os.path.join(folder, DERIVED_DIR, part_number + (LIGHT_SUFFIX if light else "") + ".FCStd")
 
 

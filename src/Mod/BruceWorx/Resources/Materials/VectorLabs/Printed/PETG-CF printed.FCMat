@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "23d6c827-c09d-4e35-958b-f60ecb5bc41e"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "PETG-CF printed"
   Description: "Printed carbon-fibre PETG (Bambu PETG-CF), dried: stiffer and stronger in X-Y than PETG Basic, about the same in Z. Absorbs little moisture. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 38 MPa, modulus 1340 MPa, elongation 4.7 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (PETG-CF, V1.0)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PETG-CF_Technical_Data_Sheet.pdf"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Printed"
 Models:
   LinearElastic:

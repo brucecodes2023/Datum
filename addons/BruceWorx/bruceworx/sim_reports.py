@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """A vault item's simulation study reports, offered as release attachments (SIM-01 / PDM-05; 30 Oct 2026).
 
-Keystone's Simulation workspace writes a study's report beside the document as
+Vector Labs' Simulation workspace writes a study's report beside the document as
 ``<document>_<study>_report.pdf`` (bruceworx_sim.report_paths). For a vault file the document is the
 item's work copy ``<workspace>/<part number>.FCStd``, so its reports are ``<part number>_*_report.pdf``
 in the workspace folder. Approve and Release ECO (bruceworx_changes, and ``vault approve

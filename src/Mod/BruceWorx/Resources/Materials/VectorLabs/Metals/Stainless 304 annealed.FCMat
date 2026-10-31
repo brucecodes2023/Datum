@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "2f8225ce-a970-43f5-8220-98c32f6277a7"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "Stainless 304 annealed"
   Description: "Austenitic 18-8 stainless (UNS S30400, EN 1.4301), annealed: CNC bar and laser-cut sheet. Cold work raises the yield a lot; bent flanges are stronger than this."
   ReferenceSource: "ASTM A240 (sheet, plate) and A276 (bar) minimums; ASM/MatWeb elastic and thermal values"
   SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=mq304a"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Metals"
 Models:
   LinearElastic:

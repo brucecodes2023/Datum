@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "a219f075-45f7-4963-8f78-123d102e03b3"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "Carbon fibre plate QI"
   Description: "APPROXIMATE. Carbon/epoxy plate (drone frames) treated as in-plane isotropic. Woven 0/90 plate is anisotropic: along the fibres about E 60-70 GPa, 600 MPa; at 45 degrees about E 18 GPa, 150-200 MPa. Through-thickness and interlaminar strength are far lower. Use a large safety factor."
   ReferenceSource: "Approximate quasi-isotropic T300-class carbon/epoxy laminate (handbook values, e.g. Performance Composites, Toray T300 data)"
   SourceURL: "https://www.performance-composites.com/carbonfibre/mechanicalproperties_2.asp"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Composites"
 Models:
   LinearElastic:

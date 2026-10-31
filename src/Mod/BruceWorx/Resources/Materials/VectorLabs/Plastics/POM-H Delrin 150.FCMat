@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "aa3ad6d8-8b66-47a7-b6bd-cbe012cbf747"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "POM-H Delrin 150"
   Description: "Acetal homopolymer (POM-H, Delrin 150 extrusion grade); stiffer and stronger than POM-C."
   ReferenceSource: "DuPont Delrin 150 NC010 product data (ISO 527)"
   SourceURL: "https://plastics.tridentplastics.com/Asset/TDS_Delrin_150_NC010_(E_71946).pdf"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Plastics"
 Models:
   LinearElastic:

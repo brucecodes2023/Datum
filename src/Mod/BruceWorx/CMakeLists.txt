@@ -215,52 +215,52 @@ INSTALL(
     FILES_MATCHING PATTERN "*.FCMat"
 )
 
-# [BW] The Keystone material library (SIM-01): engineering cards with yield strengths,
-# registered as the read-only library "Keystone" by Init.py (bruceworx_materials.py).
-SET(BruceWorx_Keystone_Materials
-    "Resources/Materials/Keystone/Composites/Carbon fibre plate QI.FCMat"
-    "Resources/Materials/Keystone/Composites/G10-FR4 laminate.FCMat"
-    "Resources/Materials/Keystone/Metals/Aluminium 5052-H32.FCMat"
-    "Resources/Materials/Keystone/Metals/Aluminium 6061-T6.FCMat"
-    "Resources/Materials/Keystone/Metals/Aluminium 7075-T6.FCMat"
-    "Resources/Materials/Keystone/Metals/Brass C360 half hard.FCMat"
-    "Resources/Materials/Keystone/Metals/Stainless 304 annealed.FCMat"
-    "Resources/Materials/Keystone/Metals/Stainless 316 annealed.FCMat"
-    "Resources/Materials/Keystone/Metals/Stainless 17-4PH H1150.FCMat"
-    "Resources/Materials/Keystone/Metals/Steel 1018 cold drawn.FCMat"
-    "Resources/Materials/Keystone/Metals/Steel 1045 cold drawn.FCMat"
-    "Resources/Materials/Keystone/Metals/Steel 4140 annealed.FCMat"
-    "Resources/Materials/Keystone/Metals/Steel 4140 pre-hardened.FCMat"
-    "Resources/Materials/Keystone/Metals/Steel A36 structural.FCMat"
-    "Resources/Materials/Keystone/Metals/Steel mild CR sheet.FCMat"
-    "Resources/Materials/Keystone/Metals/Titanium Ti-6Al-4V annealed.FCMat"
-    "Resources/Materials/Keystone/Plastics/Acrylic PMMA cast.FCMat"
-    "Resources/Materials/Keystone/Plastics/PA6 extruded dry.FCMat"
-    "Resources/Materials/Keystone/Plastics/PC sheet.FCMat"
-    "Resources/Materials/Keystone/Plastics/POM-C acetal copolymer.FCMat"
-    "Resources/Materials/Keystone/Plastics/POM-H Delrin 150.FCMat"
-    "Resources/Materials/Keystone/Plastics/UHMW-PE.FCMat"
-    "Resources/Materials/Keystone/Printed/ABS printed.FCMat"
-    "Resources/Materials/Keystone/Printed/ASA-CF printed.FCMat"
-    "Resources/Materials/Keystone/Printed/ASA printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PA12-CF printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PA6-CF printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PC printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PETG HF printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PETG-CF printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PETG printed.FCMat"
-    "Resources/Materials/Keystone/Printed/PLA printed.FCMat"
-    "Resources/Materials/Keystone/Printed/TPU 95A printed.FCMat"
+# [BW] The Vector Labs material library (SIM-01): engineering cards with yield strengths,
+# registered as the read-only library "Vector Labs" by Init.py (bruceworx_materials.py).
+SET(BruceWorx_VectorLabs_Materials
+    "Resources/Materials/VectorLabs/Composites/Carbon fibre plate QI.FCMat"
+    "Resources/Materials/VectorLabs/Composites/G10-FR4 laminate.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Aluminium 5052-H32.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Aluminium 6061-T6.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Aluminium 7075-T6.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Brass C360 half hard.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Stainless 304 annealed.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Stainless 316 annealed.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Stainless 17-4PH H1150.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Steel 1018 cold drawn.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Steel 1045 cold drawn.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Steel 4140 annealed.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Steel 4140 pre-hardened.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Steel A36 structural.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Steel mild CR sheet.FCMat"
+    "Resources/Materials/VectorLabs/Metals/Titanium Ti-6Al-4V annealed.FCMat"
+    "Resources/Materials/VectorLabs/Plastics/Acrylic PMMA cast.FCMat"
+    "Resources/Materials/VectorLabs/Plastics/PA6 extruded dry.FCMat"
+    "Resources/Materials/VectorLabs/Plastics/PC sheet.FCMat"
+    "Resources/Materials/VectorLabs/Plastics/POM-C acetal copolymer.FCMat"
+    "Resources/Materials/VectorLabs/Plastics/POM-H Delrin 150.FCMat"
+    "Resources/Materials/VectorLabs/Plastics/UHMW-PE.FCMat"
+    "Resources/Materials/VectorLabs/Printed/ABS printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/ASA-CF printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/ASA printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PA12-CF printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PA6-CF printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PC printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PETG HF printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PETG-CF printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PETG printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/PLA printed.FCMat"
+    "Resources/Materials/VectorLabs/Printed/TPU 95A printed.FCMat"
 )
-ADD_CUSTOM_TARGET(BruceWorxKeystoneMaterials ALL
-    SOURCES ${BruceWorx_Keystone_Materials}
+ADD_CUSTOM_TARGET(BruceWorxVectorLabsMaterials ALL
+    SOURCES ${BruceWorx_VectorLabs_Materials}
 )
-fc_target_copy_resource(BruceWorxKeystoneMaterials
+fc_target_copy_resource(BruceWorxVectorLabsMaterials
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_BINARY_DIR}/Mod/BruceWorx
-    ${BruceWorx_Keystone_Materials})
+    ${BruceWorx_VectorLabs_Materials})
 INSTALL(
-    DIRECTORY Resources/Materials/Keystone
+    DIRECTORY Resources/Materials/VectorLabs
     DESTINATION Mod/BruceWorx/Resources/Materials
     FILES_MATCHING PATTERN "*.FCMat"
 )

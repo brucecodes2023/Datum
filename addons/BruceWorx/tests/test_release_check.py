@@ -207,7 +207,7 @@ class DrawingCurrentTests(Base):
 
 
 class InterferenceTests(Base):
-    """Line 7 (ASM-06): the interference check's clashes, a warning that never blocks; only in Keystone."""
+    """Line 7 (ASM-06): the interference check's clashes, a warning that never blocks; only in Vector Labs."""
 
     def fake_check(self, summary):
         import types
@@ -224,7 +224,7 @@ class InterferenceTests(Base):
         self.addCleanup(sys.modules.pop, "bruceworx_interference", None)
         return module
 
-    def test_skipped_for_parts_and_outside_keystone(self):
+    def test_skipped_for_parts_and_outside_vectorlabs(self):
         self.add(PART)
         self.assertEqual((self.lines(PART)[rc.INTERFERENCE].skipped, self.lines(PART)[rc.INTERFERENCE].kind),
                          (True, rc.WARN))
@@ -232,7 +232,7 @@ class InterferenceTests(Base):
         sys.modules.pop("bruceworx_interference", None)
         line = self.lines(ASM)[rc.INTERFERENCE]
         self.assertTrue(line.skipped)
-        self.assertIn("Keystone", line.detail)
+        self.assertIn("Vector Labs", line.detail)
 
     def test_clashes_warn_and_never_block(self):
         self.add(ASM, "assembly")

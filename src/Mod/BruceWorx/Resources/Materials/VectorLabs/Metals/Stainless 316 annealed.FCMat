@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "37956f74-f181-45ac-a492-22fb6af07382"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "Stainless 316 annealed"
   Description: "Molybdenum austenitic stainless (UNS S31600, EN 1.4401), annealed; marine and chemical parts."
   ReferenceSource: "ASTM A240 (sheet, plate) and A276 (bar) minimums; ASM/MatWeb elastic and thermal values"
   SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=mq316q"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Metals"
 Models:
   LinearElastic:

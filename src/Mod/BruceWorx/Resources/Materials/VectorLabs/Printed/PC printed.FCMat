@@ -1,15 +1,15 @@
-# Keystone material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "8141dd8d-acbd-4658-94c3-e4891a30b1cd"
-  Author: "BruceWorx (Keystone)"
+  Author: "BruceWorx (Vector Labs)"
   License: "LGPL-2.1-or-later"
   Name: "PC printed"
   Description: "Printed polycarbonate (Bambu PC): heat resistant (HDT 117 C). Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 56 MPa, modulus 1450 MPa, elongation 2.1 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (PC)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PC_Technical_Data_Sheet.pdf"
   Tags:
-    - "Keystone"
+    - "Vector Labs"
     - "Printed"
 Models:
   LinearElastic:

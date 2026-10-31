@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""The Keystone material library (SIM-01): engineering materials with yield strengths.
+"""The Vector Labs material library (SIM-01): engineering materials with yield strengths.
 
-The cards live in ``Resources/Materials/Keystone/{Metals,Plastics,Printed,Composites}``
+The cards live in ``Resources/Materials/VectorLabs/{Metals,Plastics,Printed,Composites}``
 next to this module and are registered with FreeCAD's Material module as a
-read-only workbench library named ``Keystone`` (Init.py, so headless too).
+read-only workbench library named ``Vector Labs`` (Init.py, so headless too).
 Every card has density, E, nu, yield and UTS (LinearElastic), k, cp and alpha
 (Thermal) and a colour (BasicRendering). A top-level ``BruceWorx:`` block,
 which FreeCAD ignores, records the strength basis (typical or minimum), the
@@ -21,9 +21,9 @@ import os
 
 import FreeCAD as App
 
-LIBRARY_NAME = "Keystone"
+LIBRARY_NAME = "Vector Labs"
 HERE = os.path.dirname(os.path.abspath(__file__))
-LIBRARY_DIR = os.path.join(HERE, "Resources", "Materials", "Keystone")
+LIBRARY_DIR = os.path.join(HERE, "Resources", "Materials", "VectorLabs")
 MODULES_PARAM = "User parameter:BaseApp/Preferences/Mod/Material/Resources/Modules"
 
 # UUID -> card file (relative to LIBRARY_DIR). Permanent; TestBruceWorxMaterials checks the folder against it.
@@ -66,13 +66,31 @@ CARDS = {
 FAMILIES = ("Metals", "Plastics", "Printed", "Composites")
 
 
+OLD_LIBRARY_NAME = "Keystone"  # the library's name before the Vector Labs rename (31 Oct)
+
+
+def _drop_old_registration():
+    """Remove the "Keystone" registration an older profile holds (it would list the same cards twice,
+    or point at a folder that no longer exists). Only when its ModuleDir is this workbench's own
+    Materials/Vector Labs or Materials/VectorLabs folder, never a library the user added by that name."""
+    modules = App.ParamGet(MODULES_PARAM)
+    if OLD_LIBRARY_NAME not in modules.GetGroups():
+        return
+    old_dir = modules.GetGroup(OLD_LIBRARY_NAME).GetString("ModuleDir", "")
+    tail = os.path.normpath(old_dir).replace(os.sep, "/")
+    if (not old_dir or tail.endswith("Resources/Materials/Keystone")
+            or tail.endswith("Resources/Materials/VectorLabs") or not os.path.isdir(old_dir)):
+        modules.RemGroup(OLD_LIBRARY_NAME)
+
+
 def register_library():
-    """Make LIBRARY_DIR the read-only material library "Keystone" (the Material
+    """Make LIBRARY_DIR the read-only material library "Vector Labs" (the Material
     module reads Resources/Modules/<name>/ModuleDir). Rewritten on every start,
     so it follows the build or install folder. A MaterialManager made earlier
     needs ``refresh()``."""
     if not os.path.isdir(LIBRARY_DIR):
         return False
+    _drop_old_registration()
     group = App.ParamGet(f"{MODULES_PARAM}/{LIBRARY_NAME}")
     if group.GetString("ModuleDir", "") != LIBRARY_DIR:
         group.SetString("ModuleDir", LIBRARY_DIR)
@@ -85,7 +103,7 @@ def register_library():
 
 
 def manager():
-    """A Materials.MaterialManager that lists the Keystone library."""
+    """A Materials.MaterialManager that lists the Vector Labs library."""
     import Materials
 
     mm = Materials.MaterialManager()
@@ -106,7 +124,7 @@ def _uuid_for(key):
 
 
 def material(key):
-    """The Materials.Material for a Keystone UUID or card name (the file name
+    """The Materials.Material for a Vector Labs UUID or card name (the file name
     FreeCAD shows, case-insensitive); None when there is no such card."""
     uuid = _uuid_for(key)
     if uuid is None:
@@ -147,7 +165,7 @@ _HDT_CACHE = {}
 
 def hdt_of(uuid):
     """The heat deflection temperature (deg C) a plastic or printed card records, or None (metals,
-    composites and TPU have none). The Keystone cards give the value at the heavier load (1.8 MPa)."""
+    composites and TPU have none). The Vector Labs cards give the value at the heavier load (1.8 MPa)."""
     if uuid not in CARDS:
         return None
     if uuid not in _HDT_CACHE:
@@ -163,7 +181,7 @@ def _leading_number(text):
 
 
 def values(mat):
-    """The engineering values of a Keystone Materials.Material as a dict:
+    """The engineering values of a Vector Labs Materials.Material as a dict:
     density kg/m^3, E/G/yield/uts MPa, nu, elongation %, k W/m/K, cp J/kg/K,
     alpha 1/K, hdt (heat deflection temperature, deg C, plastics and printed), plus basis, brittle, source and (printed) z_strength MPa."""
 
@@ -202,20 +220,20 @@ def values(mat):
 
 
 def card(key):
-    """values() of a Keystone card by UUID or name; None when there is none."""
+    """values() of a Vector Labs card by UUID or name; None when there is none."""
     mat = material(key)
     return values(mat) if mat is not None else None
 
 
 def cards():
-    """values() of every Keystone card, by family (Metals, Plastics, Printed, Composites) then name."""
+    """values() of every Vector Labs card, by family (Metals, Plastics, Printed, Composites) then name."""
     mm = manager()
     found = []
     for uuid in CARDS:
         try:
             found.append(values(mm.getMaterial(uuid)))
         except Exception as exc:
-            App.Console.PrintWarning(f"Keystone material {CARDS[uuid]} did not load: {exc}\n")
+            App.Console.PrintWarning(f"Vector Labs material {CARDS[uuid]} did not load: {exc}\n")
     order = {name: i for i, name in enumerate(FAMILIES)}
     found.sort(key=lambda v: (order.get(v["family"], len(order)), v["name"].lower()))
     return found
