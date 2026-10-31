@@ -1,0 +1,148 @@
+%======================================================================
+\subsection{BW-SIM-05 plan: validation against open data (31 Oct 2026)}\label{sec:sim-validation-plan}
+%======================================================================
+
+You asked for the simulation to be validated against open-source data. So far every check compares the solver
+with a closed-form answer: the cantilever, the Euler column, the fin and lumped cooling, and for CFD the pipe,
+the sphere correlation and momentum theory. Those checks show the equations are solved right
+(\emph{verification}). They do not show that the model behaves like the real part (\emph{validation}), and
+they cover only simple shapes. This plan adds three tiers:
+\begin{description}[nosep,font=\normalfont\bfseries]
+  \item[V --- verification.] Closed-form checks, as now. They run on every build.
+  \item[B --- benchmarks.] Published reference solutions for 3D solids from other codes and standards bodies:
+        NAFEMS, and the Code\_Aster validation manuals. These test the mesh, the element and the
+        post-processing on shapes where the answer is not obvious.
+  \item[E --- experiments.] Measured data: wind-tunnel airfoil data for CFD, printed-specimen tests for
+        materials, and (question V5) tests on your own parts.
+\end{description}
+A Sonnet research agent searched the open sources. Each value below was read in the source unless the
+\emph{Status} column says otherwise. No value was taken from memory.
+
+\paragraph{Sources and licences.}
+\begin{itemize}[nosep]
+  \item \textbf{Code\_Aster validation manuals (V-docs).} GNU Free Documentation Licence, stated in each PDF.
+        Their values can be stored with a citation. The official URLs now return 404; the copies used are from a
+        university mirror (v14.4).
+  \item \textbf{NAFEMS benchmarks.} The documents are paid. The reference values are reproduced in open vendor
+        verification manuals (ANSYS VMC5, Altair) and online pages. We store only the numbers with a citation.
+  \item \textbf{NASA Turbulence Modeling Resource (TMR)} and the \textbf{UIUC propeller database.} They state no
+        reuse terms, so their data files are downloaded at test time and cached, not stored in the repo.
+  \item \textbf{CalculiX's own test suite.} Its reference files are CalculiX's own output: regression data, not
+        validation. It is mostly beams, shells and 2D, so it is not used here.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{The proposed set}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}Xl>{\raggedright\arraybackslash}p{2.6cm}@{}}
+\toprule
+Case & Setup and reference & Tol. & Status\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Static stress}}\\
+B-ST1 & NAFEMS LE10 thick elliptic plate, 1\,MPa pressure: $\sigma_{yy}$ at point D $(2,0,0.6)$\,m
+  $=5.38$\,MPa in magnitude (compressive in NAFEMS's sign convention) & 3\,\% & value seen; sign to fix in setup\\
+B-ST2 & Code\_Aster SSLV07, prism under its own weight: $\sigma_{zz}=\rho g z$, displacements closed form & 1\,\% &
+  formula seen; table not extracted\\
+B-ST3 & Code\_Aster SSLV301, cantilever cylinder: radial displacement at C $=-1.552\times10^{-3}$\,m,
+  $\sigma_{zz}$ at B $=169.8$\,MPa (Timoshenko) & 2\,\% & seen; built as a 3D solid\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Modal}}\\
+B-MO1 & NAFEMS FV52 square plate $10\times10\times1$\,m, $E=200$\,GPa, $\nu=0.3$, $\rho=8000$, bottom edges
+  $u_z=0$: modes 4--10 $=45.897$, 109.44 (×2), 167.89, 193.59, 206.19 (×2)\,Hz & 2\,\% & two manuals agree\\
+B-MO2 & Code\_Aster SDLV401 free sphere $R=10$\,mm: 2470.35 (×2), 2471.01 (×3), 2612.96 (×2),
+  2614.30 (×3)\,Hz (reference from another FE code, SAMCEF) & 2\,\% & seen\\
+B-MO3 & Code\_Aster SDLV100 tapered beam: $f_{1..3}=56.84$, 180.0, 401.0\,Hz & 3\,\% & seen; modes 4--5 not\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Buckling}}\\
+B-BU1 & Code\_Aster SSLV139 circular plate, analytic $F_{cr}$, re-derived for a thicker plate that suits tets & 3\,\% &
+  formula seen\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Thermal, steady and transient}}\\
+B-TH1 & Code\_Aster TPLV06 hollow sphere $R_i=1$, $R_e=2$\,m, $\dot q=100$\,W/m$^3$, $k=1$, both faces
+  20\,$^\circ$C: $T=30.625$, 32.500, 28.482\,$^\circ$C at $r=1.25$, 1.50, 1.75\,m & 1\,\% & seen; re-derived here\\
+B-TH2 & Code\_Aster TPLV304 square bar: end temperature 20.329\,$^\circ$C & 1\,\% & seen\\
+B-TT1 & Code\_Aster TTLV01 sphere cooled by convection: centre and surface temperature at 11 times from 400 to
+  2400\,s (e.g.\ 334/461\,$^\circ$C at 400\,s) & 3\,\% & seen; confirm whether $D=0.2$\,m is the diameter\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Materials (for \eref{SIM-03})}}\\
+E-MA1 & PLA tensile strength by print orientation (Eryildiz 2021, doi 10.26701/ems.881254): flat 0° 55.49,
+  45° 53.47, 90° 51.77, on edge 48.18, upright 35.52\,MPa & --- & seen; a check on the orientation
+  knock-down, not on the solver\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{CFD (\eref{SIM-06})}}\\
+B-CF1 & TMR zero-pressure-gradient flat plate: skin friction $C_f$ against the Kármán--Schoenherr correlation
+  (about 0.00263 at $Re_\theta=10^4$) & 5\,\% & data files saved\\
+E-CF2 & TMR NACA~0012, $Re=6\times10^6$, Ladson's tripped wind-tunnel data: $C_l=0.4316$, $C_d=0.00823$ at
+  $\alpha=4.04^\circ$; $C_l=1.0707$, $C_d=0.01201$ at $10.12^\circ$; Gregory's $C_p$ & $C_l$ 5\,\%, $C_d$ 15\,\% &
+  data files saved\\
+E-CF3 & Ahmed body (Ahmed and Ramm), $C_d=0.2875$; 4--10\,M cells & 10\,\% & second-hand only; on demand\\
+B-CF4 & UIUC propeller static $C_T$, $C_P$ (e.g.\ APC-class 8.5×6 at 2489\,rpm: $C_T=0.1046$): checks that the
+  disk thrust and the induced velocity agree with momentum theory, not the blades & 5\,\% & seen\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The check of B-TH1 is
+$T(r)=-\frac{\dot q r^2}{6k}+\frac{A}{r}+B$ with $T(1)=T(2)=20$, which gives $A=-100$ and $B=136.67$, and so
+$T(1.5)=32.5\,^\circ$C. This agrees with the manual.
+
+\paragraph{Gaps the search could not fill.} No open numeric reference was verified for:
+\begin{itemize}[nosep]
+  \item one-way thermal stress;
+  \item nonlinear buckling;
+  \item prestressed or constrained modal (Code\_Aster SSLV104/105 are candidates, but the values were not
+        extracted);
+  \item open per-specimen data from printed tests;
+  \item open modal-test data for beams or plates;
+  \item tabulated sphere and cylinder drag;
+  \item heated-block forced convection (Young and Vafai is behind a paywall).
+\end{itemize}
+The cheap fix is more closed forms, which is question V2:
+\begin{itemize}[nosep]
+  \item a thick cylinder with a radial temperature difference (Timoshenko's closed form) for thermal stress;
+  \item a beam under axial tension, whose frequencies rise as $\omega_n^2=\omega_{n,0}^2(1+PL^2/(n^2\pi^2EI))$
+        for simple supports, for prestressed modal;
+  \item a column with an initial bow (Southwell plot) for nonlinear buckling.
+\end{itemize}
+The real fix for the drone is measured data from your own parts (V5).
+
+%----------------------------------------------------------------------
+\subsubsection*{How it runs}
+
+\begin{itemize}[nosep]
+  \item Each case is an entry in \file{tests/validation/cases.json} with the geometry script, the loads, the reference
+        values, the tolerance, the source and the licence. A Python script builds the model, so nothing binary
+        is stored.
+  \item \textbf{Fast set} (V and B on coarse meshes, a few minutes in all): runs with the other tests on every build.
+        \textbf{Slow set} (finer meshes, the NACA~0012, the Ahmed body): run on demand.
+  \item \textbf{Validation report.} The command \emph{Simulation~$\rightarrow$ Validation} runs a set and writes a
+        \LaTeX{} report: one row per case with the reference, the result, the error and a pass mark, plus the
+        mesh-convergence plot for each benchmark. Re-running it after a CalculiX or OpenFOAM update shows at once
+        whether anything moved.
+\end{itemize}
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=V\arabic*.]
+  \item \textbf{The set.} The cases in the table, with B-ST2 and B-MO3 completed from their manuals and B-TT1's
+        diameter confirmed before use? \emph{Recommendation:} yes.
+  \item \textbf{Gaps.} Fill the missing classes with the closed forms above (thick cylinder, beam under tension,
+        bowed column)? \emph{Recommendation:} yes.
+  \item \textbf{Storing data.} Code\_Aster values stored with a citation (their licence is GNU FDL); NAFEMS
+        numbers stored with a citation only; TMR and UIUC files downloaded at test time and cached?
+        \emph{Recommendation:} yes.
+  \item \textbf{When it runs.} The fast set with every build, the slow set on demand, the report from a
+        \emph{Validation} command? \emph{Recommendation:} yes.
+  \item \textbf{Your own tests.} The most useful validation for SP-01 is a test on your own printed parts. Each
+        needs only weights, a ruler, a phone and a thermocouple: a printed PETG cantilever loaded with weights
+        (deflection), a tap test recorded with a phone (first frequency), and an ESC on its mount with a
+        thermocouple (temperature after 5\,min). Vector Labs would store each measurement next to the study and
+        show model against test in the report. \emph{Recommendation:} yes, as the third step, after the fast
+        set.
+  \item \textbf{Ahmed body.} 4--10\,M cells is hours on this Mac. Keep it on demand only, or leave it out?
+        \emph{Recommendation:} on demand only.
+  \item \textbf{Tolerances.} As in the table: 1--3\,\% for benchmarks, 3\,\% for transient, 5\,\% for $C_l$
+        and 15\,\% for $C_d$, since drag is the hardest quantity for RANS to get right.
+        \emph{Recommendation:} yes.
+\end{enumerate}
