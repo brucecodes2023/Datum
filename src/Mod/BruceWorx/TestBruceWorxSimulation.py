@@ -66,13 +66,11 @@ class TestSimulationGui(unittest.TestCase):
         panel = self.sg.classes()["NewStudyPanel"](self.doc)
         self.assertEqual(len(panel.form), 4)
         self.assertEqual([panel.model_combo.itemData(i) for i in range(panel.model_combo.count())], ["Box"])
-        # modal and buckling are available; thermal and thermal stress are listed as planned and disabled
+        # all five types are available
         texts = [panel.type_combo.itemText(i) for i in range(panel.type_combo.count())]
-        self.assertEqual(texts[:3], ["Static stress", "Modal frequencies", "Structural buckling"])
-        self.assertTrue(all("(planned)" in t for t in texts[3:]))
-        self.assertTrue(panel.type_combo.model().item(1).isEnabled())
-        self.assertFalse(panel.type_combo.model().item(3).isEnabled())
-        self.assertTrue(panel.modal_box.isHidden() and panel.buckling_box.isHidden())
+        self.assertEqual(texts, ["Static stress", "Modal frequencies", "Structural buckling", "Thermal", "Thermal stress"])
+        self.assertTrue(all(panel.type_combo.model().item(i).isEnabled() for i in range(5)))
+        self.assertTrue(panel.modal_box.isHidden() and panel.buckling_box.isHidden() and panel.thermal_box.isHidden())
         # a part without a material warns and the mesh size is the default
         self.assertIn("no material", panel.material_warn.text())
         self.assertAlmostEqual(panel.size_spin.value(), sim.default_mesh_size(self.box), places=3)
@@ -414,6 +412,95 @@ class TestSimulationGui(unittest.TestCase):
             self.assertTrue(self.sg.wait_for_report(600))
             self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
         panel.release()
+
+    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Keystone PETG printed, heat deflection temperature 65 C
+
+    def test_new_thermal_studies_from_the_panel(self):
+        panel = self.sg.classes()["NewStudyPanel"](self.doc)
+        panel.type_combo.setCurrentIndex(panel.type_combo.findData("thermal"))
+        self.assertFalse(panel.thermal_box.isHidden())
+        self.assertFalse(panel.transient_check.isHidden())
+        self.assertFalse(panel.end_spin.isEnabled())
+        panel.transient_check.setChecked(True)
+        self.assertTrue(panel.end_spin.isEnabled())
+        panel.end_spin.setValue(300.0)
+        panel.step_spin.setValue(5.0)
+        panel.initial_spin.setValue(25.0)
+        panel.select_material(self.PETG)
+        analysis = panel.create()
+        self.assertEqual(analysis.StudyType, "thermal")
+        self.assertEqual((analysis.Transient, analysis.EndTime, analysis.TimeStep, analysis.InitialTemperature),
+                         (True, 300.0, 5.0, 25.0))
+        panel.release()
+        panel = self.sg.classes()["NewStudyPanel"](self.doc)
+        panel.type_combo.setCurrentIndex(panel.type_combo.findData("thermal_stress"))
+        self.assertTrue(panel.transient_check.isHidden())
+        self.assertFalse(panel.reference_spin.isHidden())
+        self.assertFalse(panel.measure_combo.isHidden())
+        panel.reference_spin.setValue(22.0)
+        stress = panel.create()
+        self.assertEqual((stress.StudyType, stress.ReferenceTemperature), ("thermal_stress", 22.0))
+        panel.release()
+        study = self.sg.classes()["StudyPanel"](stress)
+        self.assertIn("Not solved", study.summary.text())
+        study.release()
+
+    @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+    def test_thermal_solve_bands_probe_and_report(self):
+        import bruceworx_sim_thermal as thermal
+
+        tmp = tempfile.mkdtemp(prefix="bw-simgui-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        panel = self.sg.classes()["NewStudyPanel"](self.doc)
+        panel.type_combo.setCurrentIndex(panel.type_combo.findData("thermal"))
+        panel.transient_check.setChecked(True)
+        panel.end_spin.setValue(300.0)
+        panel.step_spin.setValue(10.0)
+        panel.select_material(self.PETG)
+        analysis = panel.create()
+        panel.release()
+        study = self.sg.classes()["StudyPanel"](analysis)
+        # the setup commands (values given, so no dialog): 3 W in the body, convection from a preset on the sides
+        made = self.sg.add_thermal_object("source", analysis, values={"watts": 3.0})
+        self.assertEqual(len(made), 1)
+        made = self.sg.add_thermal_object("convection", analysis, values={"h": 25.0, "ambient_c": 20.0},
+                                          refs=[(self.box, f"Face{i}") for i in range(1, 7)])
+        self.assertEqual(len(made), 1)
+        self.assertEqual(self.sg.add_thermal_object("temperature", analysis, values={"celsius": 1.0}, refs=[]), [])
+        study.refresh()
+        self.assertIn("3 W", " ".join(study.members_list.item(i).text() for i in range(study.members_list.count())))
+        self.assertTrue(study.solve(blocking=True), study.progress.text())
+        data = thermal.stored(analysis)
+        self.assertGreater(data["tmax"], 40.0)  # 3 W into a printed PETG bar in still-ish air
+        self.assertEqual(data["limit"], 65.0)
+        text = study.summary.text()
+        self.assertIn("Time to reach the limit", text)
+        self.assertIn("Heat balance" if not data["transient"] else "Heat in", text)
+        self.assertTrue(study.time_combo.count() > 5 and not study.time_combo.isHidden())
+        for kind in ("temperature", "tempbands"):
+            self.assertTrue(study.show(kind), kind)
+            self.assertEqual(self.sg.shown_field(analysis), kind)
+        study.time_combo.setCurrentIndex(2)  # an earlier time step re-colours
+        self.assertEqual(self.sg.shown_field(analysis), "tempbands")
+        self.assertIn("65", study.legend.text())
+        # the probe moves to a clicked point without a new solve
+        reading = sim.probe(sim.latest_result(analysis), App.Vector(100, 5, 5))
+        reading["point"] = (100.0, 5.0, 5.0)
+        study._probed(reading)
+        self.assertTrue(analysis.ProbeSet)
+        self.assertLess(thermal.stored(analysis)["probe_distance"], 5.0)
+        self.assertIn("°C", self.sg.probe_text(reading))
+        files = study.report(folder=tmp)
+        for kind in ("temperature", "tempbands"):
+            self.assertTrue(os.path.isfile(os.path.join(files["dir"], f"fig_{kind}.png")), kind)
+        with open(files["tex"], encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertEqual(source.count(r"\includegraphics"), 2)
+        self.assertIn(r"\begin{axis}", source)
+        if sim.find_tex()[0]:
+            self.assertTrue(self.sg.wait_for_report(600))
+            self.assertTrue(files.get("pdf") and os.path.isfile(files["pdf"]), files.get("message"))
+        study.release()
 
     def test_simulation_preferences_page(self):
         prefs = App.ParamGet(sim.SIM_PREFS)

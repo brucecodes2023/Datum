@@ -477,7 +477,11 @@
                 "FEM_ConstraintFixed",
                 "FEM_ConstraintForce",
                 "FEM_ConstraintPressure",
-                "FEM_ConstraintDisplacement"
+                "FEM_ConstraintDisplacement",
+                "BruceWorx_SimTemperature",
+                "BruceWorx_SimHeatFlux",
+                "BruceWorx_SimHeatSource",
+                "BruceWorx_SimConvection"
               ],
               "more": [
                 "FEM_ConstraintSelfWeight",
@@ -531,6 +535,8 @@
                 "BruceWorx_ShowDisplacement",
                 "BruceWorx_ShowSafetyFactor",
                 "BruceWorx_SafetyFactorBands",
+                "BruceWorx_ShowTemperature",
+                "BruceWorx_ShowHDTBands",
                 "BruceWorx_StudyProbe",
                 "BruceWorx_ModeShapes",
                 "BruceWorx_StudyReport"

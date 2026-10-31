@@ -43,6 +43,7 @@ import time
 
 import bruceworx_sim as sim
 import bruceworx_sim_eigen as eigen
+import bruceworx_sim_thermal as thermal
 from bruceworx_slots import slot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,11 +54,18 @@ CONSTRAINT_COMMANDS = (
     ("Pressure", "FEM_ConstraintPressure"),
     ("Displacement", "FEM_ConstraintDisplacement"),
 )
+THERMAL_BUTTONS = (("Temperature", "temperature"), ("Heat flux", "flux"), ("Heat source", "source"),
+                   ("Convection", "convection"))
 RENDER_SIZE = (900, 600)
 TYPE_HINTS = {
     "static": "Static stress: linear elastic, small displacements (CalculiX).",
     "modal": "Modal frequencies: K φ = ω² M φ (CalculiX *FREQUENCY). Needs a density; no supports = free-free "
              "(the six rigid-body modes are skipped). Loads count only when Prestressed.",
+    "thermal": "Thermal: heat conduction in the part (CalculiX *HEAT TRANSFER), steady state or a warm-up over time. "
+               "Needs k (and rho, cp for a transient run) and a Temperature or Convection on a face. Temperatures are "
+               "banded against the material's heat deflection temperature.",
+    "thermal_stress": "Thermal stress, one way: the steady temperature field, then the stress it causes (alpha (T - T_ref)). "
+                      "Needs k and alpha, a Temperature or Convection, and supports.",
     "buckling": "Structural buckling: load factors λ under the study's loads (CalculiX *BUCKLE). Linear buckling is "
                 "non-conservative; the nonlinear run seeds an imperfection from mode 1.",
 }
@@ -194,6 +202,20 @@ def legend_html(kind, result=None, analysis=None):
                      f"({result.AllowableBasis})</span>")
         return (f"<b>Safety factor</b> = allowable / {sim.measure_label(measure)} stress per node; each element "
                 f"in the band of its lowest node<br>{chips}{basis}")
+    if kind == "temperature":
+        data = thermal.stored(analysis or sim.study_of(result))
+        return (f"<b>Temperature</b>, °C: blue {data.get('tmin', 0):.1f} to red {data.get('tmax', 0):.1f}" if data
+                else "<b>Temperature</b>, °C")
+    if kind == "tempbands":
+        analysis = analysis or sim.study_of(result)
+        edges, colors = thermal.bands(analysis)
+        if not edges:
+            return "No limit: the material has no heat deflection temperature"
+        names = (f"below {edges[0]:.0f} °C", f"{edges[0]:.0f} to {edges[1]:.0f} °C", f"{edges[1]:.0f} °C and above")
+        chips = "".join(f"<span style='background:{c};color:{_text_on(c)};padding:1px 6px;margin-right:4px'>&nbsp;{n}&nbsp;</span>"
+                        for c, n in zip(colors, names))
+        _limit, how = thermal.hdt_limit(analysis)
+        return (f"<b>Temperature against the limit</b> ({how}); each element in the band of its hottest node<br>{chips}")
     if kind == "stress":
         return "<b>von Mises stress</b>, MPa: blue low to red high"
     if kind == "displacement":
@@ -239,6 +261,8 @@ def show_field(analysis, kind, result=None):
     if result is None:
         _warn("No results yet: solve the study first")
         return False
+    if kind in ("temperature", "tempbands"):
+        return show_temperature(analysis, kind, result)
     nodes = list(result.NodeNumbers)
     vobj = result.Mesh.ViewObject
     _hide_for_result(analysis, result)
@@ -277,6 +301,37 @@ def show_field(analysis, kind, result=None):
             vobj.applyDisplacement(0.0)
     else:
         raise ValueError(kind)
+    _state["shown"][analysis.Name] = kind
+    try:
+        result.Document.recompute()
+    except Exception:
+        pass
+    return True
+
+
+def show_temperature(analysis, kind, result):
+    """Colours the result mesh by temperature ('temperature', smooth) or by the bands against the heat
+    deflection temperature ('tempbands': each element in the band of its hottest node)."""
+    if "TempC" not in result.PropertiesList or not len(result.TempC):
+        _warn("This result has no temperatures")
+        return False
+    nodes = list(result.NodeNumbers)
+    vobj = result.Mesh.ViewObject
+    _hide_for_result(analysis, result)
+    if kind == "temperature":
+        _color_mode(vobj, "Overall")
+        vobj.setNodeColorByScalars(nodes, list(result.TempC))
+    else:
+        edges, colors = thermal.bands(analysis)
+        if not edges:
+            _warn("The material has no heat deflection temperature: set a limit on the study to see the bands")
+            return False
+        elements = thermal.element_max_temps(result)
+        groups = {}
+        for elem, celsius in elements.items():
+            groups.setdefault(thermal.band_index_c(celsius, edges), []).append(elem)
+        vobj.ElementColor = {tuple(ids): sim.rgb(colors[i]) for i, ids in groups.items()}
+        _color_mode(vobj, "ByElement")
     _state["shown"][analysis.Name] = kind
     try:
         result.Document.recompute()
@@ -448,6 +503,7 @@ class ProbeObserver:
         reading = sim.probe(result, FreeCAD.Vector(*point[:3]))
         if reading is None:
             return
+        reading["point"] = tuple(point[:3])
         self.last = reading
         text = probe_text(reading)
         status(text, 12000)
@@ -466,10 +522,13 @@ class ProbeObserver:
 
 
 def probe_text(reading):
+    if reading.get("temperature") is not None and reading.get("von_mises") is None:
+        return f"Node {reading['node']}: {reading['temperature']:.2f} °C"
     sf = reading.get("safety_factor")
     sf_text = "–" if sf is None else ("> 100" if sf >= sim.SF_CAP else f"{sf:.3g}")
+    temp = f", {reading['temperature']:.2f} °C" if reading.get("temperature") is not None else ""
     return (f"Node {reading['node']}: von Mises {reading['von_mises']:.4g} MPa, "
-            f"displacement {reading['displacement']:.4g} mm, safety factor {sf_text}")
+            f"displacement {reading['displacement']:.4g} mm, safety factor {sf_text}{temp}")
 
 
 def start_probe(analysis, callback=None):
@@ -529,7 +588,10 @@ def render_fields(analysis, folder, size=RENDER_SIZE):
     except Exception:
         animated = None
     try:
-        for kind in ("stress", "displacement", "safety"):
+        kinds = ("stress", "displacement", "safety")
+        if thermal.is_thermal(analysis):
+            kinds = tuple(k for k, _c in thermal.figures_for(thermal.summary_part(analysis)))
+        for kind in kinds:
             if not show_field(analysis, kind, result):
                 continue
             Gui.updateGui()
@@ -543,7 +605,7 @@ def render_fields(analysis, folder, size=RENDER_SIZE):
     finally:
         if animated is not None:
             view.setAnimationEnabled(animated)
-        if before and before != "safety":
+        if before and before not in ("safety", "tempbands"):
             show_field(analysis, before, result)
     return images
 
@@ -734,6 +796,14 @@ def _make_classes():
         spin.setValue(float(value))
         return spin
 
+    def temp_spin(value, suffix, low, high, decimals):
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(low, high)
+        spin.setDecimals(decimals)
+        spin.setSuffix(suffix)
+        spin.setValue(float(value))
+        return spin
+
     def target_spin(value):
         spin = QtWidgets.QDoubleSpinBox()
         spin.setRange(0.1, 1000.0)
@@ -844,6 +914,24 @@ def _make_classes():
             self.nonlinear_check = QtWidgets.QCheckBox("Nonlinear run too (imperfection from mode 1)")
             blay.addRow("", self.nonlinear_check)
             w.layout().addWidget(self.buckling_box)
+            self.thermal_box = QtWidgets.QWidget()
+            tlay = form_layout()
+            self.thermal_box.setLayout(tlay)
+            self.transient_check = QtWidgets.QCheckBox("Transient (warm-up or cool-down over time)")
+            tlay.addRow("", self.transient_check)
+            self.end_spin = temp_spin(thermal.DEFAULT_END_TIME, " s", 0.1, 1.0e7, 1)
+            tlay.addRow("End time", self.end_spin)
+            self.step_spin = temp_spin(thermal.DEFAULT_STEP, " s", 0.001, 1.0e6, 3)
+            tlay.addRow("Time step", self.step_spin)
+            self.initial_spin = temp_spin(thermal.DEFAULT_AMBIENT, " °C", -273.0, 5000.0, 1)
+            self.initial_spin.setToolTip("The temperature the whole part starts at")
+            tlay.addRow("Initial temperature", self.initial_spin)
+            self.reference_spin = temp_spin(thermal.DEFAULT_AMBIENT, " °C", -273.0, 5000.0, 1)
+            self.reference_spin.setToolTip("Thermal stress: the stress-free temperature T_ref")
+            self.reference_label = QtWidgets.QLabel("Stress-free T_ref")
+            tlay.addRow(self.reference_label, self.reference_spin)
+            self.transient_check.toggled.connect(slot(self._type_changed))
+            w.layout().addWidget(self.thermal_box)
             self.type_hint = hint()
             w.layout().addWidget(self.type_hint)
             self.type_combo.currentIndexChanged.connect(slot(self._type_changed))
@@ -853,8 +941,14 @@ def _make_classes():
             kind = self.type_combo.currentData() or "static"
             self.modal_box.setVisible(kind == "modal")
             self.buckling_box.setVisible(kind == "buckling")
+            self.thermal_box.setVisible(kind in thermal.KINDS)
+            self.transient_check.setVisible(kind == "thermal")
+            for widget in (self.end_spin, self.step_spin):
+                widget.setEnabled(kind == "thermal" and self.transient_check.isChecked())
+            self.reference_label.setVisible(kind == "thermal_stress")
+            self.reference_spin.setVisible(kind == "thermal_stress")
             for widget in (self.measure_label, self.measure_combo):
-                widget.setVisible(kind == "static")
+                widget.setVisible(kind in ("static", "thermal_stress"))
             self.type_hint.setText(TYPE_HINTS.get(kind, ""))
 
         def options(self):
@@ -866,6 +960,12 @@ def _make_classes():
             if kind == "buckling":
                 return {"ModeCount": self.buckling_count.value(), "TargetLoadFactor": self.target_spin.value(),
                         "Nonlinear": self.nonlinear_check.isChecked()}
+            if kind == "thermal":
+                return {"Transient": self.transient_check.isChecked(), "EndTime": self.end_spin.value(),
+                        "TimeStep": self.step_spin.value(), "InitialTemperature": self.initial_spin.value()}
+            if kind == "thermal_stress":
+                return {"InitialTemperature": self.reference_spin.value(),
+                        "ReferenceTemperature": self.reference_spin.value()}
             return {}
 
         def _build_model(self):
@@ -1047,7 +1147,10 @@ def _make_classes():
             self.kind = sim.study_kind(analysis)
             self.player = ModePlayer()
             eigen.ensure_properties(analysis)
-            results = self._build_results() if self.kind == "static" else self._build_modes()
+            if thermal.is_thermal(analysis):
+                thermal.ensure_properties(analysis)
+            results = (self._build_results() if self.kind == "static" else
+                       self._build_thermal() if self.kind in thermal.KINDS else self._build_modes())
             self.form = [self._build_setup(), self._build_mesh(), self._build_solve(), results]
             self.refresh()
 
@@ -1060,10 +1163,18 @@ def _make_classes():
             w.layout().addWidget(self.members_list)
             row = QtWidgets.QHBoxLayout()
             row.setSpacing(4)
-            for text, command in CONSTRAINT_COMMANDS:
-                row.addWidget(button(f"+ {text}", lambda cmd=command: self.add_constraint(cmd),
-                                     f"Add a {text} constraint (the stock FEM panel; this one comes back after)"))
-            w.layout().addLayout(row)
+            if self.kind != "thermal":
+                for text, command in CONSTRAINT_COMMANDS:
+                    row.addWidget(button(f"+ {text}", lambda cmd=command: self.add_constraint(cmd),
+                                         f"Add a {text} constraint (the stock FEM panel; this one comes back after)"))
+                w.layout().addLayout(row)
+            if self.kind in thermal.KINDS:
+                row_t = QtWidgets.QHBoxLayout()
+                row_t.setSpacing(4)
+                for text, key in THERMAL_BUTTONS:
+                    row_t.addWidget(button(f"+ {text}", lambda k=key: self.add_thermal(k),
+                                           f"Add a {text.lower()} on the faces (or body) selected in the 3D view"))
+                w.layout().addLayout(row_t)
             row2 = QtWidgets.QHBoxLayout()
             row2.addWidget(button("Pre-check", self.precheck, "List what is missing before a solve"))
             row2.addStretch(1)
@@ -1100,9 +1211,186 @@ def _make_classes():
             w.layout().addLayout(row)
             if self.kind in ("modal", "buckling"):
                 w.layout().addWidget(self._build_eigen_options())
+            if self.kind in thermal.KINDS:
+                w.layout().addWidget(self._build_thermal_options())
             self.progress = hint()
             w.layout().addWidget(self.progress)
             return w
+
+        def _build_thermal_options(self):
+            """The thermal settings of the study (they apply at the next Solve)."""
+            a = self.analysis
+            box_ = QtWidgets.QWidget()
+            lay = form_layout()
+            box_.setLayout(lay)
+            self.transient_check = QtWidgets.QCheckBox("Transient")
+            self.transient_check.setChecked(bool(a.Transient))
+            self.transient_check.setVisible(self.kind == "thermal")
+            lay.addRow("", self.transient_check)
+            self.end_spin = temp_spin(a.EndTime, " s", 0.1, 1.0e7, 1)
+            self.step_spin = temp_spin(a.TimeStep, " s", 0.001, 1.0e6, 3)
+            self.initial_spin = temp_spin(a.InitialTemperature, " °C", -273.0, 5000.0, 1)
+            self.reference_spin = temp_spin(a.ReferenceTemperature, " °C", -273.0, 5000.0, 1)
+            lay.addRow("End time", self.end_spin)
+            lay.addRow("Time step", self.step_spin)
+            lay.addRow("Initial temperature", self.initial_spin)
+            if self.kind == "thermal_stress":
+                lay.addRow("Stress-free T_ref", self.reference_spin)
+            self.limit_spin = temp_spin(a.HDTLimit, " °C", 0.0, 5000.0, 1)
+            self.limit_spin.setSpecialValueText("the card's HDT")
+            self.limit_spin.setToolTip("The temperature limit the results are banded against; 0 = the material card's heat "
+                                       "deflection temperature")
+            self.margin_spin = temp_spin(a.TempMargin, " K", 0.1, 1000.0, 1)
+            self.margin_spin.setToolTip("Amber from this many kelvin below the limit")
+            lay.addRow("Limit", self.limit_spin)
+            lay.addRow("Amber within", self.margin_spin)
+            for widget in (self.end_spin, self.step_spin, self.initial_spin, self.reference_spin, self.limit_spin,
+                           self.margin_spin):
+                widget.valueChanged.connect(slot(self._thermal_options_changed))
+            self.transient_check.toggled.connect(slot(self._thermal_options_changed))
+            self._thermal_enable()
+            return box_
+
+        def _thermal_enable(self):
+            on = self.kind == "thermal" and self.transient_check.isChecked()
+            self.end_spin.setEnabled(on)
+            self.step_spin.setEnabled(on)
+
+        def _thermal_options_changed(self, *_a):
+            a = self.analysis
+            a.Transient = self.transient_check.isChecked() and self.kind == "thermal"
+            a.EndTime, a.TimeStep = self.end_spin.value(), self.step_spin.value()
+            a.InitialTemperature, a.ReferenceTemperature = self.initial_spin.value(), self.reference_spin.value()
+            a.HDTLimit, a.TempMargin = self.limit_spin.value(), self.margin_spin.value()
+            self._thermal_enable()
+            if self.kind == "thermal_stress":
+                a.InitialTemperature = a.ReferenceTemperature
+            try:
+                thermal.configure_solver(a, sim.members(a)["solver"])
+            except thermal.ThermalError as exc:
+                self.progress.setText(f"<span style='color:#b00020'>{exc}</span>")
+            self._refresh_summary()
+
+        def add_thermal(self, key):
+            """Adds a thermal setup object on the selection (a dialog asks for the value)."""
+            if add_thermal_object(key, self.analysis):
+                self.refresh()
+
+        def _build_thermal(self):
+            """The thermal results: temperature and bands, the time step, the numbers, the probe, the report."""
+            w = box("Results", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"))
+            self.summary = hint("Not solved yet.")
+            w.layout().addWidget(self.summary)
+            row = QtWidgets.QHBoxLayout()
+            row.setSpacing(4)
+            row.addWidget(button("Temperature", lambda: self.show("temperature"), "Colour by temperature"))
+            row.addWidget(button("HDT bands", lambda: self.show("tempbands"),
+                                 "Colour against the heat deflection temperature: red above, amber within the margin"))
+            w.layout().addLayout(row)
+            if self.kind == "thermal_stress":
+                row_s = QtWidgets.QHBoxLayout()
+                row_s.setSpacing(4)
+                row_s.addWidget(button("Stress", lambda: self.show("stress"), "Colour by von Mises stress"))
+                row_s.addWidget(button("Displacement", lambda: self.show("displacement"), "Colour by displacement, exaggerated"))
+                row_s.addWidget(button("Safety Factor", lambda: self.show("safety"), "Colour by safety factor"))
+                w.layout().addLayout(row_s)
+                lay = form_layout()
+                self.measure_combo = measure_combo(sim.study_measure(self.analysis))
+                self.measure_combo.currentIndexChanged.connect(slot(self._measure_changed))
+                lay.addRow("Safety factor from", self.measure_combo)
+                w.layout().addLayout(lay)
+            lay_t = form_layout()
+            self.time_combo = QtWidgets.QComboBox()
+            self.time_combo.currentIndexChanged.connect(slot(self._time_changed))
+            self.time_label = QtWidgets.QLabel("Time step")
+            lay_t.addRow(self.time_label, self.time_combo)
+            w.layout().addLayout(lay_t)
+            self.legend = hint()
+            w.layout().addWidget(self.legend)
+            row2 = QtWidgets.QHBoxLayout()
+            self.probe_button = QtWidgets.QPushButton("Probe")
+            self.probe_button.setCheckable(True)
+            self.probe_button.setToolTip("Click a point on the result mesh to read its temperature (a transient run plots it)")
+            self.probe_button.toggled.connect(slot(self.toggle_probe))
+            row2.addWidget(self.probe_button)
+            row2.addWidget(button("Report", self.report, "LaTeX report with the renders, compiled to a PDF beside the document"))
+            row2.addStretch(1)
+            w.layout().addLayout(row2)
+            self.probe_label = hint()
+            w.layout().addWidget(self.probe_label)
+            return w
+
+        def selected_result(self):
+            """The result the time combo points at (the last one by default)."""
+            results = thermal.results_by_time(self.analysis)
+            index = self.time_combo.currentIndex()
+            if not results:
+                return None
+            return results[index] if 0 <= index < len(results) else results[-1]
+
+        def _time_changed(self, *_a):
+            kind = shown_field(self.analysis)
+            if kind and kind in ("temperature", "tempbands"):
+                self.show(kind)
+
+        def _fill_times(self):
+            results = thermal.results_by_time(self.analysis)
+            show = len(results) > 1
+            self.time_combo.setVisible(show)
+            self.time_label.setVisible(show)
+            if len(results) != self.time_combo.count():
+                self.time_combo.blockSignals(True)
+                self.time_combo.clear()
+                for r in results:
+                    self.time_combo.addItem(f"{float(r.Time):.4g} s")
+                self.time_combo.setCurrentIndex(len(results) - 1)
+                self.time_combo.blockSignals(False)
+
+        def _thermal_summary(self):
+            a = self.analysis
+            self._fill_times()
+            data = thermal.stored(a)
+            if not data:
+                self.summary.setText("Not solved yet.")
+                self.legend.setText("")
+                return
+            lines = [f"Temperature <b>{data['tmin']:.1f}</b> to <b>{data['tmax']:.1f} °C</b> (hottest node {data['hot_node']}"
+                     + (f", at {data['tmax_time']:.4g} s" if data["transient"] else "") + ")"]
+            limit = data.get("limit")
+            if limit is not None:
+                edges, _c = thermal.bands(a)
+                if data["tmax"] >= limit:
+                    word, color = "above the limit", "#b00020"
+                elif data["tmax"] >= edges[0]:
+                    word, color = "within the margin", "#8a6d00"
+                else:
+                    word, color = "below the margin", "#1f7a46"
+                lines.append(f"Limit {limit:.0f} °C ({data['limit_how']}): <b style='color:{color}'>{word}</b>")
+                if data["transient"]:
+                    ttl = data.get("time_to_limit")
+                    lines.append("Time to reach the limit: " + ("never in this run" if ttl is None else f"<b>{ttl:.4g} s</b>"))
+            else:
+                lines.append("<span style='color:#8a6d00'>The material has no heat deflection temperature: no bands "
+                             "(set a limit above).</span>")
+            if data["transient"]:
+                lines.append(f"Probe node {data['probe_node']} ({data['probe_how']}): "
+                             f"{data['probe_curve'][-1]:.1f} °C at the end")
+            bal = data.get("balance")
+            if bal and "error" not in bal:
+                if data["transient"]:
+                    lines.append(f"Heat in {bal['in']:.4g} W, out {bal['out']:.4g} W (the rest heats the part)")
+                else:
+                    lines.append(f"Heat balance: in {bal['in']:.4g} W, out {bal['out']:.4g} W "
+                                 f"(residual {100 * bal['relative']:.2g} %)")
+            if self.kind == "thermal_stress":
+                result = sim.latest_result(a)
+                if result is not None:
+                    ext = sim.result_extrema(result)
+                    lines.append(f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b>, max displacement <b>{ext['max_disp']:.4g} mm</b>"
+                                 + (f", min safety factor <b>{ext['min_sf']:.3g}</b>" if ext["min_sf"] is not None else ""))
+            self.summary.setText("<br>".join(lines))
+            kind = shown_field(a)
+            self.legend.setText(legend_html(kind, self.selected_result(), a) if kind else "")
 
         def _build_eigen_options(self):
             """The modal or buckling settings of the study (they apply at the next Solve)."""
@@ -1660,6 +1948,10 @@ def _make_classes():
             self._refresh_summary()
 
         def _refresh_summary(self):
+            if self.kind in thermal.KINDS:
+                if _alive(self.summary):
+                    self._thermal_summary()
+                return
             if self.kind in ("modal", "buckling"):
                 if _alive(self.summary):
                     self.summary.setText(self._fill_modes())
@@ -1830,6 +2122,9 @@ def _make_classes():
                 if self.kind == "buckling" and bool(self.analysis.Nonlinear):
                     return self.solve_nonlinear(blocking)
                 return True
+            if self.kind in thermal.KINDS:
+                self.show("tempbands" if thermal.bands(self.analysis)[0] else "temperature")
+                return True
             self.show("safety" if getattr(result, "SafetyFactor", None) else "stress")
             return True
 
@@ -1871,8 +2166,9 @@ def _make_classes():
 
         # --- results
         def show(self, kind):
-            if show_field(self.analysis, kind):
-                self.legend.setText(legend_html(kind, sim.latest_result(self.analysis), self.analysis))
+            result = self.selected_result() if self.kind in thermal.KINDS else None
+            if show_field(self.analysis, kind, result):
+                self.legend.setText(legend_html(kind, result or sim.latest_result(self.analysis), self.analysis))
                 return True
             return False
 
@@ -1887,6 +2183,9 @@ def _make_classes():
                 stop_probe()
 
         def _probed(self, reading):
+            if self.kind == "thermal" and reading.get("point"):
+                thermal.update_probe(self.analysis, reading["point"])
+                self._thermal_summary()
             if _alive(self.probe_label):
                 self.probe_label.setText(probe_text(reading))
 
@@ -2266,7 +2565,7 @@ def run_probe():
 
 def run_bands():
     panel = open_study_panel()
-    if panel is not None:
+    if panel is not None and hasattr(panel, "bands_button"):
         panel.show_bands(True)
     return panel
 
@@ -2297,6 +2596,148 @@ def run_report():
     return report_study(study, done=lambda files: None)
 
 
+# ----- the thermal setup (Temperature, Heat flux, Heat source, Convection) -----------------------------------
+
+
+def selected_refs():
+    """[(object, 'Face3'), ...] of the faces, edges and vertices selected in the 3D view."""
+    import FreeCADGui as Gui
+
+    refs = []
+    for sel in Gui.Selection.getSelectionEx():
+        for sub in sel.SubElementNames:
+            if sub.startswith(("Face", "Edge", "Vertex")):
+                refs.append((sel.Object, sub))
+    return refs
+
+
+def selected_bodies(analysis):
+    """The objects selected as whole bodies; the study's model when nothing is."""
+    import FreeCADGui as Gui
+
+    found = [sel.Object for sel in Gui.Selection.getSelectionEx() if sim.shape_of(sel.Object) is not None]
+    if not found:
+        model = getattr(analysis, "Model", None)
+        found = [model] if model is not None and sim.shape_of(model) is not None else []
+    return found
+
+
+def ask_values(key):
+    """The value dialog of a thermal setup command; {...} or None when cancelled."""
+    from PySide import QtWidgets
+
+    dialog = QtWidgets.QDialog()
+    titles = {"temperature": "Temperature", "flux": "Heat flux", "source": "Heat source", "convection": "Convection"}
+    dialog.setWindowTitle(titles[key])
+    form = QtWidgets.QFormLayout(dialog)
+
+    def spin(value, suffix, low, high, decimals=2):
+        s = QtWidgets.QDoubleSpinBox()
+        s.setRange(low, high)
+        s.setDecimals(decimals)
+        s.setSuffix(suffix)
+        s.setValue(value)
+        return s
+
+    fields = {}
+    combo = None
+    if key == "temperature":
+        fields["celsius"] = spin(80.0, " °C", -273.0, 5000.0)
+        form.addRow("Temperature", fields["celsius"])
+    elif key == "flux":
+        fields["w_per_m2"] = spin(1000.0, " W/m²", -1.0e9, 1.0e9)
+        form.addRow("Heat flux (into the part)", fields["w_per_m2"])
+    elif key == "source":
+        fields["watts"] = spin(1.0, " W", -1.0e6, 1.0e6, 3)
+        form.addRow("Heat generated in the body", fields["watts"])
+    else:
+        combo = QtWidgets.QComboBox()
+        for name, h in thermal.CONVECTION_PRESETS:
+            combo.addItem(f"{name}  (h = {h:g} W/m²K)", h)
+        combo.addItem("Typed value", None)
+        fields["h"] = spin(thermal.CONVECTION_PRESETS[1][1], " W/m²K", 0.0, 1.0e5)
+        fields["ambient_c"] = spin(thermal.DEFAULT_AMBIENT, " °C", -273.0, 5000.0)
+        form.addRow("Preset", combo)
+        form.addRow("h", fields["h"])
+        form.addRow("Ambient", fields["ambient_c"])
+
+        def preset_changed(*_a):
+            h = combo.currentData()
+            if h is not None:
+                fields["h"].setValue(h)
+            fields["h"].setEnabled(h is None)
+
+        combo.currentIndexChanged.connect(slot(preset_changed))
+        combo.setCurrentIndex(1)
+        preset_changed()
+        note = QtWidgets.QLabel(thermal.CONVECTION_NOTE)
+        note.setWordWrap(True)
+        form.addRow(note)
+    buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    form.addRow(buttons)
+    if not dialog.exec():
+        return None
+    return {name: field.value() for name, field in fields.items()}
+
+
+def add_thermal_object(key, analysis=None, values=None, refs=None, bodies=None):
+    """Adds a Temperature, Heat flux, Heat source or Convection to the thermal study: on the selected faces
+    (a Heat source: on the selected bodies, else the study's model). ``values``/``refs``/``bodies`` let a
+    script skip the dialog and the selection. Returns the objects made ([] with a message when it cannot)."""
+    analysis = analysis or current_study()
+    if analysis is None or not thermal.is_thermal(analysis):
+        _warn("Open a Thermal or Thermal stress study first")
+        return []
+    if key == "source":
+        bodies = bodies if bodies is not None else selected_bodies(analysis)
+        if not bodies:
+            _warn("Heat source: select a body in the 3D view")
+            return []
+    else:
+        refs = refs if refs is not None else selected_refs()
+        if not refs:
+            _warn("Select the faces in the 3D view first")
+            return []
+    values = values if values is not None else ask_values(key)
+    if values is None:
+        return []
+    doc = analysis.Document
+    doc.openTransaction("Thermal setup")
+    try:
+        if key == "temperature":
+            made = [thermal.add_temperature(analysis, refs, values["celsius"])]
+        elif key == "flux":
+            made = [thermal.add_heat_flux(analysis, refs, values["w_per_m2"])]
+        elif key == "convection":
+            made = [thermal.add_convection(analysis, refs, values["h"], values.get("ambient_c", thermal.DEFAULT_AMBIENT))]
+        else:
+            made = []
+            for body in bodies:
+                made += thermal.add_heat_source(analysis, body, values["watts"])
+    except (thermal.ThermalError, ValueError) as exc:
+        doc.abortTransaction()
+        _warn(f"Thermal setup: {exc}")
+        return []
+    doc.commitTransaction()
+    status(f"Added {', '.join(o.Label for o in made)}")
+    return made
+
+
+def _with_thermal_study():
+    study = current_study()
+    return study is not None and thermal.is_thermal(study)
+
+
+def run_add(key):
+    panel = _state.get("panel")
+    study = current_study()
+    if isinstance(panel, classes()["StudyPanel"]) and not panel.released and panel.analysis is study:
+        return panel.add_thermal(key)
+    return add_thermal_object(key, study)
+
+
 COMMANDS = (
     ("BruceWorx_NewStudy", "New Study", os.path.join(HERE, "BruceWorx_NewStudy.svg"),
      "Set up a simulation study: type, model, material, mesh; then its loads and constraints", _with_doc, open_new_study),
@@ -2322,6 +2763,20 @@ COMMANDS = (
      "Safety-factor bands of the study: thresholds and colours, saved as the default if you like", _with_study, run_bands),
     ("BruceWorx_ModeShapes", "Mode Shapes", os.path.join(HERE, "BruceWorx_MotionStudy.svg"),
      "Play the mode shapes of a modal or buckling study (Motion Study puts one on the timeline)", _with_modes, run_modes),
+    ("BruceWorx_SimTemperature", "Temperature", "FEM_ConstraintTemperature",
+     "Fix the temperature of the selected faces (a thermal study)", _with_thermal_study, lambda: run_add("temperature")),
+    ("BruceWorx_SimHeatFlux", "Heat flux", "FEM_ConstraintHeatflux",
+     "A heat flux in W/m² into the selected faces", _with_thermal_study, lambda: run_add("flux")),
+    ("BruceWorx_SimHeatSource", "Heat source", "FEM_ConstraintBodyHeatSource",
+     "Heat generated in the selected body, in watts (an ESC or a motor)", _with_thermal_study, lambda: run_add("source")),
+    ("BruceWorx_SimConvection", "Convection", "FEM_ConstraintHeatflux",
+     "Convection to the air on the selected faces: still air, light airflow, prop wash, or a typed h", _with_thermal_study,
+     lambda: run_add("convection")),
+    ("BruceWorx_ShowTemperature", "Temperature", "FEM_ResultShow",
+     "Colour the result by temperature", _with_result, lambda: run_show("temperature")),
+    ("BruceWorx_ShowHDTBands", "HDT bands", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),
+     "Colour the temperature against the heat deflection temperature: red above, amber within the margin",
+     _with_result, lambda: run_show("tempbands")),
     ("BruceWorx_StudyReport", "Report", os.path.join(HERE, "BruceWorx_StudyReport.svg"),
      "Write the study report (LaTeX with renders, compiled to a PDF) beside the document", _with_result, run_report),
 )

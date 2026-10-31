@@ -81,6 +81,10 @@ class TestDefinition(unittest.TestCase):
         self.assertEqual([g["caption"] for g in sim["tabs"][0]["groups"]], ["Study", "Setup", "Mesh", "Solve", "Results"])
         self.assertIn("Simulation · Results", ws.tab_toolbars(sim, "Simulation"))
         self.assertEqual(ws.place_of(self.defn, "BruceWorx_ShowSafetyFactor"), ("Simulation", "Simulation", "Results"))
+        for name in ("BruceWorx_SimTemperature", "BruceWorx_SimHeatFlux", "BruceWorx_SimHeatSource", "BruceWorx_SimConvection"):
+            self.assertEqual(ws.place_of(self.defn, name), ("Simulation", "Simulation", "Setup"))
+        for name in ("BruceWorx_ShowTemperature", "BruceWorx_ShowHDTBands"):
+            self.assertEqual(ws.place_of(self.defn, name), ("Simulation", "Simulation", "Results"))
         self.assertIn("Mechanical Boundary Conditions and Loads", ws.replaced_toolbars(self.defn))
 
     def test_custom_toolbars_per_workbench(self):
