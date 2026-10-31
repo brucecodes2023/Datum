@@ -36,9 +36,11 @@
 #include <App/PropertyPythonObject.h>
 #include <Base/Console.h>
 #include <Base/Placement.h>
+#include <Base/PlacementPy.h>
 #include <Base/Rotation.h>
 #include <Base/Tools.h>
 #include <Base/Interpreter.h>
+#include <CXX/Objects.hxx>
 
 #include <Mod/Part/App/TopoShape.h>
 #include <Mod/Part/App/AttachExtension.h>
@@ -297,6 +299,61 @@ void AssemblyObject::preDrag(std::vector<App::DocumentObject*> dragParts)
 
         draggedParts.push_back(part);
     }
+
+    // [BW] let the Python drag checks (flexible wires) see which parts move
+    dragging = true;
+    callDragModule("pre_drag", false);
+}
+
+// [BW] Calls bruceworx_drag.<name>(assembly, parts). Without the module (plain FreeCAD) or on a
+// Python error the answer is "accept", so a bug there never blocks a drag.
+bool AssemblyObject::callDragModule(const char* name, bool withPlacements)
+{
+    Base::PyGILStateLocker lock;
+    try {
+        PyObject* raw = PyImport_ImportModule("bruceworx_drag");
+        if (!raw) {
+            PyErr_Clear();
+            return true;
+        }
+        Py::Module module(raw, true);
+        if (!module.hasAttr(name)) {
+            return true;
+        }
+        Py::List list;
+        if (withPlacements) {
+            // every part the solver moves, at the placement it proposes
+            for (auto& pair : objectPartMap) {
+                if (!pair.first || !pair.second.part) {
+                    continue;
+                }
+                Base::Placement plc = getMbdPlacement(pair.second.part);
+                if (!pair.second.offsetPlc.isIdentity()) {
+                    plc = plc * pair.second.offsetPlc;
+                }
+                Py::Tuple entry(2);
+                entry.setItem(0, Py::asObject(pair.first->getPyObject()));
+                entry.setItem(1, Py::asObject(new Base::PlacementPy(new Base::Placement(plc))));
+                list.append(entry);
+            }
+        }
+        else {
+            for (auto* part : draggedParts) {
+                if (part) {
+                    list.append(Py::asObject(part->getPyObject()));
+                }
+            }
+        }
+        Py::Tuple args(2);
+        args.setItem(0, Py::asObject(getPyObject()));
+        args.setItem(1, list);
+        Py::Object result = Py::Callable(module.getAttr(name)).apply(args);
+        return result.isNone() || result.isTrue();
+    }
+    catch (Py::Exception&) {
+        PyErr_Print();
+    }
+    return true;
 }
 
 // [BW] Moves an MbD part to a placement (dragging, or putting it back).
@@ -593,6 +650,12 @@ bool AssemblyObject::validateNewPlacements()
     }
     lastLimitViolation = violation;
 
+    // [BW] Flexible wires (ROU-08): a step that pulls one taut is refused like a limit.
+    if (dragging && !callDragModule("check", true)) {
+        lastRejectWasLimit = true;
+        return false;
+    }
+
     // TODO: We could do further tests
     // For example check if the joints connectors are correctly aligned.
     return true;
@@ -602,6 +665,10 @@ void AssemblyObject::postDrag()
 {
     mbdAssembly->runPostDrag();  // Do this after last drag
     purgeTouched();
+    if (dragging) {
+        dragging = false;
+        callDragModule("post_drag", false);  // [BW] flexible wires: keep the last shape
+    }
 }
 
 void AssemblyObject::savePlacementsForUndo()

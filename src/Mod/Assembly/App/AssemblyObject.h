@@ -307,6 +307,13 @@ private:
     double limitViolation(App::DocumentObject** worstJoint = nullptr);
     void warnViolatedLimits();
     bool runDragStepTo(const std::vector<Base::Placement>& dragPlacements);
+
+    // [BW] Python drag checks (module bruceworx_drag, ROU-08): after the solver proposes
+    // placements and before they are applied, flexible wires are solved at the proposed
+    // pin positions; a wire that would be pulled taut (or bent past its minimum radius)
+    // refuses the step, which sends it into the same bisection the joint limits use.
+    bool dragging = false;
+    bool callDragModule(const char* name, bool withPlacements);
     void saveLastGoodPlacements();
     void restoreLastGoodPlacements(bool properties);
 
