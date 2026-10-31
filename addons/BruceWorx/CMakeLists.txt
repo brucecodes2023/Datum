@@ -100,6 +100,7 @@ INSTALL(
         bruceworx/drawing_standards.py
     bruceworx/pdm_workspace.py
     bruceworx/vault_move.py
+    bruceworx/renumber.py
         bruceworx/kicad_bridge.py
         bruceworx/ecad_vault.py
         bruceworx/sheetmetal_rules.py
