@@ -1,0 +1,54 @@
+%======================================================================
+\subsection{BW-ROB-03/04 plan: mass report and drone balance (30 Oct 2026)}\label{sec:rob0304-plan}
+%======================================================================
+
+\paragraph{What exists.} Mass properties (\eref{MOD-11}, \file{bruceworx\_physical.py}) already give mass,
+centre of mass and the inertia tensor of a selection, combine several bodies with the parallel-axis theorem,
+and show the principal axes. Wires carry their own mass (ROU-02). What is missing for SP-01 is (a) mass you
+\emph{know} rather than compute, since a battery or motor modelled as a simple shape has the wrong density, (b) the
+whole assembly as a report, and (c) the drone-specific checks of \eref{ROB-04}.
+
+\paragraph{ROB-03: the mass report.} Each part's mass comes from, in order: a measured mass you typed
+(\code{MeasuredMass}, a new part property), the COTS datasheet mass (\code{DatasheetMass}), then density
+$\times$ volume. For a typed mass the centre of mass stays the shape's centroid, and the inertia is the shape's
+scaled to that mass. The \emph{Mass Report} command walks the assembly (links, sub-assemblies, wires) and writes a
+table: item, quantity, mass source, mass, share of the total, plus the totals, CG and inertia about the CG and
+about the origin. It goes to a panel, a CSV, and a 3D CG marker.
+
+\paragraph{ROB-04: drone balance and thrust.} Each motor is marked (a property \code{ThrustAxis} on the motor
+part, or picked once in the panel) and has a thrust table from its manufacturer's test data: throttle, thrust,
+current at a given prop and voltage (CSV, one per motor and prop). From these:
+\[
+  \frac{T}{W}=\frac{\sum_i T_{\max,i}}{mg},\qquad
+  \mathbf c_T=\frac{1}{n}\sum_i \mathbf p_i,\qquad
+  e=\lVert(\mathbf c_m-\mathbf c_T)_{xy}\rVert ,
+\]
+with $\mathbf p_i$ the motor axes' points in the frame plane and $\mathbf c_m$ the centre of mass. The hover
+throttle is where the table gives $T_i=mg/n$ per motor; the hover current follows from the same table, and the
+flight time estimate is $t\approx 0.8\,C/I_{\text{hover}}$ for a pack of capacity $C$. Per-motor load share in
+hover comes from the force and moment balance with the CG offset $\Delta\mathbf c=(\mathbf c_m-\mathbf
+c_T)_{xy}$ and the arms $\mathbf r_i=(\mathbf p_i-\mathbf c_T)_{xy}$ (the least-squares split, exact for any
+symmetric frame):
+\[
+  T_i=\frac{mg}{n}+mg\,\mathbf r_i^{\mathsf T}\Bigl(\sum_j\mathbf r_j\mathbf r_j^{\mathsf T}\Bigr)^{-1}\Delta\mathbf c ,
+\]
+which sums to $mg$ and puts the thrust resultant through the CG; for a symmetric quad with arm $a$ it is
+$\frac{mg}{4}+\frac{mg}{2a^2}\,\mathbf r_i\cdot\Delta\mathbf c$.
+
+\paragraph{Checks.} Amber when $T/W<2$ (red below 1.5), and when $e$ is more than 2\,\% of the motor diagonal
+(red above 5\,\%), or any motor's hover share is above 60\,\% throttle. The acceptance example of \eref{ROB-04}
+(the offset battery of Fig.~\ref{fig:cg}) must flag.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=D\arabic*.]
+  \item \textbf{Mass priority.} Measured, then datasheet, then density $\times$ volume?
+        \emph{Recommendation:} yes.
+  \item \textbf{Thrust data.} One CSV per motor and prop combination (throttle, thrust\,g, current\,A, voltage),
+        stored with the motor's vault item? \emph{Recommendation:} yes.
+  \item \textbf{Outputs.} $T/W$, hover throttle, CG offset and per-motor share, hover current and flight time?
+        \emph{Recommendation:} all of them.
+  \item \textbf{Thresholds.} $T/W$ amber below 2, CG offset amber above 2\,\% of the motor diagonal, hover above
+        60\,\% throttle amber, all configurable? \emph{Recommendation:} yes.
+  \item \textbf{Where.} A \emph{Mass \& Balance} group in the Inspect tab, with a panel and a CSV?
+        \emph{Recommendation:} yes.
+\end{enumerate}

@@ -1,0 +1,54 @@
+%======================================================================
+\subsection{BW-SIM-01 last step: thermal and thermal stress (plan, 30 Oct 2026)}\label{sec:sim-thermal-plan}
+%======================================================================
+
+The last two study types of \eref{SIM-01} reuse the frame that static, modal and buckling already use: the New
+Study panel, Netgen mesh, bundled CalculiX, pre-check, results, bands and the \LaTeX{} report. The use case is
+yours: an ESC or motor heating a printed mount, and whether the mount stays below the temperature where it
+softens.
+
+\paragraph{Theory.} Steady conduction solves $\nabla\cdot(k\nabla T)+\dot q=0$, with a fixed temperature,
+a heat flux $q''$, or convection $-k\,\partial T/\partial n=h(T-T_\infty)$ on the boundary and the heat
+generation $\dot q$ (W per body, spread over its volume) inside. CalculiX runs it as a \code{*HEAT TRANSFER,
+STEADY STATE} step on the same C3D10 mesh, with $k$ from the Keystone cards. \textbf{Thermal stress} then
+runs a static step with that temperature field as a load: each element expands by
+$\boldsymbol\varepsilon_{th}=\alpha(T-T_{\text{ref}})\mathbf I$, so a free part grows and a held part is
+stressed. It is one-way: the deformation does not change the heat flow, which holds for small strains.
+
+\paragraph{Benchmarks (SIM-05).}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Bar, conduction & aluminium $10\times10\times100$\,mm, $k=167$\,W/m\,K, ends at 100 and 20\,$^\circ$C: linear,
+  60\,$^\circ$C at mid-length, $Q=kA\Delta T/L=13.36$\,W.\\
+Fin & same bar, base 80\,$^\circ$C, sides and tip in air at $h=25$\,W/m$^2$K, $T_\infty=20\,^\circ$C, tip
+  insulated: $m=\sqrt{hP/kA}=7.738$\,m$^{-1}$, $T_{\text{tip}}=T_\infty+\theta_b/\cosh mL=65.64\,^\circ$C,
+  $Q=\sqrt{hPkA}\,\theta_b\tanh mL=5.03$\,W; accepts 2\,\%.\\
+Thermal stress & steel bar heated 50\,K: free, it grows $\alpha L\Delta T=0.060$\,mm; held at both ends,
+  $\sigma=-E\alpha\Delta T=-126$\,MPa; accepts 2\,\%.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{The workflow.} New Study offers \emph{Thermal} and \emph{Thermal stress}. The Setup group gains
+Temperature, Heat flux, Heat source (W on a body) and Convection ($h$, $T_\infty$). The pre-check asks for $k$
+(and $\alpha$ for thermal stress) and for at least one temperature or convection boundary, since without one
+the temperature is undefined. The results show temperature in bands (like the safety factor) and, for thermal
+stress, the static views. The report adds the heat balance: the heat put in equals the heat taken out by the
+boundaries, to within the solver's tolerance.
+
+\paragraph{Questions for you.}
+\begin{enumerate}[label=H\arabic*.]
+  \item \textbf{Study types now.} Steady-state thermal and one-way thermal stress, with transient (warm-up over
+        time) later? \emph{Recommendation:} yes.
+  \item \textbf{Loads.} Fixed temperature, heat flux, heat source in watts per body, convection; radiation later?
+        \emph{Recommendation:} yes.
+  \item \textbf{Convection presets.} Still air $h=10$, light airflow 25, fan or prop wash 75\,W/m$^2$K, plus a typed
+        value? \emph{Recommendation:} yes, with a note that these are estimates.
+  \item \textbf{Temperature limit.} Add each plastic's heat deflection temperature (HDT) to the Keystone cards, and
+        colour the temperature result against it (amber within 10\,K of HDT, red above), like the safety-factor
+        bands? \emph{Recommendation:} yes, configurable.
+  \item \textbf{Parts in contact.} An ESC on a mount is two bodies. Treat touching faces as perfectly bonded for
+        now (a contact conductance comes with \eref{SIM-02})? \emph{Recommendation:} yes.
+\end{enumerate}
