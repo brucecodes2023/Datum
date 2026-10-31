@@ -51,6 +51,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/project_setup.py
     bruceworx/hardware.py
     bruceworx/routing.py
+    bruceworx/balance.py
     bruceworx/rope.py
     bruceworx/fittings.py
     bruceworx/connector_library.py
@@ -114,6 +115,7 @@ INSTALL(
         bruceworx/project_setup.py
         bruceworx/hardware.py
         bruceworx/routing.py
+        bruceworx/balance.py
         bruceworx/rope.py
         bruceworx/fittings.py
         bruceworx/connector_library.py
