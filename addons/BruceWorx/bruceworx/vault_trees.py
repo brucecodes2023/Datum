@@ -68,7 +68,7 @@ def structure(vault, links=None) -> dict:
     for pn, item in vault.items.items():
         code = item.latest.code if item.latest else ""
         items[pn] = {"display": pdm.display_part_number(pn, code), "description": item.description,
-                     "type": item.item_type, "state": item.state, "revision": code,
+                     "category": getattr(item, "category", ""), "type": item.item_type, "state": item.state, "revision": code,
                      "obsolete": bool(getattr(item, "obsolete", False))}
         if item.drawing_of:
             drawings.setdefault(item.drawing_of, []).append(pn)

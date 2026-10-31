@@ -31,6 +31,7 @@ The pure helpers at the top are tested in TestBruceWorxVaultClient.py.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import tempfile
 import zipfile
@@ -256,6 +257,87 @@ def query_word_matches(row, key, value):
 
         return vault_trees.program_code(row.get("part_number")) == value.upper()
     return None
+
+
+UNCATEGORIZED = "Uncategorized"
+CATEGORY_PREF = "VaultCategories"  # JSON in Preferences/BruceWorx: {vault root: {"hidden": [...], "collapsed": [...]}}
+
+
+def category_prefs(root, group=None):
+    """(hidden, collapsed): the category names hidden and the category groups folded in this vault
+    (by its folder), as remembered in the Keystone preferences. "" stands for Uncategorized."""
+    try:
+        group = group if group is not None else _prefs()
+        saved = json.loads(group.GetString(CATEGORY_PREF, "{}") or "{}").get(str(root), {})
+        return set(saved.get("hidden", [])), set(saved.get("collapsed", []))
+    except Exception:  # noqa: BLE001 -- no preferences or a damaged value: nothing hidden
+        return set(), set()
+
+
+def save_category_prefs(root, hidden, collapsed, group=None):
+    try:
+        group = group if group is not None else _prefs()
+        data = json.loads(group.GetString(CATEGORY_PREF, "{}") or "{}")
+        if hidden or collapsed:
+            data[str(root)] = {"hidden": sorted(hidden), "collapsed": sorted(collapsed)}
+        else:
+            data.pop(str(root), None)
+        group.SetString(CATEGORY_PREF, json.dumps(data, sort_keys=True))
+    except Exception as exc:  # noqa: BLE001 -- a preference that cannot be kept is not worth an error
+        _console(f"Vault: category choices not remembered ({exc})", "log")
+
+
+def category_counts(rows):
+    """{category: items} over the file rows ("" = uncategorized); change rows (ECR/ECO) are not items."""
+    counts = {}
+    for r in rows.values():
+        if r.get("item_type") != "change":
+            counts[r.get("category") or ""] = counts.get(r.get("category") or "", 0) + 1
+    return counts
+
+
+def group_by_category(nodes, rows, hidden=(), show_hidden=False):
+    """The tree's top level cut into one group node per category: named groups A-Z, then
+    Uncategorized. A top-level group node ("Not in an assembly", "Other files") is opened up: its
+    categorized items join their category's group, the rest stay in it, inside Uncategorized.
+    Groups in ``hidden`` are left out unless ``show_hidden`` (a search), in which case they are kept
+    and marked. When no item has a category the nodes come back as they were.
+    Returns (nodes, number of items hidden)."""
+    def category(node):
+        return (rows.get(node["pn"]) or {}).get("category") or ""
+
+    flat = [c for n in nodes for c in (n["children"] if n["pn"] is None else [n])]
+    if not any(category(n) for n in flat):
+        return nodes, 0
+    buckets, rest = {}, []
+    for node in nodes:
+        if node["pn"] is not None:
+            buckets.setdefault(category(node), []).append(node)
+            continue
+        left = []
+        for child in node["children"]:
+            if category(child):
+                buckets.setdefault(category(child), []).append(child)
+            else:
+                left.append(child)
+        if left:
+            rest.append(dict(node, children=left))
+    members = {name: list(items) for name, items in buckets.items()}
+    members[""] = members.get("", []) + rest
+    out, hidden_items = [], 0
+    for name in sorted(members, key=lambda c: (c == "", c.casefold())):
+        items = members[name]
+        count = sum(len(n["children"]) if n["pn"] is None else 1 for n in items)
+        if not count:
+            continue
+        is_hidden = name in hidden
+        if is_hidden and not show_hidden:
+            hidden_items += count
+            continue
+        label = name or UNCATEGORIZED
+        out.append({"pn": None, "group": f"{label}  \u00b7  {count}" + ("  \u00b7  hidden" if is_hidden else ""),
+                    "key": f"cat:{name}", "category": name, "qty": None, "children": items})
+    return out, hidden_items
 
 
 def matches(row, kind="all", query=""):
@@ -1112,7 +1194,7 @@ def make_new_file(path, pn, kind, description, vault_root):
 
 
 def _new_part_dialog(s):
-    """(kind, description, program) from a small dialog, or None when cancelled."""
+    """(kind, description, program, category) from a small dialog, or None when cancelled."""
     from PySide import QtWidgets
 
     from bruceworx import vault_setup
@@ -1133,6 +1215,12 @@ def _new_part_dialog(s):
     text = QtWidgets.QLineEdit()
     text.setPlaceholderText("e.g. Motor bracket")
     form.addRow("Description", text)
+    category = QtWidgets.QComboBox()  # optional; the vault's own categories as suggestions
+    category.setEditable(True)
+    category.addItem("")
+    category.addItems([c for c in sorted(category_counts(_panel_rows(s)), key=str.casefold) if c])
+    category.lineEdit().setPlaceholderText("optional, e.g. Connectors")
+    form.addRow("Category", category)
     number = QtWidgets.QLabel()
     form.addRow("Number", number)
     buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
@@ -1159,10 +1247,15 @@ def _new_part_dialog(s):
     update()
     if dialog.exec() != QtWidgets.QDialog.Accepted:
         return None
-    return kind.currentText().lower(), text.text().strip(), program.currentText()
+    return kind.currentText().lower(), text.text().strip(), program.currentText(), category.currentText().strip()
 
 
-def new_part(kind=None, description=None, program="", open_it=True):
+def _panel_rows(s):
+    """{pn: {"category": ...}} for the vault's items, to suggest its existing categories."""
+    return {pn: {"category": item.category} for pn, item in s.vault.items.items()}
+
+
+def new_part(kind=None, description=None, program="", open_it=True, category=""):
     """New Part in Vault (FND-08): number a new part or assembly, check it in as WIP 01 and check
     it out to you; it opens ready to model. Without ``kind`` and ``description`` a dialog asks.
     Returns the part number, or "" when cancelled or refused."""
@@ -1174,13 +1267,14 @@ def new_part(kind=None, description=None, program="", open_it=True):
         answer = _new_part_dialog(s)
         if answer is None:
             return ""
-        kind, description, program = answer
+        kind, description, program, category = answer
     from bruceworx import vault_setup
 
     def make(path, pn):
         make_new_file(path, pn, kind, description, s.root)
 
-    ok, pn = _run("New Part in Vault", vault_setup.new_item, s.vault, kind, description, make, program)
+    ok, pn = _run("New Part in Vault", vault_setup.new_item, s.vault, kind, description, make, program,
+                  "", category)
     if not ok:
         return ""
     s.refresh()
@@ -1977,6 +2071,7 @@ def _make_classes():
     QTY_ROLE = QtCore.Qt.UserRole + 1
     CONTEXT_ROLE = QtCore.Qt.UserRole + 2  # shown only as the parent of a match: dimmed
     GROUP_ROLE = QtCore.Qt.UserRole + 3
+    KEY_ROLE = QtCore.Qt.UserRole + 5  # a category group header: "cat:<name>"
     PATH_ROLE = QtCore.Qt.UserRole + 4  # P/Ns from the top, to keep a folded branch folded
     TIP_WIDTH = 220  # the largest a thumbnail is drawn in the file name's tooltip
 
@@ -2178,6 +2273,9 @@ def _make_classes():
             self.thumb_files = {}
             self.links_cache = {}
             self.collapsed = set()
+            self.hidden_categories = set()
+            self._cat_root = None
+            self._hidden_items = 0
             self._filling = False
             self.pictures = None  # Refresh Pictures: the P/Ns still to render, while it runs
             self.kind = "all"
@@ -2282,7 +2380,17 @@ def _make_classes():
             self.sort.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
             self.sort.setLayoutDirection(QtCore.Qt.RightToLeft)
             self.sort.clicked.connect(self.toggle_sort)
+            self.categories = QtWidgets.QToolButton()
+            self.categories.setObjectName("bwVaultSort")
+            self.categories.setText("Categories")
+            self.categories.setToolTip("Show or hide the vault's categories (Connectors, ...)")
+            self.categories.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            self.categories_menu = QtWidgets.QMenu(self.categories)
+            self.categories_menu.aboutToShow.connect(self.fill_categories_menu)
+            self.categories.setMenu(self.categories_menu)
+            self.categories.hide()  # only when the vault has categories
             count.addWidget(self.count, 1)
+            count.addWidget(self.categories)
             count.addWidget(self.sort)
             tl.addLayout(count)
             lay.addWidget(top)
@@ -2363,6 +2471,7 @@ def _make_classes():
                         "part_number": pn, "display": st.display, "revision": st.revision,
                         "description": st.description, "state": st.state, "code": st.code,
                         "item_type": st.item_type, "status_text": text, "status_role": role,
+                        "category": getattr(s.vault.items.get(pn), "category", ""),
                         "sha": last.sha256 if last else "", "object": os.path.join(s.root, last.object_name)
                         if last else "", "at": last.at if last else "", "active": pn == active,
                     }
@@ -2450,6 +2559,26 @@ def _make_classes():
                          if pn not in listed and self.rows[pn].get("item_type") != "change"]
                 if extra:  # in the workspace but not (yet) in the vault's replay
                     nodes.append({"pn": None, "group": "Other files", "qty": None, "children": extra})
+            self._sync_category_prefs()
+            self._hidden_items = 0
+            if not changes:
+                # A search looks through hidden categories too (their groups are marked "hidden").
+                nodes, self._hidden_items = group_by_category(
+                    nodes, self.rows, self.hidden_categories, show_hidden=bool(query.strip()))
+                if self._hidden_items:
+                    listed_now = set()
+
+                    def seen(ns):
+                        for n in ns:
+                            listed_now.add(n["pn"])
+                            seen(n["children"])
+
+                    seen(nodes)
+                    hits = hits & listed_now
+            counts = category_counts(self.rows)
+            self.categories.setVisible(not changes and any(counts))
+            self.categories.setText(f"Categories ({len(self.hidden_categories & set(counts))} hidden)"
+                                    if self.hidden_categories & set(counts) else "Categories")
             current = self.row_for(self.list.currentIndex())
             current = current["part_number"] if current else None
             self._filling = True
@@ -2470,7 +2599,8 @@ def _make_classes():
             shown = len(hits)
             word = "change" if changes else "item"
             self.count.setText(f"{shown} {word}{'s' if shown != 1 else ''}" +
-                               (f" of {total}" if shown != total else ""))
+                               (f" of {total}" if shown != total else "") +
+                               (f" · {self._hidden_items} in hidden categories" if self._hidden_items else ""))
             self.sort.setText("Modified" if self.sort_by_time else "Part number")
             s = _state["session"]
             if s is None:
@@ -2508,12 +2638,13 @@ def _make_classes():
             return out
 
         def make_items(self, node, parent_path, expand):
-            path = f"{parent_path}/{node['pn'] or node.get('group')}"
+            path = f"{parent_path}/{node['pn'] or node.get('key') or node.get('group')}"
             first = QtGui.QStandardItem(node.get("group") or (self.rows.get(node["pn"]) or {}).get("display", ""))
             first.setData(node["pn"], PN_ROLE)
             first.setData(node.get("qty"), QTY_ROLE)
             first.setData(bool(node.get("context")), CONTEXT_ROLE)
             first.setData(node.get("group") or "", GROUP_ROLE)
+            first.setData(node.get("key"), KEY_ROLE)
             first.setData(path, PATH_ROLE)
             items = [first] + [QtGui.QStandardItem() for _c in COLUMNS[1:]]
             for item in items:
@@ -2530,6 +2661,55 @@ def _make_classes():
             path = index.siblingAtColumn(0).data(PATH_ROLE)
             if path:
                 (self.collapsed.add if folded else self.collapsed.discard)(path)
+                if index.siblingAtColumn(0).data(KEY_ROLE):  # a category group: remembered per vault
+                    self._save_category_prefs()
+
+        # --- categories
+        def _sync_category_prefs(self):
+            """Read this vault's hidden and folded category groups when the vault changes."""
+            s = _state["session"]
+            root = s.root if s is not None else None
+            if root == self._cat_root:
+                return
+            self._cat_root = root
+            self.hidden_categories, folded = category_prefs(root) if root else (set(), set())
+            self.collapsed = {p for p in self.collapsed if not p.startswith("/cat:")} | {f"/cat:{c}" for c in folded}
+
+        def _save_category_prefs(self):
+            if self._cat_root:
+                folded = {p[len("/cat:"):] for p in self.collapsed if p.startswith("/cat:")}
+                save_category_prefs(self._cat_root, self.hidden_categories, folded)
+
+        def set_category_hidden(self, name, hide):
+            (self.hidden_categories.add if hide else self.hidden_categories.discard)(name)
+            self._save_category_prefs()
+            self.fill()
+
+        def show_all_categories(self):
+            self.hidden_categories.clear()
+            self._save_category_prefs()
+            self.fill()
+
+        def fill_categories_menu(self):
+            """One checkbox per category (checked = shown), Show all, and the group folding."""
+            menu = self.categories_menu
+            menu.clear()
+            for name, n in sorted(category_counts(self.rows).items(), key=lambda kv: (kv[0] == "", kv[0].casefold())):
+                action = menu.addAction(f"{name or UNCATEGORIZED}  ({n})")
+                action.setCheckable(True)
+                action.setChecked(name not in self.hidden_categories)
+                action.toggled.connect(lambda on, c=name: self.set_category_hidden(c, not on))
+            menu.addSeparator()
+            menu.addAction("Show all").triggered.connect(lambda _c=False: self.show_all_categories())
+
+        def group_menu(self, key, pos):
+            name = key[len("cat:"):]
+            menu = QtWidgets.QMenu(self)
+            hidden = name in self.hidden_categories
+            act = menu.addAction(f"Show {name or UNCATEGORIZED}" if hidden else f"Hide {name or UNCATEGORIZED}")
+            act.triggered.connect(lambda _c=False: self.set_category_hidden(name, not hidden))
+            menu.addAction("Show all categories").triggered.connect(lambda _c=False: self.show_all_categories())
+            menu.exec(self.list.viewport().mapToGlobal(pos))
 
         def fit_name_column(self):
             """The Part number column wide enough for the deepest, longest P/N-REV (within reason)."""
@@ -2690,6 +2870,10 @@ def _make_classes():
         def context_menu(self, pos):
             index = self.list.indexAt(pos)
             row = self.row_for(index)
+            key = index.siblingAtColumn(0).data(KEY_ROLE) if index.isValid() else None
+            if row is None and key:
+                self.group_menu(key, pos)
+                return
             if row is None:
                 return
             self.list.setCurrentIndex(index)

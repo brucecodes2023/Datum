@@ -365,6 +365,107 @@ class TestNewPartInVault(unittest.TestCase):
         self.assertEqual(vc.new_part("part", "Second", open_it=False), "LE-01-01002-001")
 
 
+class _FakePrefs:
+    def __init__(self):
+        self.d = {}
+
+    def GetString(self, k, default=""):
+        return self.d.get(k, default)
+
+    def SetString(self, k, v):
+        self.d[k] = v
+
+
+class TestVaultCategories(unittest.TestCase):
+    """Categories: the tree groups by them, groups can be hidden and folded, the choice is kept per vault."""
+
+    def rows(self):
+        def r(pn, cat):
+            return {"part_number": pn, "display": pn, "description": pn, "item_type": "part", "category": cat}
+        return {p: r(p, c) for p, c in (("A", "Connectors"), ("B", "Connectors"), ("C", ""), ("D", "Seals"), ("E", ""))}
+
+    def nodes(self):
+        return [{"pn": p, "qty": None, "children": []} for p in "ABCD"] + [
+            {"pn": None, "group": "Other files", "qty": None,
+             "children": [{"pn": "E", "qty": None, "children": []}]}]
+
+    def test_group_by_category(self):
+        out, hidden = vc.group_by_category(self.nodes(), self.rows())
+        self.assertEqual([n.get("category", n["group"]) for n in out], ["Connectors", "Seals", ""])
+        self.assertEqual([len(n["children"]) for n in out], [2, 1, 2])  # C, and Other files with E
+        self.assertEqual((hidden, out[0]["group"]), (0, "Connectors  \u00b7  2"))
+        out, hidden = vc.group_by_category(self.nodes(), self.rows(), {"Connectors", ""})
+        self.assertEqual(([n["group"] for n in out], hidden), (["Seals  \u00b7  1"], 4))
+        out, hidden = vc.group_by_category(self.nodes(), self.rows(), {"Connectors"}, show_hidden=True)
+        self.assertTrue(out[0]["group"].endswith("hidden"))
+        plain = {p: dict(r, category="") for p, r in self.rows().items()}
+        self.assertEqual(vc.group_by_category(self.nodes(), plain), (self.nodes(), 0))
+
+    def test_choices_are_remembered_per_vault(self):
+        g = _FakePrefs()
+        vc.save_category_prefs("/v/one", {"Connectors"}, {"Seals"}, g)
+        vc.save_category_prefs("/v/two", {""}, set(), g)
+        self.assertEqual(vc.category_prefs("/v/one", g), ({"Connectors"}, {"Seals"}))
+        self.assertEqual(vc.category_prefs("/v/two", g), ({""}, set()))
+        self.assertEqual(vc.category_prefs("/v/three", g), (set(), set()))
+        vc.save_category_prefs("/v/two", set(), set(), g)
+        self.assertEqual(vc.category_prefs("/v/two", g), (set(), set()))
+
+    def test_panel_groups_hides_and_remembers(self):
+        import shutil
+
+        from bruceworx import vault_setup as vs
+
+        tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-cat-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ref = vs.create_vault(vs.VaultSetup(name="Cat", folder=os.path.join(tmp, "vault"),
+                                            numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("LE")])),
+                              actor="bruce@mac").ref_path
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        old_cat = prefs.GetString(vc.CATEGORY_PREF, "")
+        prefs.SetString("VaultPath", ref)
+        prefs.SetString(vc.CATEGORY_PREF, "")
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+        self.addCleanup(prefs.SetString, vc.CATEGORY_PREF, old_cat)
+        a = vc.new_part("part", "Housing", open_it=False, category="Connectors")
+        b = vc.new_part("part", "Terminal", open_it=False, category="Connectors")
+        c = vc.new_part("part", "Plate", open_it=False)
+        s = vc.session()
+        self.assertEqual(s.vault.items[a].category, "Connectors")
+        from PySide import QtCore
+
+        GROUP = QtCore.Qt.UserRole + 3
+        from PySide import QtCore
+
+        GROUP = QtCore.Qt.UserRole + 3
+        panel = vc._classes()["VaultPanel"]()
+        self.addCleanup(panel.deleteLater)
+        panel.refresh()
+
+        def tops():
+            return [panel.model.index(r, 0).data(GROUP) for r in range(panel.model.rowCount())]
+
+        self.assertEqual(tops(), ["Connectors  \u00b7  2", "Uncategorized  \u00b7  1"])
+        self.assertEqual(panel.model.rowCount(panel.model.index(0, 0)), 2)
+        panel.set_category_hidden("Connectors", True)
+        self.assertEqual(tops(), ["Uncategorized  \u00b7  1"])
+        self.assertIn("2 in hidden categories", panel.count.text())
+        panel.search.setText("Housing")  # a search looks through hidden categories
+        self.assertEqual(tops(), ["Connectors  \u00b7  2  \u00b7  hidden"])
+        panel.search.setText("")
+        self.assertEqual(vc.category_prefs(s.root)[0], {"Connectors"})
+        again = vc._classes()["VaultPanel"]()  # a new panel (a new session) starts with the choice kept
+        self.addCleanup(again.deleteLater)
+        again.refresh()
+        self.assertEqual([again.model.index(r, 0).data(GROUP) for r in range(again.model.rowCount())],
+                         ["Uncategorized  \u00b7  1"])
+        again.show_all_categories()
+        self.assertEqual(again.model.rowCount(), 2)
+        self.assertEqual(vc.category_prefs(s.root)[0], set())
+        self.assertIsNotNone(c)
+
+
 class TestICloudDownload(unittest.TestCase):
     def setUp(self):
         import shutil
