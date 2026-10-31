@@ -206,3 +206,13 @@ Flat plate, heated & Air at 5\,m/s along a 50\,mm plate, laminar: $Re_L=1.66\tim
   \item \textbf{Acceptance.} The four benchmarks above, each run in CI at the coarse preset.
         \emph{Recommendation:} yes.
 \end{enumerate}
+
+\paragraph{Your answers (31 Oct).} O1--O9 as recommended. OpenFOAM is \emph{not} bundled: Vector Labs finds
+an installed \emph{OpenFOAM-v2606.app} (the tested version; any other version triggers a warning) and offers
+\emph{Install OpenFOAM\ldots} when none is installed. Prop wash and external flow come first, then cooling with
+the convection map. Propellers are actuator disks fed by the thrust tables, with swirl off by default.
+Turbulence is $k$--$\omega$ SST, with laminar as an option. The mesh uses \code{snappyHexMesh} presets with an
+automatic domain. Results show inside Vector Labs, with \emph{Open in ParaView} when it is installed. The links
+to the other studies are the convection map (built first) and wall pressure as a static load. Cases live in
+\file{\textasciitilde/Library/Caches/Vector Labs/cfd/}. The four benchmarks are the acceptance, and they will
+be joined by the open validation data now being gathered.
