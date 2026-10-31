@@ -56,7 +56,7 @@ EPICS = [
       "Fresh clone builds on both platforms using documented commands only; CI green on both."),
     E("FND-02", "Packaging, branding & releases", "M0", "In progress", ["FND-01"],
       "FCB-P0-02, P0-03, P0-09, P0-11, P0-17, P0-18",
-      "Branding 1.1.4-bw.1 and the unsigned .dmg (#3) exist. Keystone.app (25 Oct, your choice: fully renamed, own settings folders, built from the working tree): package/bruceworx/make-keystone.sh builds a self-contained bundle into /Applications; rebuilt through the 25 Oct UAT (Coin 4.0.10 bundled; the check run uses a throwaway profile). Still to do: release tagging with dmg + source, signing and notarising.",
+      "Branding 1.1.4-bw.1 and the unsigned .dmg (#3) exist. 31 Oct (your decision): rebranded Vector Labs (app, menu bar, Dock: 'Vector Labs'; splash, About, Get Info: 'Vector Labs, powered by FreeCAD'), bundle id com.vectorlabs.app, new arrow icon and splash, settings copied from the Keystone folders on first launch, material library renamed 'Vector Labs'; make-vectorlabs.sh (make-keystone.sh is a shim); Keystone.app kept as a link until other sessions' scripts repoint. Keystone.app (25 Oct, your choice: fully renamed, own settings folders, built from the working tree): package/bruceworx/make-keystone.sh builds a self-contained bundle into /Applications; rebuilt through the 25 Oct UAT (Coin 4.0.10 bundled; the check run uses a throwaway profile). Still to do: release tagging with dmg + source, signing and notarising.",
       "Tagged release installs on a clean Mac and opens a Fusion STEP file within envelope."),
     E("FND-03", "Track upstream FreeCAD main", "M0", "To do", ["FND-01"],
       "FCB-P1-16..21, P0-12 (replaced: rebase-at-26.3 policy), P2-01/02 (add-on vs fork)",

@@ -32,6 +32,15 @@ pixi environment and rewrites and re-signs 1\,453 files so that nothing points i
 The result is 1.7\,GB in \file{/Applications}, version \code{1.1.4-bw.1+<commit>[-dirty]}, with an icon drawn from the
 splash's arch. Checked by launching it from \file{/Applications}: it reports itself as Keystone, uses its own settings
 folders, its own Python and the native Qt platform, and loads all 20 workbenches and BruceWorx.
+\textbf{Rebranded Vector Labs} (your decision, 31 Oct): the app, menu bar and Dock say \emph{Vector Labs}; the
+splash, About box and Get Info say \emph{Vector Labs, powered by FreeCAD} (``powered by'' rather than ``by'', since
+FreeCAD is the FreeCAD Project Association's trademark). Bundle id \code{com.vectorlabs.app}; a new icon and splash
+(an arrow from an origin with its dashed components); \file{make-vectorlabs.sh} and \file{vectorlabs\_relocate.py}
+(\file{make-keystone.sh} remains as a shim). The bundle's launcher copies \file{Preferences/Keystone} and
+\file{Application Support/Keystone} to \file{Vector Labs} folders on first launch and rewrites the paths inside the
+copied settings; the Keystone folders stay as a backup. The material library \emph{Keystone} became \emph{Vector Labs}
+(documents find cards by UUID, tested). \file{/Applications/Keystone.app} is a link to \file{Vector Labs.app} until
+the other sessions' part-build scripts move to the new path, then it is removed.
 \emph{Acceptance:} the tagged release installs on a clean Mac and opens a Fusion STEP export
 (\code{LE-01001}, 200$\times$200$\times$8 envelope).
 \end{epic}
