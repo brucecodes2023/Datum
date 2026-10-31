@@ -254,6 +254,14 @@ class ConfigurationRevisions:
         raise LifecycleError("a configuration item's revisions are its file item's")
 
 
+def normalize_category(category) -> str:
+    """Trim and collapse whitespace; at most 60 characters; None -> ""."""
+    text = " ".join(str(category or "").split())
+    if len(text) > 60:
+        raise ValueError("a category name is at most 60 characters")
+    return text
+
+
 @dataclass
 class Item:
     part_number: str
@@ -265,6 +273,8 @@ class Item:
     # MOD-03: a configuration item names the file's item and its row; its revisions are the file's.
     configuration_of: str | None = None
     configuration: str = ""
+    # Vault-panel grouping label ("Connectors"); "" = uncategorized. Not part of the part number.
+    category: str = ""
 
     @property
     def latest(self) -> Revision:
@@ -452,6 +462,17 @@ class Vault:
         rev.history.append(f"item type: {item.item_type} -> {item_type}")
         rev.records.append(self._entry("set_item_type", item_type=item_type, was=item.item_type))
         item.item_type = item_type
+        return item
+
+    def set_category(self, part_number, category):
+        """Tag an item with a category ("" clears it). Pure organisation: it never touches the
+        part number, revision or state, so it is allowed in every state, obsolete included (a
+        retired connector can still be filed away). Nothing is recorded on the revision; the
+        journal event is the record. Unknown items raise KeyError via the lookup."""
+        if part_number not in self.items:
+            raise LifecycleError(f"{part_number} is not an item in this vault")
+        item = self.items[part_number]
+        item.category = normalize_category(category)
         return item
 
     def drawings_of(self, part_number):

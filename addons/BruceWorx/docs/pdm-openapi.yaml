@@ -141,6 +141,20 @@ paths:
         content: {application/json: {schema: {type: object, required: [item_type], properties: {item_type: {enum: [part, cots]}}}}}
       responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /items/{pn}/category:
+    put:
+      operationId: set_category
+      summary: >
+        File the item under a category (a label the Vault panel groups by; "" clears it).
+        Pure organisation: the part number, revision and state do not change, and it is
+        allowed in every state, obsolete included. At most 60 characters. Unknown item: 409.
+        A journal op added 30 Oct 2026; every client opening the vault must know it.
+      parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [category], properties: {category: {type: string, maxLength: 60}}}}}
+      responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
   /items/{pn}/configurations:
     post:
       operationId: add_configuration

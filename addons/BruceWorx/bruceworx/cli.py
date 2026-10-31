@@ -33,6 +33,7 @@ COMMANDS = ("export-step", "list-tree", "rename", "next", "preview", "vault", "p
 VAULT_ACTIONS = (
     "init", "status", "create", "checkout", "checkin", "undo-checkout",
     "submit", "approve", "reject", "retire", "fetch", "sync", "import", "settings",
+    "set-category", "categories",  # item categories (30 Oct 2026)
     "kicad-import", "kicad-update", "kicad-open",  # ECD-05: KiCad projects as vault items (ecad_vault)
 )
 _ENTRY_NAMES = {"hooks.py", "hooks"}
@@ -108,7 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     vault = sub.add_parser("vault", help="Folder PDM vault (no FreeCAD needed)")
     vault.add_argument("action", choices=VAULT_ACTIONS)
+    vault.add_argument("pns", nargs="*", metavar="PN", help="set-category: the part numbers to file")
     vault.add_argument("--vault", required=True, help="Vault folder or its .bwvault ref file")
+    vault.add_argument("--category", default=None,
+                       help='set-category: the category name ("" clears it), e.g. Connectors')
+    vault.add_argument("--from-csv", dest="categories_csv", default="",
+                       help="set-category: a CSV with columns part_number,category (instead of PN... --category)")
     vault.add_argument("--name", default="", help="init: vault name (default: folder name)")
     vault.add_argument("--pn", default="", help="Part number, without revision")
     vault.add_argument("--type", default="", help="create: part (default), assembly, drawing or cots; "
@@ -395,6 +401,16 @@ def _vault_command(args) -> int:
 
         partprops.attach_vault(vault)
     payload = {"ok": True, "command": f"vault {args.action}"}
+    if args.action == "set-category":
+        return _vault_set_category(vault, args, payload)
+    if args.action == "categories":
+        counts = vault.categories()
+        payload["categories"] = [{"category": name or "(uncategorized)", "count": n}
+                                 for name, n in sorted(counts.items(), key=lambda kv: (kv[0] == "", kv[0].lower()))]
+        for row in payload["categories"]:
+            print(f"{row['count']:6d}  {row['category']}", file=sys.stderr)
+        emit(payload)
+        return 0
     if args.action == "sync":
         return _vault_sync(vault, args, payload)
     if args.action == "import":
@@ -430,6 +446,38 @@ def _vault_command(args) -> int:
         payload["state"] = vault.items[args.pn].state
     emit(payload)
     return 0
+
+
+def _vault_set_category(vault, args, payload) -> int:
+    """set-category: PN... --category NAME, or --from-csv FILE (part_number,category); --dry-run reports only."""
+    import csv  # noqa: PLC0415
+
+    from bruceworx import vault_setup  # noqa: PLC0415
+
+    mapping: dict = {}
+    if args.categories_csv:
+        with open(args.categories_csv, newline="", encoding="utf-8-sig") as handle:
+            reader = csv.DictReader(handle)
+            if not reader.fieldnames or not {"part_number", "category"} <= set(reader.fieldnames):
+                raise ValueError("the CSV needs the columns part_number,category")
+            for row in reader:
+                pn = (row["part_number"] or "").strip()
+                if pn:
+                    mapping[pn] = row["category"] or ""
+    else:
+        pns = list(args.pns) + ([args.pn] if args.pn else [])
+        if not pns or args.category is None:
+            raise ValueError("vault set-category needs PN... --category NAME (or --from-csv FILE)")
+        mapping = {pn: args.category for pn in pns}
+    result = vault_setup.set_categories(vault, mapping, dry_run=args.dry_run)
+    payload.update(result, dry_run=bool(args.dry_run))
+    verb = "would set" if args.dry_run else "set"
+    print(f"{verb} {len(result['set'])}, unchanged {len(result['unchanged'])}, "
+          f"not in the vault {len(result['missing'])}", file=sys.stderr)
+    for pn in result["missing"]:
+        print(f"warning: {pn} is not in the vault", file=sys.stderr)
+    emit(payload)
+    return 1 if result["missing"] and not args.dry_run and not result["set"] else 0
 
 
 def _vault_kicad(vault, args, payload) -> int:

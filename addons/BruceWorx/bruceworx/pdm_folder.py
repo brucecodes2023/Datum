@@ -77,6 +77,7 @@ LIFECYCLE_OPS = {
     "release_eco": ("number", "note", "checklists", "attachments"),
     "set_bom": ("parent", "lines", "revision", "sha256", "missing"),
     "set_item_type": ("part_number", "item_type"),  # MOD-05: part <-> cots
+    "set_category": ("part_number", "category"),  # item categories (30 Oct 2026)
     "add_configuration": ("part_number", "configuration_of", "configuration", "description"),  # MOD-03
     # PDM-09 (26 Oct 2026): a project is a journal record naming its top assembly.
     "create_project": ("code", "name", "program", "top", "units", "drawing_profile", "description"),
@@ -496,6 +497,16 @@ class FolderVault:
     def set_item_type(self, part_number, item_type):
         return self._record("set_item_type", dict(part_number=part_number, item_type=item_type))
 
+    def set_category(self, part_number, category):
+        return self._record("set_category", dict(part_number=part_number, category=pdm.normalize_category(category)))
+
+    def categories(self) -> dict:
+        """{category: item count}; items without one count under ""."""
+        counts: dict = {}
+        for item in self.model.items.values():
+            counts[item.category] = counts.get(item.category, 0) + 1
+        return counts
+
     def add_configuration(self, part_number, configuration_of, configuration, description=""):
         return self._record("add_configuration", dict(part_number=part_number, configuration_of=configuration_of,
                                                       configuration=configuration, description=description))
@@ -872,6 +883,7 @@ class FolderVault:
                 "part_number": pn,
                 "type": item.item_type,
                 "description": item.description,
+                "category": item.category,
                 "revision": rev.code,
                 "state": item.state,
                 "released": item.released.code if item.released else None,

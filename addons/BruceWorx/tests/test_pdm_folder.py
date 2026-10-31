@@ -88,6 +88,25 @@ class ReplayTests(_TempDir, unittest.TestCase):
         self.assertEqual(json.loads(open(vault.journal_path).read().splitlines()[-1])["args"],
                          {"item_type": "cots", "part_number": PART})
 
+    def test_category_replays_and_old_vaults_load(self):
+        vault = FolderVault.init(self.tmp, "Pedestal", actor="bruce@mac")
+        vault.create_item(PART, "part", "Housing")
+        vault.create_item(ASSY, "assembly")
+        self.assertEqual(vault.categories(), {"": 2})
+        vault.set_category(PART, "Connectors")
+        with self.assertRaises(LifecycleError):
+            vault.set_category("LE-01-09999-001", "Connectors")
+        again = FolderVault(self.tmp, actor="bruce@mac")
+        self.assertEqual(again.items[PART].category, "Connectors")
+        self.assertEqual(again.categories(), {"Connectors": 1, "": 1})
+        rows = {r["part_number"]: r for r in again.status()["items"]}
+        self.assertEqual((rows[PART]["category"], rows[ASSY]["category"]), ("Connectors", ""))
+        self.assertEqual(again.problems, [])
+        # a journal written before categories existed has no such line and loads unchanged
+        lines = [line for line in open(vault.journal_path).read().splitlines() if "set_category" not in line]
+        open(vault.journal_path, "w").write("\n".join(lines) + "\n")
+        self.assertEqual(FolderVault(self.tmp, actor="bruce@mac").items[PART].category, "")
+
     def test_configurations_replay(self):
         """MOD-03: configuration items come back from the journal sharing their file's state; they
         have no file of their own (check-out goes to the file), and versions resolve to the file."""
@@ -565,6 +584,24 @@ class CliTests(_TempDir, unittest.TestCase):
         code, status = self._run("status")
         row = status["items"][0]
         self.assertEqual((row["display"], row["versions"], row["file"]), (PART + "-A", 1, "plate.FCStd"))
+
+    def test_set_category_and_categories(self):
+        self.vault_dir = os.path.join(self.tmp, "Pedestal")
+        self._run("init")
+        other = "LE-01-01002-001"
+        for pn in (PART, other):
+            self._run("create", "--pn", pn, "--description", "x")
+        csv_path = os.path.join(self.tmp, "cat.csv")
+        with open(csv_path, "w", encoding="utf-8") as handle:
+            handle.write(f"part_number,category\n{PART},Connectors\nLE-01-09999-001,Connectors\n")
+        code, result = self._run("set-category", "--from-csv", csv_path, "--dry-run")
+        self.assertEqual((code, result["set"], result["missing"]), (0, [PART], ["LE-01-09999-001"]))
+        self.assertEqual(self._run("categories")[1]["categories"], [{"category": "(uncategorized)", "count": 2}])
+        self._run("set-category", "--from-csv", csv_path)
+        code, result = self._run("set-category", PART, other, "--category", "Connectors")
+        self.assertEqual((result["set"], result["unchanged"]), ([other], [PART]))
+        self.assertEqual(self._run("categories")[1]["categories"], [{"category": "Connectors", "count": 2}])
+        self.assertEqual(self._run("status")[1]["items"][0]["category"], "Connectors")
 
     # PDM-05: approve, reject and retire take the note and the checklist, as the panels do.
     DWG = "LE-03-01001-001"

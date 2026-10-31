@@ -119,6 +119,14 @@ class NewItemTests(_Tmp):
         self.assertEqual(self.vault.items[pn].item_type, "cots")
         self.assertEqual(vs.new_item(self.vault, "part", "Bracket", self.make), "LE-01-01002-001")
 
+    def test_new_item_takes_a_category(self):
+        pn = vs.new_item(self.vault, "cots", "Deutsch DT04-2P", self.make, category=" Connectors ")
+        self.assertEqual(self.vault.items[pn].category, "Connectors")
+        self.assertEqual(vs.new_item(self.vault, "part", "Plain", self.make) and
+                         self.vault.items["LE-01-01002-001"].category, "")
+        out = vs.set_categories(self.vault, {pn: "Connectors", "LE-01-01002-001": "Seals", "LE-09-99999-001": "x"})
+        self.assertEqual(out, {"set": ["LE-01-01002-001"], "unchanged": [pn], "missing": ["LE-09-99999-001"]})
+
     def test_a_file_that_cannot_be_made_burns_no_number(self):
         def broken(path, number):
             raise RuntimeError("no FreeCAD")

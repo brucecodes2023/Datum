@@ -982,14 +982,17 @@ def program_of(part_number: str, vault_root: str) -> str:
 NEW_ITEM_KINDS = ("part", "assembly", "cots")  # cots: a bought item (MOD-05), numbered as a part
 
 
-def new_item(vault, kind: str, description: str, make_file, program: str = "", document_type: str = "") -> str:
+def new_item(vault, kind: str, description: str, make_file, program: str = "", document_type: str = "",
+             category: str = "") -> str:
     """Number a new part or assembly and check it in as WIP 01, without an import (FND-08).
 
     ``vault`` is a FolderVault; ``make_file(path, part_number)`` writes the FreeCAD file
     (a part with its part properties, the number and revision 01 already set). The number
     is previewed first and taken only once the file exists, so a file that cannot be made
     burns no number. ``program`` defaults to the vault's first program, ``document_type``
-    to the code named like the kind. Returns the part number; the item is not checked out.
+    to the code named like the kind. ``category`` (optional) files the item in the Vault panel's
+    category group, recorded right after create_item. Returns the part number; the item is not
+    checked out.
     """
     from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
 
@@ -1021,6 +1024,8 @@ def new_item(vault, kind: str, description: str, make_file, program: str = "", d
         if taken != key:
             raise ValueError(f"the number moved on while the file was made ({taken}, not {key}); try again")
         vault.create_item(key, kind, description)
+        if category and str(category).strip():
+            vault.set_category(key, category)
         vault.checkout(key)
         try:
             vault.checkin(key, staged, comment=f"New {kind}: {description}")
@@ -1039,6 +1044,31 @@ def new_item(vault, kind: str, description: str, make_file, program: str = "", d
         except OSError:
             pass
     return key
+
+
+def set_categories(vault, mapping, dry_run: bool = False) -> dict:
+    """File many items at once: ``mapping`` is {part_number: category} ("" clears).
+
+    Returns {"set": [pn...], "unchanged": [pn...], "missing": [pn...]}. Items already in that
+    category are left alone (no journal line); unknown part numbers are reported, not raised.
+    ``dry_run`` reports without writing. Used by ``bw-hooks vault set-category`` and by
+    library imports that tag what they create.
+    """
+    from bruceworx import pdm as _pdm  # noqa: PLC0415
+
+    out = {"set": [], "unchanged": [], "missing": []}
+    for pn, category in mapping.items():
+        item = vault.items.get(pn)
+        if item is None:
+            out["missing"].append(pn)
+            continue
+        if item.category == _pdm.normalize_category(category):
+            out["unchanged"].append(pn)
+            continue
+        if not dry_run:
+            vault.set_category(pn, category)
+        out["set"].append(pn)
+    return out
 
 
 def import_linked_files(vault, paths, program: str, known=None, writer=None, progress=None):
