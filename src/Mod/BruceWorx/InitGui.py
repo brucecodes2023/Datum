@@ -153,6 +153,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx interference check was not installed: {exc}")
 
 try:
+    import bruceworx_massreport_gui
+
+    bruceworx_massreport_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx mass report and drone balance were not installed: {exc}")
+
+try:
     import bruceworx_routing_gui
 
     bruceworx_routing_gui.install()

@@ -164,7 +164,6 @@
               "caption": "Inspect",
               "commands": [
                 "Std_Measure",
-                "BruceWorx_MassProperties",
                 "BruceWorx_Interference",
                 "BruceWorx_OverhangAnalysis",
                 "BruceWorx_ThicknessAnalysis",
@@ -176,6 +175,14 @@
                 "Part_CheckGeometry",
                 "Std_ToggleClipPlane",
                 "Part_SectionCut"
+              ]
+            },
+            {
+              "caption": "Mass & Balance",
+              "commands": [
+                "BruceWorx_MassProperties",
+                "BruceWorx_MassReport",
+                "BruceWorx_DroneBalance"
               ]
             },
             {

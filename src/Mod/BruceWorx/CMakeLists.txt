@@ -103,6 +103,10 @@ SET(BruceWorx_SRCS
     TestBruceWorxInspector.py
     bruceworx_physical.py
     TestBruceWorxPhysical.py
+    bruceworx_massreport.py
+    TestBruceWorxBalance.py
+    bruceworx_massreport_gui.py
+    BruceWorx_DroneBalance.svg
     bruceworx_parameters.py
     TestBruceWorxParameters.py
     bruceworx_toasts.py

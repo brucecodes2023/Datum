@@ -448,10 +448,30 @@ def _mass_override(body) -> float | None:
     return kg if kg > 0 else None
 
 
+TYPED_MASS = (("MeasuredMass", "measured"), ("DatasheetMass", "datasheet"))
+
+
+def typed_mass(obj):
+    """(kg, "measured" | "datasheet") from the part's own mass properties when one is set above zero, else None.
+    Priority: measured, then datasheet, then volume times density (computed_mass)."""
+    props = getattr(obj, "PropertiesList", ())
+    for name, source in TYPED_MASS:
+        if name not in props:
+            continue
+        value = getattr(obj, name)
+        kg = value.getValueAs("kg").Value if hasattr(value, "getValueAs") else float(value)
+        if kg > 0:
+            return kg, source
+    return None
+
+
 def computed_mass(obj):
-    """Mass of the bodies that have a material; 0 kg when none has one (the
-    "Default" placeholder's density is not the part's). A body's
+    """The part's typed mass (MeasuredMass, then DatasheetMass) when set; otherwise the mass of the bodies that have
+    a material; 0 kg when none has one (the "Default" placeholder's density is not the part's). A body's
     ``MassOverride`` replaces its volume times density. None: no bodies."""
+    typed = typed_mass(obj)
+    if typed is not None:
+        return f"{typed[0]} kg"
     bodies = _bodies(obj)
     if not bodies:
         return None
