@@ -434,6 +434,8 @@ class RoutingGuiTests(unittest.TestCase):
         self.assertEqual((pins[0].PinName, pins[0].Label, pins[0].GaugeMin, pins[0].GaugeMax, pins[0].TerminalPN),
                          ("VBAT", "Pin VBAT", 28, 22, "SXH-001T-P0.6"))
         self.assertEqual(pins[0].TerminalMfr, "JST")
+        panel.strip.setValue(2.3)
+        self.assertAlmostEqual(pins[0].StripLength.Value, 2.3)
         self.assertEqual(part.ConnectorFamily, "JST-XH")
         self.assertIn("Pin VBAT", panel.status.text())
         # The same frame as a port.

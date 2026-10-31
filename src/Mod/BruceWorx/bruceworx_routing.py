@@ -799,6 +799,10 @@ class Wire(_Routed):
              "From, from pin, to, to pin and signal as last filled in from the pins (a value typed over them stays)",
              hidden=True)
         _add(obj, "App::PropertyString", "Warnings", "A wire end the pin does not take (gauge range)", readonly=True)
+        _add(obj, "App::PropertyLength", "FromStrip", "Wire inside the connector at the start (its pin's StripLength)",
+             readonly=True)
+        _add(obj, "App::PropertyLength", "ToStrip", "Wire inside the connector at the end (its pin's StripLength)",
+             readonly=True)
         _add(obj, "App::PropertyStringList", "BomExtras",
              "Counted BOM lines this item brings: P/N|quantity|kind (a terminal and a seal per end on a pin)",
              group="BruceWorx", readonly=True)
@@ -824,24 +828,28 @@ class Wire(_Routed):
                 self._quiet = False
         self.apply_rule(obj, od)
         obj.Shape = sweep(path.Shape.Wires[0], od)
-        length = float(path.Length.Value) * (1.0 + obj.Slack / 100.0)
+        strips = self.fill_ends(obj, path)
+        length = float(path.Length.Value) * (1.0 + obj.Slack / 100.0) + strips  # ROU-05: wire inside the connectors
         self.finish(obj, length)
         obj.Mass = rt.wire_mass(obj.Gauge, length, od) / 1000.0  # g -> kg
         self.check(obj, path)
-        self.fill_ends(obj, path)
 
     def fill_ends(self, obj, path):
         """ROU-05: from/to and signal from the pins the path's ends are on, the gauge check and the
-        terminals. A field is filled while it is empty or still holds what was filled last."""
+        terminals and the strip lengths (returned summed). A field is filled while it is empty or still
+        holds what was filled last."""
         rt = _rt()
         ends = path_ends(path)
         values = ["", "", "", "", ""]
         warnings, extras = [], {}
+        strip = [0.0, 0.0]
         for k, key in enumerate(("start", "end")):
             found = ends.get(key)
             if found is None or not _bp().is_pin(found[0]):
                 continue
             frame, _placement, connector = found
+            if "StripLength" in frame.PropertiesList:
+                strip[k] = float(frame.StripLength.Value)
             values[2 * k] = connector.Label if connector is not None else ""
             values[2 * k + 1] = str(frame.PinName)
             if not values[4] and frame.DefaultSignal:
@@ -869,6 +877,12 @@ class Wire(_Routed):
         rows = [f"{key}|{n}|{what}|{mfr}|{mpn}" for (key, what, mfr, mpn), n in extras.items()]
         if list(obj.BomExtras) != rows:
             obj.BomExtras = rows
+        if "FromStrip" in obj.PropertiesList:
+            if abs(obj.FromStrip.Value - strip[0]) > 1e-12:
+                obj.FromStrip = strip[0]
+            if abs(obj.ToStrip.Value - strip[1]) > 1e-12:
+                obj.ToStrip = strip[1]
+        return strip[0] + strip[1]
 
 
 class Pipe(_Routed):
@@ -1162,7 +1176,9 @@ def from_to_rows(doc):
         end = _end_name(obj, obj.ToConnector, obj.ToPart)
         rows.append({"wire": obj.Label, "signal": obj.Signal, "gauge": obj.Gauge, "colour": _colour_name(obj.Colour),
                      "from": start, "from_pin": obj.FromPin, "from_mate": mate_label(doc, start, ends.get("start")),
+                     "from_strip": float(obj.FromStrip.Value) if "FromStrip" in obj.PropertiesList else 0.0,
                      "to": end, "to_pin": obj.ToPin, "to_mate": mate_label(doc, end, ends.get("end")),
+                     "to_strip": float(obj.ToStrip.Value) if "ToStrip" in obj.PropertiesList else 0.0,
                      "length_m": float(obj.Length.Value) / 1000.0})
     return rows
 

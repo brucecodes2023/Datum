@@ -53,6 +53,8 @@ PIN_PROPS = {
     "SealItem": ("App::PropertyString", "Wire seal's Standard Library vault P/N", ""),
     "DefaultSignal": ("App::PropertyString", "Signal a wire on this pin gets by default", ""),
     "StraightLength": ("App::PropertyLength", "Straight wire before the first bend; 0 = the default rule (Bend Rules)", 0.0),
+    "StripLength": ("App::PropertyLength",
+                    "Wire inside the connector beyond this frame (a crimp contact's strip length), added to the cut length", 0.0),
 }
 PORT_PROPS = {
     "PortName": ("App::PropertyString", "Port name (1, 2, IN, A)", ""),

@@ -332,8 +332,9 @@ class RoutingCoreTests(unittest.TestCase):
         br.make_hose(path, inner=6.0, od=10.0, name="Return")
         self.doc.recompute()
         lines = br.from_to_csv(self.doc).splitlines()
-        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,From mate,To,To pin,To mate,Length (m)")
-        self.assertEqual(lines[1], f"W2,GND,18 AWG,black,J1,2,,M1,-,,{(280 + 30 * math.pi) * 1.05 / 1000:.3f}")
+        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,From mate,From strip (mm),To,To pin,To mate,"
+                                   "To strip (mm),Length (m)")
+        self.assertEqual(lines[1], f"W2,GND,18 AWG,black,J1,2,,,M1,-,,,{(280 + 30 * math.pi) * 1.05 / 1000:.3f}")
         lines = br.cut_list_csv(self.doc).splitlines()
         self.assertEqual(lines[0], "Item,Kind,Size,Cut length (mm),Bend radius,Bends,Bend table")
         self.assertEqual(lines[1], f"Line,Pipe,12 x 1,{280 + 30 * math.pi:.1f},20,3,"
@@ -679,7 +680,14 @@ class ConnectorFittingTests(unittest.TestCase):
         self.assertIn(("gauge", "warn"), br.row_badges(wire, {}, [])[1])
         # The from-to list names J1's mate (P1 sits on it); J9 has none.
         lines = br.from_to_csv(self.doc).splitlines()
-        self.assertEqual(lines[1].split(",")[:10], ["W1", "+5V", "18 AWG", "red", "J1", "1", "P1", "J9", "B", ""])
+        self.assertEqual(lines[1].split(",")[:12], ["W1", "+5V", "18 AWG", "red", "J1", "1", "P1", "", "J9", "B", "", ""])
+        # The wire inside the connector at each end (a crimp contact's strip length) is cut too.
+        before = wire.Length.Value
+        self.bp.pin(part, "1").StripLength = 2.3
+        self.doc.recompute()
+        self.assertAlmostEqual(wire.Length.Value, before + 2 * 2.3, places=6)  # J1 and J9 are both XHP-2 pin 1
+        self.assertAlmostEqual((wire.FromStrip.Value, wire.ToStrip.Value), (2.3, 2.3))
+        self.assertEqual(br.from_to_csv(self.doc).splitlines()[1].split(",")[7], "2.3")
         p1.Label = "P7"
         self.assertEqual(br.from_to_rows(self.doc)[0]["from_mate"], "P7")
 

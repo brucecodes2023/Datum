@@ -936,8 +936,8 @@ def tube_size(name):
 # ----------------------------------------------------------------------------------------------
 # Reports.
 
-FROM_TO_COLUMNS = ("Wire", "Signal", "Gauge", "Colour", "From", "From pin", "From mate", "To", "To pin", "To mate",
-                   "Length (m)")
+FROM_TO_COLUMNS = ("Wire", "Signal", "Gauge", "Colour", "From", "From pin", "From mate", "From strip (mm)", "To",
+                   "To pin", "To mate", "To strip (mm)", "Length (m)")
 CUT_LIST_COLUMNS = ("Item", "Kind", "Size", "Cut length (mm)", "Bend radius", "Bends", "Bend table")
 
 
@@ -951,11 +951,15 @@ def _csv(columns, rows):
 
 def from_to_csv(rows):
     """``rows``: dicts with wire, signal, gauge, colour, from, from_pin, from_mate, to, to_pin,
-    to_mate, length_m. A mate is the connector mated with that end's connector (ROU-05)."""
+    to_mate, length_m; from_strip and to_strip in mm. A mate is the connector mated with that end's
+    connector; a strip is the wire inside the connector at that end, included in the length (ROU-05)."""
+    def strip(value):
+        return f"{float(value):g}" if value else ""
+
     return _csv(FROM_TO_COLUMNS, [
         (r.get("wire", ""), r.get("signal", ""), r.get("gauge", ""), r.get("colour", ""), r.get("from", ""),
-         r.get("from_pin", ""), r.get("from_mate", ""), r.get("to", ""), r.get("to_pin", ""), r.get("to_mate", ""),
-         f"{float(r.get('length_m', 0)):.3f}")
+         r.get("from_pin", ""), r.get("from_mate", ""), strip(r.get("from_strip")), r.get("to", ""), r.get("to_pin", ""),
+         r.get("to_mate", ""), strip(r.get("to_strip")), f"{float(r.get('length_m', 0)):.3f}")
         for r in rows])
 
 

@@ -1033,6 +1033,8 @@ class FramePanel:
         self.terminal_item.setPlaceholderText("Standard Library P/N (optional)")
         self.seal_item.setPlaceholderText("Standard Library P/N (optional)")
         self.pin_straight = spin(special="default rule")
+        self.strip = spin(special="none")
+        self.strip.setToolTip("Wire inside the connector beyond the frame (the terminal's strip length); added to the cut length")
         pin.addRow("Thinnest wire", self.gauge_min)
         pin.addRow("Thickest wire", self.gauge_max)
         pin.addRow("Terminal MPN", self.terminal)
@@ -1043,6 +1045,7 @@ class FramePanel:
         pin.addRow("Seal item", self.seal_item)
         pin.addRow("Default signal", self.signal)
         pin.addRow("Straight before bend", self.pin_straight)
+        pin.addRow("Strip length", self.strip)
         layout.addWidget(self.pin_box)
 
         self.port_box = QtWidgets.QGroupBox("Port")
@@ -1092,6 +1095,7 @@ class FramePanel:
                 widget.setText(str(getattr(f, name, "")))
             self.signal.setText(f.DefaultSignal)
             self.pin_straight.setValue(float(f.StraightLength.Value))
+            self.strip.setValue(float(getattr(getattr(f, "StripLength", 0.0), "Value", 0.0)))
         else:
             self.port_type.setCurrentText(f.PortType)
             self.port_size.setText(f.PortSize)
@@ -1149,6 +1153,9 @@ class FramePanel:
                     self._set(prop, widget.text().strip())
                 self._set("DefaultSignal", self.signal.text().strip())
                 self._set("StraightLength", self.pin_straight.value())
+                if "StripLength" not in f.PropertiesList:
+                    bp.add_frame_props(f, bp.PIN)
+                self._set("StripLength", self.strip.value())
             else:
                 self._set("PortName", name)
                 self._set("PortType", self.port_type.currentText())

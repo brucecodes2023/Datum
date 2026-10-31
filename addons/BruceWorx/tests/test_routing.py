@@ -344,11 +344,12 @@ class ReportTests(unittest.TestCase):
         text = rt.from_to_csv([{"wire": "W1", "signal": "+12V", "gauge": "22 AWG", "colour": "red", "from": "J1",
                                 "from_pin": "1", "to": "M1", "to_pin": "+", "length_m": 0.2345}])
         lines = text.splitlines()
-        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,From mate,To,To pin,To mate,Length (m)")
-        self.assertEqual(lines[1], "W1,+12V,22 AWG,red,J1,1,,M1,+,,0.234")
-        text = rt.from_to_csv([{"wire": "W2", "from": "J1", "from_pin": "2", "from_mate": "P1", "to": "M1",
-                                "to_pin": "-", "length_m": 0.1}])
-        self.assertEqual(text.splitlines()[1], "W2,,,,J1,2,P1,M1,-,,0.100")
+        self.assertEqual(lines[0], "Wire,Signal,Gauge,Colour,From,From pin,From mate,From strip (mm),To,To pin,To mate,"
+                                   "To strip (mm),Length (m)")
+        self.assertEqual(lines[1], "W1,+12V,22 AWG,red,J1,1,,,M1,+,,,0.234")
+        text = rt.from_to_csv([{"wire": "W2", "from": "J1", "from_pin": "2", "from_mate": "P1", "from_strip": 2.3,
+                                "to": "M1", "to_pin": "-", "length_m": 0.1}])
+        self.assertEqual(text.splitlines()[1], "W2,,,,J1,2,P1,2.3,M1,-,,,0.100")
 
     def test_terminal_csv(self):
         text = rt.terminal_csv([
