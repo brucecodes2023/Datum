@@ -20,7 +20,7 @@ servo size), built as \textbf{configurations} (\eref{MOD-03}) rather than separa
 \emph{Acceptance:} the template regenerates cleanly for three wheelbases.
 \end{epic}
 
-\begin{epic}{ROB-03}{Mass, CG \& inertia report}{M1}{\stTodo}{FCB-P2R-07}
+\begin{epic}{ROB-03}{Mass, CG \& inertia report}{M1}{\stDone}{FCB-P2R-07}
 Per-part mass from density or a COTS override; totals, CG and the inertia tensor; CSV export and a 3D CG
 marker. It builds on \eref{MOD-11}.
 \emph{Acceptance:} the X-frame example in Figure~\ref{fig:cg}: 388.1\,g, CG at $(2.45, 0, -2.73)$\,mm.
@@ -36,7 +36,7 @@ Computed in headless FreeCAD.}
 \label{fig:cg}
 \end{figure}
 
-\begin{epic}{ROB-04}{Drone balance \& thrust-to-weight}{M3}{\stTodo}{FCB-P2R-08}
+\begin{epic}{ROB-04}{Drone balance \& thrust-to-weight}{M3}{\stDone}{FCB-P2R-08}
 Compare the CG with the centroid of the motor axes, and report thrust-to-weight
 $T/W=\sum_i T_{\max,i}/(m g)$ from COTS data. Warn when the horizontal CG offset exceeds a fraction of the
 arm length, or $T/W<2$.
