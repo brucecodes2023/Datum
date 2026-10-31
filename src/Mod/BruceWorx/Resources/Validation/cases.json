@@ -1,0 +1,985 @@
+{
+ "version": 1,
+ "description": "SIM-05 validation cases of Vector Labs: published reference values with citations (numbers only), and the parameters of the geometry builders in bruceworx_validation_cases.py. Run by bruceworx_validation.py.",
+ "cfd": [],
+ "cases": [
+  {
+   "id": "B-ST1",
+   "title": "NAFEMS LE10, thick elliptic plate under pressure",
+   "tier": "B",
+   "kind": "fe",
+   "study": "static",
+   "builder": "le10",
+   "params": {
+    "thickness_mm": 600.0,
+    "E_MPa": 210000.0,
+    "nu": 0.3,
+    "pressure_MPa": 1.0
+   },
+   "mesh": {
+    "fast": 120.0,
+    "slow": [
+     150.0,
+     100.0,
+     70.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "syy_D",
+   "references": [
+    {
+     "key": "syy_D",
+     "label": "sigma_yy at D (2, 0, 0.6) m, top surface at the hole",
+     "value": -5.38,
+     "unit": "MPa",
+     "basis": "NAFEMS target; NEGATIVE = compressive. Confirmed: COMSOL model documentation states the NAFEMS value as -5.38 MPa; the FeenoX/Fino example (hex20, same BCs) computes -5.38016 / -5.3601 MPa with the pressure pressing down on the top face; this build gives -5.34 MPa (mesh 120 mm) with the same sign. Altair and Abaqus quote the magnitude 5.38 only."
+    }
+   ],
+   "citation": {
+    "document": "NAFEMS LE10, thick plate under pressure (The Standard NAFEMS Benchmarks, TNSB Rev. 3, 1990)",
+    "location": "target solution: direct stress sigma_yy at point D (2.0, 0.0, 0.6) m",
+    "url": "https://doc.comsol.com/6.1/doc/com.comsol.help.models.sme.thick_plate/thick_plate.html",
+    "also": [
+     "https://www.seamplex.com/fino/cases/012-nafems-le10"
+    ]
+   },
+   "licence": "NAFEMS documents are paid; only the published reference number and the geometry of the case are stored, with the citation",
+   "setup": "Quadrant of the plate: outer ellipse (x/3.25)^2+(y/2.75)^2=1 m, inner (x/2)^2+y^2=1 m, z from 0 to 0.6 m, E=210 GPa, nu=0.3, 1 MPa on the top face; uy=0 on y=0, ux=0 on x=0, ux=uy=0 on the outer face, uz=0 on the outer face's edge at z=0.3 m (mid-plane)."
+  },
+  {
+   "id": "B-ST2",
+   "title": "Code_Aster SSLV07, prism stretched under its own weight",
+   "tier": "B",
+   "kind": "fe",
+   "study": "static",
+   "builder": "sslv07",
+   "params": {
+    "half_width_mm": 500.0,
+    "height_mm": 3000.0,
+    "E_MPa": 200000.0,
+    "nu": 0.3,
+    "density": 7800.0,
+    "g": 9.81
+   },
+   "mesh": {
+    "fast": 300.0,
+    "slow": [
+     300.0,
+     200.0,
+     150.0
+    ]
+   },
+   "tolerance": 0.01,
+   "primary": "wB",
+   "references": [
+    {
+     "key": "wB",
+     "label": "w at B (0, 0, 0)",
+     "value": -1.721655e-06,
+     "unit": "m"
+    },
+    {
+     "key": "wC",
+     "label": "w at C (0.5, 0, 0)",
+     "value": -1.707308e-06,
+     "unit": "m"
+    },
+    {
+     "key": "uD",
+     "label": "u at D (0.5, 0, 3)",
+     "value": -1.721655e-07,
+     "unit": "m"
+    },
+    {
+     "key": "wD",
+     "label": "w at D (0.5, 0, 3)",
+     "value": 1.434713e-08,
+     "unit": "m",
+     "basis": "a difference of two large numbers (w_top = rho g nu x^2/2E); sensitive to the point support at A"
+    },
+    {
+     "key": "wE",
+     "label": "w at E (0, 0, 1.5)",
+     "value": -1.291241e-06,
+     "unit": "m"
+    },
+    {
+     "key": "szzE",
+     "label": "sigma_zz at E (0, 0, 1.5)",
+     "value": 114777.0,
+     "unit": "Pa"
+    }
+   ],
+   "citation": {
+    "document": "Code_Aster validation manual SSLV07 (v14.4)",
+    "location": "section 3.3, table of tested values (modelling A); formulas in section 2.1",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v3/v3.04.007.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Quadrant 0<=x,y<=0.5 m of the 1x1x3 m prism (symmetry planes x=0, y=0; the manual's DX=DY=0 on the axis AB), point A (0,0,3) held in z, the weight (g=9.81) and the uniform traction rho g L = 229554 Pa on the top face. sigma_zz at A (2.29554e5 Pa in the manual) is not tested: a point support makes a stress spike in a tetrahedral mesh."
+  },
+  {
+   "id": "B-ST3",
+   "title": "Code_Aster SSLV301, cantilever cylinder under a linearly varying line load (3D solid)",
+   "tier": "B",
+   "kind": "fe",
+   "study": "static",
+   "builder": "sslv301",
+   "params": {
+    "radius_mm": 6.0,
+    "length_mm": 240.0,
+    "E_MPa": 210000.0,
+    "nu": 0.3,
+    "q0_N_per_m": 3000.0,
+    "segments": 16,
+    "clamp": "plane"
+   },
+   "mesh": {
+    "fast": 3.0,
+    "slow": [
+     3.0,
+     2.0,
+     1.5
+    ]
+   },
+   "tolerance": 0.02,
+   "primary": "urC",
+   "references": [
+    {
+     "key": "urC",
+     "label": "radial displacement at C (R, 0, L)",
+     "value": -0.001552,
+     "unit": "m",
+     "basis": "source value (Timoshenko, beam theory; the manual's Aster axisymmetric run gives -1.54839e-3)"
+    },
+    {
+     "key": "szz_2R",
+     "label": "sigma_zz on the tension fibre 2R = 12 mm from the clamp",
+     "value": 145552500.62230805,
+     "unit": "Pa",
+     "derived": true,
+     "basis": "the manual's beam theory at z = 2R: M(z) = q0 (L - z)^3 / (6 L), sigma = M R / I, I = pi R^4 / 4, with q0 = 3 N/mm, L = 240 mm; at z = 0 the same formula gives the manual's 169.8 MPa"
+    },
+    {
+     "key": "szzB",
+     "label": "sigma_zz at B (R, 0, 0), the clamped section",
+     "value": 169800000.0,
+     "unit": "Pa",
+     "informative": true,
+     "basis": "the manual's value is beam theory at the root. The 3D solid has a root effect that depends on the clamp: 164 MPa with the section held plane (this case), about 220 MPa with a fully clamped face (mesh-converged, 1 mm), so it is reported but not marked."
+    }
+   ],
+   "citation": {
+    "document": "Code_Aster validation manual SSLV301 (v14.4)",
+    "location": "section 2.2 (reference results) and 3.3",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v3/v3.04.301.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Cylinder R=6 mm, L=240 mm along z, E=210 GPa, nu=0.3. The line load q = 3000 N/m (1 - z/L) in -x on the generator at theta=0, as 16 uniform edge forces (mean over each 15 mm segment). Root: z=0 face held in z only (the section stays plane and may contract), rigid motions removed at the two points (+-R, 0, 0). Geometry check: R, L and the load are from section 1; the beam values 1.552e-3 m and 169.8 MPa follow from q0 L^4/(30 E I) and q0 L^2 R/(6 I)."
+  },
+  {
+   "id": "B-MO1",
+   "title": "NAFEMS FV52, simply supported solid square plate",
+   "tier": "B",
+   "kind": "fe",
+   "study": "modal",
+   "builder": "fv52",
+   "params": {
+    "side_mm": 10000.0,
+    "thickness_mm": 1000.0,
+    "E_MPa": 200000.0,
+    "nu": 0.3,
+    "density": 8000.0,
+    "modes": 7,
+    "support_z_mm": 0.0
+   },
+   "mesh": {
+    "fast": 600.0,
+    "slow": [
+     600.0,
+     400.0,
+     300.0
+    ]
+   },
+   "tolerance": 0.02,
+   "primary": "f1",
+   "status": "known_gap",
+   "envelope": 0.12,
+   "note": "The flexural modes converge 2.5 to 5 % below the NAFEMS targets (mode 4: 43.6, 43.4, 43.0 Hz on the 600, 400, 300 mm meshes against 45.897, still falling as the mesh is refined) with the support as the ANSYS manual states it (uz=0 on the bottom edges); with the support at mid-height 44.0 Hz, with the whole side faces held in z 44.3 Hz (500 mm mesh). The in-plane mode 8 (193.59 Hz) matches to 0.01 %, so E, nu and the density are right. Not made to match; reported as a known gap, tolerance unchanged.",
+   "references": [
+    {
+     "key": "f1",
+     "label": "mode 4",
+     "value": 45.897,
+     "unit": "Hz"
+    },
+    {
+     "key": "f2",
+     "label": "mode 5",
+     "value": 109.44,
+     "unit": "Hz"
+    },
+    {
+     "key": "f3",
+     "label": "mode 6",
+     "value": 109.44,
+     "unit": "Hz"
+    },
+    {
+     "key": "f4",
+     "label": "mode 7",
+     "value": 167.89,
+     "unit": "Hz"
+    },
+    {
+     "key": "f5",
+     "label": "mode 8",
+     "value": 193.59,
+     "unit": "Hz"
+    },
+    {
+     "key": "f6",
+     "label": "mode 9",
+     "value": 206.19,
+     "unit": "Hz"
+    },
+    {
+     "key": "f7",
+     "label": "mode 10",
+     "value": 206.19,
+     "unit": "Hz"
+    }
+   ],
+   "citation": {
+    "document": "NAFEMS FV52, simply supported solid square plate; target frequencies as listed in the ANSYS Verification Manual, benchmark VMC5",
+    "location": "table of target frequencies (modes 4 to 10; modes 1 to 3 are rigid)",
+    "url": "https://ansyshelp.ansys.com/public/Views/Secured/corp/v251/en/ans_vm/Hlp_V_VMC5.html"
+   },
+   "licence": "NAFEMS documents are paid; only the published reference number and the geometry of the case are stored, with the citation",
+   "setup": "10x10x1 m plate, E=200 GPa, nu=0.3, rho=8000 kg/m^3, uz=0 along the four bottom edges (z=0) only."
+  },
+  {
+   "id": "B-MO2",
+   "title": "Code_Aster SDLV401, free solid sphere",
+   "tier": "B",
+   "kind": "fe",
+   "study": "modal",
+   "builder": "sdlv401",
+   "params": {
+    "radius_mm": 10.0,
+    "E_MPa": 100.0,
+    "nu": 0.3,
+    "density": 10000.0,
+    "modes": 10
+   },
+   "mesh": {
+    "fast": 3.0,
+    "slow": [
+     3.0,
+     2.0,
+     1.5
+    ]
+   },
+   "tolerance": 0.02,
+   "primary": "f1",
+   "references": [
+    {
+     "key": "f1",
+     "label": "mode 1",
+     "value": 2470.35,
+     "unit": "Hz"
+    },
+    {
+     "key": "f2",
+     "label": "mode 2",
+     "value": 2470.35,
+     "unit": "Hz"
+    },
+    {
+     "key": "f3",
+     "label": "mode 3",
+     "value": 2471.01,
+     "unit": "Hz"
+    },
+    {
+     "key": "f4",
+     "label": "mode 4",
+     "value": 2471.01,
+     "unit": "Hz"
+    },
+    {
+     "key": "f5",
+     "label": "mode 5",
+     "value": 2471.01,
+     "unit": "Hz"
+    },
+    {
+     "key": "f6",
+     "label": "mode 6",
+     "value": 2612.96,
+     "unit": "Hz"
+    },
+    {
+     "key": "f7",
+     "label": "mode 7",
+     "value": 2612.96,
+     "unit": "Hz"
+    },
+    {
+     "key": "f8",
+     "label": "mode 8",
+     "value": 2614.3,
+     "unit": "Hz"
+    },
+    {
+     "key": "f9",
+     "label": "mode 9",
+     "value": 2614.3,
+     "unit": "Hz"
+    },
+    {
+     "key": "f10",
+     "label": "mode 10",
+     "value": 2614.3,
+     "unit": "Hz"
+    }
+   ],
+   "citation": {
+    "document": "Code_Aster validation manual SDLV401 (v14.4)",
+    "location": "section 2.2, table, degree-2 column (reference: SAMCEF, a numerical solution, not an analytic one)",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v2/v2.04.401.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Free sphere R=10 mm, E=1e8 Pa, nu=0.3, rho=1e4 kg/m^3; the six rigid modes are skipped, the ten next frequencies compared in order."
+  },
+  {
+   "id": "B-MO3",
+   "title": "Code_Aster SDLV100, tapered cantilever beam as a solid",
+   "tier": "B",
+   "kind": "fe",
+   "study": "modal",
+   "builder": "sdlv100",
+   "params": {
+    "length_mm": 1000.0,
+    "h0_mm": 40.0,
+    "h1_mm": 10.0,
+    "E_MPa": 200000.0,
+    "nu": 0.3,
+    "density": 7800.0,
+    "modes": 5
+   },
+   "mesh": {
+    "fast": 10.0,
+    "slow": [
+     10.0,
+     8.0,
+     6.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "f1",
+   "references": [
+    {
+     "key": "f1",
+     "label": "bending mode 1",
+     "value": 56.84,
+     "unit": "Hz"
+    },
+    {
+     "key": "f2",
+     "label": "bending mode 2",
+     "value": 180.0,
+     "unit": "Hz"
+    },
+    {
+     "key": "f3",
+     "label": "bending mode 3",
+     "value": 401.0,
+     "unit": "Hz"
+    },
+    {
+     "key": "f4",
+     "label": "bending mode 4",
+     "value": 723.2,
+     "unit": "Hz"
+    },
+    {
+     "key": "f5",
+     "label": "bending mode 5",
+     "value": 1145.41,
+     "unit": "Hz"
+    }
+   ],
+   "citation": {
+    "document": "Code_Aster validation manual SDLV100 (v14.4)",
+    "location": "section 3.3, table 'matrice coherente', column 'Reference SAMCEF' (modes 4 and 5: 723.2 and 1145.41 Hz, page 5)",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v2/v2.04.100.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Beam 1 m long, square section 40 mm at the clamp to 10 mm at the tip, E=2e11 Pa, rho=7800, uz=0 at every node as in the manual (DZ=0 on all nodes). The manual prints no Poisson ratio; 0.3 is taken because the SAMCEF frequencies are 4.9 % above the Euler-Bernoulli 54.18 Hz, which is the plane-strain stiffening 1/sqrt(1-nu^2) for nu=0.3, and this build reproduces them within 0.4 %."
+  },
+  {
+   "id": "B-BU1",
+   "title": "Code_Aster SSLV139, buckling of a circular plate (thick, simply supported rim)",
+   "tier": "B",
+   "kind": "fe",
+   "study": "buckling",
+   "builder": "sslv139",
+   "params": {
+    "radius_mm": 60.0,
+    "thickness_mm": 5.0,
+    "E_MPa": 210000.0,
+    "nu": 0.3
+   },
+   "mesh": {
+    "fast": 3.0,
+    "slow": [
+     3.0,
+     2.5,
+     2.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "Fcr",
+   "references": [
+    {
+     "key": "Fcr",
+     "label": "critical line load F_cr of the rim",
+     "value": 2779.8563224250465,
+     "unit": "N/mm",
+     "derived": true,
+     "basis": "F = F_thin / (1 + F_thin / (kappa G h)), F_thin = k^2 D / R^2 with k^2 = 4.198 (nu = 0.3: root of x J0(x) = (1 - nu) J1(x)), D = E h^3 / (12 (1 - nu^2)), kappa = 5/6, G = E / (2 (1 + nu)); derivation in bruceworx_validation_cases.circular_plate_fcr"
+    }
+   ],
+   "source_check": {
+    "quantity": "F_cr of the manual's own plate (h = 0.5 mm, R = 0.115 m, clamped, E = 2.1e11 Pa, nu = 0.3)",
+    "value": 2668.315,
+    "unit": "N/m",
+    "formula": "14.68 D / R^2 (clamped; 14.68 = j_{1,1}^2)"
+   },
+   "citation": {
+    "document": "Code_Aster validation manual SSLV139 (v14.4)",
+    "location": "section 2.1 (F_cr = 14.68 D / R^2, Timoshenko and Gere) and 2.2 (2668.315 N/m)",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v3/v3.04.139.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Quarter plate R=60 mm, h=5 mm (R/h=12), E=210 GPa, nu=0.3, 1 MPa on the rim face (line load 1 MPa x h), uz=0 on the rim face, symmetry planes. The manual's rim is clamped with the radial motion free, which a solid cannot hold (its rim face turns by moving radially), so the rim is simply supported and the reference is re-derived for that edge; the same derivation with J1(x)=0 returns the manual's 14.68 and 2668.3 N/m."
+  },
+  {
+   "id": "B-TH1",
+   "title": "Code_Aster TPLV06, hollow sphere with heat generation",
+   "tier": "B",
+   "kind": "fe",
+   "study": "thermal",
+   "builder": "tplv06",
+   "params": {
+    "Ri_mm": 1000.0,
+    "Re_mm": 2000.0,
+    "k": 1.0,
+    "T0": 20.0,
+    "Q_W_m3": 100.0,
+    "radii_m": [
+     1.25,
+     1.5,
+     1.75
+    ]
+   },
+   "mesh": {
+    "fast": 250.0,
+    "slow": [
+     250.0,
+     200.0,
+     150.0
+    ]
+   },
+   "tolerance": 0.01,
+   "primary": "T_1.5",
+   "references": [
+    {
+     "key": "T_1.25",
+     "label": "T at r = 1.25 m",
+     "value": 30.625,
+     "unit": "degC"
+    },
+    {
+     "key": "T_1.5",
+     "label": "T at r = 1.5 m",
+     "value": 32.5,
+     "unit": "degC"
+    },
+    {
+     "key": "T_1.75",
+     "label": "T at r = 1.75 m",
+     "value": 28.482,
+     "unit": "degC"
+    }
+   ],
+   "citation": {
+    "document": "Code_Aster validation manual TPLV06 (v14.4)",
+    "location": "section 2.1 (closed form) and 3.3 (reference column)",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v4/v4.04.006.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Octant of the hollow sphere (adiabatic cut planes), both spherical faces at 20 degC, Q=100 W/m^3 as total power Q x V, k=1 W/m K; the profile is read at the radius by a cubic fit of the nodal values within 0.15 m. Check: T(r)=T0+Q/(6k)[(Re^2-Ri^2)(1/Ri-1/r)/(1/Ri-1/Re)-(r^2-Ri^2)] gives 30.625, 32.500, 28.482 at 1.25, 1.5, 1.75 m."
+  },
+  {
+   "id": "B-TH2",
+   "title": "Code_Aster TPLV304, square bar, imposed temperature and convection",
+   "tier": "B",
+   "kind": "fe",
+   "study": "thermal",
+   "builder": "tplv304",
+   "params": {
+    "b_mm": 25.4,
+    "L_mm": 203.2,
+    "k": 43.2675,
+    "Tw": 37.78,
+    "h": 5.678,
+    "Ta": -17.78
+   },
+   "mesh": {
+    "fast": 8.0,
+    "slow": [
+     8.0,
+     6.0,
+     4.0
+    ]
+   },
+   "tolerance": 0.01,
+   "primary": "T_end",
+   "references": [
+    {
+     "key": "T_end",
+     "label": "mean temperature of the end face y = L",
+     "value": 20.329,
+     "unit": "degC"
+    }
+   ],
+   "citation": {
+    "document": "Code_Aster validation manual TPLV304 (v14.4)",
+    "location": "section 3.3, table of tested values (end of the bar, y = L)",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v4/v4.04.304.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Bar 25.4 x 203.2 x 25.4 mm, y=0 at 37.78 degC, y=L insulated, the four sides in air (5.678 W/m^2 K, -17.78 degC), k=43.2675 W/m K."
+  },
+  {
+   "id": "B-TT1",
+   "title": "Code_Aster TTLV01, sphere cooled by convection (heated from outside)",
+   "tier": "B",
+   "kind": "fe",
+   "study": "thermal",
+   "builder": "ttlv01",
+   "params": {
+    "diameter_mm": 200.0,
+    "rho": 7200.0,
+    "k": 48.822,
+    "cp": 669.0,
+    "h": 232.5,
+    "Te": 1000.0,
+    "T0": 20.0,
+    "end_s": 2400.0,
+    "step_s": 20.0,
+    "times_s": [
+     400,
+     600,
+     800,
+     1000,
+     1200,
+     1400,
+     1600,
+     1800,
+     2000,
+     2200,
+     2400
+    ]
+   },
+   "mesh": {
+    "fast": 20.0,
+    "slow": [
+     20.0,
+     15.0,
+     12.0
+    ]
+   },
+   "slow_params": {
+    "step_s": 8.0
+   },
+   "tolerance": 0.03,
+   "primary": "Tc_1000",
+   "references": [
+    {
+     "key": "Tc_400",
+     "label": "centre at t = 400 s",
+     "value": 334,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_600",
+     "label": "centre at t = 600 s",
+     "value": 500,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_800",
+     "label": "centre at t = 800 s",
+     "value": 618,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_1000",
+     "label": "centre at t = 1000 s",
+     "value": 706,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_1200",
+     "label": "centre at t = 1200 s",
+     "value": 774,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_1400",
+     "label": "centre at t = 1400 s",
+     "value": 828,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_1600",
+     "label": "centre at t = 1600 s",
+     "value": 872,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_1800",
+     "label": "centre at t = 1800 s",
+     "value": 902,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_2000",
+     "label": "centre at t = 2000 s",
+     "value": 923,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_2200",
+     "label": "centre at t = 2200 s",
+     "value": 942,
+     "unit": "degC"
+    },
+    {
+     "key": "Tc_2400",
+     "label": "centre at t = 2400 s",
+     "value": 956,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_400",
+     "label": "surface at t = 400 s",
+     "value": 461,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_600",
+     "label": "surface at t = 600 s",
+     "value": 608,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_800",
+     "label": "surface at t = 800 s",
+     "value": 696,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_1000",
+     "label": "surface at t = 1000 s",
+     "value": 774,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_1200",
+     "label": "surface at t = 1200 s",
+     "value": 828,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_1400",
+     "label": "surface at t = 1400 s",
+     "value": 868,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_1600",
+     "label": "surface at t = 1600 s",
+     "value": 902,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_1800",
+     "label": "surface at t = 1800 s",
+     "value": 923,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_2000",
+     "label": "surface at t = 2000 s",
+     "value": 942,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_2200",
+     "label": "surface at t = 2200 s",
+     "value": 956,
+     "unit": "degC"
+    },
+    {
+     "key": "Ts_2400",
+     "label": "surface at t = 2400 s",
+     "value": 962,
+     "unit": "degC"
+    }
+   ],
+   "diameter_check": {
+    "result": "D = 0.2 m is the DIAMETER (R = 0.1 m)",
+    "basis": "The exact series solution (Gurney-Lurie charts are its graphical form) with R = 0.1 m, Bi = h R / k = 0.476, gives centre/surface 341.9/475.5 degC at 400 s and 952.8/962.4 at 2400 s against the manual's 334/461 and 956/962 (chart reading). With R = 0.2 m (Bi = 0.952) it gives 69.6/359.9 at 400 s and 707.7/810.3 at 2400 s, nowhere near. The manual's note at the node table (section 3.1) also puts the sector's axis at O with a sphere of the printed diameter.",
+    "series_R0.1": [
+     [
+      400,
+      341.9,
+      475.5
+     ],
+     [
+      600,
+      494.3,
+      597.0
+     ],
+     [
+      800,
+      611.5,
+      690.4
+     ],
+     [
+      1000,
+      701.5,
+      762.1
+     ],
+     [
+      1200,
+      770.6,
+      817.2
+     ],
+     [
+      1400,
+      823.8,
+      859.5
+     ],
+     [
+      1600,
+      864.6,
+      892.1
+     ],
+     [
+      1800,
+      896.0,
+      917.1
+     ],
+     [
+      2000,
+      920.1,
+      936.3
+     ],
+     [
+      2200,
+      938.6,
+      951.1
+     ],
+     [
+      2400,
+      952.8,
+      962.4
+     ]
+    ]
+   },
+   "citation": {
+    "document": "Code_Aster validation manual TTLV01 (v14.4)",
+    "location": "section 4.1, table of tested values (centre, surface; reference column from the VPCS chart reading, stated uncertainty < 2 %, larger below 600 s)",
+    "url": "https://ericca.uqtr.ca/fr14.4/man_v/v4/v4.25.001.pdf"
+   },
+   "licence": "GNU Free Documentation Licence (stated in the PDF): the numbers are stored with this citation, the PDF is not",
+   "setup": "Octant of the sphere (diameter 0.2 m), k=48.822 W/m K, rho c_p = 7200 x 669 J/m^3 K, 20 degC at t=0, convection 232.5 W/m^2 K to 1000 degC on the spherical face; fixed steps of 20 s to 2400 s; the centre is the coolest node, the surface the hottest."
+  },
+  {
+   "id": "G-TS1",
+   "title": "Thick cylinder with a radial temperature difference (thermal stress)",
+   "tier": "G",
+   "kind": "fe",
+   "study": "thermal_stress",
+   "builder": "thick_cylinder",
+   "params": {
+    "a_mm": 50.0,
+    "b_mm": 100.0,
+    "half_length_mm": 300.0,
+    "E_MPa": 210000.0,
+    "nu": 0.3,
+    "alpha": 1.2e-05,
+    "T_ref": 20.0,
+    "dT": 100.0
+   },
+   "mesh": {
+    "fast": 12.0,
+    "slow": [
+     12.0,
+     10.0,
+     8.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "shoop_a",
+   "references": [
+    {
+     "key": "shoop_a",
+     "label": "hoop stress at the bore",
+     "value": -220.3148926399866,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "shoop_b",
+     "label": "hoop stress at the outside",
+     "value": 139.68510736001346,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "sz_a",
+     "label": "axial stress at the bore",
+     "value": -220.31489263998657,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "sz_b",
+     "label": "axial stress at the outside",
+     "value": 139.68510736001346,
+     "unit": "MPa",
+     "derived": true
+    }
+   ],
+   "citation": {
+    "document": "Timoshenko and Goodier, Theory of Elasticity, 3rd ed., thermal stress in a long hollow cylinder (steady radial conduction, free ends)",
+    "location": "closed form in bruceworx_validation_cases.lame_thermal; checked there: sigma_r = 0 at both radii and no net axial force",
+    "url": ""
+   },
+   "licence": "Textbook closed form (a derivation, no data copied)",
+   "setup": "Quarter of a cylinder a=50, b=100 mm, half length 300 mm (symmetry at z=0, ends free), bore 120 degC, outside 20 degC = T_ref, E=210 GPa, nu=0.3, alpha=12e-6/K; stresses read on the mid-plane by a cubic fit over the radius. A half length of 150 mm (3 wall thicknesses) leaves the free-end effect in the mid-plane: -233 against -220 MPa."
+  },
+  {
+   "id": "G-PM1",
+   "title": "Pinned beam under axial tension (prestressed modal)",
+   "tier": "G",
+   "kind": "fe",
+   "study": "modal",
+   "builder": "tensioned_beam",
+   "params": {
+    "length_mm": 500.0,
+    "width_mm": 10.0,
+    "tension_N": 10000.0
+   },
+   "mesh": {
+    "fast": 5.0,
+    "slow": [
+     7.0,
+     5.0,
+     4.0
+    ]
+   },
+   "tolerance": 0.02,
+   "primary": "f1",
+   "references": [
+    {
+     "key": "f1",
+     "label": "mode 1, first bending (plane 1)",
+     "value": 146.76435066178445,
+     "unit": "Hz",
+     "derived": true
+    },
+    {
+     "key": "f1b",
+     "label": "mode 2, first bending (plane 2)",
+     "value": 146.76435066178445,
+     "unit": "Hz",
+     "derived": true
+    },
+    {
+     "key": "f2",
+     "label": "mode 3, second bending (plane 1)",
+     "value": 437.91569047544647,
+     "unit": "Hz",
+     "derived": true
+    },
+    {
+     "key": "f2b",
+     "label": "mode 4, second bending (plane 2)",
+     "value": 437.91569047544647,
+     "unit": "Hz",
+     "derived": true
+    }
+   ],
+   "citation": {
+    "document": "Beam with axial tension, simply supported: omega_n^2 = omega_n0^2 (1 + P L^2 / (n^2 pi^2 E I)) (standard result, e.g. Blevins, Formulas for Natural Frequency and Mode Shape; SIM-05 plan)",
+    "location": "bruceworx_sim_eigen.tensioned_frequency, checked against the form above in the builder",
+    "url": ""
+   },
+   "licence": "Textbook closed form (a derivation, no data copied)",
+   "setup": "Steel beam 500 x 10 x 10 mm, T = 10 kN, pinned ends, static step then perturbation frequency step (stress stiffening)."
+  },
+  {
+   "id": "G-NB1",
+   "title": "Column with an initial bow (nonlinear buckling, Southwell plot)",
+   "tier": "G",
+   "kind": "fe",
+   "study": "buckling",
+   "builder": "bowed_column",
+   "params": {
+    "length_mm": 500.0,
+    "width_mm": 10.0,
+    "load_N": 1000.0
+   },
+   "mesh": {
+    "fast": 8.0,
+    "slow": [
+     7.0,
+     5.0,
+     4.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "lambda_southwell",
+   "references": [
+    {
+     "key": "lambda_southwell",
+     "label": "critical load factor from the Southwell plot (Euler: pi^2 E I / (2L)^2 / P)",
+     "value": 1.7271807701906374,
+     "unit": "-",
+     "derived": true
+    },
+    {
+     "key": "intercept_mm",
+     "label": "Southwell intercept = the imposed bow at the monitored node (1 % of 4 V / S)",
+     "value": 0.09900990099009901,
+     "unit": "mm",
+     "derived": true
+    }
+   ],
+   "citation": {
+    "document": "Southwell, On the analysis of experimental observations in problems of elastic stability, Proc. R. Soc. A 135 (1932); Timoshenko and Gere, Theory of Elastic Stability (amplification 1/(1 - P/Pcr))",
+    "location": "with the bow in the shape of the buckling mode, d = a0 (P/Pcr) / (1 - P/Pcr), so d/P = (a0 + d)/Pcr: a straight line of slope 1/Pcr",
+    "url": ""
+   },
+   "licence": "Textbook closed form (a derivation, no data copied)",
+   "setup": "Cantilever column 500 x 10 x 10 mm, P_ref = 1 kN, the nonlinear run (large displacements) with the bow = mode 1 at 1 % of the section; the plot uses load factors from 0.3 to 0.85 of lambda_1."
+  }
+ ]
+}

@@ -409,3 +409,10 @@ try:
     bruceworx_sim_gui.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx simulation studies were not installed: {exc}")
+
+try:
+    import bruceworx_validation_gui
+
+    bruceworx_validation_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx validation command (SIM-05) was not installed: {exc}")

@@ -78,7 +78,8 @@ class TestDefinition(unittest.TestCase):
 
     def test_simulation_tab(self):
         sim = ws.workspace(self.defn, "Simulation")
-        self.assertEqual([g["caption"] for g in sim["tabs"][0]["groups"]], ["Study", "Setup", "Mesh", "Solve", "Results"])
+        self.assertEqual([g["caption"] for g in sim["tabs"][0]["groups"]], ["Study", "Setup", "Mesh", "Solve", "Results", "Validation"])
+        self.assertEqual(ws.place_of(self.defn, "BruceWorx_Validation"), ("Simulation", "Simulation", "Validation"))
         self.assertIn("Simulation · Results", ws.tab_toolbars(sim, "Simulation"))
         self.assertEqual(ws.place_of(self.defn, "BruceWorx_ShowSafetyFactor"), ("Simulation", "Simulation", "Results"))
         for name in ("BruceWorx_SimTemperature", "BruceWorx_SimHeatFlux", "BruceWorx_SimHeatSource", "BruceWorx_SimConvection"):

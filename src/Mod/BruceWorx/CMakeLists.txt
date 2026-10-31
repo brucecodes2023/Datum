@@ -169,6 +169,12 @@ SET(BruceWorx_SRCS
     TestBruceWorxCfd.py
     bruceworx_sim_gui.py
     TestBruceWorxSimulation.py
+    bruceworx_validation.py
+    bruceworx_validation_cases.py
+    bruceworx_validation_gui.py
+    BruceWorx_Validation.svg
+    TestBruceWorxValidation.py
+    TestBruceWorxValidationGui.py
     BruceWorx_NewStudy.svg
     BruceWorx_SafetyFactor.svg
     BruceWorx_Probe.svg
@@ -267,6 +273,22 @@ INSTALL(
     DIRECTORY Resources/Materials/VectorLabs
     DESTINATION Mod/BruceWorx/Resources/Materials
     FILES_MATCHING PATTERN "*.FCMat"
+)
+
+# [BW] SIM-05 validation cases: published reference values with citations (numbers only), for bruceworx_validation.py.
+SET(BruceWorx_Validation
+    Resources/Validation/cases.json
+)
+ADD_CUSTOM_TARGET(BruceWorxValidation ALL
+    SOURCES ${BruceWorx_Validation}
+)
+fc_target_copy_resource(BruceWorxValidation
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/Mod/BruceWorx
+    ${BruceWorx_Validation})
+INSTALL(
+    FILES ${BruceWorx_Validation}
+    DESTINATION Mod/BruceWorx/Resources/Validation
 )
 
 INSTALL(

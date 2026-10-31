@@ -557,6 +557,12 @@
                 "FEM_PostFilterDataAtPoint",
                 "FEM_ResultsPurge"
               ]
+            },
+            {
+              "caption": "Validation",
+              "commands": [
+                "BruceWorx_Validation"
+              ]
             }
           ]
         }
