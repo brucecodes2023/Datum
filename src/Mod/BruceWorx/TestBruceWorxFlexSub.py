@@ -128,6 +128,7 @@ class FlexSubTests(unittest.TestCase):
         link.touch()
         self.parent.recompute()
         self.assertEqual(cwire.Gauge, "18 AWG")
+        self.assertIn("ReadOnly", cwire.getPropertyStatus("Gauge"))  # a copy is read-only; the source is the editor
         # A routed item added to the sub-assembly appears; one deleted disappears.
         extra = br.make_wire(path, gauge="22 AWG", name="W2", colour=None)
         self.sub.recompute()

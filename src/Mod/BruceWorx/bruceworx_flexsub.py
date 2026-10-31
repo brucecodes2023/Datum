@@ -18,6 +18,7 @@ copies of a rigid link removed.
 import FreeCAD as App
 
 PROP = "FlexSource"
+EDIT_HINT = "Edit this wire in its sub-assembly"
 # Never copied from the source: the copy has its own shape, place, links and view.
 _SKIP = {"Shape", "Placement", "Proxy", "Visibility", "ExpressionEngine", "Attachments", "AttachedTo", PROP,
          "Label2", "AttacherType", "AttacherEngine", "MapMode", "MapPathParameter", "MapReversed", "AttachmentOffset",
@@ -103,6 +104,42 @@ def _copy_points(src, dst, attached):
         dst.Points = merged
 
 
+def _user_names(src):
+    """The user-facing properties a copy takes from its source: what ``_copy_props`` writes."""
+    return [n for n in src.PropertiesList
+            if n not in _SKIP and n not in ("Points", "RoutePoints") and not _is_output(src, n)]
+
+
+def _set_locked(obj, names, locked):
+    """A copy's user-facing values are read-only (ReadOnly status); the sync unlocks them while it writes."""
+    for name in names:
+        if name in obj.PropertiesList:
+            obj.setPropertyStatus(name, "ReadOnly" if locked else "-ReadOnly")
+
+
+def _guard_edit(obj):
+    """Double-clicking a copy says where to edit it instead of opening the routing panel."""
+    proxy = getattr(getattr(obj, "ViewObject", None), "Proxy", None)
+    if proxy is None or getattr(proxy, "flex_guard", False):
+        return
+
+    def setEdit(vobj, _mode=0):
+        parent = vobj.Object.getParentGroup()
+        sub = getattr(getattr(parent, "LinkedObject", None), "Label", "")
+        text = EDIT_HINT + (f" ({sub})" if sub else "")
+        App.Console.PrintWarning(text + "\n")
+        try:
+            import FreeCADGui as Gui
+
+            Gui.getMainWindow().statusBar().showMessage(text, 5000)
+        except Exception:
+            pass
+        return False  # no edit mode
+
+    proxy.setEdit = setEdit
+    proxy.flex_guard = True
+
+
 def _copy_props(src, dst, links):
     for name in src.PropertiesList:
         if name in _SKIP or name == "Points" or name == "RoutePoints" or _is_output(src, name):
@@ -170,7 +207,14 @@ def sync(link, objmap, assembly=None):
             obj = _new_copy(link, src)
             existing[src.Name] = obj
         by_source[src] = obj
-        _copy_props(src, obj, {**objmap, **{s.Name: c for s, c in by_source.items()}})
+        names = _user_names(src)
+        _set_locked(obj, names, False)
+        try:
+            _copy_props(src, obj, {**objmap, **{s.Name: c for s, c in by_source.items()}})
+        finally:
+            _set_locked(obj, names, True)
+        if App.GuiUp and obj.ViewObject is not None:
+            _guard_edit(obj)
         if br.is_path(src):
             _copy_points(src, obj, {i for i, _t, _s in br.attachments_of(obj)})
             wanted_att = []
