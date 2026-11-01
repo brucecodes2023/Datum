@@ -1576,31 +1576,78 @@ def surface_files(folder):
                   glob.glob(os.path.join(folder, "VTK", "*", "*.vtp")))
 
 
-PIPELINE_NOTE = ("FreeCAD's FEM post pipeline crashes in this GUI build, so the flow is converted to VTK "
-                 "(foamToVTK) but not shown here; use Open in ParaView.")
+FARFIELD_PATCHES = ("inlet", "outlet", "ymin", "ymax", "zmin", "zmax", "xmin", "xmax")
+
+
+def part_patch_files(folder):
+    """The boundary .vtp files of the study's parts (the far-field patches left out) of the latest time."""
+    files = glob.glob(os.path.join(folder, "VTK", "*", "boundary", "*.vtp"))
+    parts = [f for f in files if os.path.splitext(os.path.basename(f))[0] not in FARFIELD_PATCHES]
+    return sorted(parts)
+
+
+def scaled_copy(path, factor=1000.0):
+    """A copy of a foamToVTK .vtu/.vtp with the points scaled (the case is in metres, the model in mm), written to
+    an ``mm`` folder beside it; the fields stay in SI. (FemPostPipeline.scale() empties an unstructured grid in this
+    build, so the file is scaled before FEM reads it.)"""
+    from vtkmodules.util.numpy_support import vtk_to_numpy
+
+    if path.endswith(".vtu"):
+        from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridReader as Reader, vtkXMLUnstructuredGridWriter as Writer
+    else:
+        from vtkmodules.vtkIOXML import vtkXMLPolyDataReader as Reader, vtkXMLPolyDataWriter as Writer
+    out_dir = os.path.join(os.path.dirname(path), "mm")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, os.path.basename(path))
+    reader = Reader()
+    reader.SetFileName(path)
+    reader.Update()
+    data = reader.GetOutput()
+    points = data.GetPoints().GetData()
+    vtk_to_numpy(points)[...] *= factor
+    points.Modified()
+    writer = Writer()
+    writer.SetFileName(out)
+    writer.SetInputData(data)
+    writer.SetDataModeToBinary()
+    writer.Write()
+    return out
+
+
+def _colour_by(obj, field, component=None, transparency=None):
+    """Colours a post object in the 3D view by a field (and component, e.g. the velocity magnitude)."""
+    vo = obj.ViewObject
+    vo.DisplayMode = "Surface"
+    try:
+        vo.Field = field
+        if component:
+            vo.Component = component
+    except Exception as exc:  # a field this result does not have
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(f"[cfd] cannot colour {obj.Label} by {field}: {exc}\n")
+    if transparency is not None:
+        vo.Transparency = transparency
 
 
 def load_results(analysis, folder=None, install=None):
-    """Converts the latest time to VTK and adds it to the study as a FEM post-pipeline (scaled to mm so it sits on
-    the model, velocity and pressure stay in SI) with a cut plane through the middle (XZ). Returns
-    {"result", "cut", "vtu"}.
+    """Converts the latest time to VTK and adds it to the study as FEM post-pipelines (scaled to mm so they sit on
+    the model, velocity and pressure stay in SI), and in the 3D view shows
 
-    Surface pressure is a field of this pipeline (colour the boundary by p); streamlines: this build of FreeCAD's
-    FEM module has no streamline filter object, so they are left to ParaView (Open in ParaView).
+    * the surface pressure on each part (a pipeline of its boundary patch, coloured by p),
+    * a cut plane through the middle (XZ) coloured by the velocity magnitude (a filter of the volume pipeline).
+
+    The volume pipeline itself is hidden (it would fill the view). FEM has no streamline filter object, so
+    streamlines are left to ParaView (Open in ParaView). Returns {"result", "cut", "surfaces", "vtu"}.
     """
     import FreeCAD
     import ObjectsFem
 
     folder = folder or analysis.CaseFolder
     vtu = convert_vtk(folder, install)
-    if FreeCAD.GuiUp and not os.environ.get("BW_FEM_PIPELINE"):
-        # Creating a Fem::FemPostPipeline in this GUI build crashes in SoFCColorGradient::setMarkerLabel (found
-        # 27 Oct 2026, see bruceworx_sim._no_post_pipeline), so the GUI only converts; headless makes the pipeline.
-        return {"result": None, "cut": None, "vtu": vtu, "note": PIPELINE_NOTE}
     doc = analysis.Document
     result = doc.addObject("Fem::FemPostPipeline", "Pipeline_Airflow")
-    result.read(vtu)
-    result.scale(1000.0)  # the case is in metres, the model in mm
+    result.read(scaled_copy(vtu))  # the case is in metres, the model in mm
     result.Label = "Airflow result"
     analysis.addObject(result)
     cut = None
@@ -1619,13 +1666,29 @@ def load_results(analysis, folder=None, install=None):
     except Exception as exc:
         FreeCAD.Console.PrintWarning(f"[cfd] cut plane not added: {exc}\n")
         cut = None
+    surfaces = []
+    for path in part_patch_files(folder):
+        try:
+            surf = doc.addObject("Fem::FemPostPipeline", "Pipeline_Pressure")
+            surf.read(scaled_copy(path))
+            surf.Label = "Surface pressure " + os.path.splitext(os.path.basename(path))[0]
+            analysis.addObject(surf)
+            surfaces.append(surf)
+        except Exception as exc:
+            FreeCAD.Console.PrintWarning(f"[cfd] surface pressure of {path} not added: {exc}\n")
     doc.recompute()
-    try:
-        if FreeCAD.GuiUp:
-            result.ViewObject.DisplayMode = "Surface"
-    except Exception:
-        pass
-    return {"result": result, "cut": cut, "vtu": vtu}
+    if FreeCAD.GuiUp:
+        try:
+            result.ViewObject.Visibility = False
+            if cut is not None:
+                _colour_by(cut, "U", "Magnitude")
+                cut.ViewObject.Visibility = True
+            for surf in surfaces:
+                _colour_by(surf, "p")
+                surf.ViewObject.Visibility = True
+        except Exception as exc:
+            FreeCAD.Console.PrintWarning(f"[cfd] result colouring failed: {exc}\n")
+    return {"result": result, "cut": cut, "surfaces": surfaces, "vtu": vtu}
 
 
 def open_in_paraview(folder):

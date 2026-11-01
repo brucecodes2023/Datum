@@ -276,7 +276,7 @@ def _make_classes():
             w.layout().addWidget(self.table)
             row = QtWidgets.QHBoxLayout()
             self.load_button = button("Show in 3D", self.load_results,
-                                        "Convert the last time with foamToVTK (and show it with a cut plane where the FEM post pipeline works)")
+                                        "Convert the last time with foamToVTK and show it: surface pressure on the parts and a mid cut plane coloured by velocity")
             self.paraview_button = button("Open in ParaView", self.open_paraview)
             self.report_button = button("Report", self.report)
             for b in (self.load_button, self.paraview_button, self.report_button):
@@ -411,12 +411,16 @@ def _make_classes():
             except Exception as exc:
                 self.result_label.setText(f"<span style='color:#b00020'>{exc}</span>")
                 return None
-            if out.get("note"):
-                self.result_label.setText(f"VTK files: {os.path.dirname(os.path.dirname(out['vtu']))}. {out['note']}")
-                if cfd.paraview_app():
-                    self.open_paraview()
-                return out
-            self.result_label.setText("Added the flow result" + (" with a cut plane." if out["cut"] else "."))
+            parts = len(out.get("surfaces") or [])
+            self.result_label.setText(
+                "Showing the flow: " + (f"surface pressure on {parts} part{'s' if parts != 1 else ''}" if parts else "no part surface")
+                + (", the mid cut plane coloured by velocity" if out["cut"] else "") + ". Streamlines: Open in ParaView.")
+            try:
+                import FreeCADGui
+
+                FreeCADGui.SendMsgToActiveView("ViewFit")
+            except Exception:
+                pass
             return out
 
         def open_paraview(self):

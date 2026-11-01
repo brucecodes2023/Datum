@@ -409,11 +409,8 @@ class TestAirflowStudy(unittest.TestCase):
         # results through the FEM post pipeline
         out = cfd.load_results(a, info["folder"])
         self.assertTrue(os.path.isfile(out["vtu"]))
-        if App.GuiUp:  # the GUI build cannot create a FEM post pipeline (see load_results)
-            self.assertIsNone(out["result"])
-        else:
-            self.assertIn(out["result"], a.Group)
-            self.assertIsNotNone(out["cut"])
+        self.assertIn(out["result"], a.Group)
+        self.assertIsNotNone(out["cut"])
         # the LaTeX report has the airflow section
         data = sim.summary(a)
         tex = sim.report_source(data)
@@ -421,6 +418,53 @@ class TestAirflowStudy(unittest.TestCase):
         self.assertIn("Convergence", tex)
         self.assertIn(r"$C_d$", tex)
         print(f"\n[study] end-to-end Cd = {cd:.4f}; cut plane: {out['cut'] is not None}")
+
+
+_VTP = """<?xml version="1.0"?>
+<VTKFile type="PolyData" version="0.1" byte_order="LittleEndian">
+<PolyData><Piece NumberOfPoints="3" NumberOfPolys="1">
+<PointData Scalars="p"><DataArray type="Float32" Name="p" format="ascii">-1 0 1</DataArray></PointData>
+<Points><DataArray type="Float32" NumberOfComponents="3" format="ascii">-0.1 -0.1 -0.1  0.1 -0.1 -0.1  0 0.1 -0.1</DataArray></Points>
+<Polys><DataArray type="Int32" Name="connectivity" format="ascii">0 1 2</DataArray>
+<DataArray type="Int32" Name="offsets" format="ascii">3</DataArray></Polys>
+</Piece></PolyData></VTKFile>
+"""
+
+
+def fake_case(root):
+    """A case folder with the foamToVTK output of a tiny flow (internal mesh and a part patch), no OpenFOAM needed."""
+    os.makedirs(os.path.join(root, "VTK", "10", "boundary"))
+    from vtkmodules.util.numpy_support import numpy_to_vtk
+    from vtkmodules.vtkCommonCore import vtkPoints
+    from vtkmodules.vtkCommonDataModel import vtkPolyData
+    from vtkmodules.vtkFiltersCore import vtkDelaunay3D
+    from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter
+    import numpy as np
+
+    axis = np.linspace(-0.2, 0.2, 5)
+    xyz = np.array([[x, y + 0.013 * x, z] for x in axis for y in axis for z in axis], dtype=np.float32)
+    cloud = vtkPolyData()
+    pts = vtkPoints()
+    pts.SetData(numpy_to_vtk(xyz, deep=True))
+    cloud.SetPoints(pts)
+    mesh = vtkDelaunay3D()
+    mesh.SetInputData(cloud)
+    mesh.Update()
+    grid = mesh.GetOutput()
+    for name, values in (("p", xyz[:, 0] * 10.0), ("U", np.stack([1.0 + xyz[:, 2], 0.0 * xyz[:, 0], xyz[:, 1]], axis=1))):
+        array = numpy_to_vtk(np.ascontiguousarray(values, dtype=np.float32), deep=True)
+        array.SetName(name)
+        grid.GetPointData().AddArray(array)
+    writer = vtkXMLUnstructuredGridWriter()
+    writer.SetFileName(os.path.join(root, "VTK", "10", "internal.vtu"))
+    writer.SetInputData(grid)
+    writer.Write()
+    for name in ("Ball", "inlet"):
+        with open(os.path.join(root, "VTK", "10", "boundary", name + ".vtp"), "w") as f:
+            f.write(_VTP)
+    with open(os.path.join(root, "vectorlabs.json"), "w") as f:
+        json.dump({"geometry": {"bbox": [[-0.2, -0.2, -0.2], [0.2, 0.2, 0.2]]}}, f)
+    return os.path.join(root, "VTK", "10", "internal.vtu")
 
 
 def pump(n=4):
@@ -449,6 +493,37 @@ class TestAirflowGui(unittest.TestCase):
         self.ball.Radius = 50.0
         self.doc.recompute()
         pump()
+
+    def test_fem_post_pipeline_does_not_crash_the_gui(self):
+        # Regression: every Fem::FemPostPipeline crashed in SoFCColorGradient::setMarkerLabel (objects compiled against
+        # the old Coin headers kept the old SbString size after the Coin 4.0.10 update).
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        vtu = fake_case(tmp)
+        pipe = self.doc.addObject("Fem::FemPostPipeline", "P")
+        pipe.read(vtu)
+        self.doc.recompute()
+        self.assertIsNotNone(pipe.ViewObject)
+        self.assertGreater(pipe.ViewObject.getEnumerationsOfProperty("Field").count("p") + 1, 0)
+
+    def test_results_in_the_3d_view(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        vtu = fake_case(tmp)
+        a = self.doc.addObject("Fem::FemAnalysis", "Study")
+        saved = cfd.convert_vtk
+        cfd.convert_vtk = lambda folder, install=None: vtu
+        try:
+            out = cfd.load_results(a, tmp)
+        finally:
+            cfd.convert_vtk = saved
+        self.assertEqual(len(out["surfaces"]), 1)  # the Ball patch, not the inlet
+        self.assertIsNotNone(out["cut"])
+        self.assertFalse(out["result"].ViewObject.Visibility)
+        self.assertTrue(out["surfaces"][0].ViewObject.Visibility)
+        self.assertEqual(out["surfaces"][0].ViewObject.Field, "p")
+        self.assertEqual(out["cut"].ViewObject.Field, "U")
+        self.assertEqual(out["cut"].ViewObject.Component, "Magnitude")
 
     def test_new_study_airflow_panel_and_run(self):
         import FreeCADGui as Gui
@@ -508,7 +583,8 @@ class TestAirflowGui(unittest.TestCase):
         out = study.load_results()
         self.assertIsNotNone(out)
         self.assertTrue(os.path.isfile(out["vtu"]))
-        self.assertIn("VTK files", study.result_label.text())  # the GUI converts only (pipeline crash, see load_results)
+        self.assertIsNotNone(out["result"])  # the flow is shown in the 3D view
+        self.assertIn("Showing the flow", study.result_label.text())
 
     def test_stop_button_ends_a_run(self):
         if INSTALL is None:
