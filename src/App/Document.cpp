@@ -1685,7 +1685,8 @@ static std::string checkFileName(const char* file)
             .GetParameterGroupByPath("User parameter:BaseApp/Preferences/Document")
             ->GetBool("CheckExtension", true)) {
         const char* ext = strrchr(file, '.');
-        if ((ext == nullptr) || !boost::iequals(ext + 1, "fcstd")) {
+        // BW PDM-14: a simulation document is a .vlsim, the same zip; Save As keeps that extension.
+        if ((ext == nullptr) || !(boost::iequals(ext + 1, "fcstd") || boost::iequals(ext + 1, "vlsim"))) {
             if (ext && ext[1] == 0) {
                 fn += "FCStd";
             }

@@ -297,6 +297,11 @@ cat > "$C/Info.plist" <<PLIST
     <key>CFBundleTypeRole</key><string>Editor</string>
     <key>LSHandlerRank</key><string>Alternate</string>
     <key>CFBundleTypeExtensions</key><array><string>FCStd</string><string>fcstd</string></array>
+  </dict><dict>
+    <key>CFBundleTypeName</key><string>Vector Labs Simulation</string>
+    <key>CFBundleTypeRole</key><string>Editor</string>
+    <key>LSHandlerRank</key><string>Owner</string>
+    <key>CFBundleTypeExtensions</key><array><string>vlsim</string></array>
   </dict></array>
 </dict></plist>
 PLIST

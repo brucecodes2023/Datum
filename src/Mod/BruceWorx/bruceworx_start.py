@@ -168,6 +168,7 @@ def read_fcstd(path: str) -> dict:
     """What the page shows about a file: parse_document_xml's fields plus the
     thumbnail PNG bytes (or None). Unreadable files give empty fields."""
     info = {"pn": "", "rev": "", "state": "", "item_type": "", "kind": "other", "thumbnail": None}
+    simulation = str(path).lower().endswith(".vlsim")  # PDM-14: a simulation file is a study whatever it holds
     try:
         with zipfile.ZipFile(path) as zf:
             names = set(zf.namelist())
@@ -177,6 +178,8 @@ def read_fcstd(path: str) -> dict:
                 info["thumbnail"] = zf.read(THUMBNAIL)
     except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError, ValueError) as exc:
         info["error"] = str(exc)
+    if simulation:
+        info["kind"], info["item_type"] = "simulation", "simulation"
     return info
 
 

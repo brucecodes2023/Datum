@@ -203,6 +203,11 @@ bool GUIApplication::event(QEvent* ev)
             Application::Instance->open(fn, "FreeCAD");
             return true;
         }
+        if (fi.suffix().toLower() == QLatin1String("vlsim")) {
+            // BW PDM-14: a simulation document; its Python module opens it as a normal document.
+            Application::Instance->open(file.toUtf8(), "bruceworx_vlsim");
+            return true;
+        }
     }
 
     return GUIApplicationNativeEventAware::event(ev);

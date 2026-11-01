@@ -43,6 +43,8 @@ FreeCAD.__unit_test__.append("TestBruceWorxSimModel")
 FreeCAD.__unit_test__.append("TestBruceWorxCfd")
 FreeCAD.__unit_test__.append("TestBruceWorxSimWorkspace")
 FreeCAD.__unit_test__.append("TestBruceWorxMaterials")
+FreeCAD.__unit_test__.append("TestBruceWorxVlsim")
+FreeCAD.__unit_test__.append("TestBruceWorxSimVault")
 
 FreeCAD.__unit_test__.append("TestBruceWorxCfdParaView")
 # BruceWorx's own material library (FR-4, PCB copper, ...), also used headless.
@@ -60,6 +62,14 @@ try:
     bruceworx_materials.register_library()
 except Exception as exc:
     FreeCAD.Console.PrintWarning(f"The Vector Labs material library was not registered: {exc}\n")
+
+# Simulation files (PDM-14): File > Open, Open Recent and Finder open *.vlsim as normal documents.
+try:
+    import bruceworx_vlsim
+
+    bruceworx_vlsim.register()
+except Exception as exc:
+    FreeCAD.Console.PrintWarning(f"The .vlsim file type was not registered: {exc}\n")
 
 # Simulation (SIM-01): a fresh profile finds the bundled CalculiX (Vector Labs: Contents/bin/ccx).
 try:

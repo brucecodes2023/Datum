@@ -81,9 +81,14 @@ SET(BruceWorx_SRCS
     bruceworx_vaultwizard.py
     bruceworx_preview.py
     bruceworx_previewmesh.py
+    bruceworx_vlsim.py
     bruceworx_vaultbrowser.py
     bruceworx_package.py
     TestBruceWorxPackage.py
+    TestBruceWorxVlsim.py
+    bruceworx_sim_vault.py
+    bruceworx_sim_vault_ui.py
+    TestBruceWorxSimVault.py
     TestBruceWorxVaultBrowser.py
     TestBruceWorxPreviewMesh.py
     bruceworx_vaultclient.py
