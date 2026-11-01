@@ -110,7 +110,7 @@ EPICS = [
       "Bracket flat length matches the bend-allowance formula to 0.01 mm."),
     E("MOD-07", "Frames & weldments", "M3", "To do", [],
       "(new)",
-      "Structural members along sketch edges, profile library (2020 extrusion, tube, dimensional lumber), end treatments, cut list. Reference: LumberCAD (beta) component catalogue. Plan (FrameForge plus a BruceWorx layer) approved 24 Oct; not started.",
+      "Structural members along sketch edges, profile library (2020 extrusion, tube, dimensional lumber), end treatments, cut list. Reference: LumberCAD (beta) component catalogue. Plan (FrameForge plus a Vector Labs layer) approved 24 Oct; not started.",
       "Frame example produces a cut list with lengths and mitre angles."),
     E("MOD-08", "Surfacing parity", "M5", "To do", [],
       "(new)",

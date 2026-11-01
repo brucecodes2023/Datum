@@ -3,7 +3,7 @@
 %======================================================================
 
 Every other track depends on a fork that builds reproducibly, ships, and keeps up with FreeCAD. Two
-foundation decisions changed in the interview. BruceWorx now tracks \textbf{upstream main} instead of
+foundation decisions changed in the interview. Vector Labs now tracks \textbf{upstream main} instead of
 waiting for the 26.3 tag. Fixes found while reviewing the UI now have an epic of their own.
 
 \begin{epic}{FND-01}{Build \& CI on Linux and macOS arm64}{M0}{\stProg}{FCB-P0-CI-01..06, P0-01, P0-06..08, P0-10}
@@ -31,7 +31,7 @@ development build. The bundle is self-contained: \file{keystone\_relocate.py} co
 pixi environment and rewrites and re-signs 1\,453 files so that nothing points into \file{.pixi} or the build tree.
 The result is 1.7\,GB in \file{/Applications}, version \code{1.1.4-bw.1+<commit>[-dirty]}, with an icon drawn from the
 splash's arch. Checked by launching it from \file{/Applications}: it reports itself as Keystone, uses its own settings
-folders, its own Python and the native Qt platform, and loads all 20 workbenches and BruceWorx.
+folders, its own Python and the native Qt platform, and loads all 20 workbenches and Vector Labs.
 \textbf{Rebranded Vector Labs} (your decision, 31 Oct): the app, menu bar and Dock say \emph{Vector Labs}; the
 splash, About box and Get Info say \emph{Vector Labs, powered by FreeCAD} (``powered by'' rather than ``by'', since
 FreeCAD is the FreeCAD Project Association's trademark). Bundle id \code{com.vectorlabs.app}; a new icon and splash
@@ -50,7 +50,7 @@ the other sessions' part-build scripts move to the new path, then it is removed.
 continuous tracking:
 \begin{itemize}
   \item \code{upstream-main} stays a fast-forward mirror. A nightly job rebases the \code{[BW]} series onto it
-        and runs the BruceWorx tests plus the headless acceptance corpus (\eref{FND-05}).
+        and runs the Vector Labs tests plus the headless acceptance corpus (\eref{FND-05}).
   \item A conflict or red build opens an issue automatically. The \emph{conflict budget} is the number of
         upstream files our series touches. It is reported each night and must not grow without a reason
         recorded in the PR.

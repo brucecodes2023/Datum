@@ -145,8 +145,8 @@ change.}
         documents use''. The Create Vault wizard asks it on its first page.
   \item \textbf{Two profiles, nothing else.} \code{mm} $\mapsto$ \emph{Standard (mm, kg, s, \textdegree)}, 2 decimals;
         \code{in} $\mapsto$ \emph{Imperial decimal (in, lb)}, 3 decimals (question~2). US customary, feet--inches and the
-        rest stay available in FreeCAD's own menu but are never set by BruceWorx.
-  \item \textbf{The override} is the document's own \code{UnitSystem}, set when BruceWorx creates a document (New Part,
+        rest stay available in FreeCAD's own menu but are never set by Vector Labs.
+  \item \textbf{The override} is the document's own \code{UnitSystem}, set when Vector Labs creates a document (New Part,
         New Assembly, New Drawing, the wizard) from the vault or the project, and changed from the status bar's unit
         button as today. The status-bar readout gains ``inch'' or ``mm'' beside the vault name, and a document whose units
         differ from its vault's shows them in the Vault tab's header (the ``in'' badge in figure~\ref{fig:pdm09-tree}).
@@ -477,13 +477,13 @@ vault wears the ``in'' badge. The pack's stdlib tests cover the new entries.
         file changes but how it is shown; a file deliberately kept in the other units can be switched back
         from the status bar.
   \item \textbf{The leading zero is a TechDraw preference qualified by the active schema}, not a per-drawing
-        setting: it needs no new property, and inch drawings in a BruceWorx vault are ASME by question~4.
+        setting: it needs no new property, and inch drawings in a Vector Labs vault are ASME by question~4.
         An ISO GPS vault's inch drawings drop it too; the preference can be turned off.
   \item \textbf{The sheet stays when a model's units change}: the title block, tolerance block and dimension
         formats follow at once, the sheet (ANSI~B or ISO~A3) is chosen at creation and changed with
         \code{set\_sheet}, which keeps every field. Swapping the sheet by itself would move the views.
   \item \textbf{Inch-family schemas count as inch.} US customary, Building US and Civil documents are shown
-        as ``in'' by the badge and the drawing profile, though BruceWorx never sets them.
+        as ``in'' by the badge and the drawing profile, though Vector Labs never sets them.
   \item \textbf{Decimals keys only when present.} Stock FreeCAD without the pack is unchanged. While the keys
         exist they win over Preferences $\rightarrow$ General $\rightarrow$ Units ``Number of decimals'' at the
         next document switch (question below).

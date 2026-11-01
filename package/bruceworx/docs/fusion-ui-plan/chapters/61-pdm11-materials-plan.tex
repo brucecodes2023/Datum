@@ -11,7 +11,7 @@ how FreeCAD finds them, how a released part keeps the values it was released wit
 It builds on the folder vault (\eref{PDM-04}), the lifecycle (\eref{PDM-05}), the part properties
 (\S\ref{sec:partprops}) and Vault Settings (\eref{PDM-09}, \eref{DRW-01}).
 
-\paragraph{The short answer to your question.} Yes: FreeCAD 1.x ships one, and BruceWorx already uses it. Its
+\paragraph{The short answer to your question.} Yes: FreeCAD 1.x ships one, and Vector Labs already uses it. Its
 \emph{Standard} folder has 125 engineering materials, every one with a density, most with strength and elastic values
 (93 steels under EN names, 6 aluminium alloys including 6061-T6 and 7075-T6, 13 thermoplastics, glass, concrete,
 wood). It is a good \emph{starting point} but not a shop library: it has no PETG, no ``1045'' by that name (it has
@@ -92,7 +92,7 @@ External material interface & exists upstream (a Python class serving materials)
 \end{tabularx}
 \end{center}
 
-\paragraph{What BruceWorx does with materials today.} \code{MaterialName} (BOM column, title block, required at submit)
+\paragraph{What Vector Labs does with materials today.} \code{MaterialName} (BOM column, title block, required at submit)
 is computed from the bodies' \code{ShapeMaterial.Name}, and \code{Mass} is volume times density
 (\code{partprops.computed\_mass}, \code{\_density\_kg\_per\_mm3}; an appearance-only card already gives ``no mass'' instead
 of a failed save). The right panel's \emph{Material} field opens FreeCAD's \code{Std\_SetMaterial}. The Create Vault wizard
@@ -104,7 +104,7 @@ stay as they were when it took them''. Materials need the same, for the same rea
 \paragraph{Three findings to act on.} (1) A FreeCAD part names its material by UUID only, so a part opened anywhere
 the library is missing shows Default and 0\,kg, and \emph{saving it there loses the material}; the part file must carry
 its own copy. (2) Editing a card changes every part that uses it, released or not, so a released part needs pinned
-values. (3) Every place BruceWorx (or Claude) picks a material must refuse cards without a density.
+values. (3) Every place Vector Labs (or Claude) picks a material must refuse cards without a density.
 
 %----------------------------------------------------------------------
 \subsubsection*{2. Theory}
@@ -234,7 +234,7 @@ library is read-only to FreeCAD, so its own material editor cannot change a vaul
 with a new UUID in the User library.
 
 \paragraph{The part carries its material (the safety net).} When a body gets a material (picker, FreeCAD's dialog, a
-script, the bridge: the \code{partprops} observer already watches \code{ShapeMaterial}), BruceWorx writes a hidden map
+script, the bridge: the \code{partprops} observer already watches \code{ShapeMaterial}), Vector Labs writes a hidden map
 \code{BW\_MaterialSnapshot} on the body: UUID, code, revision, hash, name, library, density and the other engineering
 values. On opening a document:
 \begin{enumerate}[nosep]
@@ -259,12 +259,12 @@ the vault is not open.}
 \label{fig:pdm11-picker}
 \end{figure}
 
-\paragraph{Picking a material.} The \emph{Material} field opens a BruceWorx picker in place of \code{Std\_SetMaterial}
+\paragraph{Picking a material.} The \emph{Material} field opens a Vector Labs picker in place of \code{Std\_SetMaterial}
 (figure~\ref{fig:pdm11-picker}): the open vault's released materials first, grouped by family, each with code, revision,
 standard, density and price in the vault's units; chips add FreeCAD Standard, BruceWorx (electronics) or the vault's WIP
 materials; search covers names, codes and stock sizes. It sets the material on every body of the part (or the selected
 body), writes the snapshot, and fills \code{MaterialSpec} when the vault has that property and it is empty, as a sheet-metal
-rule does. Every BruceWorx path that sets a material (picker, bridge, CSV, the KiCad board) uses one function,
+rule does. Every Vector Labs path that sets a material (picker, bridge, CSV, the KiCad board) uses one function,
 \code{materials.assign}, which refuses a card without a density with a plain sentence (``Steel in the Appearance library
 is a colour, not a material: use Appearance''). FreeCAD's own dialog already hides such cards.
 
@@ -383,7 +383,7 @@ owner's.
   \item \textbf{FreeCAD Standard materials in vault parts.} Allow them in WIP and warn at release (a waivable checklist
         line), or forbid them?\\
         \emph{Recommendation:} allow and warn; \emph{Adopt into the vault library} fixes them in one pass.
-  \item \textbf{The appearance trap.} Never list or accept a card without a density anywhere BruceWorx or Claude sets a
+  \item \textbf{The appearance trap.} Never list or accept a card without a density anywhere Vector Labs or Claude sets a
         material?\\
         \emph{Recommendation:} yes; appearance stays under \emph{Appearance}.
   \item \textbf{Material codes.} \code{MAT-0001}, a counter of the vault's own, or a document type in the part-number

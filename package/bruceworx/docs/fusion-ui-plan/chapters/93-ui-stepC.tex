@@ -75,7 +75,7 @@ icon is redrawn.
 floated.
 
 \textbf{Effort:} 1--2 days. \textbf{Risks:} A floating or vertical toolbar must drop its caption (the margin is
-set only for the top area). Toolbars should be locked in the top area while the BruceWorx bar is on
+set only for the top area). Toolbars should be locked in the top area while the Vector Labs bar is on
 (\code{ToolBarManager::setToolBarsLocked}), otherwise a drag can land a group in a second row with its caption
 cut off. No upstream conflict.
 
@@ -405,7 +405,7 @@ recent-file parsing.
         CAM work, when those workspaces get real use.
   \item \textbf{Where workbenches are shown or hidden.} Should the ticks in figure~\ref{fig:stepC-prefs} write
         FreeCAD's own enabled-workbench list, so a hidden workbench is not loaded at all? Or should they keep
-        a separate BruceWorx list that only hides it from the menu?\\
+        a separate Vector Labs list that only hides it from the menu?\\
         \emph{Recommendation:} write the stock list. There is one truth, and start-up is faster.
   \item \textbf{Title bar route.} For C4, should the native calls stay in Python via \code{ctypes} (no
         compiled code, no upstream diff), or go in a small \file{MacTitleBar.mm}? And should the row be

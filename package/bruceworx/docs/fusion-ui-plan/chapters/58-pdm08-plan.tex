@@ -108,7 +108,7 @@ to be reported upstream with the spike file.
 \node[t,right=4mm of fc,text width=6.2cm,align=left] {Lost on the way, kept in the attached \texttt{.f3d}: history,
   sketches, parameters, joints. Rebuilt: joints, materials, drawings when a part next changes.};
 \end{tikzpicture}
-\caption{Migration from Fusion. Orange runs in Fusion, blue in BruceWorx, green are the two points where you decide.
+\caption{Migration from Fusion. Orange runs in Fusion, blue in Vector Labs, green are the two points where you decide.
 Nothing is written to the vault before the reviewed \file{migration.csv} says so.}
 \label{fig:pdm08-pipeline}
 \end{figure}
@@ -119,7 +119,7 @@ Nothing is written to the vault before the reviewed \file{migration.csv} says so
         material, physical properties, the design's Fusion version, and every occurrence with its parent and transform.
         Each drawing as PDF, each design as \file{.f3d} (\file{.f3z} for assemblies). The Fusion API works in
         centimetres, so lengths are converted once, in the script.
-  \item \textbf{Check} (BruceWorx, FreeCAD-free, like \code{scan\_for\_import}). Reads the manifest and the register,
+  \item \textbf{Check} (Vector Labs, FreeCAD-free, like \code{scan\_for\_import}). Reads the manifest and the register,
         proposes a vault number and revision for each component (section~4), finds repeats (the same component in two
         designs), and writes \file{migration.csv}. Nothing is reserved yet.
   \item \textbf{Review.} You open \file{migration.csv} in a spreadsheet, fix a number or a revision, untick a row; the

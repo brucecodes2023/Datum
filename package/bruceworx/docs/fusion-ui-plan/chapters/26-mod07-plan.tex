@@ -2,10 +2,10 @@
 \subsection{MOD-07 plan: frames, lumber and weld beads on FrameForge (23 Oct 2026, approved 24 Oct)}\label{sec:mod07-plan}
 %======================================================================
 
-\eref{MOD-07} gives BruceWorx structural frames: members swept along sketch lines from a profile library, mitres and
+\eref{MOD-07} gives Vector Labs structural frames: members swept along sketch lines from a profile library, mitres and
 trims, a cut list, dimensional lumber with board feet, and weld beads that show as weld symbols on drawings. This plan
 compares the open-source frame add-ons, reports a spike in this build, gives the cut-length, board-foot and weld theory,
-and proposes adopting FrameForge with a thin BruceWorx layer.
+and proposes adopting FrameForge with a thin Vector Labs layer.
 
 \paragraph{Your answers (23 Oct).}
 \begin{center}
@@ -216,7 +216,7 @@ $m = \rho\,\tfrac{z^2}{2}\,L$ (3\,mm all around a $20\times20$ tube, $L\approx73
 $2.12\times73\times145 = 22$\,kN).
 
 %----------------------------------------------------------------------
-\subsubsection*{4. Integration: FrameForge plus a BruceWorx frame layer}
+\subsubsection*{4. Integration: FrameForge plus a Vector Labs frame layer}
 
 \begin{itemize}[nosep]
   \item \textbf{Bundled like SheetMetal} (\S\ref{sec:mod06-plan}): vendored in \file{package/bruceworx/vendor/FrameForge/},
@@ -228,7 +228,7 @@ $2.12\times73\times145 = 22$\,kN).
   \item \textbf{Our layer} (\file{src/Mod/BruceWorx/bruceworx\_frame*.py}), on top of FrameForge's objects, not a fork:
         \begin{itemize}[nosep]
           \item \emph{Structural Member} opens FrameForge's profile panel (figure~\ref{fig:mod07-panel}) with our
-                defaults: \emph{Pre-extend} on, members grouped in the frame's part, the BruceWorx profile library.
+                defaults: \emph{Pre-extend} on, members grouped in the frame's part, the Vector Labs profile library.
           \item \emph{Profile library} as JSON files in FrameForge's own format, added to its lists: inch square and
                 rectangular tube, \textbf{round tube} (metric and inch), inch angle and flat bar, 20-series T-slot
                 $20\times40$, 80/20 1010/1020, and a \textbf{Lumber} material with $1\times$, $2\times$ and $4\times$
@@ -258,7 +258,7 @@ $2.12\times73\times145 = 22$\,kN).
 \begin{minipage}[b]{0.55\linewidth}
 \caption{FrameForge's \emph{Create Profile} panel in this build: material, family and size lists with a picture, the
 dimensions, \emph{Pre-extend}, path alignment (a $3\times3$ anchor grid) and mirroring. Our \emph{Structural Member}
-opens it with \emph{Pre-extend} ticked and the BruceWorx library loaded.}
+opens it with \emph{Pre-extend} ticked and the Vector Labs library loaded.}
 \label{fig:mod07-panel}
 \end{minipage}
 \end{figure}
@@ -331,7 +331,7 @@ switched on. 6: weld symbols follow \textbf{the vault's drawing standard}, AWS b
 \subsubsection*{Questions before MOD-07 starts}
 
 \begin{enumerate}
-  \item \textbf{Adopt or fork.} Bundle FrameForge as is and put our work in a separate BruceWorx layer, or fork it now?\\
+  \item \textbf{Adopt or fork.} Bundle FrameForge as is and put our work in a separate Vector Labs layer, or fork it now?\\
         \emph{Recommendation:} adopt and layer; send the pre-extend fix and the inch libraries upstream; fork only if
         upstream stays silent and we need to change its objects.
   \item \textbf{Skeleton lines.} Draw frames on member centre lines (with pre-extend on), or on outer edges?\\

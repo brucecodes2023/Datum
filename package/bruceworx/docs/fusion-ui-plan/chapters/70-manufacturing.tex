@@ -2,7 +2,7 @@
 \section{Track MFG --- Manufacturing outputs}\label{sec:mfg}
 %======================================================================
 
-BruceWorx parts go to three processes: FDM printing (PETG/ABS), CNC machining and sheet metal / laser.
+Vector Labs parts go to three processes: FDM printing (PETG/ABS), CNC machining and sheet metal / laser.
 FreeCAD already exports 3MF (Mesh workbench) and DXF (Draft importers), and its CAM workbench ships
 post-processors, including GRBL and LinuxCNC. This track connects those to the model and to the release.
 
@@ -31,7 +31,7 @@ static study, if one exists). Evaluating the faces of the convex hull plus the p
 and taking the minimum, gives a suggested orientation that the user can accept or override.
 
 \begin{epic}{MFG-02}{CNC CAM}{M3}{\stTodo}{(new)}
-Use FreeCAD CAM with BruceWorx defaults: a \textbf{setup template} (stock from the bounding box plus
+Use FreeCAD CAM with Vector Labs defaults: a \textbf{setup template} (stock from the bounding box plus
 allowance, work offset at a datum corner), a \textbf{tool library} matching the shop's tools, operation
 templates (face, adaptive clearing, profile, drill and chamfer), and a \textbf{post-processor} for the target
 machine (open question).

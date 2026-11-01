@@ -2,7 +2,7 @@
 \subsection{MOD-05 plan: threads, holes and the hardware library (25 Oct 2026)}\label{sec:mod05-plan}
 %======================================================================
 
-\eref{MOD-05} gives BruceWorx three things Fusion and SolidWorks users reach for every day: hole
+\eref{MOD-05} gives Vector Labs three things Fusion and SolidWorks users reach for every day: hole
 presets (with \textbf{heat-set insert} holes for printed parts), a \textbf{cosmetic thread}, and a
 \textbf{fastener library} whose screws, nuts and washers are vault COTS items. It bundles the open-source
 Fasteners add-on instead of writing a library, and keeps everything else in Python next to the existing
@@ -18,9 +18,9 @@ and the open ones are at the end.
 Question & Answer\\
 \midrule
 Fastener library & The \textbf{Fasteners add-on} (\code{shaise/FreeCAD\_FastenersWB}: ISO/DIN screws, nuts,
-  washers, inserts), bundled with BruceWorx.\\
+  washers, inserts), bundled with Vector Labs.\\
 In the vault & A fastener placed in an assembly is a vault \textbf{COTS item} (item type \code{cots}) with a
-  BruceWorx part number.\\
+  Vector Labs part number.\\
 Heat-set holes & \textbf{Ruthex / CNC Kitchen, M2--M5}, with their published hole diameters and depths.\\
 Open details & Decided here with reasons; questions listed in section~8.\\
 \bottomrule
@@ -298,7 +298,7 @@ the gearbox acceptance in the GUI.
         view, as Fusion does? It touches the display code. \emph{Recommendation:} yes, after the studio
         rendering work settles.
   \item \textbf{Fasteners' own toolbar.} Keep the add-on's 100-odd commands reachable (a \emph{Fasteners} tab
-        under Design), or only BruceWorx's \emph{Insert Fastener}? \emph{Recommendation:} only Insert
+        under Design), or only Vector Labs' \emph{Insert Fastener}? \emph{Recommendation:} only Insert
         Fastener on the ribbon; the add-on's workbench stays under ``More workbenches''.
 \end{enumerate}
 

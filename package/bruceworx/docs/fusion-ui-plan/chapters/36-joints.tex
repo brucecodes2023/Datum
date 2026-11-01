@@ -70,7 +70,7 @@ own part, so $\theta_0$ does not change as the parts move. It is stored on the j
 $L_0 = h_1 - h_2$, stored as \code{LimitLengthZero}.
 
 \paragraph{Drag backstop.} The solver stops at limits today, but nothing checked that it does. After each drag step,
-BruceWorx now reads every limited joint itself. If a step would take a joint further past a limit, it is cut back:
+Vector Labs now reads every limited joint itself. If a step would take a joint further past a limit, it is cut back:
 the move is halved six times from the last good position, so the part stops within $1/64$ of one mouse step of the
 limit. A plain solve that leaves a joint outside its limits now prints a warning in the Report view (``Hinge is at
 120 deg, outside its limits (0 deg to 90 deg)''). Python can now drive a drag (\code{preDrag}, \code{doDragStep},
@@ -102,11 +102,11 @@ section~\ref{sec:tonight}.
 \paragraph{A jointed pattern instance (built 22 Oct).} Your answer: the joint wins, and the conflict says what holds
 the instance. Before, when a bolt pattern went from 6 to 8, the pattern moved instance \#2 to its new place
 (90\,$^\circ$). The next recompute ran the assembly solver (\code{SolveOnRecompute}), which pulled it back to the hole its
-joint names (120\,$^\circ$) and kept the pattern's rotation. The joint itself moves nothing. Now a BruceWorx pattern
+joint names (120\,$^\circ$) and kept the pattern's rotation. The joint itself moves nothing. Now a Vector Labs pattern
 does not move an instance that a joint holds: an active joint on it that the solver applies (the instance is connected
 to the grounded parts), or a grounding of the instance. The other instances move as usual, so the pattern and the
 solver never pull against each other. When a held instance is away from its place in the pattern (more than
-$10^{-4}$\,mm or about $0.01^\circ$ off), BruceWorx says so in four places:
+$10^{-4}$\,mm or about $0.01^\circ$ off), Vector Labs says so in four places:
 \begin{itemize}[nosep]
   \item a red line in the pattern panel while it is open;
   \item a Report view warning when it appears (\emph{Bolt pattern: instance \#2 (Pattern\_i1) is held by joint

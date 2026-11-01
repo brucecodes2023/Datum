@@ -91,7 +91,7 @@ Placement helpers & \file{Mod/Part/App/GizmoHelper.cpp} (edge mid-point, face no
 Preferences & \code{BaseApp/Preferences/Gui/Gizmos}: \code{EnableGizmos} (on), \code{DelayedGizmoUpdate} (off: the
   value follows the drag live).\\
 Colours & Style parameters \code{LinearGizmoBaseColor}, \code{LinearGizmoActiveColor},
-  \code{DimensionVisualizerColor} (red, yellow, blue by default). Setting them in the BruceWorx theme makes the
+  \code{DimensionVisualizerColor} (red, yellow, blue by default). Setting them in the Vector Labs theme makes the
   task-panel arrows match ours \verify.\\
 \code{View3DInventorPy} & \code{addDraggerCallback(dragger, "addMotionCallback", fn)}, \code{getPointOnViewport},
   \code{getObjectInfo}, \code{getCameraNode}, \code{getSceneGraph}: all a Python editor needs.\\
@@ -255,7 +255,7 @@ field shows the expression and typing a number asks whether to replace it.
         where FreeCAD's own arrows take over.
 \end{enumerate}
 A face that no supported feature made (a side face of a pad, an imported body) shows a short hint and the inspector
-instead. The arrow and field are BruceWorx widgets on the 3D view, like the navigation pill: a child
+instead. The arrow and field are Vector Labs widgets on the 3D view, like the navigation pill: a child
 \code{QWidget} placed at the arrow tip from \code{getPointOnViewport} (device pixels from the bottom, converted),
 with a \code{Gui::QuantitySpinBox} and \code{Gui.ExpressionBinding} for units and expressions. Preference:
 Preferences $\rightarrow$ BruceWorx $\rightarrow$ \emph{On-canvas editing} (default on).

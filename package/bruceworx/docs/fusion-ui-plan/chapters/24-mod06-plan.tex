@@ -2,7 +2,7 @@
 \subsection{MOD-06 plan: sheet metal from the bundled SheetMetal add-on (23 Oct 2026, approved 24 Oct)}\label{sec:mod06-plan}
 %======================================================================
 
-\eref{MOD-06} gives BruceWorx sheet metal by bundling the open-source SheetMetal add-on (\code{shaise/FreeCAD\_SheetMetal})
+\eref{MOD-06} gives Vector Labs sheet metal by bundling the open-source SheetMetal add-on (\code{shaise/FreeCAD\_SheetMetal})
 rather than writing a new one. This plan says what was tested in this build, the theory the flat pattern rests on, how
 the add-on is bundled and shown as the \emph{Design $\rightarrow$ Sheet Metal} tab, the per-vault rules, and the outputs
 (flat DXF and bend table) that tie it to \eref{MFG-03} and \eref{DRW-07}.
@@ -225,7 +225,7 @@ SS304-1.2 & Stainless 304 & 1.2 & 1.2 & 0.45 & $1.2\times2.4$ & 4.2 & \\
         uses for the Ribbon add-on.
   \item \textbf{A user copy wins.} FreeCAD keys modules by lower-case folder name and loads the user's \file{Mod}
         after the built-in one, so a SheetMetal installed from the Addon Manager replaces ours (FreeCAD prints
-        ``2 entries found''). BruceWorx shows this once in the status bar (question~1).
+        ``2 entries found''). Vector Labs shows this once in the status bar (question~1).
 \end{itemize}
 
 \paragraph{Licence findings.}
@@ -243,7 +243,7 @@ File headers & 25 files LGPL-2.1-or-later; \textbf{8 files GPL-2.0-or-later}: \f
   4 files without a header. The 2024 relicence commit did not touch them.\\
 networkx~3.5 & BSD-3-Clause\\
 Compatibility & LGPL-2.1-or-later FreeCAD may be combined with GPL-2.0-or-later code: the combination is then
-  distributed under the GPL, whose main duty, the complete source, BruceWorx already meets (\eref{FND-04}: a source
+  distributed under the GPL, whose main duty, the complete source, Vector Labs already meets (\eref{FND-04}: a source
   archive with every release; Python is shipped as source). Nothing here blocks the internal \file{.dmg}.\\
 \bottomrule
 \end{tabularx}
@@ -384,7 +384,7 @@ one. No upstream FreeCAD code changes: everything is Python and CMake.
 
 %----------------------------------------------------------------------
 \paragraph{Your answers to the questions below (24 Oct).} All six as recommended. 1: FreeCAD's rule stays, a newer
-SheetMetal from the Addon Manager wins, with a one-time note. 2: upstream is followed \textbf{at every BruceWorx
+SheetMetal from the Addon Manager wins, with a one-time note. 2: upstream is followed \textbf{at every Vector Labs
 release}, after its tests and our bracket pass. 3: \textbf{one K per rule} now, the K table per material by $R/T$
 later. 4: rules in \textbf{millimetres, gauge as an alias}; a new vault starts with Al~5052-H32 1.0/1.5/2.0/3.0, CR
 steel 16/14/12\,ga and stainless 304 1.2/1.5, with the K values of section~2 until the shop gives theirs. 5: a
@@ -398,8 +398,8 @@ to fix the headers. Building started 24 Oct.
   \item \textbf{A SheetMetal from the Addon Manager.} If you (or someone) install SheetMetal from the Addon Manager, it
         replaces the bundled one. Keep that rule, or always load the bundled copy?\\
         \emph{Recommendation:} keep FreeCAD's rule (a newer user copy wins) and show a one-time note, so you can try an
-        upstream fix without waiting for a BruceWorx build.
-  \item \textbf{Updates.} Follow upstream at every BruceWorx release (after its tests and our bracket pass), or only
+        upstream fix without waiting for a Vector Labs build.
+  \item \textbf{Updates.} Follow upstream at every Vector Labs release (after its tests and our bracket pass), or only
         when a fix is needed?\\
         \emph{Recommendation:} at every release; the add-on changes often and old pins get hard to rebase.
   \item \textbf{K per rule or K table.} One K per rule (rule fixes $T$ and $R$), or a K table per material by $R/T$?\\
