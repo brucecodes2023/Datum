@@ -352,6 +352,13 @@ class TestWashVerdict(unittest.TestCase):
         self.assertEqual(conv["window"], 200)
         self.assertEqual([st["name"] for st in conv["listed"]], ["tiny"])  # 0.075 % of the thrust: listed, not judged
 
+    def test_the_line_is_one_and_a_half_percent_of_the_thrust(self):
+        self.assertEqual(wash.SIGNIFICANT_SHARE, 0.015)
+        folder, info = self.case(5e-4, lambda i: -0.40, lambda i: -0.068, lambda i: -0.048)  # 1.7 % and 1.2 % of 4 N
+        conv = wash.wash_convergence(folder, info)
+        self.assertEqual(sorted(st["name"] for st in conv["judged"]), ["Total", "arm1", "plate"])
+        self.assertEqual([st["name"] for st in conv["listed"]], ["tiny"])
+
     def test_a_small_part_that_swings_does_not_fail_the_verdict(self):
         folder, info = self.case(5e-4, lambda i: -0.40, lambda i: -0.12, lambda i: -0.003 * (1 + 0.3 * (-1) ** i))
         self.assertEqual(wash.wash_convergence(folder, info)["verdict"], "converged")
@@ -379,7 +386,7 @@ class TestWashVerdict(unittest.TestCase):
         conv = wash.wash_convergence(folder, info)
         tex = "\n".join(wash._window_table(conv))
         self.assertIn("plate", tex)
-        self.assertIn("no (under 2", tex)
+        self.assertIn("no (under 1.5", tex)
 
 
 class TestXFrameRun(unittest.TestCase):

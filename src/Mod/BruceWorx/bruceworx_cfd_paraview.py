@@ -113,8 +113,8 @@ def wash_plan(info):
         line = [c / m for c in line]
         normal = [axis[1] * line[2] - axis[2] * line[1], axis[2] * line[0] - axis[0] * line[2], axis[0] * line[1] - axis[1] * line[0]]
         names = (a.get("label") or a["name"]) + ((" and " + (b.get("label") or b["name"])) if b else "")
-        cuts.append({"kind": f"cut{i + 1}", "origin": list(a["center"]), "normal": normal,
-                     "caption": f"Vertical cut through {names}: speed $|U|$ in the plane of the thrust axis"})
+        cuts.append({"kind": f"cut{i + 1}", "origin": list(a["center"]), "normal": normal, "title": f"Cut through {names}",
+                     "caption": f"Vertical cut through {cfd._tex(names)}: speed $|U|$ in the plane of the thrust axis"})
     vi = sum(d.get("v_induced", 0.0) for d in disks) / len(disks)
     return {"axis": axis, "plane_origin": plane, "up": perpendicular(axis), "cuts": cuts, "iso_speed": 0.5 * vi, "vi": vi}
 
@@ -134,6 +134,20 @@ def picture_kinds(folder_or_info=None):
     out = list(IMAGES) + [WASH_KINDS[0]] + [(c["kind"], c["caption"]) for c in plan["cuts"]]
     out.append((WASH_KINDS[1][0], WASH_KINDS[1][1] % f"{plan['iso_speed']:.3g}"))
     return out
+
+
+def picture_titles(folder_or_info=None):
+    """{kind: short name} for the picture list: the motors' own labels in the cuts ("Cut through Motor 1 and Motor 3")."""
+    info = folder_or_info
+    try:
+        if isinstance(info, str):
+            info = _json(info)
+        plan = wash_plan(info) if info else {}
+    except Exception:
+        plan = {}
+    titles = {"iso": "Isometric", "side": "Side", "cut": "Cut plane", "axis": "Along the thrust axis", "wake": "Wake surface"}
+    titles.update({c["kind"]: c["title"] for c in plan.get("cuts", [])})
+    return titles
 
 
 def images(folder):

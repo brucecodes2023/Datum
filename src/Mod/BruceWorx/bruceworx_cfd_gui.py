@@ -19,7 +19,6 @@ import time
 import bruceworx_cfd as cfd
 import bruceworx_cfd_paraview as pvm
 import bruceworx_sim as sim
-import bruceworx_sim_events as events
 from bruceworx_slots import slot
 
 _classes = None
@@ -456,7 +455,6 @@ def _make_classes():
                 issues, est = [("error", f"Pre-check failed: {exc}")], None
             colors = {"error": "#b00020", "warning": "#8a6d00", "info": "#555"}
             self.issues.setText("<br>".join(f"<span style='color:{colors[l]}'>{t}</span>" for l, t in issues))
-            events.from_precheck(issues)
             self.run_button.setEnabled(not any(l == "error" for l, _t in issues) and not self._running())
             return issues
 
@@ -480,8 +478,6 @@ def _make_classes():
                 return
             self.folder = info["folder"]
             self.reader = cfd.LogReader(self.folder)
-            events.run_started(getattr(self.analysis, "Label", ""))
-            self.feed = events.FoamFeed(self.folder)
             self.run_button.setEnabled(False)
             self.stop_button.setEnabled(True)
             self.stage_label.setText(f"Running in {self.folder} on {info['n_procs']} core(s)…")
@@ -498,10 +494,6 @@ def _make_classes():
                 self.timer.stop()
                 return
             self.reader.update()
-            try:
-                self.feed.poll()
-            except Exception:
-                pass
             self.res_plot.set_series({f: v[-2000:] for f, v in self.reader.residuals.items()})
             try:
                 info = json.load(open(os.path.join(self.folder, "vectorlabs.json")))
@@ -518,10 +510,6 @@ def _make_classes():
                 self.timer.stop()
                 self.stop_button.setEnabled(False)
                 result = self.runner.result()
-                try:
-                    self.feed.finish(result)
-                except Exception:
-                    pass
                 note = " (MPI did not start on this Mac: ran on one core)" if cfd.mpi_known_broken() else ""
                 self.stage_label.setText(f"Run {result}{note}.")
                 if result == "done":
@@ -575,7 +563,7 @@ def _make_classes():
                 detail = "<br>Forces along the thrust axis, mean (swing): " + "; ".join(
                     f"{st['name']} {st['mean']:.3g} N ({st['swing'] * 100:.2g} %)" for st in conv["judged"])
                 if conv.get("listed"):
-                    detail += "<br>Under 2 % of the thrust, not judged: " + ", ".join(st["name"] for st in conv["listed"])
+                    detail += f"<br>Under {cfd.wash().SIGNIFICANT_SHARE * 100:.3g} % of the thrust, not judged: " + ", ".join(st["name"] for st in conv["listed"])
             self.conv_label.setText(conv["text"] + verdict + detail + (f"<br>Induced velocity at the disks: {disks}" if disks else ""))
 
         def _pressure_changed(self):
@@ -742,20 +730,19 @@ def _make_classes():
                                       else f"<span style='color:#8a6d00'>No pictures: {self.pv_job.message}</span>")
             self._show_picture()
 
-        PICTURE_NAMES = {"iso": "Isometric", "side": "Side", "cut": "Cut plane", "axis": "Along the thrust axis", "wake": "Wake surface"}
-
         def _fill_picture_choice(self):
             """The picture list of this study: the three generic ones, and for prop wash the axis view, a cut through each pair of
             opposite disks and the wake surface.  Refilled when the case changes."""
             folder = getattr(self.analysis, "CaseFolder", "") if getattr(self, "analysis", None) is not None else ""
             kinds = [k for k, _c in pvm.picture_kinds(folder or None)]
+            titles = pvm.picture_titles(folder or None)
             if kinds == [self.picture_choice.itemData(i) for i in range(self.picture_choice.count())]:
                 return
             keep = self.picture_choice.currentData()
             self.picture_choice.blockSignals(True)
             self.picture_choice.clear()
             for k in kinds:
-                self.picture_choice.addItem(self.PICTURE_NAMES.get(k) or f"Cut through disk pair {k[3:]}", k)
+                self.picture_choice.addItem(titles.get(k, k), k)
             if keep in kinds:
                 self.picture_choice.setCurrentIndex(kinds.index(keep))
             self.picture_choice.blockSignals(False)

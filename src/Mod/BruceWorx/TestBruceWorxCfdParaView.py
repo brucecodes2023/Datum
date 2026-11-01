@@ -191,6 +191,10 @@ class TestScriptAndSeeds(unittest.TestCase):
         self.assertEqual(plan["axis"], [0.0, 0.0, 1.0])
         self.assertAlmostEqual(plan["iso_speed"], 2.5)  # half the induced velocity of 5 m/s
         self.assertAlmostEqual(plan["plane_origin"][2], 0.1 - 0.05)  # half a diameter below the disks
+        titles = pvm.picture_titles(info)
+        self.assertEqual(titles["cut1"], "Cut through Motor 0 and Motor 3")  # the motors' own labels
+        self.assertEqual(titles["axis"], "Along the thrust axis")
+        self.assertIn("Motor 0 and Motor 3", plan["cuts"][0]["caption"])
         pairs = pvm.disk_pairs(info)
         self.assertEqual(len(pairs), 2)
         for a, b in pairs:  # opposite: the centres mirror each other about the middle

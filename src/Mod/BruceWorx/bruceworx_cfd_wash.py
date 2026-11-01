@@ -579,7 +579,7 @@ def wash_forces(folder, info=None):
 
 
 WASH_RESIDUAL = 1.0e-3  # jets from actuator disks never reach the external-flow limit of 1e-4
-SIGNIFICANT_SHARE = 0.02  # a part carrying more than 2 % of the thrust is judged; the others are listed only
+SIGNIFICANT_SHARE = 0.015  # a part carrying more than 1.5 % of the thrust (the user's line, 1 Nov second round) is judged; the others are listed only
 VERDICT_LABELS = {"converged": "converged", "unsteady": "steady average of an unsteady flow", "not converged": "not converged"}
 
 
@@ -605,7 +605,7 @@ def _window_stats(rows, axis, window, change):
 
 def wash_convergence(folder, info=None, reader=None, residual=WASH_RESIDUAL, window=None, change=None):
     """The verdict of a prop-wash study.  Forces are judged along the thrust axis on the total and on every part that
-    carries more than 2 % of the total thrust, over the last ``window`` iterations: the averages must be steady to
+    carries more than SIGNIFICANT_SHARE (1.5 %) of the total thrust, over the last ``window`` iterations: the averages must be steady to
     ``change`` (the window's mean against the one before) and the residuals below ``residual``.
     ``converged``: all of it, and the forces swing less than ``change``.  ``unsteady`` (shown as "steady average of an
     unsteady flow"): the averages are steady but the residuals stay above the limit or the forces swing; the mean and
@@ -695,13 +695,14 @@ def _window_table(conv):
         return []
     out = [r"\begin{tabular}{@{}lrrrrl@{}}", r"\toprule",
            r"Part & Mean (N) & Share of thrust & Swing & Drift & Judged\\", r"\midrule"]
-    under = r"no (under 2\,\%)"
+    pct = f"{SIGNIFICANT_SHARE * 100:.3g}"
+    under = rf"no (under {pct}\,\%)"
     for st in rows:
         out.append(f"{cfd._tex(st['name'])} & {st['mean']:.4g} & {st['share'] * 100:.2f}\\,\\% & {st['swing'] * 100:.2g}\\,\\% & "
                    f"{st['drift'] * 100:.2g}\\,\\% & {'yes' if st['judged'] else under}\\\\")
     out += [r"\bottomrule", r"\end{tabular}",
             r"Mean, swing (largest minus smallest over the window) and drift (the window's mean against the mean of the window before it) of the force "
-            r"along the thrust axis; parts under 2\,\% of the thrust are listed and do not decide the verdict."]
+            rf"along the thrust axis; parts under {pct}\,\% of the thrust are listed and do not decide the verdict."]
     return out
 
 
