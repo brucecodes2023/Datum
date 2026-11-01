@@ -624,6 +624,18 @@ class TestFirstEditOffer(unittest.TestCase):
         # an assembly being built links the housing: the housing's transaction is not an edit of it
         self.assertFalse(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001"))
 
+    def test_editing_a_linked_part_in_place_offers_it(self):
+        # PDM-13: double-click a part in an assembly: the part's document is in edit while the assembly is active
+        self.assertTrue(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001", "LE_01_01003_001"))
+        self.assertFalse(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001", "LE_01_01004_001"))
+        self.assertFalse(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001", None))
+
+    def test_open_is_read_only_unless_the_old_question_is_switched_on(self):
+        import FreeCAD
+
+        pref = FreeCAD.ParamGet(vc.PREFS_PATH)
+        self.assertFalse(pref.GetBool("AskCheckOutOnOpen", False))
+
 
 if __name__ == "__main__":
     unittest.main()

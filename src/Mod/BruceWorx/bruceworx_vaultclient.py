@@ -1305,7 +1305,10 @@ def open_from_vault(pn=None, ask=True):
         if not ok:
             return False
         st = s.status(pn)
-    if ask and st.code in (UP_TO_DATE, NEWER) and st.state == WIP and not s.vault.locks.get(pn):
+    # PDM-13 (1 Nov): you check out when you edit, not when you open ("let me open something and when I go to edit
+    # something ask me to check-out the file"): a plain open is read-only. The old question stays behind a preference.
+    if (ask and _prefs().GetBool("AskCheckOutOnOpen", False) and st.code in (UP_TO_DATE, NEWER) and st.state == WIP
+            and not s.vault.locks.get(pn)):
         from PySide import QtWidgets
 
         box = QtWidgets.QMessageBox(_window())
@@ -1323,6 +1326,14 @@ def open_from_vault(pn=None, ask=True):
                 return False
         elif box.clickedButton() is not ro:
             return False
+    try:  # a big assembly opens from its preview meshes (Fast Open, PRF-03); parts and small assemblies do not
+        import bruceworx_fastopen
+
+        if bruceworx_fastopen.maybe_fast_open(s, pn) is not None:
+            _update_tabs()
+            return True
+    except Exception as exc:  # noqa: BLE001 -- Fast Open is a speed-up, never a reason not to open
+        _console(f"BruceWorx vault: Fast Open did not run ({exc}); opening the file", "warn")
     ok, _r = _run("Open from Vault", s.work.make_local, pn)  # iCloud: the file and what it links
     if not ok:
         return False
@@ -1762,11 +1773,28 @@ def _offer_save_checkout(s, pn, filename):
     return False
 
 
-def offers_first_edit(doc_name, active_name):
-    """Whether a transaction opening in doc_name is your first edit of it. Only one in the active document
-    is: a part opened to be linked gets transactions from the assembly's command (the vault writing its
-    LifecycleState), which are not edits of the part. Saving any vault file still asks for its check-out."""
-    return active_name is None or active_name == doc_name
+def offers_first_edit(doc_name, active_name, edit_name=None):
+    """Whether a transaction opening in doc_name is your first edit of it. One in the active document is, and
+    one in the document being edited in place (PDM-13: double-click a linked part in an assembly: its own
+    document is in edit while the assembly is active). A part opened to be linked gets transactions from the
+    assembly's command (the vault writing its LifecycleState), which are not edits of the part. Saving any
+    vault file still asks for its check-out."""
+    return active_name is None or active_name == doc_name or (edit_name is not None and edit_name == doc_name)
+
+
+def _edit_document_name():
+    """The name of the document whose object the 3D view is editing in place, or None."""
+    try:
+        import FreeCADGui
+
+        gui = FreeCADGui.editDocument()
+        if gui is not None:
+            return gui.Document.Name
+        active = FreeCADGui.ActiveDocument
+        vp = active.getInEdit() if active is not None else None
+        return vp.Object.Document.Name if vp is not None else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 class _DocumentObserver:
@@ -1825,7 +1853,7 @@ class _DocumentObserver:
         import FreeCAD
 
         active = FreeCAD.ActiveDocument
-        if not offers_first_edit(doc.Name, active.Name if active is not None else None):
+        if not offers_first_edit(doc.Name, active.Name if active is not None else None, _edit_document_name()):
             return
         s = _state["session"]
         pn = pn_for_document(doc, s) if s is not None else ""
@@ -1833,7 +1861,7 @@ class _DocumentObserver:
             return
         st = s.status(pn)
         item = s.vault.model.items.get(pn)
-        if st.code != UP_TO_DATE or item is None or item.state != WIP:
+        if st.code not in (UP_TO_DATE, NEWER) or item is None or item.state != WIP:
             return
         self.asked.add(doc.Name)
         from PySide import QtCore
@@ -1906,13 +1934,21 @@ def _offer_first_edit(name, pn):
         doc = FreeCAD.getDocument(name)
     except Exception:
         return
-    if s is None or s.status(pn).code != UP_TO_DATE:
+    if s is None or s.status(pn).code not in (UP_TO_DATE, NEWER):
         return
     st = s.status(pn)
+    newer = st.code == NEWER
     text = (f"{doc.Label} ({st.display}) is not checked out to you, so changes to it cannot be saved.\n\n"
-            "Check it out now?")
+            + ("A newer version is in the vault: checking out brings it in, and your open copy is reloaded "
+               "from it.\n\n" if newer else "") + "Check it out now?")
     if _ask("Check Out", text, "Check Out", "Not Now", default_yes=True):
-        check_out(pn)
+        if check_out(pn) and newer:
+            try:
+                fresh = FreeCAD.getDocument(name)
+                _reload(fresh)
+            except Exception:  # noqa: BLE001
+                _message("Check Out", f"{st.display} was checked out and brought up to date. Close and reopen "
+                                      "it to see the newer version.", "info")
 
 
 # ----- tabs: a lock on documents you cannot save -----------------------------------------------
