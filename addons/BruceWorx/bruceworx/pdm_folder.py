@@ -95,6 +95,14 @@ RENUMBER_OP = "renumber"
 # see bruceworx.product_tree). Both are optional and come from the FreeCAD side; a journal without
 # them replays as before. Every Vector Labs copy must know an operation before the vault uses it.
 CHECKIN_EXTRAS = ("made_from", "fingerprint")
+# PRF-04 (2 Nov 2026): ``migrate_storage`` re-encodes stored file versions without new versions (Bruce: no
+# check-outs, no history per item). args ``format`` (e.g. "binary-brep"), ``note`` and ``objects``
+# ({old SHA-256: {"sha256", "size", "filename"}}, the new objects it wrote). Replay maps every old SHA-256
+# to its new one (versions, drawings' made_from, released files, BOM versions) and keeps the old one on the
+# version (``migrated_from``); objects are never removed, so a copy of Vector Labs that does not know the
+# operation records it as a problem and reads the old objects as before. :meth:`FolderVault.canonical`
+# turns an old SHA-256 (a work copy's base) into the current one.
+MIGRATE_OP = "migrate_storage"
 
 
 class VaultFormatError(ValueError):
@@ -114,6 +122,7 @@ class FileVersion:
     # ({"volume", "area", "centre", "box"}); None for versions checked in without them.
     made_from: dict | None = None
     fingerprint: dict | None = None
+    migrated_from: str = ""  # PRF-04: the SHA-256 this version was stored under before a storage migration
 
     @property
     def object_name(self) -> str:
@@ -249,6 +258,7 @@ class FolderVault:
         self.locks: dict[str, str] = {}
         self.lock_times: dict[str, str] = {}  # P/N -> when its current lock was taken (PDM-10)
         self.released_files: dict[tuple[str, str], str] = {}
+        self.migrated: dict[str, str] = {}  # PRF-04: old SHA-256 -> the SHA-256 it is stored under now
         self.problems: list[str] = []
         self.events: list[Event] = []  # every event, in replay order: readers need no second read
         self._seen: set[str] = set()
@@ -376,6 +386,8 @@ class FolderVault:
             return result
         if event.op == RENUMBER_OP:
             return self._apply_renumber(event)
+        if event.op == MIGRATE_OP:
+            return self._apply_migrate(event)
         pn = args.get("part_number")
         item = self.model.items.get(pn)
         if item is not None and item.configuration_of:  # MOD-03: a configuration has no file of its own
@@ -411,6 +423,58 @@ class FolderVault:
         else:
             raise ValueError(f"unknown operation {event.op!r}")
         return None
+
+    def _apply_migrate(self, event: Event):
+        """PRF-04: the versions stored under an old SHA-256 are stored under the new one now."""
+        objects = event.args.get("objects") or {}
+        if not isinstance(objects, dict):
+            raise ValueError("migrate_storage needs objects {old sha256: record}")
+        mapping = {}
+        for old, record in objects.items():
+            if not isinstance(record, dict) or not record.get("sha256"):
+                raise ValueError(f"migrate_storage: no new sha256 for {old}")
+            mapping[old] = record
+        if not mapping:
+            return 0
+        for old, record in mapping.items():
+            self.migrated[old] = record["sha256"]
+        moved = 0
+        for versions in self.versions.values():
+            for version in versions:
+                record = mapping.get(version.sha256)
+                if record is not None:
+                    version.migrated_from = version.migrated_from or version.sha256
+                    version.sha256 = record["sha256"]
+                    version.size = int(record.get("size", version.size))
+                    moved += 1
+                if version.made_from:
+                    version.made_from = {pn: mapping[s]["sha256"] if s in mapping else s
+                                         for pn, s in version.made_from.items()}
+        for key, sha in list(self.released_files.items()):
+            if sha in mapping:
+                self.released_files[key] = mapping[sha]["sha256"]
+        for item in self.model.items.values():
+            for rev in getattr(item, "revisions", []):
+                if getattr(rev, "bom_version", "") in mapping:
+                    rev.bom_version = mapping[rev.bom_version]["sha256"]
+        return moved
+
+    def canonical(self, sha256: str | None) -> str | None:
+        """PRF-04: the SHA-256 a version is stored under now (a pre-migration hash -> its new one)."""
+        seen = 0
+        while sha256 in self.migrated and seen < 8:  # a later migration of a migrated object
+            sha256 = self.migrated[sha256]
+            seen += 1
+        return sha256
+
+    def migrate_storage(self, objects: dict, fmt: str, note: str = ""):
+        """Record a storage migration (PRF-04). ``objects`` maps old SHA-256 -> the record of the new
+        object, already written with :meth:`store_object`. One journal event for the whole vault."""
+        for record in objects.values():
+            path = os.path.join(self.root, object_name(record["sha256"], record["filename"]))
+            if not os.path.exists(path) or sha256_of(path) != record["sha256"]:
+                raise LifecycleError(f"migrate_storage: {path} is missing or does not match its SHA-256")
+        return self._record(MIGRATE_OP, _optional(dict(format=fmt, objects=objects), note=note))
 
     def _apply_renumber(self, event: Event):
         """Replay a renumber (PDM-12): the model re-keys the item and its references, then the file
@@ -802,6 +866,7 @@ class FolderVault:
 
     def version_with(self, part_number, sha256: str) -> FileVersion | None:
         """The version of ``part_number`` with this SHA-256, or None."""
+        sha256 = self.canonical(sha256)
         return next((v for v in self.versions.get(self.file_item(part_number), []) if v.sha256 == sha256), None)
 
     def store_object(self, path: str, digest: str | None = None) -> dict:

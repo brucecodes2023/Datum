@@ -519,7 +519,8 @@ class Workspace:
             return FileStatus(pn, NOT_IN_VAULT, path if local else "", local=local or "")
         latest = vault.latest_version(pn)
         lock = vault.locks.get(pn) or ""
-        code = status_code(True, lock, vault.actor, self.base(pn) or None, local,
+        # PRF-04: a base or work copy from before a storage migration is the same version as its new hash
+        code = status_code(True, lock, vault.actor, vault.canonical(self.base(pn) or None), vault.canonical(local),
                            latest.sha256 if latest else None, item.state)
         return FileStatus(
             pn, code, path if local else "", self.base(pn), local or "", latest.sha256 if latest else "",
@@ -622,7 +623,7 @@ class Workspace:
         latest = self.vault.latest_version(pn)
         if latest is None:
             return self.path(pn)
-        if local == latest.sha256:
+        if self.vault.canonical(local) == latest.sha256 and local == latest.sha256:
             self._ensure([self.path(pn)])  # evicted by iCloud: download it to edit it
             _set_writable(self.path(pn), True)
             self._record_base(pn, latest.sha256)

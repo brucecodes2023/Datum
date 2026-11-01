@@ -47,3 +47,16 @@ instead of one per link; open large assemblies on the preview meshes the vault a
 a part's exact shape when it is edited or measured. Target: TL-P01 opens at least three times faster and orbits
 smoothly.
 \end{epic}
+
+\begin{epic}{PRF-04}{Vault storage migration}{M5}{\stProg}{Bruce 2 Nov}
+Bruce: switch every vault file to binary, without check-outs or a new version per item. Stored files are
+write-once and verified by SHA-256 (\code{objects/<ab>/<sha256>}), and drawings, BOMs and previews refer to those
+hashes, so files are not edited in place. \code{bruceworx.vault\_storage} re-encodes each stored version into a
+new object: a zip rewrite in which every shape Document.xml names as \code{X.brp} becomes \code{X.bin} and
+everything else is copied byte for byte. Each shape is compared with the original (type, counts, volume, area,
+box) and any difference stops the run before anything is recorded. One \code{migrate\_storage} journal event
+maps old to new; replay moves versions, drawings' made-from, released files and BOM versions to the new hashes,
+\code{FolderVault.canonical} keeps old work-copy bases current, and unchanged work copies are refreshed. Old
+objects stay, so an older Vector Labs still reads the vault. On a copy of the vault: 114 of 165 stored files,
+767 shapes, 26.9 to 18.5\,MB, statuses unchanged, 37 of 37 files open in FreeCAD with identical shapes.
+\end{epic}
