@@ -78,6 +78,7 @@ LIFECYCLE_OPS = {
     "set_bom": ("parent", "lines", "revision", "sha256", "missing"),
     "set_item_type": ("part_number", "item_type"),  # MOD-05: part <-> cots
     "set_category": ("part_number", "category"),  # item categories (30 Oct 2026)
+    "set_description": ("part_number", "description"),  # clearer descriptions, no new version (2 Nov 2026)
     "add_configuration": ("part_number", "configuration_of", "configuration", "description"),  # MOD-03
     # PDM-09 (26 Oct 2026): a project is a journal record naming its top assembly.
     "create_project": ("code", "name", "program", "top", "units", "drawing_profile", "description"),
@@ -620,6 +621,9 @@ class FolderVault:
 
     def set_item_type(self, part_number, item_type):
         return self._record("set_item_type", dict(part_number=part_number, item_type=item_type))
+
+    def set_description(self, part_number, description):
+        return self._record("set_description", dict(part_number=part_number, description=" ".join(str(description or "").split())))
 
     def set_category(self, part_number, category):
         return self._record("set_category", dict(part_number=part_number, category=pdm.normalize_category(category)))

@@ -155,6 +155,20 @@ paths:
         content: {application/json: {schema: {type: object, required: [category], properties: {category: {type: string, maxLength: 60}}}}}
       responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /items/{pn}/description:
+    put:
+      operationId: set_description
+      summary: >
+        A clearer description (2 Nov 2026): metadata only, so no new file version, number, revision or
+        state. WIP items only; a released item's description changes through an ECO with its next revision.
+        Spaces are tidied; an empty or unchanged description is refused. Recorded on the latest revision.
+        A journal op added 2 Nov 2026; every client opening the vault must know it.
+      parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [description], properties: {description: {type: string, minLength: 1}}}}}
+      responses: {"200": {description: The item, content: {application/json: {schema: {$ref: "#/components/schemas/Item"}}}}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
   /items/{pn}/renumber:
     post:
       operationId: renumber

@@ -474,6 +474,22 @@ class Vault:
         item.item_type = item_type
         return item
 
+    def set_description(self, part_number, description):
+        """A clearer description (Bruce, 2 Nov: "the descriptions should be better to describe what drawings
+        are"). Metadata only: no new file version, number, revision or state. WIP items only: a released
+        item's description changes through an ECO with its next revision. Recorded on the latest revision."""
+        item = self._own(part_number, "describe")
+        text = " ".join(str(description or "").split())
+        if not text:
+            raise ValueError("a description cannot be empty")
+        if item.latest.state != WIP:
+            raise LifecycleError(f"{part_number} is {item.latest.state}; its description changes with its next revision")
+        if text == item.description:
+            raise LifecycleError(f"{part_number} already reads {text!r}")
+        item.latest.history.append(f"description: {item.description!r} -> {text!r}")
+        item.description = text
+        return item
+
     def set_category(self, part_number, category):
         """Tag an item with a category ("" clears it). Pure organisation: it never touches the
         part number, revision or state, so it is allowed in every state, obsolete included (a

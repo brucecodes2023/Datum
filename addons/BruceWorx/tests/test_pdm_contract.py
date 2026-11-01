@@ -59,6 +59,7 @@ TRANSITIONS = (
     ("B1", "set_bom", "PUT /items/{pn}/revisions/{rev}/bom", "WIP revision", "its BOM replaced"),
     ("T13", "set_item_type", "PUT /items/{pn}/type", "part or cots, not Obsolete", "cots or part"),
     ("T15", "set_category", "PUT /items/{pn}/category", "any item, any state", "category set or cleared"),
+    ("T17", "set_description", "PUT /items/{pn}/description", "WIP", "description replaced; no new version"),
     ("T16", "renumber", "POST /items/{pn}/renumber", "any item but In Review, with a reason",
      "same item under a new number, the old one an alias"),
     ("T14", "add_configuration", "POST /items/{pn}/configurations", "part or assembly, not Obsolete",
@@ -215,6 +216,18 @@ class _Lifecycle:
         self.v.retire(PART, "replaced")  # obsolete items can still be filed
         self.v.set_category(PART, "Retired")
         self.assertEqual(self.v.items[PART].category, "Retired")
+
+    def test_T17_description(self):
+        self.v.create_item(PART, description="Housing")
+        self.v.set_description(PART, "  Housing,   machined  ")
+        self.assertEqual((self.v.items[PART].description, self.v.items[PART].state), ("Housing, machined", WIP))
+        with self.assertRaises(ValueError):
+            self.v.set_description(PART, " ")
+        with self.assertRaises(LifecycleError):
+            self.v.set_description(PART, "Housing, machined")  # nothing changes
+        self.released()
+        with self.assertRaises(LifecycleError):  # a released description changes with the next revision
+            self.v.set_description(PART, "Housing, anodised")
 
     def test_T16_renumber(self):
         other = "LE-01-01002-001"
