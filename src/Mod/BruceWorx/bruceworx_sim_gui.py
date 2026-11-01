@@ -2275,7 +2275,7 @@ def _make_classes():
                              f"mid-plane <b>{bore['hoop_mid']:.4g}</b> MPa, von Mises max <b>{bore['vonMises_max']:.4g}</b> MPa"
                              + (f", lowest safety factor on the bore <b>{bore['bore_min_sf']:.3g}</b> (not the part's)"
                                 if bore.get("bore_min_sf") is not None else "")
-                             f"<br><span style='color:#777'>The safety factor uses the {ext['measure']} equivalent stress, "
+                             + f"<br><span style='color:#777'>The safety factor uses the {ext['measure']} equivalent stress, "
                              "never the hoop stress.</span>")
             self.summary.setText(
                 f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b> (node {ext['max_vm_node']})<br>"
