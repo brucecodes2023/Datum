@@ -1108,6 +1108,18 @@ def rebuild_mesh(fem, drop_unused=True, upgrade=False, volumes=None):
     return new
 
 
+def record_stage(analysis, stage):
+    """Stores the Model Builder fingerprint of a finished stage (bruceworx_sim_model.record); never raises."""
+    try:
+        import bruceworx_sim_model as model
+
+        model.record(analysis, stage)
+    except Exception as exc:
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(f"SIM-07: could not record the {stage} fingerprint: {exc}\n")
+
+
 def mesh_study(analysis, progress=None):
     """Generates the study's mesh (recompute of the Netgen object); returns mesh_stats.
 
@@ -1149,6 +1161,7 @@ def mesh_study(analysis, progress=None):
     stats = mesh_stats(mesh)
     stats["seconds"] = round(time.time() - t0, 1)
     stats["notes"] = notes
+    record_stage(analysis, "mesh")
     if progress:
         progress(f"Meshed: {stats['nodes']} nodes, {stats['elements']} elements in {stats['seconds']} s")
     return stats
@@ -1403,6 +1416,13 @@ def check_displacement(result, analysis=None):
 
 
 def finish_solve(fea, progress=None):
+    """Loads the results of a finished ccx run (see ``_finish_solve``) and records the solution's fingerprint."""
+    result = _finish_solve(fea, progress)
+    record_stage(fea.analysis, "solution")
+    return result
+
+
+def _finish_solve(fea, progress=None):
     """Loads the results of a finished ccx run, adds the safety factor; returns the result object.
 
     A modal or buckling study's results are its modes (bruceworx_sim_eigen.finish); this returns the

@@ -1,0 +1,84 @@
+%======================================================================
+\subsection{SIM-07 P1 --- Built, 1 Nov: the Model Builder's model layer}\label{sec:sim07-model-built}
+%======================================================================
+
+The headless half of phase P1 is in \file{src/Mod/BruceWorx/bruceworx\_sim\_model.py}: no Qt, tested in FreeCADCmd.
+The tree widget, the settings form and the status marks are built on it by the shell work; this layer does not touch
+the solvers or the workspace files.
+
+\paragraph{What you can do now (through the API).}
+\begin{itemize}[nosep]
+  \item \textbf{The tree.} \code{model\_tree(analysis)} returns Global Definitions (Parameters, Selections: empty
+        placeholders), Geometry (the analysed part), Materials, Physics, Mesh, Study (a step node named for the study
+        type, and the solver) and Results, in solving order. Physics lists the supports and loads of a structural
+        study, the thermal conditions of a thermal one, and for an airflow study virtual nodes bound to the study's
+        properties: inlet and far field, walls, turbulence and, in prop wash, one node per marked motor. Results
+        lists the result objects and virtual plot nodes by study type (stress, displacement, safety factor, hoop and
+        radial stress for a spinning part, modes, temperature, forces, pressure), a probe and the report. Keys are
+        stable strings (\code{phys/Force}); icons are the ids of the mock-up sprite. Building the tree creates and
+        changes nothing, so a study made before today opens unchanged (tested: same objects, same properties).
+  \item \textbf{One settings declaration per node type.} \code{settings(node)} returns sections of fields (name,
+        label, kind, unit, choices, help, range). \code{get\_value} and \code{set\_value} read and write the existing
+        properties; a write is one document transaction, so one undo step. Numbers accept a quantity with a unit
+        (``500\,N'', ``2\,kN'', ``1\,cm'', ``12000\,rpm'', ``20\,degC'', ``300\,K''); a unit of another kind, a value
+        out of range, an unknown choice or a missing face raises a \code{ValueError} that says what was expected.
+        Covered: the study (label, knockdown, stress measure), the material (a card from the library the New Study
+        panel uses), Fixed, Displacement, Hold, Force (faces, magnitude, direction, reversed), Pressure, Gravity, Spin
+        (speed, axis), Temperature, Heat flux, Convection, Heat source, Initial temperature, the mesh (maximum size,
+        fineness, second order, node limit), the solver, the study step (modal, buckling and thermal settings only for
+        their types) and the airflow groups of the old panel (speed and angle, air, far field and domain, turbulence,
+        reference area and length, mesh preset, actuator disk).
+  \item \textbf{Out-of-date marks.} \code{state(analysis)} gives each node ``ok'', ``stale'', ``warn'', ``todo'' or
+        ``run''. \code{node\_messages(analysis)} gives the pre-check findings by node for the Messages tab.
+\end{itemize}
+
+\paragraph{Fingerprints, as in the plan.} $h(n)=H(s(n),h(\mathrm{deps}))$ with $H$ a 12-character SHA-1 of the
+settings' canonical text. The geometry term is the rounded volume (6 digits), area, bounding box (5 digits), face and
+solid counts of the analysed part, not \code{Shape.hashCode}, which changes at every save. The dependencies are
+\[
+  h_\mathrm{mesh}=H(\text{mesh settings},h_\mathrm{geo}),\qquad
+  h_\mathrm{sol}=H(\text{study},\text{solver},h_\mathrm{mesh},h_\mathrm{materials},h_\mathrm{physics}),\qquad
+  h_\mathrm{res}=h_\mathrm{sol}.
+\]
+The study keeps the fingerprints of its last mesh and last solution in a hidden \code{BW\_Fingerprints} map, added on
+the first \code{record}. \code{sim.mesh\_study} records ``mesh'', \code{sim.finish\_solve} and \code{cfd.save\_summary}
+record ``solution'' (one line each). A compute node is stale when its stored fingerprint differs from the current one.
+Acceptance on a plate with a hole (100\,$\times$\,50\,$\times$\,5\,mm, fixed left, 500\,N right): moving the force to
+other faces leaves geometry, material, supports and mesh ``ok'' and marks the solution and every result node stale;
+changing the material does the same; changing the maximum element size marks the mesh and everything after it; a longer
+plate marks the mesh. Save, close and reopen gives the same fingerprints and no stale mark. A real CalculiX solve
+records, and a force edit afterwards marks it stale.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{No local mesh sizes yet}, so in P1 the mesh depends on the geometry and its own settings only; a load's
+        faces mark the mesh the day a local size refers to them (P2).
+  \item \textbf{Display settings are not inputs}: the stress measure, band colours and edges, the probe point, the
+        pressure colour range and the played mode scale recolour stored fields and never mark the solution. The
+        knockdown is an input, because the safety factor is computed at the solve.
+  \item \textbf{A study from before today} (nothing stored) counts as up to date when it has a mesh or results; the
+        first re-mesh of such a study marks its old results stale, since they belong to the old mesh.
+  \item \textbf{Airflow has one stored stage.} OpenFOAM meshes inside the run, so its Mesh node follows the solution.
+  \item \textbf{A write never recomputes the mesh.} \code{set\_value} recomputes only the edited constraint (its
+        symbols); changing the maximum size does not re-mesh, the node turns stale. Nothing solves until Compute (W6).
+  \item \textbf{Findings go to the node they name} (``Force: no faces\ldots'' to the Force), the rest by keyword to the
+        section (no support: Physics; no material: Materials), and what is left to the study node.
+  \item \textbf{Errors mark ``todo'', warnings ``warn''}; Parameters and Selections carry no mark in P1.
+\end{itemize}
+
+\paragraph{Tests.} \file{TestBruceWorxSimModel.py}, 27 headless tests: the section order and keys (static, modal,
+thermal, external flow, prop wash) and that building the tree, the state and the messages change no object and add no
+property; each field type, units and their errors, one undo step, face selections and the bad-face error, material
+card, spin in rpm, temperatures in K and degC, convection, the per-type step fields and the airflow fields; the
+acceptance cases above, the legacy study, save and load, the running mark, the todo and warn marks and messages, and a
+real CalculiX solve (skipped without \code{ccx}). \file{TestBruceWorxSimCore} and \file{TestBruceWorxSimRotor} still pass.
+
+\paragraph{Open questions for you.}
+\begin{enumerate}[nosep]
+  \item \textbf{The analysed part in the Geometry node} is read only (the mesh shape object is built from it at New
+        Study). Should the Settings pane let you swap it, which re-points the study and marks everything stale?
+  \item \textbf{Material cards} are chosen by name from the library. Two libraries sharing a name show the library in
+        brackets; is that enough, or should the pane group by library?
+  \item \textbf{Hold constraints} (the spin-hold points) are recognised by their label ``Hold\ldots''. A proper type
+        property on them would be safer; worth a small change in \code{hold\_for\_spin}?
+\end{enumerate}

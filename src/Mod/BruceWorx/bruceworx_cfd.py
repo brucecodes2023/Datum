@@ -1586,6 +1586,15 @@ def start_run(analysis, root=None):
 
 
 def save_summary(analysis, folder, stage_text=""):
+    """Stores the finished run's summary on the study and records its Model Builder fingerprint."""
+    summary = _save_summary(analysis, folder, stage_text)
+    from bruceworx_sim import record_stage
+
+    record_stage(analysis, "solution")
+    return summary
+
+
+def _save_summary(analysis, folder, stage_text=""):
     if is_wash(analysis):
         return wash().save_summary_wash(analysis, folder, stage_text)
     info = json.load(open(os.path.join(folder, "vectorlabs.json")))
