@@ -28,6 +28,17 @@ def close_all():
         App.closeDocument(doc.Name)
 
 
+class TestPictureScript(unittest.TestCase):
+    def test_quadratic_cells_are_subdivided_and_the_triad_is_off_by_default(self):
+        axis = ((0, 0, 0), (0, 0, 1))
+        text = post.pv_script("a.vtu", "a.png", "Hoop", "Hoop [MPa]", 0.0, 1.0, "Turbo", "quarter", (400, 300), axis)
+        self.assertIn('"axes": false', text)
+        self.assertIn('"subdivision": 2', text)
+        self.assertIn("NonlinearSubdivisionLevel", text)
+        self.assertIn('"axes": true', post.pv_script("a.vtu", "a.png", "Hoop", "Hoop [MPa]", 0.0, 1.0, "Turbo", "iso", (400, 300),
+                                                      axis, axes=True))
+
+
 class TestMaths(unittest.TestCase):
     def test_axisymmetric_field_about_z(self):
         import numpy as np

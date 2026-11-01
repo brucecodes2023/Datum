@@ -1095,7 +1095,7 @@ PV_ARRAYS = {"vonMises": "vonMises", "displacement": "DisplacementMagnitude", "r
 
 
 def pv_script(vtu, png, field_name, title, lo, hi, cmap, view, size, axis, profile_png=None, profile_line=None,
-              profile_title="", gui=False):
+              profile_title="", gui=False, axes=False, subdivision=2):
     """The pvbatch script (text) that draws one picture of a .vtu: the field on the surface with a colour bar, the part cut
     by the view ('quarter' removes the wedge u > 0, v > 0 of the axis frame; 'half' the half v > 0), the camera for the
     view.  The colour table is sampled from ``colormap_points`` so ParaView and the 3D view agree."""
@@ -1104,7 +1104,7 @@ def pv_script(vtu, png, field_name, title, lo, hi, cmap, view, size, axis, profi
         "vtu": vtu, "png": png, "field": field_name, "title": title, "range": [lo, hi], "view": view, "size": list(size),
         "point": list(point), "a": list(a), "u": list(u), "v": list(v),
         "rgb": [list(p) for p in colormap_points(cmap)],
-        "profile_png": profile_png, "profile_line": profile_line, "profile_title": profile_title, "gui": gui,
+        "profile_png": profile_png, "profile_line": profile_line, "profile_title": profile_title, "gui": gui, "axes": bool(axes), "subdivision": int(subdivision),
     }
     import json
 
@@ -1144,7 +1144,7 @@ try:
     rv.UseColorPaletteForBackground = 0
 except Exception:
     pass
-rv.OrientationAxesVisibility = 1
+rv.OrientationAxesVisibility = 1 if C.get("axes") else 0
 disp = Show(keep, rv)
 ColorBy(disp, ("POINTS", C["field"]))
 lut = GetColorTransferFunction(C["field"])
@@ -1164,6 +1164,10 @@ bar.WindowLocation = "Any Location"
 bar.Position = [0.86, 0.15]
 bar.ScalarBarLength = 0.7
 disp.Representation = "Surface"
+try:  # quadratic cells (Tet10) are drawn curved, not as faceted linear ones
+    disp.NonlinearSubdivisionLevel = C.get("subdivision", 2)
+except Exception:
+    pass
 box = keep.GetDataInformation().GetBounds()
 centre = [(box[0] + box[1]) / 2, (box[2] + box[3]) / 2, (box[4] + box[5]) / 2]
 diag = math.sqrt((box[1] - box[0]) ** 2 + (box[3] - box[2]) ** 2 + (box[5] - box[4]) ** 2) or 1.0
@@ -1230,7 +1234,7 @@ def _run_pvbatch(script, work, log="pvbatch.log"):
 
 
 def contour_png(analysis, field="hoop", axis=None, view="quarter", path=None, range=None, cmap=None, size=(1200, 800),
-                result=None, vtu=None):  # noqa: A002 -- `range` is the documented argument name
+                result=None, vtu=None, axes=False):  # noqa: A002 -- `range` is the documented argument name
     """One off-screen picture of a field of the study's latest result, drawn by ParaView's pvbatch on the exported .vtu, so
     it runs in FreeCADCmd (the GUI's own 3D view is not needed).
 
@@ -1240,6 +1244,8 @@ def contour_png(analysis, field="hoop", axis=None, view="quarter", path=None, ra
     path: the PNG to write (default: <field>_<view>.png beside the document, else the temp folder).
     range: (min, max) to pin the colour bar, else the study's fixed range for the field, else the data's own range.
     cmap: "Rainbow", "Turbo" or "Jet" (default: the study's, else Rainbow).  size: pixels (w, h).
+    axes: True draws ParaView's orientation triad (off by default for report figures).  Quadratic cells are drawn
+    curved (NonlinearSubdivisionLevel 2).
     Returns the PNG path; the .vtu it used sits beside it (``vtu`` to reuse one already written).
     Raises PostError (never hangs) when ParaView is missing or fails."""
     key = field_key(field)
@@ -1267,7 +1273,7 @@ def contour_png(analysis, field="hoop", axis=None, view="quarter", path=None, ra
         lo, hi = lo - 0.5 * (abs(lo) or 1.0), hi + 0.5 * (abs(hi) or 1.0)
     label, unit, _prop = FIELDS[key]
     title = f"{label} [{unit}]" if unit else label
-    script = pv_script(vtu, path, PV_ARRAYS[key], title, lo, hi, cmap, view, size, resolved)
+    script = pv_script(vtu, path, PV_ARRAYS[key], title, lo, hi, cmap, view, size, resolved, axes=axes)
     code, logfile = _run_pvbatch(script, work, os.path.splitext(os.path.basename(path))[0] + ".log")
     if code or not os.path.isfile(path):
         tail = ""
@@ -1327,7 +1333,7 @@ def write_paraview_script(analysis, vtu, field, path, result=None):
     label, unit, _prop = FIELDS[key]
     section = study_section(analysis)
     script = pv_script(vtu, "", PV_ARRAYS[key], f"{label} [{unit}]" if unit else label, lo, hi, study_colormap(analysis),
-                       section if section != "none" else "iso", (1200, 800), default_axis(analysis), gui=True)
+                       section if section != "none" else "iso", (1200, 800), default_axis(analysis), gui=True, axes=True)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(script)
     return path
