@@ -35,10 +35,11 @@ class TestCases(unittest.TestCase):
         ids = [c["id"] for c in val.load_cases()]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sorted(ids), sorted(["B-ST1", "B-ST2", "B-ST3", "B-MO1", "B-MO2", "B-MO3", "B-BU1", "B-TH1", "B-TH2",
-                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1"]))
-        self.assertEqual(self.doc["cfd"], [])  # the hook for SIM-06
+                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "B-CF4"]))
+        self.assertEqual([c["id"] for c in self.doc["cfd"]], ["B-CF4"])  # the SIM-06 cases (bruceworx_cfd_wash)
         for case in self.cases.values():
-            self.assertIn(case["builder"], vc.BUILDERS, case["id"])
+            if case.get("kind", "fe") == "fe":
+                self.assertIn(case["builder"], vc.BUILDERS, case["id"])
             self.assertTrue(case["licence"] and case["setup"], case["id"])
             cit = case["citation"]
             self.assertTrue(cit["document"] and cit["location"], case["id"])
@@ -247,6 +248,11 @@ class TestFastSet(unittest.TestCase):
 
     def test_tt1_ttlv01(self):
         self.check("B-TT1")
+
+    def test_cf4_actuator_disk(self):
+        if self.by_id["B-CF4"]["mark"] == "SKIPPED":
+            self.skipTest("OpenFOAM is not installed")
+        self.check("B-CF4")
 
     def test_gap_thick_cylinder(self):
         self.check("G-TS1")

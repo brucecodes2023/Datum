@@ -63,6 +63,18 @@ def register_runner(kind, function):
     _RUNNERS[kind] = function
 
 
+def runner_for(kind):
+    """The runner of a case kind; the "cfd" cases register themselves (bruceworx_cfd_wash) on first use."""
+    if kind == "cfd" and "cfd" not in _RUNNERS:
+        try:
+            import bruceworx_cfd_wash
+
+            bruceworx_cfd_wash.register()
+        except ImportError:
+            pass
+    return _RUNNERS.get(kind)
+
+
 def sizes_for(case, set_name):
     mesh = case.get("mesh") or {}
     if set_name == "fast":
@@ -181,7 +193,7 @@ def run_fe_case(case, size, work_dir, progress=None):
 
 def run_case(case, set_name="fast", work_dir=None, progress=None):
     """One case in a set: its result dict, with a 'series' of the three meshes in the slow set (the finest is the result)."""
-    runner = run_fe_case if case.get("kind", "fe") == "fe" else _RUNNERS.get(case.get("kind"))
+    runner = run_fe_case if case.get("kind", "fe") == "fe" else runner_for(case.get("kind"))
     if runner is None:
         return {"id": case["id"], "title": case.get("title", ""), "kind": case.get("kind"), "mark": "SKIPPED",
                 "error": f"no runner for the kind {case.get('kind')!r}", "rows": [], "seconds": 0.0, "size": None,

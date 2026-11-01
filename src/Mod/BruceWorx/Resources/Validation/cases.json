@@ -1,7 +1,56 @@
 {
  "version": 1,
  "description": "SIM-05 validation cases of Vector Labs: published reference values with citations (numbers only), and the parameters of the geometry builders in bruceworx_validation_cases.py. Run by bruceworx_validation.py.",
- "cfd": [],
+ "cfd": [
+  {
+   "id": "B-CF4",
+   "title": "Actuator disk in hover, Rankine-Froude momentum theory",
+   "tier": "B",
+   "kind": "cfd",
+   "study": "prop_wash",
+   "builder": "actuator_disk",
+   "params": {
+    "thrust_N": 1.0,
+    "diameter_mm": 76.0,
+    "iterations": 1500
+   },
+   "mesh": {
+    "fast": 1.5833,
+    "slow": [
+     3.1667,
+     1.5833,
+     1.0556
+    ]
+   },
+   "tolerance": 0.1,
+   "primary": "v_disk",
+   "references": [
+    {
+     "key": "v_disk",
+     "label": "mean axial velocity through the disk (induced velocity v_i)",
+     "value": 9.57,
+     "unit": "m/s",
+     "tolerance": 0.1,
+     "basis": "v_i = sqrt(T / (2 rho A)) with T = 1 N, D = 76 mm, rho = 1.204 kg/m^3 (20 C, sea level): 9.567 m/s. Uniform actuator disk, steady RANS k-omega SST; the RANS result sits 7 to 8 % high and tends to 9.6 to 10.2 m/s on finer meshes."
+    },
+    {
+     "key": "v_wake",
+     "label": "mean axial velocity in the contracted wake core (r < 0.6 R, 0.9 to 1.1 D downstream)",
+     "value": 19.1,
+     "unit": "m/s",
+     "tolerance": 0.15,
+     "basis": "Far wake 2 v_i = 19.13 m/s in momentum theory (ideal, no mixing); the turbulent shear layer mixes the wake, so the core sits about 10 % low at 1 D."
+    }
+   ],
+   "citation": {
+    "document": "Rankine-Froude momentum theory of an actuator disk in hover (any rotor text; e.g. J. G. Leishman, Principles of Helicopter Aerodynamics, 2nd ed., chapter 2)",
+    "location": "ideal induced velocity v_i = sqrt(T/(2 rho A)); the fully developed wake velocity is 2 v_i",
+    "url": "https://en.wikipedia.org/wiki/Momentum_theory"
+   },
+   "licence": "closed-form result of a textbook theory; no tabulated data is copied",
+   "setup": "Axisymmetric 5 degree wedge about the X axis, 4 D upstream, 14 D downstream, 5 D radius, all outer faces open (totalPressure); one disk of 76 mm diameter and D/8 thickness at x = 0 with a constant momentum force of 1 N on the air (+X), simpleFoam k-omega SST, bruceworx_cfd_wash.write_disk_case."
+  }
+ ],
  "cases": [
   {
    "id": "B-ST1",
