@@ -86,6 +86,14 @@ class TestConsent(unittest.TestCase):
         c.timed_out()
         self.assertEqual(c.decide(), "prompt")
 
+    def test_remembered_allow_starts_allowed(self):
+        self.assertEqual(bb.initial_consent(True).decide(), "run")
+        c = bb.initial_consent(False)
+        self.assertEqual(c.decide(), "prompt")
+        r = bb.initial_consent(True)
+        r.revoke()  # the chip: asks again
+        self.assertEqual(r.decide(), "prompt")
+
     def test_autoallow_only_headless(self):
         old = os.environ.get("BW_BRIDGE_AUTOALLOW")
         os.environ["BW_BRIDGE_AUTOALLOW"] = "1"

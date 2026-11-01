@@ -11,11 +11,14 @@ per line::
 * Address and token: <UserAppData>/BruceWorx/bridge.json ({port, token, pid,
   version, headless}), mode 600, removed when FreeCAD quits. The port is 47820,
   or any free port when that one is taken.
-* Consent, once per FreeCAD session: the first call shows "Allow Claude Code to
-  control FreeCAD for this session?". Calls wait for the answer (up to two
-  minutes), then run or are refused. Allowed, a "Claude connected" chip sits in
-  the status bar; a click disconnects, and the next call asks again. Deny refuses
-  every call until BruceWorx > Allow Claude Code.
+* Consent: the first call shows "Allow Claude Code to control FreeCAD?". Calls
+  wait for the answer (up to two minutes), then run or are refused. Allowed, a
+  "Claude connected" chip sits in the status bar; a click disconnects, and the
+  next call asks again. Deny refuses every call until BruceWorx > Allow Claude Code.
+* Remembered (Bruce, 1 Nov 2026: "so I only click on first start"): the prompt's
+  "Don't ask again on this Mac" box, ticked by default, stores ClaudeBridgeAlways,
+  and every later start begins allowed with the chip showing. Deny, the chip's
+  disconnect and the Preferences switch clear it; the next call asks again.
 * Every call goes to the Report view (reads as log lines, changes as messages)
   and to <UserAppData>/BruceWorx/bridge.log. Modelling calls and run_python are
   one undo step each (bruceworx_bridge_tools).
@@ -47,6 +50,7 @@ from bruceworx_slots import slot
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF_NAME = "ClaudeBridge"
+ALWAYS_PREF = "ClaudeBridgeAlways"  # allowed at every start without asking (default off until the first Allow)
 PROTOCOL = 1
 DEFAULT_PORT = 47820
 STATE_FILE = "bridge.json"
@@ -173,6 +177,11 @@ class Consent:
     @property
     def allowed(self) -> bool:
         return self.state == self.ALLOWED
+
+
+def initial_consent(remembered: bool) -> Consent:
+    """A GUI session's consent at start: allowed when the user ticked "Don't ask again", else ask."""
+    return Consent(Consent.ALLOWED if remembered else Consent.ASK)
 
 
 # Argument specs: tool -> (kind, {arg: (type, required, default)}). The MCP server's
@@ -604,6 +613,21 @@ def enabled() -> bool:
         return True
 
 
+def remembered() -> bool:
+    try:
+        import FreeCAD
+
+        return bool(FreeCAD.ParamGet(PREFS_PATH).GetBool(ALWAYS_PREF, False))
+    except Exception:
+        return False
+
+
+def remember(allow: bool) -> None:
+    import FreeCAD
+
+    FreeCAD.ParamGet(PREFS_PATH).SetBool(ALWAYS_PREF, bool(allow))
+
+
 class _GuiBridge:
     """QTcpServer, the consent prompt and the status-bar chip."""
 
@@ -611,7 +635,7 @@ class _GuiBridge:
         QtCore, _QtWidgets, QtNetwork = _qt()
         self.folder = state_dir()
         self.token = new_token()
-        self.consent = Consent()
+        self.consent = initial_consent(remembered())
         self.disp = Dispatcher(self.token, self.folder, False, self.consent)
         self.server = QtNetwork.QTcpServer()
         self.sockets = {}  # socket -> LineBuffer
@@ -637,6 +661,9 @@ class _GuiBridge:
             return
         write_state(self.folder, _state_data(self.port, self.token, False))
         FreeCAD.Console.PrintLog(f"Claude bridge listening on 127.0.0.1:{self.port}\n")
+        if self.consent.allowed:
+            FreeCAD.Console.PrintMessage("Claude bridge: Claude Code is allowed (remembered on this Mac).\n")
+            QtCore.QTimer.singleShot(0, lambda: self._show_chip(True))
 
     # --- sockets ---------------------------------------------------------------------
     def _accept(self):
@@ -729,19 +756,24 @@ class _GuiBridge:
         box.setObjectName(DIALOG_NAME)
         box.setWindowTitle("Claude Code")
         box.setIcon(QtWidgets.QMessageBox.Question)
-        box.setText("Allow Claude Code to control FreeCAD for this session?")
+        box.setText("Allow Claude Code to control FreeCAD?")
         box.setInformativeText(
             "Claude Code can then read and change open documents, run Python in FreeCAD and use the "
             "vault. Every call is listed in the Report view. Click “Claude connected” in the "
             "status bar to disconnect."
         )
+        keep = QtWidgets.QCheckBox("Don't ask again on this Mac")
+        keep.setObjectName("remember")
+        keep.setChecked(True)
+        box.setCheckBox(keep)
         allow = box.addButton("Allow", QtWidgets.QMessageBox.AcceptRole)
         allow.setObjectName("allow")
         deny = box.addButton("Deny", QtWidgets.QMessageBox.RejectRole)
         deny.setObjectName("deny")
         box.setDefaultButton(deny)
         box.setWindowModality(QtCore.Qt.ApplicationModal)
-        box.buttonClicked.connect(lambda button: self._answered(button is allow or button.objectName() == "allow"))
+        box.buttonClicked.connect(lambda button: self._answered(button is allow or button.objectName() == "allow",
+                                                                keep.isChecked()))
         box.rejected.connect(lambda: self._answered(False) if self.consent.state == Consent.ASKING else None)
         self.dialog = box
         self.timer = QtCore.QTimer()
@@ -759,15 +791,17 @@ class _GuiBridge:
             dialog.hide()
             dialog.deleteLater()
 
-    def _answered(self, allow):
+    def _answered(self, allow, keep=False):
         if self.consent.state != Consent.ASKING:
             return
         self.consent.answer(allow)
         self._close_prompt()
+        remember(allow and keep)
         import FreeCAD
 
         FreeCAD.Console.PrintMessage(
-            "Claude bridge: Claude Code is allowed for this session.\n" if allow
+            ("Claude bridge: Claude Code is allowed, and will be at every start (remembered on this Mac).\n"
+             if keep else "Claude bridge: Claude Code is allowed for this session.\n") if allow
             else "Claude bridge: Claude Code was denied for this session.\n")
         self._show_chip(allow)
         self._release()
@@ -794,16 +828,20 @@ class _GuiBridge:
         self._drain()
 
     def allow(self):
-        """BruceWorx > Allow Claude Code: allow without waiting for a call."""
+        """BruceWorx > Allow Claude Code: allow without waiting for a call, remembered like the prompt's
+        ticked box."""
         if self.consent.state == Consent.ASKING:
-            self._answered(True)
+            self._answered(True, True)
             return
         self.consent.answer(True)
+        remember(True)
         self._show_chip(True)
 
     def revoke(self):
-        """The chip: disconnect. Open connections are closed; the next call asks again."""
+        """The chip: disconnect and forget the remembered Allow. Open connections are closed; the next call
+        asks again."""
         self.consent.revoke()
+        remember(False)
         if self.disp.tools is not None:
             self.disp.tools.reset_session()
         self._show_chip(False)
@@ -823,7 +861,7 @@ class _GuiBridge:
             self.chip = QtWidgets.QPushButton("Claude connected", bar)
             self.chip.setObjectName(CHIP_NAME)
             self.chip.setFlat(True)
-            self.chip.setToolTip("Claude Code can control FreeCAD in this session. Click to disconnect.")
+            self.chip.setToolTip("Claude Code can control FreeCAD. Click to disconnect; the next call asks again.")
             self.chip.clicked.connect(slot(self.revoke))
             bar.addPermanentWidget(self.chip)
         self.chip.setVisible(bool(on))
@@ -903,7 +941,7 @@ def install() -> None:
         import bruceworx_menu
 
         action = QtGui.QAction("Allow Claude Code", FreeCADGui.getMainWindow())
-        action.setToolTip("Let Claude Code control FreeCAD in this session without waiting for its first call.")
+        action.setToolTip("Let Claude Code control FreeCAD now and at every start, without asking.")
         action.triggered.connect(lambda _checked=False: _allow_command())
         bruceworx_menu.add_action(action, MENU_ACTION)
     except Exception:

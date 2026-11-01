@@ -158,16 +158,35 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="ClaudeBridge">
         <property name="toolTip">
-         <string>On by default. Lets Claude Code (the BruceWorx MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call in a session asks you; a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
+         <string>On by default. Lets Claude Code (the BruceWorx MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick "Don't ask again" to be asked only once); a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
         </property>
         <property name="text">
-         <string>Claude Code bridge (asks once per session)</string>
+         <string>Claude Code bridge</string>
         </property>
         <property name="checked">
          <bool>true</bool>
         </property>
         <property name="prefEntry" stdset="0">
          <cstring>ClaudeBridge</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="ClaudeBridgeAlways">
+        <property name="toolTip">
+         <string>Set by the Allow prompt's "Don't ask again on this Mac" box (or BruceWorx &gt; Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the "Claude connected" chip showing. Untick it, Deny, or click the chip to be asked again.</string>
+        </property>
+        <property name="text">
+         <string>Allow Claude Code without asking (remembered)</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>ClaudeBridgeAlways</cstring>
         </property>
         <property name="prefPath" stdset="0">
          <cstring>BruceWorx</cstring>
