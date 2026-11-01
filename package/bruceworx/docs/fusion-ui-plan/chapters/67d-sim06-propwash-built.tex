@@ -1,0 +1,137 @@
+%======================================================================
+\subsection{BW-SIM-06 phase 2 --- Built, 31 Oct: prop wash with actuator disks}\label{sec:sim06-wash-built}
+%======================================================================
+
+Phase 2 of \S\ref{sec:sim06-plan} is in (commit \code{SIM-06: prop wash with actuator disks}): the study type
+\emph{Prop wash}, next to External flow in the Airflow group of New Study. The case writer, the thrust from the
+balance and the results are in \file{src/Mod/BruceWorx/bruceworx\_cfd\_wash.py} (no FreeCAD needed to test it),
+built on the phase-1 writer, runner, log reader, convergence rule and the cache folder of \S\ref{sec:sim06-built}.
+The study frame (\file{bruceworx\_sim.py}, \file{bruceworx\_sim\_gui.py}) and the Airflow panel
+(\file{bruceworx\_cfd\_gui.py}) gained the type through a few lines each. Your answers O3 and O4 were followed:
+thrust from the \eref{ROB-04} table at hover, a typed thrust as the override, swirl off (see \emph{Open}).
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{New Study $\to$ Airflow $\to$ Prop wash} on an assembly whose motors are marked with a
+        \code{ThrustAxis} (the Mass \& Balance marking, \eref{ROB-03}). Settings: the propeller diameter (one
+        diameter for all disks), the speed (\emph{0 = hover}, otherwise a free stream along $+X$ with the angle of
+        attack), mesh preset, turbulence, air temperature and altitude; and under Run the thrust per motor (blank
+        = the hover share), the disk offset (blank = just above the motor part) and the wake-side domain length.
+  \item \textbf{Thrust.} Each motor's disk carries its \emph{hover share}: the weight from the mass report
+        split over the motors by the CG offset, exactly what the Mass \& Balance panel shows. The thrust table is what turns that thrust
+        into a throttle and a current; the pre-check warns when a share is above a table's maximum
+        (\emph{cannot hover}). \emph{Thrust per motor} replaces all shares with one number.
+  \item \textbf{Disks.} A disk is a cylinder of cells of the propeller's diameter, three cells thick, centred on
+        the motor's axis a tenth of a diameter above the top of the motor part (or the typed offset from the
+        motor centre). Its cells are a \code{cellZone} made by \code{topoSet}; the zone carries a constant
+        momentum source $-T\hat{\mathbf n}/\rho$ spread over its volume, so the total force is exactly $T$
+        whatever the mesh. The mesh is refined to $D/10$, $D/16$ or $D/24$ across each disk (coarse, medium,
+        fine) in a cylinder from half a diameter above to 1.5\,D below, and to one level coarser in a wake
+        cylinder of radius $D$ down to $6D$.
+  \item \textbf{Domain.} A box with open faces in hover (\code{totalPressure} with
+        \code{pressureInletOutletVelocity} on all six faces, so air is drawn in and leaves wherever it wants);
+        2 characteristic lengths $L$ (the largest size of the model) round it and 4\,$L$ on the wake side.
+        In forward flight the phase-1 free-stream box (inlet, outlet, slip sides), $3L$ upstream and $6L$
+        downstream, with the disks turned with the model by the angle of attack.
+  \item \textbf{Pre-check.} Phase 1's checks, plus a line per disk (thrust, induced velocity $v_i$ and the far
+        wake $2v_i$ from momentum theory), the cell count with the share in the disks, a warning if a disk's
+        centre is inside a part, and an error when the diameter is blank or no motor is marked.
+  \item \textbf{Results.} A force table per part (pressure plus viscous: $F_x$, $F_y$, $F_z$), the
+        \emph{download} on each part as a share of the total thrust (the force along the wake, against the thrust
+        axis; positive means thrust lost), and the mean velocity along the wake in every disk next to the value
+        momentum theory gives. The live plot shows the force along the thrust axis per part. The convergence
+        verdict uses the plan's three tests; in hover the third is the net flow through all six faces against
+        the flow the disks move. \emph{Report} adds a Prop wash section (setup, convergence, propellers, forces).
+\end{itemize}
+
+\paragraph{Benchmark: one disk in free air} (hover, $T=1$\,N, $D=76$\,mm; test
+\code{TestBruceWorxCfdWash.TestDiskBenchmark}, registered as validation case \code{B-CF4}). An axisymmetric
+$5^\circ$ wedge, 12\,500 cells, 1500 iterations, serial: 40\,s. The reference is momentum theory,
+$v_i=\sqrt{T/2\rho A}=9.567$\,m/s at the disk and $2v_i=19.13$\,m/s in the fully contracted wake.
+\begin{center}\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule Mesh (cells across $D$) & Cells & Disk $v$ (m/s) & Error & Wake core $v$ (m/s) & Error\\ \midrule
+24 & 5\,000 & 10.81 & $+13\,\%$ & 16.46 & $-14\,\%$\\
+48 (the test) & 12\,500 & 10.35 & $+8.2\,\%$ & 17.26 & $-9.6\,\%$\\
+72 & 21\,600 & 10.22 & $+6.8\,\%$ & 17.32 & $-9.3\,\%$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The disk value is the volume-weighted mean axial velocity in the disk's cells; the wake value is the mean over
+$r<0.6R$ between 0.9 and 1.1\,D downstream (the axis peak is 18.4\,m/s at $x/D=1.1$, $-3.9\,\%$). The test accepts
+10\,\% at the disk and 15\,\% in the wake (your brief); the plan's 5\,\% and 10\,\% are not met on any of the three
+meshes. The disk value falls with the mesh and seems to level off near $+6\,\%$, and the wake core sits about
+$9\,\%$ low. I read that as turbulent mixing (the $k$--$\omega$ SST shear layer erodes the core before the wake has
+contracted fully, and the disk passes more air than the ideal uniform wake would), but did not separate it: a steady
+laminar run of the same case does not converge. A thrust of $T/4$ gives half the speed (test
+\code{test\_thrust\_scales\_the\_velocity\_as\_the\_square\_root}), which checks the source's normalisation.
+
+\paragraph{Two frames, four disks each} (coarse preset, one core, hover; run through the study as built).
+\begin{center}\small
+\begin{tabular}{@{}p{0.27\linewidth}rrrrl@{}}
+\toprule Frame & Cells & Time & Thrust & Download & Disks $v$ (momentum theory)\\ \midrule
+Small X-frame (plate, four 65\,mm arms; test) & 92\,k & 68\,s & 4$\times$0.5\,N & 0.076\,N, 3.8\,\% & 7.37\,m/s (6.77)\\
+ROB-03 frame (80\,mm plate, 110\,mm arms, 28\,mm motors; 388\,g) & 242\,k & 572\,s & 4$\times$0.952\,N & 0.798\,N, 21.0\,\% & 9.46\,m/s (9.33)\\
+\bottomrule
+\end{tabular}
+\end{center}
+The small frame converged in 456 iterations, its four arms load alike to 0.1\,\% (symmetric frame), and each arm
+takes 2.3\,\% of the thrust. The ROB-03 frame did \emph{not} meet the plan's tests in 1500 iterations (residuals
+$2\times10^{-3}$ on $U$, forces moving by more than 0.5\,\% on some parts), although the total download had been
+steady to 0.2\,\% since iteration 200 and the net flow through the box was 0.002\,\% of the disks' flow. Of the 21\,\%,
+each motor takes 3.3\,\% (0.124\,N) and each arm 2.0\,\% (0.075\,N), the plate and battery nothing. The motors are
+directly under the disks: the pressure just below a disk is about $T/A-\tfrac12\rho v_i^2\approx157$\,Pa, and a
+28\,mm cylinder 7.6\,mm below it feels about 0.1\,N of that. A real propeller has a hub over the motor and moves no air
+there, so this uniform-disk number is an upper bound for the motors (see \emph{Open}).
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{Not \code{actuationDiskSource}.} The plan named that fvOption. In v2606 it is a \emph{wind turbine}
+        model: it takes the upstream speed $U$ and the curves $C_p$, $C_t$ and computes $T=2\rho A U^2a(1-a)$ as a
+        \emph{sink} of momentum. In hover $U=0$, so it gives no thrust at all, and a propeller has a given thrust,
+        not a curve. Each disk is therefore a \code{vectorSemiImplicitSource} on a cell zone, with the thrust as a
+        constant force on the air ($-T$ along the motor's \code{ThrustAxis}). \code{radialActuationDiskSource} has the
+        same limit; \code{rotorDiskSource} is blade-element theory and needs the blade data.
+  \item \textbf{Wedge normalisation.} In a wedge the source acts on $\alpha/360^\circ$ of the disk, so the benchmark
+        passes the thrust times $5/360$; the first run, without it, gave 87\,m/s ($\sqrt{72}$ too much).
+  \item \textbf{Open faces in hover.} A free stream does not exist, so the box is open on all faces. The mass-flow
+        test of phase 1 (inlet against outlet) cannot hold there; the net flow through all six faces is compared
+        with the flow the disks move ($v_iA$ summed), and the net flow was 0.00003\,\% (small frame) and 0.002\,\% (ROB-03) of it.
+  \item \textbf{Where the disk sits.} The balance knows the motor's centre, not its propeller. The disk is placed at
+        the top of the smallest part that contains the motor's centre plus $0.1D$ (7.6\,mm for 76\,mm), unless
+        \emph{Disk offset} is typed; a propeller already modelled as a part makes the pre-check warn when the disk
+        centre is inside a part.
+  \item \textbf{Thrust is the hover share.} The thrust table cannot give the thrust by itself (it maps throttle to
+        thrust and needs a thrust to start from). The share of the weight is the thrust the motor must give to hold the
+        drone; the table says whether it can. Climbing or manoeuvring thrust is a typed thrust.
+  \item \textbf{Code placement.} All new logic is in \file{bruceworx\_cfd\_wash.py}; \file{bruceworx\_cfd.py} only
+        dispatches (\code{is\_wash}) so a parallel change to the runner does not collide with it. The validation
+        hook registers the \code{cfd} runner on first use (\code{bruceworx\_validation.runner\_for}).
+\end{itemize}
+
+\paragraph{Tests} (\code{TestBruceWorxCfdWash}, 30 with one GUI test, 29 headless; the validation hook is commit \code{SIM-06: register the actuator-disk benchmark as validation case B-CF4}): momentum theory (the 9.57 and 19.1\,m/s of chapter 67, forward
+flight and climb solved from $T=2\rho Av_i|\mathbf V+v_i\hat{\mathbf w}|$), the disk geometry and its rotation with the
+angle of attack, the case writer (dictionaries parse and \code{foamDictionary} reads each one, per-disk force, zone and
+probe, snappy cylinders, open faces against free stream, the wake-side margin, presets, pre-check messages), the
+benchmark and its $\sqrt T$ scaling, and on the FreeCAD side the study on the ROB-03 X-frame (type registered, hover
+default, thrust equals the balance's shares and sums to $mg$, typed overrides, errors for no diameter or no motor,
+case written, report section). The GUI test checks the New Study fields (diameter, thrust, offset appear; angle and area hide; speed 0 and back to 10) and the wash table. The four-disk run (68\,s) is skipped unless \code{BW\_CFD\_SLOW=1}. Also run: \code{TestBruceWorxSimCore} and \code{TestBruceWorxSimulation} (their study-type lists now include Prop wash), \code{TestBruceWorxValidation.TestCases} and \code{B-CF4} through \code{run\_set} (PASS, 35\,s).
+
+\paragraph{Open.}
+\begin{itemize}[nosep]
+  \item \textbf{Swirl} (the tangential force from the motor torque, off by default in your answer) is not built: the
+        thrust table has no torque column, and a swirl force needs the cell's position about the axis (a coded
+        source). Give me a torque source (the table, or $Q=P/\omega$ from rpm) and it is one more source term.
+  \item \textbf{Propeller diameter} is one number in the study. A per-motor diameter would be a second property on
+        the marked motor part; say if the SP-01 ever mixes propeller sizes.
+  \item \textbf{Run time.} The ROB-03 frame is 242\,k cells at the coarse preset and 572\,s on one core for 1500 iterations; the
+        parallel run is another agent's work, and the disks add nothing to it.
+  \item \textbf{Convergence of the jet.} A steady RANS wake keeps a little unsteadiness: the ROB-03 run stalls at
+        residuals of $2\times10^{-3}$. Options if you want the verdict green: more iterations, a second-order
+        scheme only after the first 500, or a time-averaged (unsteady) run. I would first look at whether the
+        overlapping arm and motor solids of that test model, which are separate parts, are the cause.
+  \item \textbf{Hub.} Add a \emph{hub diameter} so the disk is an annulus (\code{cylinderToCell} has \code{innerRadius}):
+        the thrust then acts on $\pi(D^2-d^2)/4$ and the motor under the hub is spared the pressure under the disk. It
+        changes the download on every real drone; I did not add it without asking.
+  \item \textbf{Results in 3D} (cut plane, streamlines) belong to the results-display work of phase 1.
+\end{itemize}
