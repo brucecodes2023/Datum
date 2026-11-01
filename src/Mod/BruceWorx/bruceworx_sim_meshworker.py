@@ -77,7 +77,8 @@ def time_limit(analysis=None, est_nodes=0):
 
 
 def gmsh_binary():
-    """The gmsh executable (FEM preference, then PATH, then next to the application), or None."""
+    """The gmsh executable, or None: the FEM preference, then the copy bundled with the application
+    (``<home>/gmsh/bin/gmsh``, put there by make-vectorlabs.sh; in a dev build ``build/release/gmsh``), ``<home>/bin/gmsh``, PATH."""
     try:
         import FreeCAD
 
@@ -85,7 +86,7 @@ def gmsh_binary():
         if path and os.path.isfile(path):
             return path
         home = FreeCAD.getHomePath()
-        for cand in (os.path.join(home, "bin", "gmsh"), os.path.join(home, "Contents", "bin", "gmsh")):
+        for cand in (os.path.join(home, "gmsh", "bin", "gmsh"), os.path.join(home, "bin", "gmsh")):
             if os.path.isfile(cand):
                 return cand
     except Exception:
@@ -149,7 +150,14 @@ def run_worker(shape, settings, limit, label="", progress=None, kind="netgen", c
             f.write(_CHILD % (os.path.dirname(os.path.abspath(__file__)), tmp))
         env = dict(os.environ, FREECAD_USER_HOME=os.path.join(tmp, "home"), QT_QPA_PLATFORM="offscreen")
         log = open(os.path.join(tmp, "child.log"), "w")
-        proc = subprocess.Popen([_freecadcmd(), os.path.join(tmp, "run.py")], env=env, stdin=subprocess.DEVNULL,
+        if kind == "gmsh":
+            binary = gmsh_binary()
+            if not binary:
+                raise RuntimeError("no gmsh binary found")
+            command = gmsh_command(binary, settings, tmp)
+        else:
+            command = [_freecadcmd(), os.path.join(tmp, "run.py")]
+        proc = subprocess.Popen(command, env=env, cwd=tmp, stdin=subprocess.DEVNULL,
                                 stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         _current["proc"] = proc
         # Netgen holds the interpreter lock, so the child cannot watch its parent itself: a shell does (the parent quit or crashed).
@@ -170,6 +178,11 @@ def run_worker(shape, settings, limit, label="", progress=None, kind="netgen", c
                 last = elapsed
                 progress(f"{label}: meshing… {elapsed:.0f} s of {limit:.0f} s")
             time.sleep(0.05)
+            if PUMP is not None:
+                try:
+                    PUMP()
+                except Exception:
+                    pass
         log.close()
         if _cancel.is_set():
             raise MeshCancelled("Meshing cancelled")
@@ -178,11 +191,6 @@ def run_worker(shape, settings, limit, label="", progress=None, kind="netgen", c
         if proc.returncode != 0 or not os.path.isfile(out):
             tail = ""
             try:
-            if PUMP is not None:
-                try:
-                    PUMP()
-                except Exception:
-                    pass
                 tail = open(os.path.join(tmp, "child.log")).read().strip().splitlines()[-1]
             except Exception:
                 pass
@@ -227,10 +235,7 @@ def child_main(tmp):
     shape = Part.Shape()
     shape.read(os.path.join(tmp, "shape.brep"))
     out = os.path.join(tmp, job["out"])
-    if job.get("kind") == "gmsh":
-        _gmsh(shape, job["settings"], tmp, out)
-    else:
-        _netgen(shape, job["settings"], out)
+    _netgen(shape, job["settings"], out)
     sys.stdout.flush()
     os._exit(0)  # no teardown of the SMESH objects
 
@@ -256,12 +261,48 @@ def _netgen(shape, settings, out):
     netgen.FemMesh.write(out)
 
 
-def _gmsh(shape, settings, tmp, out):
-    binary = gmsh_binary()
-    if not binary:
-        raise RuntimeError("no gmsh binary")
-    order = 2 if settings.get("SecondOrder") else 1
-    size = float(settings.get("MaxSize", 5.0))
-    cmd = [binary, "-3", "-order", str(order), "-clmax", str(size), "-format", "unv", "-o", out,
-           os.path.join(tmp, "shape.brep")]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+MAX_SIZE_POINTS = 3000
+
+
+def size_points_from_msz(path):
+    """[(x, y, z, h)] from a Netgen local-size file (point count, then the points; the line section is ignored)."""
+    out = []
+    try:
+        with open(path) as f:
+            n = int(f.readline().split()[0])
+            for _ in range(n):
+                x, y, z, h = (float(v) for v in f.readline().split()[:4])
+                out.append((x, y, z, h))
+    except Exception:
+        return []
+    if len(out) > MAX_SIZE_POINTS:
+        out = out[:: -(-len(out) // MAX_SIZE_POINTS)]
+    return out
+
+
+def gmsh_command(binary, settings, tmp):
+    """The gmsh command line for ``shape.brep`` in ``tmp``: MaxSize and MinSize as -clmax and -clmin, curvature sizing
+    (6 elements per full circle, or 3 x NbSegsPerRadius when larger), the order, and the local sizes of a Netgen
+    ``MeshSizeFile`` as one Ball field per point (size h inside radius h, growing to MaxSize over 2 x MaxSize)."""
+    big = float(settings.get("MaxSize", 5.0))
+    small = float(settings.get("MinSize", 0.0) or 0.0)
+    curv = max(6, 3 * int(settings.get("NbSegsPerRadius", 2) or 2))
+    inp = os.path.join(tmp, "shape.brep")
+    points = size_points_from_msz(settings["MeshSizeFile"]) if settings.get("MeshSizeFile") else []
+    if points:
+        inp = os.path.join(tmp, "job.geo")
+        lines = ['Merge "shape.brep";']
+        for n, (x, y, z, h) in enumerate(points, 1):
+            lines.append(f"Field[{n}] = Ball; Field[{n}].XCenter = {x}; Field[{n}].YCenter = {y}; Field[{n}].ZCenter = {z}; "
+                         f"Field[{n}].Radius = {h}; Field[{n}].VIn = {h}; Field[{n}].VOut = {big}; Field[{n}].Thickness = {2 * big};")
+        lines.append("Field[%d] = Min; Field[%d].FieldsList = {%s};" % (len(points) + 1, len(points) + 1,
+                                                                        ", ".join(str(n) for n in range(1, len(points) + 1))))
+        lines.append("Background Field = %d;" % (len(points) + 1))
+        with open(inp, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    cmd = [binary, "-3", "-nopopup", "-order", "2" if settings.get("SecondOrder") else "1", "-clmax", repr(big)]
+    if small > 0:
+        cmd += ["-clmin", repr(small)]
+    # straight mid-edge nodes: curved ones invert tetrahedra on the impeller's blade fillets (CalculiX: nonpositive Jacobians)
+    cmd += ["-setnumber", "Mesh.SecondOrderLinear", "1", "-setnumber", "Mesh.MeshSizeFromCurvature", str(curv), "-format", "unv", "-o", os.path.join(tmp, "mesh.unv"), inp]
+    return cmd

@@ -104,6 +104,31 @@ if [[ -x "$env/bin/ccx" ]]; then
 else
     say "warning: no ccx in the environment (pixi.toml lists calculix): the Simulation workspace cannot solve"
 fi
+# Gmsh (SIM-04, 1 Nov): the second volume mesher, tried when Netgen fails or times out (a study can also pick it).
+# The official self-contained SDK build from gmsh.info (GPL v2+, run as a separate program, like OpenFOAM), checked
+# against a pinned SHA-256, copied to Contents/gmsh/{bin,lib,share/doc}: gmsh finds libgmsh through
+# @executable_path/../lib, so nothing is installed into the conda environment and no existing package changes.
+# bruceworx_sim_meshworker.gmsh_binary looks for Contents/gmsh/bin/gmsh.
+gmsh_ver=4.15.2
+gmsh_sha=2ebbc7c241a1681fc21e1bd32fe7f6637449bf407dbd642cf4f8751d56d46b25
+gmsh_tgz="${VL_CACHE:-$HOME/Library/Caches/VectorLabs}/gmsh-$gmsh_ver-MacOSARM-sdk.tgz"
+if [[ ! -f "$gmsh_tgz" ]]; then
+    mkdir -p "$(dirname "$gmsh_tgz")"
+    curl -fsSL -o "$gmsh_tgz" "https://gmsh.info/bin/macOS/gmsh-$gmsh_ver-MacOSARM-sdk.tgz" || say "warning: could not download Gmsh"
+fi
+if [[ -f "$gmsh_tgz" ]] && [[ "$(shasum -a 256 "$gmsh_tgz" | cut -d' ' -f1)" == "$gmsh_sha" ]]; then
+    gmsh_tmp="$(mktemp -d)"
+    tar xzf "$gmsh_tgz" -C "$gmsh_tmp"
+    gmsh_src="$gmsh_tmp/gmsh-$gmsh_ver-MacOSARM-sdk"
+    mkdir -p "$C/gmsh/bin" "$C/gmsh/lib" "$C/gmsh/share/doc"
+    cp -p "$gmsh_src/bin/gmsh" "$C/gmsh/bin/gmsh"
+    cp -p "$gmsh_src/lib/libgmsh.$gmsh_ver.dylib" "$gmsh_src/lib/libgmsh.${gmsh_ver%.*}.dylib" "$C/gmsh/lib/" 2>/dev/null \
+        || cp -a "$gmsh_src"/lib/libgmsh*.dylib "$C/gmsh/lib/"
+    rsync -a "$gmsh_src/share/doc/gmsh" "$C/gmsh/share/doc/"
+    rm -rf "$gmsh_tmp"
+else
+    say "warning: no verified Gmsh archive: the Gmsh mesher is not bundled (checksum $gmsh_sha expected)"
+fi
 # Tectonic compiles a study's LaTeX report (SIM-01, 30 Oct); its ICU, HarfBuzz, graphite2, FreeType,
 # libpng, zlib and iconv dylibs come along through the relocation step. bruceworx_sim.find_tex looks
 # for Contents/bin/tectonic. Its TeX files are pre-seeded into Contents/Resources/tectonic-cache below
@@ -326,6 +351,11 @@ if [[ -x "$C/bin/ccx" ]]; then
     ccx_out="$("$C/bin/ccx" -v 2>&1 || true)"
     [[ "$ccx_out" == *Version* ]] || fail "the bundled CalculiX does not start (its dylibs were not relocated?)"
     say "CalculiX $(grep -o 'Version [0-9.]*' <<<"$ccx_out")"
+fi
+if [[ -x "$C/gmsh/bin/gmsh" ]]; then
+    gmsh_out="$("$C/gmsh/bin/gmsh" -version 2>&1 || true)"
+    [[ "$gmsh_out" == "$gmsh_ver"* ]] || fail "the bundled Gmsh does not start: $gmsh_out"
+    say "Gmsh $gmsh_out"
 fi
 if [[ -x "$C/bin/tectonic" ]]; then
     tectonic_out="$(env -i HOME="$HOME" "$C/bin/tectonic" --version 2>&1 || true)"

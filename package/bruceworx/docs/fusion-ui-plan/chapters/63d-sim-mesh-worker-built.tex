@@ -60,3 +60,37 @@ limit be shown in the Mesh node so it can be set there?
 \paragraph{Your answers (1 Nov).} Add Gmsh as a second mesher, bundled in the app and tried automatically when Netgen
 fails or times out, also selectable per study. While a mesh or solve runs, the Compute button becomes Cancel (and each
 running Progress row gets a stop button). The Mesh node shows the time limit, automatic or your own.
+
+\paragraph{Follow-up: Gmsh (1 Nov).} Your answer: add Gmsh, choosable per study, and the next try when Netgen fails.
+\textbf{The program.} The official self-contained SDK build for macOS arm64, Gmsh 4.15.2 from gmsh.info
+(\code{gmsh-4.15.2-MacOSARM-sdk.tgz}, SHA-256 \code{2ebbc7c2\ldots6d46b25}, pinned in \file{make-vectorlabs.sh}), links only system
+libraries and its own \file{libgmsh.4.15.dylib} through \code{@executable\_path/../lib}, so no \code{install\_name\_tool} was needed and
+nothing was added to the conda/pixi environment (no package changed). \file{make-vectorlabs.sh} downloads it once into
+\file{\~{}/Library/Caches/VectorLabs}, verifies the checksum, copies it to \file{Contents/gmsh/\{bin,lib,share/doc\}} (with Gmsh's
+LICENSE and CREDITS) and checks that it starts; a dev build finds it in \file{build/release/gmsh/}. \textbf{Licence.} Gmsh is GPL v2 or
+later (OpenCASCADE and its other parts under their own terms, in CREDITS.txt). Vector Labs runs it as a separate program, a
+child process that reads a BREP and writes a mesh file, like OpenFOAM and CalculiX; nothing links to it. The licence text
+ships in the bundle; the source offer is the gmsh.info site.
+\textbf{How it is used.} Called directly (FEM's \code{gmshtools} builds a document-bound .geo and needs a FEM mesh object, which the
+worker avoids): \code{gmsh -3 -order N -clmax MaxSize -clmin MinSize -setnumber Mesh.MeshSizeFromCurvature c -format unv},
+$c=\max(6,3\times\text{NbSegsPerRadius})$. Second order comes back as Tet10 in FEM's node order (checked: every mid-edge node of
+the first 50 elements sits at its edge midpoint in order 1-2, 2-3, 3-1, 1-4, 2-4, 3-4; mesh volume 6000.000 for the cantilever).
+Local sizes: the points of the Netgen \code{.msz} file become Ball fields in a \file{job.geo} (size $h$ inside radius $h$, growing to
+MaxSize over $2\times$MaxSize; at most 3000 points). A new study property \code{Mesher} (Netgen or Gmsh, default Netgen)
+picks the first mesher; the tries are Netgen, Netgen first order, Gmsh, or with Mesher=Gmsh: Gmsh, Netgen, Netgen first order.
+A study set to Gmsh always meshes in a worker; without a gmsh program it says so and uses Netgen.
+\textbf{Straight mid-edge nodes.} Gmsh's default curved second-order nodes inverted tetrahedra on the impeller's blade
+fillets (CalculiX: ``nonpositive Jacobian'', no result); \code{Mesh.SecondOrderLinear=1} puts the mid-edge nodes on the straight
+edges, as the Netgen Tet10 upgrade does, and the solve ran clean.
+\textbf{Recompute.} A mesh made in a worker left the Netgen object ``touched'', so the next \code{doc.recompute()} (adding a
+constraint) ran Netgen in this process, the very hang; the worker path now clears the touched state (test added).
+\textbf{Acceptance.} T\_HUB\,=\,1.9 STEP, MaxSize 2.0, MinSize 0.1, second order, Mesher Gmsh: 254\,260 nodes, 155\,533 Tet10
+elements in 9--17\,s (Netgen: no mesh in 300\,s). A static spin at 60\,000\,rpm about the axis of the largest flat face, that
+face clamped (a test setup, not a design support; generic 210\,GPa steel): CalculiX 304\,s (the input took 6\,s), max von Mises
+141.9\,MPa, max displacement 0.0165\,mm. Cantilever 60\,$\times$\,10\,$\times$\,10, 1\,MPa on the top face, second order, MaxSize 3: Netgen
+2414 nodes, tip displacement 0.094312\,mm; Gmsh 2722 nodes, 0.094441\,mm (+0.14\,\%). Tests: \code{TestMeshWorker} 12 (5 new:
+Gmsh Tet10 order and volume, displacement agreement, Mesher=Gmsh first, Netgen failing falls through to Gmsh, no Netgen on
+recompute), \code{TestBruceWorxSimRotor} 65, \code{TestBruceWorxSimModel} 45, \code{TestBruceWorxSimCore} 57, 0 failures.
+\textbf{Not done.} The Cancel button and the visible time limit belong to the panes agent; \code{cancel()} stays the API.
+The bundle step was run only up to the checksum and copy logic on a dev copy (\code{bash -n}); a full \file{make-vectorlabs.sh}
+run, which also relocates and signs, was not done here. Gmsh's quality at these sizes (worst-element shape) is unreviewed.

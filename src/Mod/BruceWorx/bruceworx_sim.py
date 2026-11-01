@@ -796,6 +796,11 @@ def ensure_study_properties(analysis):
     if "MeshNodeLimit" not in props:
         analysis.addProperty("App::PropertyInteger", "MeshNodeLimit", "Study",
                              "[BW] Hard limit on the estimated mesh nodes for this study; 0 = the preference (1 000 000)")
+    if "Mesher" not in props:
+        analysis.addProperty("App::PropertyEnumeration", "Mesher", "Study",
+                             "[BW] The volume mesher tried first: Netgen, or Gmsh (the other is the next try when it fails)")
+        analysis.Mesher = ["Netgen", "Gmsh"]
+        analysis.Mesher = "Netgen"
     if "MeshTimeLimit" not in props:
         analysis.addProperty("App::PropertyFloat", "MeshTimeLimit", "Study",
                              "[BW] Seconds one Netgen try may take in its worker process; 0 = automatic "
@@ -1198,6 +1203,13 @@ def _shape_volume_area(shape):
     return sum(s.Volume for s in shape.Solids), sum(s.Area for s in shape.Solids)
 
 
+def _mesher_of(analysis):
+    try:
+        return str(analysis.Mesher) if analysis is not None and "Mesher" in analysis.PropertiesList else "Netgen"
+    except Exception:
+        return "Netgen"
+
+
 def _use_worker(mesh, analysis):
     """True when Netgen runs in a worker process: the study sets a MeshTimeLimit, or the estimate is over
     ``WORKER_MIN_NODES``; a small model meshes in this process (a worker costs about a second)."""
@@ -1205,6 +1217,8 @@ def _use_worker(mesh, analysis):
 
     try:
         if analysis is not None and "MeshTimeLimit" in analysis.PropertiesList and float(analysis.MeshTimeLimit) > 0:
+            return True
+        if _mesher_of(analysis) == "Gmsh":
             return True
         shape = shape_of(getattr(mesh, "Shape", None))
         if shape is None or not shape.Solids:
@@ -1231,11 +1245,12 @@ def _mesh_in_workers(mesh, analysis, say, progress=None):
     limit = mw.time_limit(analysis, _estimate_for(mesh, shape))
     total_end = time.time() + mw.TOTAL_FACTOR * limit
     base = mw.netgen_settings(mesh, NETGEN_COPY_PROPS, second)
-    tries = [("Netgen" + (", second order" if second else ""), "netgen", second)]
-    if second:
-        tries.append(("Netgen, first order (Tet10 after)", "netgen", False))
-    if mw.gmsh_binary():
-        tries.append(("Gmsh" + (", second order" if second else ""), "gmsh", second))
+    order = ", second order" if second else ""
+    netgen = [("Netgen" + order, "netgen", second)] + ([("Netgen, first order (Tet10 after)", "netgen", False)] if second else [])
+    gmsh = [("Gmsh" + order, "gmsh", second)] if mw.gmsh_binary() else []
+    if not gmsh and _mesher_of(analysis) == "Gmsh":
+        say("warning", "The study asks for Gmsh but no gmsh program was found (bundled copy, FEM preference, PATH): using Netgen")
+    tries = (gmsh + netgen) if _mesher_of(analysis) == "Gmsh" else (netgen + gmsh)
     done = []
     say("info", f"Meshing in a worker process, up to {limit:.0f} s per try")
     for n, (label, kind, order2) in enumerate(tries, 1):
@@ -1253,6 +1268,7 @@ def _mesh_in_workers(mesh, analysis, say, progress=None):
         if info["status"] == "ok":
             say("ok" if not done else "warning", info["text"])
             mesh.FemMesh = fem
+            mesh.purgeTouched()  # a later recompute must not run Netgen in this process (the hang the worker avoids)
             return mesh.FemMesh, ([f"{'; '.join(done)}; meshed by {label} ({info['seconds']} s)"] if done else [])
         done.append(f"{info['text']} ({info['seconds']} s)")
         say("warning", info["text"] + (f" ({info['seconds']} s)" if info["status"] != "timeout" else "")

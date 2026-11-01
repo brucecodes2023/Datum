@@ -1137,6 +1137,8 @@ class TestMeshWorker(unittest.TestCase):
 
     def test_every_try_timing_out_is_an_error_listing_each(self):
         an, mesh = self.study(True, limit=3.0)
+        real_gmsh, self.mw.gmsh_binary = self.mw.gmsh_binary, lambda: None  # no third try
+        self.addCleanup(setattr, self.mw, "gmsh_binary", real_gmsh)
         self.mw.TEST_HOOK = lambda job: job.update(test_sleep=120)
         t0 = __import__("time").time()
         with self.assertRaises(sim.StudyError) as ctx:
@@ -1156,6 +1158,86 @@ class TestMeshWorker(unittest.TestCase):
         with self.assertRaises(sim.StudyError) as ctx:
             sim.mesh_study(an)
         self.assertIn("cancelled", str(ctx.exception))
+        self.assertClean()
+
+    def solve_cantilever(self, mesher):
+        """The cantilever clamped at x = 0 and loaded by 1 MPa on its top face, meshed by ``mesher`` and solved; max displacement."""
+        import Part
+
+        close_all()
+        doc = App.newDocument("MG")
+        solid = Part.makeBox(60, 10, 10)
+        body = vc.shape_object(doc, "B", solid)
+        objs = sim.new_study(doc, sim.StudyPlan(name="G", model=body, material=vc.material(), max_size=3.0, second_order=True))
+        an = objs["analysis"]
+        an.Mesher = mesher
+        vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(0, 0.0)), "xyz")
+        vc.add_pressure(doc, an, body, vc.faces_where(solid, vc.plane_at(2, 10.0)), 1.0)
+        doc.recompute()
+        said = []
+        sim.mesh_study(an, said.append)  # the recompute above meshed in-process; this meshes with the study's mesher
+        self.assertEqual(any("Gmsh" in t and "Try 1" in t for t in said), mesher == "Gmsh", said)
+        tmp = tempfile.mkdtemp(prefix="bw-mg-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        fea = sim.prepare_solve(an, tmp)
+        self.assertEqual(fea.ccx_run(), 0)
+        result = sim.finish_solve(fea)
+        stats = sim.mesh_stats(sim.members(an)["mesh"])
+        return sim.result_extrema(result)["max_disp"], stats
+
+    def test_gmsh_makes_the_same_second_order_cantilever_mesh(self):
+        if not self.mw.gmsh_binary():
+            self.skipTest("no gmsh program")
+        an, mesh = self.study(True)
+        shape = sim.shape_of(mesh.Shape)
+        fem, info = self.mw.run_worker(shape, self.mw.netgen_settings(mesh, sim.NETGEN_COPY_PROPS, True), 120.0, "G", kind="gmsh")
+        self.assertEqual(info["status"], "ok", info)
+        self.assertEqual(len(fem.getElementNodes(next(iter(fem.Volumes)))), 10)
+        self.assertAlmostEqual(fem.Volume.Value, 6000.0, places=3)
+        # the mid-edge nodes sit at the edge midpoints in FEM's order (1-2, 2-3, 3-1, 1-4, 2-4, 3-4)
+        for vid in list(fem.Volumes)[:50]:
+            ids = list(fem.getElementNodes(vid))
+            pts = [fem.Nodes[i] for i in ids]
+            for k, (a, b) in enumerate(((0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3))):
+                self.assertLess((pts[4 + k] - (pts[a] + pts[b]) * 0.5).Length, 1e-6)
+        self.assertClean()
+
+    def test_gmsh_and_netgen_cantilever_displacements_agree(self):
+        if not self.mw.gmsh_binary() or not sim.find_ccx():
+            self.skipTest("no gmsh or CalculiX")
+        netgen, n_stats = self.solve_cantilever("Netgen")
+        gmsh, g_stats = self.solve_cantilever("Gmsh")
+        self.assertEqual(g_stats["order"], "second")
+        self.assertNotEqual(n_stats["nodes"], g_stats["nodes"])  # two different meshes
+        self.assertAlmostEqual(gmsh / netgen, 1.0, delta=0.02, msg=f"Netgen {netgen}, Gmsh {gmsh}")
+
+    def test_a_recompute_after_a_worker_mesh_does_not_run_netgen(self):
+        an, mesh = self.study(True, limit=60.0)
+        sim.mesh_study(an)
+        self.assertNotIn("Touched", mesh.State)
+        nodes = mesh.FemMesh.NodeCount
+        mesh.Document.recompute()
+        self.assertEqual(mesh.FemMesh.NodeCount, nodes)
+
+    def test_a_study_set_to_gmsh_meshes_with_gmsh_first(self):
+        if not self.mw.gmsh_binary():
+            self.skipTest("no gmsh program")
+        an, mesh = self.study(True)
+        an.Mesher = "Gmsh"
+        said = []
+        self.assertTrue(sim._use_worker(mesh, an))
+        sim.mesh_study(an, said.append)
+        self.assertTrue(any("Try 1: Gmsh" in t for t in said), said)
+        self.assertClean()
+
+    def test_netgen_failing_falls_through_to_gmsh(self):
+        if not self.mw.gmsh_binary():
+            self.skipTest("no gmsh program")
+        an, mesh = self.study(True, limit=3.0)
+        self.mw.TEST_HOOK = lambda job: job.update(test_sleep=120) if job["kind"] == "netgen" else None
+        stats = sim.mesh_study(an)
+        self.assertEqual(stats["order"], "second")
+        self.assertTrue(any("Try 3: Gmsh" in t for t in stats["notes"]), stats["notes"])
         self.assertClean()
 
     def test_the_time_limit_rule(self):
