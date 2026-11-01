@@ -46,6 +46,7 @@ public:
     App::PropertyInteger NbSegsPerEdge;
     App::PropertyInteger NbSegsPerRadius;
     App::PropertyBool Optimize;
+    App::PropertyString MeshSizeFile;
 
     /// returns the type name of the ViewProvider
     const char* getViewProviderName() const override

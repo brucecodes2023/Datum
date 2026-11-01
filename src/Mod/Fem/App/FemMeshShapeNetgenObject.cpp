@@ -76,6 +76,13 @@ FemMeshShapeNetgenObject::FemMeshShapeNetgenObject()
         "allows defining the minimum number of mesh segments in which radii will be split"
     );
     ADD_PROPERTY_TYPE(Optimize, (true), "MeshParams", Prop_None, "Optimize the resulting mesh");
+    ADD_PROPERTY_TYPE(
+        MeshSizeFile,
+        (""),
+        "MeshParams",
+        Prop_None,
+        "A Netgen local mesh-size file (.msz: points x y z h, then lines x1 y1 z1 x2 y2 z2 h); empty = none"
+    );
 }
 
 FemMeshShapeNetgenObject::~FemMeshShapeNetgenObject() = default;
@@ -109,6 +116,9 @@ App::DocumentObjectExecReturn* FemMeshShapeNetgenObject::execute()
         tet->SetGrowthRate(GrowthRate.getValue());
         tet->SetNbSegPerEdge(NbSegsPerEdge.getValue());
         tet->SetNbSegPerRadius(NbSegsPerRadius.getValue());
+    }
+    if (MeshSizeFile.getValue()[0] != 0) {
+        tet->SetMeshSizeFile(MeshSizeFile.getValue());
     }
     myNetGenMesher.SetParameters(tet);
     newMesh.getSMesh()->ShapeToMesh(shape);
