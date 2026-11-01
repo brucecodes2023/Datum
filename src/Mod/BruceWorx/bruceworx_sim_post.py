@@ -608,6 +608,9 @@ def hold_for_spin(analysis, face=None, axis=None):
             setattr(c, f"{ax}Free", free)
             if not free:
                 setattr(c, f"{ax}Displacement", 0)
+        c.addProperty("App::PropertyString", "BW_Role", "Base", "[BW] What this constraint is for")
+        c.BW_Role = HOLD_ROLE
+        c.setEditorMode("BW_Role", 2)
         analysis.addObject(c)
         return c
 
@@ -777,6 +780,26 @@ def bore_stress(result, analysis=None, axis=None, band=0.05):
     }
 
 
+BURST_LIMIT = 1.2
+HOLD_ROLE = "HoldForSpin"
+
+
+def burst_limit(analysis):
+    """The study's lowest allowed burst margin n_burst/n (property ``BurstMarginLimit``, default 1.2; made on first use)."""
+    if "BurstMarginLimit" not in analysis.PropertiesList:
+        analysis.addProperty("App::PropertyFloat", "BurstMarginLimit", "Study",
+                             "[BW] Lowest allowed burst margin n_burst / n of a spinning rotor (below it is an error)")
+        analysis.BurstMarginLimit = BURST_LIMIT
+    return float(analysis.BurstMarginLimit)
+
+
+def is_hold_for_spin(obj):
+    """A constraint made by ``hold_for_spin`` (its ``BW_Role``); studies made before the property had the label 'Hold ...'."""
+    if "BW_Role" in obj.PropertiesList:
+        return obj.BW_Role == HOLD_ROLE
+    return obj.TypeId == "Fem::ConstraintDisplacement" and obj.Label.startswith("Hold")
+
+
 def burst_speed(result, analysis=None):
     """The burst speed of a spinning rotor, Zwicky style: n_burst = n sqrt(UTS / sigma_avg), where sigma_avg is the average hoop
     stress over the disc's meridional section (the (r, z) half plane) and UTS the ultimate tensile strength of the study's
@@ -794,7 +817,8 @@ def burst_speed(result, analysis=None):
     if not spins:
         return {}
     rpm = spin_rpm(spins[0])
-    out = {"rpm": rpm, "avg_hoop": None, "uts": None, "uts_source": "", "burst_rpm": None, "margin": None, "note": ""}
+    limit = burst_limit(analysis)
+    out = {"limit": limit, "below": False, "rpm": rpm, "avg_hoop": None, "uts": None, "uts_source": "", "burst_rpm": None, "margin": None, "note": ""}
     material = sim.study_material(analysis) or {}
     uts = material.get("uts")
     out["uts"] = uts
@@ -834,6 +858,7 @@ def burst_speed(result, analysis=None):
     else:
         out["burst_rpm"] = rpm * math.sqrt(uts / out["avg_hoop"])
         out["margin"] = out["burst_rpm"] / rpm
+        out["below"] = out["margin"] < limit
     return out
 
 

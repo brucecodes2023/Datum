@@ -138,7 +138,7 @@ script and a picture.
 
 \paragraph{Your answers (1 Nov).} (1) Keep our section for now. (2) Built as \code{hold\_for\_spin} in the review rounds
 below. (3) Yes: a \emph{Blade mass} load from the blade count, mass and radius, and spin combined with a thermal study.
-(4) Yes: report the burst speed beside the safety factor. A tilted-axis \code{hold\_for\_spin} stays for later.
+(4) Yes: report the burst speed beside the safety factor. A tilted-axis \code{hold\_for\_spin} stays for later. Built: a burst margin below the study's limit (property \code{BurstMarginLimit}, default 1.2) is a pre-check error once results exist, and is shown as an error in the panel and the report; \code{hold\_for\_spin}'s constraints carry a hidden \code{BW\_Role} = \code{HoldForSpin}, which the model tree reads (older studies fall back to the ``Hold'' label).
 
 
 \subsection*{Follow-up: review by the Vector Jet session}

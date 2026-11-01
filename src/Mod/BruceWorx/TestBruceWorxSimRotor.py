@@ -216,6 +216,24 @@ class TestSpinSetup(unittest.TestCase):
         self.assertTrue(sim.ready(issues), issues)
         self.assertFalse([t for k, t in issues if "rigid-body" in t or "free" in t or "stops the bore" in t], issues)
 
+    def test_hold_constraints_carry_a_hidden_role_and_old_studies_fall_back_to_the_label(self):
+        doc, body, solid, an = self.study()
+        post.add_spin(an, 30000, axis="z")
+        made = post.hold_for_spin(an)
+        for c in made:
+            self.assertEqual(c.BW_Role, "HoldForSpin")
+            self.assertTrue(c.getEditorMode("BW_Role"))  # hidden
+            self.assertTrue(post.is_hold_for_spin(c))
+        import bruceworx_sim_model as model
+
+        self.assertEqual({model.constraint_kind(c) for c in made}, {"hold"})
+        plain = vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(2, 0.0)), "z", "Support")
+        self.assertFalse(post.is_hold_for_spin(plain))
+        self.assertEqual(model.constraint_kind(plain), "displacement")
+        old = vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(0, 0.0)), "x", "Hold old study")  # no BW_Role
+        self.assertTrue(post.is_hold_for_spin(old))
+        self.assertEqual(model.constraint_kind(old), "hold")
+
     def test_hold_for_spin_with_enough_vertices_is_a_pure_vertex_3_2_1(self):
         import Part
 
@@ -949,6 +967,21 @@ class TestBurstSpeed(unittest.TestCase):
             tex = open(sim.report_tex(an)["tex"], encoding="utf-8").read()
             self.assertIn("Burst speed (Zwicky)", tex)
             self.assertIn("Burst margin", tex)
+            # the limit (default 1.2, a study property): below it is an error once results exist, in the panel text and the report
+            self.assertEqual(post.burst_limit(an), 1.2)
+            self.assertFalse(got["below"])
+            self.assertEqual([t for lv, t in sim.precheck(an) if "Burst margin" in t], [])
+            an.BurstMarginLimit = 5.0
+            errors = [t for lv, t in sim.precheck(an) if lv == "error" and "Burst margin" in t]
+            self.assertEqual(len(errors), 1, errors)
+            self.assertEqual([t for lv, t in sim.precheck(an, results=False) if "Burst margin" in t], [])  # never blocks a solve
+            low = post.burst_speed(result, an)
+            self.assertTrue(low["below"])
+            import bruceworx_sim_gui as gui
+
+            self.assertIn("ERROR: below the limit 5", gui.burst_html(low))
+            self.assertIn("ERROR: margin", open(sim.report_tex(an)["tex"], encoding="utf-8").read())
+            an.BurstMarginLimit = 1.2
             # without an ultimate strength there is no burst speed, and the reason is given
             mat = sim.members(an)["materials"][0]
             card = dict(mat.Material)

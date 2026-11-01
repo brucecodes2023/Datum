@@ -1202,7 +1202,7 @@ def study_kind(analysis):
     return str(analysis.StudyType or "static")
 
 
-def precheck(analysis):
+def precheck(analysis, results=True):
     """What is missing before a solve: a list of ("error"|"warning", text). Empty means ready.
 
     By study type: static and buckling need supports and a load (buckling: the reference load); a
@@ -1310,6 +1310,16 @@ def precheck(analysis):
 
         issues += post.precheck_spin(analysis, m)
         issues += post.precheck_blades(analysis, m)
+        last = latest_result(analysis) if results and post.spin_loads(analysis) else None
+        if last is not None:
+            try:
+                burst = post.burst_speed(last, analysis)
+                if burst.get("below"):
+                    issues.append(("error", f"Burst margin {burst['margin']:.3g} is below the limit {burst['limit']:g} "
+                                            f"(n_burst {burst['burst_rpm']:.5g} rpm at {burst['rpm']:g} rpm): lower the speed, "
+                                            "strengthen the part, or change the limit (study property BurstMarginLimit)"))
+            except Exception:
+                pass
     if m["solver"] is None:
         issues.append(("error", "No solver: New Study makes a CalculiX solver"))
     if not find_ccx():
@@ -1337,7 +1347,7 @@ def prepare_solve(analysis, working_dir=None, progress=None):
     """Meshes when needed, checks, writes the CalculiX input; returns the FemToolsCcx to run."""
     from femtools import ccxtools
 
-    issues = precheck(analysis)
+    issues = precheck(analysis, results=False)  # an old result must not block the next solve
     if not ready(issues):
         raise StudyError("; ".join(text for kind, text in issues if kind == "error"))
     m = members(analysis)
@@ -2081,6 +2091,9 @@ def report_source(data, figures=()):
                          rf"(node {res['min_sf_away_node']}; {res['support_nodes']} nodes on supports left out{e(near)})\\")
         burst = res.get("burst") or {}
         if burst:
+            if burst.get("below"):
+                lines.append(rf"Burst margin check & \textcolor{{bandA}}{{\textbf{{ERROR: margin {_fmt(burst['margin'], 3)} is "
+                             rf"below the limit {_fmt(burst['limit'], 3)}}}}}\\")
             if burst.get("burst_rpm"):
                 lines.append(rf"Burst speed (Zwicky) & \textbf{{{_fmt(burst['burst_rpm'], 5)}}} rpm = "
                              rf"{_fmt(burst['margin'], 3)} $\times$ the {_fmt(burst['rpm'], 5)} rpm of the study\\")

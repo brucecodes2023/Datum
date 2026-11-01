@@ -147,7 +147,9 @@ def constraint_kind(obj):
     if tid == "Fem::ConstraintFixed":
         return "fixed"
     if tid == "Fem::ConstraintDisplacement":
-        return "hold" if label.startswith("Hold") else "displacement"
+        import bruceworx_sim_post as post
+
+        return "hold" if post.is_hold_for_spin(obj) else "displacement"
     if tid == "Fem::ConstraintForce":
         return "force"
     if tid == "Fem::ConstraintPressure":

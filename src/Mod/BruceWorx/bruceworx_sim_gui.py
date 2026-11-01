@@ -3071,7 +3071,9 @@ def burst_html(burst):
         return ""
     if burst.get("burst_rpm"):
         return (f"<br>Burst speed <b>{burst['burst_rpm']:.5g} rpm</b>, margin n<sub>burst</sub>/n "
-                f"<b>{burst['margin']:.3g}</b> <span style='color:#777'>(average hoop stress over the section "
+                + (f"<b style='color:#b00020'>{burst['margin']:.3g} — ERROR: below the limit {burst['limit']:g}</b>"
+                   if burst.get("below") else f"<b>{burst['margin']:.3g}</b>")
+                + f" <span style='color:#777'>(average hoop stress over the section "
                 f"{burst['avg_hoop']:.4g} MPa, UTS {burst['uts']:.4g} MPa from {burst['uts_source']}; assumes stress "
                 "grows with speed squared)</span>")
     return f"<br><span style='color:#8a6d00'>{burst.get('note') or 'No burst speed'}</span>"
