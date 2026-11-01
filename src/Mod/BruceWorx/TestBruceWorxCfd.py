@@ -97,6 +97,27 @@ class TestRunDir(unittest.TestCase):
             run.wait()
             self.assertEqual(run.result(), "done", cfd._read(os.path.join(folder, "log.run")))
 
+    @needs_foam
+    def test_a_parallel_run_under_a_path_with_a_space(self):
+        # mpirun hands the ranks the physical folder (with the space) unless PWD is passed on; and PMIx needs the
+        # loopback settings (MPI_ENV). The small sphere is forced parallel below the usual cell threshold.
+        saved = cfd.MPI_MIN_CELLS, cfd.mpi_known_broken
+        cfd.MPI_MIN_CELLS, cfd.mpi_known_broken = 0, lambda *a: False
+        try:
+            with tempfile.TemporaryDirectory() as t:
+                folder = os.path.join(t, "Vector Labs", "cfd", "sphere")
+                info = cfd.write_case(folder, sphere_parts(), cfd.Setup(speed=0.015, turbulence="laminar",
+                                                                         preset="coarse", n_procs=2))
+                self.assertEqual(info["n_procs"], 2)
+                run = cfd.Runner(folder, INSTALL).start()
+                run.wait()
+                log = cfd._read(os.path.join(folder, "log.run"))
+                self.assertEqual(run.result(), "done", log)
+                self.assertNotIn("running serial", log)
+                self.assertIn("nProcs : 2", cfd._read(os.path.join(folder, "log.simpleFoam")))
+        finally:
+            cfd.MPI_MIN_CELLS, cfd.mpi_known_broken = saved
+
 
 class TestGeometry(unittest.TestCase):
     def test_watertight(self):

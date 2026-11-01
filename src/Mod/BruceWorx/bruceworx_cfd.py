@@ -860,7 +860,9 @@ def allrun_text(n_procs, meshing=True, extra_post=""):
         lines += ['stage decomposePar', 'decomposePar -force > log.decomposePar 2>&1 || fail decomposePar',
                   'stage simpleFoam',
                   f'export {MPI_ENV_SH}',
-                  f'mpirun -np {n_procs} simpleFoam -parallel > log.simpleFoam 2>&1 &',
+                  # OpenFOAM takes its folder from $PWD. mpirun gives the ranks the physical path, which has the
+                  # space that run_dir's symlink avoids; -x PWD hands them the shell's logical one (the link).
+                  f'mpirun -np {n_procs} -x PWD simpleFoam -parallel > log.simpleFoam 2>&1 &',
                   'mpipid=$!', 'n=0', 'while [ "$n" -lt 25 ] && [ ! -s log.simpleFoam ] && kill -0 $mpipid 2>/dev/null; do sleep 1; n=$((n+1)); done',
                   'if [ ! -s log.simpleFoam ]; then',
                   '  echo "@@ note: mpi did not start, running serial"',
