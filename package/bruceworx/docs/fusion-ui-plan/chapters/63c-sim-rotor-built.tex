@@ -170,3 +170,24 @@ reading to 0.0000\,MPa on 26\,776 nodes) and found six things; all are fixed and
 \paragraph{Tests.} \file{TestBruceWorxSimRotor} now has 35 tests (was 21): the fixed-bore error (Fixed and Displacement), the
 axial-only bore face accepted, \code{hold\_for\_spin}, the full held wheel, \code{bore\_stress}, \code{working\_dir}, the
 surface-only, unused-node and Tet10 upgrade cases, the singular guard and the picture script.
+
+\paragraph{Second round of the same review.}
+\begin{enumerate}[nosep]
+  \item \textbf{The support set is now a pure vertex 3-2-1.} Point B holds a direction that is \emph{tangential} at B (it
+        picks the largest radius whose tangent is the global X, Y or Z, so a vertex on the $+X$ radius holds Y; a warning
+        names the tangential share when no vertex has such a tangent). A holds both directions across the axis, C (a vertex
+        off the line A--B) holds the axial direction; A and B hold it too, so the three axial points fix the two tilts. A
+        flat face is used only when you pick one. A plain annulus has every vertex on its seam, so there is no C: the axial
+        direction is held along a circular edge at A's level instead (a balanced rotor's axial shift is the same all round the
+        edge, so it costs no stress). \emph{What the 8\,\% was:} only the bound of the earlier test. Measured on the whole 2\,mm
+        annulus with no symmetry planes, the bore hoop was $+0.028\,\%$ with the face-based set (size 5) and $+0.089\,\%$ on a
+        4\,mm disc (size 6); with the point set it is $+0.027\,\%$ (size 5) and $+0.006\,\%$ (size 3). The earlier B was already
+        tangential on the annulus (it sits on the seam), but could have been partly radial elsewhere; the axial face held back
+        the Poisson thinning a little (the 4\,mm case). Validation case \textbf{G-RD2} (whole annulus, tolerance 0.2\,\%) and
+        tests for the annulus, a sector with a true vertex 3-2-1, and the face option.
+  \item \textbf{Elements not connected through faces.} After the Tet10 upgrade and the removal of unused nodes, Netgen could
+        still leave a few elements that touch the wheel only at a node or an edge: a mechanism. \code{mesh\_study} now keeps the
+        largest body connected through shared faces (union-find over each face's sorted corner nodes) and drops the rest; the
+        count and the number of clusters are in \code{stats["notes"]} and the progress text. Tested with a tet hanging by one
+        node and one hanging by an edge.
+\end{enumerate}

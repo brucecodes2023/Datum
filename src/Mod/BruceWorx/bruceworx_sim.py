@@ -1016,14 +1016,60 @@ def used_node_ids(fem):
     return used
 
 
-def rebuild_mesh(fem, drop_unused=True, upgrade=False):
+def face_connected_volumes(fem):
+    """(keep, dropped_elements, clusters): the volume element ids of the largest body whose tetrahedra share faces (union-find
+    over each face's sorted corner-node triplet), the number of elements outside it and the number of such clusters.  Elements
+    that touch the body only at a node or an edge are a mechanism for the solver.  Only tetrahedra are examined; a mesh with
+    other volume types is returned whole."""
+    ids = list(fem.Volumes)
+    corners = {}
+    for vid in ids:
+        nodes = fem.getElementNodes(vid)
+        if len(nodes) not in (4, 10):
+            return set(ids), 0, 0
+        corners[vid] = nodes[:4]
+    parent = {vid: vid for vid in ids}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    seen = {}
+    for vid in ids:
+        n = corners[vid]
+        for tri in ((n[0], n[1], n[2]), (n[0], n[1], n[3]), (n[0], n[2], n[3]), (n[1], n[2], n[3])):
+            key = tuple(sorted(tri))
+            other = seen.setdefault(key, vid)
+            if other != vid:
+                ra, rb = find(vid), find(other)
+                if ra != rb:
+                    parent[ra] = rb
+    groups = {}
+    for vid in ids:
+        groups.setdefault(find(vid), []).append(vid)
+    if len(groups) <= 1:
+        return set(ids), 0, 0
+    biggest = max(groups.values(), key=len)
+    return set(biggest), len(ids) - len(biggest), len(groups) - 1
+
+
+def rebuild_mesh(fem, drop_unused=True, upgrade=False, volumes=None):
     """A new FemMesh with the same elements; ``drop_unused`` leaves out the nodes no element uses (a failed second-order
     step of Netgen leaves ~100k of them: a support picked by nearest node can land on one and the wheel is then free),
     ``upgrade`` turns linear tetrahedra into Tet10 with straight mid-edge nodes (FEM / Abaqus C3D10 order: edges 1-2, 2-3,
-    3-1, 1-4, 2-4, 3-4).  Node and element ids are kept; the new mid-edge nodes number on from the largest id."""
+    3-1, 1-4, 2-4, 3-4).  Node and element ids are kept; the new mid-edge nodes number on from the largest id.
+    ``volumes``: the volume element ids to keep (the others, and the faces and edges that need their nodes, are left out)."""
     import Fem
 
-    keep = used_node_ids(fem) if drop_unused else None
+    keep = None
+    if volumes is not None:
+        keep = set()
+        for vid in volumes:
+            keep.update(fem.getElementNodes(vid))
+    elif drop_unused:
+        keep = used_node_ids(fem)
     new = Fem.FemMesh()
     nodes = fem.Nodes
     for nid, v in nodes.items():
@@ -1045,13 +1091,19 @@ def rebuild_mesh(fem, drop_unused=True, upgrade=False):
         return list(ids) + [mid(ids[i], ids[j]) for i, j in pairs]
 
     for vid in fem.Volumes:
+        if volumes is not None and vid not in volumes:
+            continue
         ids = list(fem.getElementNodes(vid))
         new.addVolume(quad(ids, TET10_EDGES) if upgrade and len(ids) == 4 else ids, vid)
     for fid in fem.Faces:
         ids = list(fem.getElementNodes(fid))
+        if keep is not None and not all(n in keep for n in ids):
+            continue
         new.addFace(quad(ids, ((0, 1), (1, 2), (2, 0))) if upgrade and len(ids) == 3 else ids, fid)
     for eid in fem.Edges:
         ids = list(fem.getElementNodes(eid))
+        if keep is not None and not all(n in keep for n in ids):
+            continue
         new.addEdge(quad(ids, ((0, 1),)) if upgrade and len(ids) == 2 else ids, eid)
     return new
 
@@ -1060,7 +1112,7 @@ def mesh_study(analysis, progress=None):
     """Generates the study's mesh (recompute of the Netgen object); returns mesh_stats.
 
     A mesh without volume elements (Netgen sometimes returns the surface only for a complex solid) is an error. Nodes no
-    element uses are dropped. When second order was asked and Netgen returned linear tetrahedra, they are upgraded to Tet10
+    element uses are dropped, and so is every group of elements not connected to the largest body through shared faces. When second order was asked and Netgen returned linear tetrahedra, they are upgraded to Tet10
     with straight mid-edge nodes (said in the progress text and in ``stats['notes']``)."""
     mesh = members(analysis)["mesh"]
     if mesh is None:
@@ -1081,15 +1133,19 @@ def mesh_study(analysis, progress=None):
     first = len(fem.getElementNodes(next(iter(fem.Volumes)))) == 4
     upgrade = bool(getattr(mesh, "SecondOrder", False)) and first
     orphans = fem.NodeCount - len(used_node_ids(fem))
-    if upgrade or orphans:
+    keep, loose, clusters = face_connected_volumes(fem)
+    if upgrade or orphans or loose:
         if upgrade:
             notes.append("Second order was asked but Netgen returned linear tetrahedra: upgraded them to Tet10 with straight mid-edge nodes")
         if orphans:
             notes.append(f"Dropped {orphans} nodes no element uses (left by a failed second-order step)")
+        if loose:
+            notes.append(f"Dropped {loose} elements in {clusters} clusters that touch the body only at a node or an edge "
+                         "(not connected through faces: a mechanism for the solver)")
         for text in notes:
             if progress:
                 progress(text)
-        mesh.FemMesh = rebuild_mesh(fem, drop_unused=True, upgrade=upgrade)
+        mesh.FemMesh = rebuild_mesh(fem, drop_unused=True, upgrade=upgrade, volumes=keep if loose else None)
     stats = mesh_stats(mesh)
     stats["seconds"] = round(time.time() - t0, 1)
     stats["notes"] = notes

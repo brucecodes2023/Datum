@@ -587,6 +587,37 @@ class TestMeshFailures(unittest.TestCase):
             close_all()
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_elements_touching_the_body_at_a_node_or_an_edge_are_dropped(self):
+        an, fem = self.first_order_mesh()
+        n_vol = fem.VolumeCount
+        top = max(fem.Nodes)
+        bodyv = next(iter(fem.Volumes))
+        shared = fem.getElementNodes(bodyv)[0]
+        hang = fem.Nodes[shared]
+        new = sim.rebuild_mesh(fem, drop_unused=False)
+        # a tet hanging by ONE node, and a second one hanging by an EDGE (two nodes) of the body's first tet
+        n1 = [top + 1, top + 2, top + 3]
+        for k, nid in enumerate(n1):
+            new.addNode(hang.x + 100 + k, hang.y + 100, hang.z + 100 + (k % 2), nid)
+        new.addVolume([shared] + n1, 900001)
+        edge = fem.getElementNodes(bodyv)[:2]
+        n2 = [top + 4, top + 5]
+        for k, nid in enumerate(n2):
+            new.addNode(hang.x - 100 - k, hang.y - 90 + 5 * k, hang.z - 100, nid)
+        new.addVolume(list(edge) + n2, 900002)
+        keep, loose, clusters = sim.face_connected_volumes(new)
+        self.assertEqual((loose, clusters), (2, 2))
+        self.assertEqual(len(keep), n_vol)
+        self.assertNotIn(900001, keep)
+        said = []
+        stats, fake = self.run_study_mesh(an, new, False, said)
+        self.assertEqual(fake.FemMesh.VolumeCount, n_vol)
+        self.assertEqual(len(sim.used_node_ids(fake.FemMesh)), fake.FemMesh.NodeCount)
+        self.assertTrue(any("2 elements in 2 clusters" in t for t in said), said)
+        self.assertTrue(any("2 clusters" in t for t in stats["notes"]))
+        # a connected mesh is left alone
+        self.assertEqual(sim.face_connected_volumes(fem)[1:], (0, 0))
+
     def test_a_singular_solution_is_refused(self):
         class R:
             DisplacementLengths = [0.1, 5.0e6]
