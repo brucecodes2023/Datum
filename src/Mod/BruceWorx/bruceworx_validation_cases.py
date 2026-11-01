@@ -808,9 +808,63 @@ def build_bowed_column(params, size):
     return Setup(doc, objs, measure, nonlinear=True)
 
 
+# ----- gap: a rotating annular disc (SIM-04) -----------------------------------------------------------------------
+
+
+def disc_references(a, b, rpm, rho, nu):
+    """Bore and rim hoop stress and the radial and hoop stress at mid-radius of a thin rotating annulus, MPa
+    (bruceworx_sim_post.rotating_disc, lengths in mm, density in kg/m^3)."""
+    import bruceworx_sim_post as post
+
+    omega = rpm * 2.0 * math.pi / 60.0
+    mid = 0.5 * (a + b)
+    at = lambda r: post.rotating_disc(r / 1000.0, a / 1000.0, b / 1000.0, rho, omega, nu)  # noqa: E731 -- Pa
+    return {"shoop_a": at(a)[1] / 1e6, "shoop_b": at(b)[1] / 1e6, "sr_mid": at(mid)[0] / 1e6, "shoop_mid": at(mid)[1] / 1e6}
+
+
+def build_rotating_disc(params, size):
+    """A quarter of a thin steel annulus (a = 10, b = 50 mm, 2 mm thick, so plane stress to a fraction of a percent) with
+    symmetry planes on x = 0, y = 0 and the mid-plane, spinning at 30 000 rpm about Z (a spin load, CalculiX
+    *DLOAD CENTRIF).  The cylindrical stress components about the spin axis are averaged over the nodes on the bore and
+    the rim, and read at mid-radius through a cubic fit over the radius on the mid-plane."""
+    import Part
+
+    import bruceworx_sim_post as post
+
+    doc = App.newDocument("RotatingDisc")
+    a, b, t = params["a_mm"], params["b_mm"], params["thickness_mm"]
+    half = t / 2.0
+    solid = Part.makeCylinder(b, half).cut(Part.makeCylinder(a, half)).common(Part.makeBox(b, b, half))
+    body = shape_object(doc, "Disc", solid)
+    mat = material(params["E_MPa"], params["nu"], params["density"], name="Steel")
+    objs = sim.new_study(doc, sim.StudyPlan(name="Rotating disc", model=body, material=mat, max_size=size))
+    an = objs["analysis"]
+    add_displacement(doc, an, body, faces_where(solid, plane_at(0, 0.0)), "x", "SymmetryX0")
+    add_displacement(doc, an, body, faces_where(solid, plane_at(1, 0.0)), "y", "SymmetryY0")
+    add_displacement(doc, an, body, faces_where(solid, plane_at(2, 0.0)), "z", "MidPlane")
+    post.add_spin(an, params["rpm"], axis=((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+    doc.recompute()
+
+    def measure(analysis, result):
+        values = post.cylindrical_stress(result, analysis=analysis)
+        pos = positions(result)
+        ids = list(result.NodeNumbers)
+        rs = [values["r"][i] for i in range(len(ids))]
+        bore = [values["hoop"][i] for i in range(len(ids)) if abs(rs[i] - a) < 1e-4]
+        rim = [values["hoop"][i] for i in range(len(ids)) if abs(rs[i] - b) < 1e-4]
+        mid_plane = [i for i, n in enumerate(ids) if abs(pos[n][2]) < 1e-6]
+        w = 0.35 * (b - a)
+        r0 = 0.5 * (a + b)
+        return {"shoop_a": sum(bore) / len(bore), "shoop_b": sum(rim) / len(rim),
+                "sr_mid": local_fit([rs[i] for i in mid_plane], [values["radial"][i] for i in mid_plane], r0, w),
+                "shoop_mid": local_fit([rs[i] for i in mid_plane], [values["hoop"][i] for i in mid_plane], r0, w)}
+
+    return Setup(doc, objs, measure)
+
+
 BUILDERS = {
     "le10": build_le10, "sslv07": build_sslv07, "sslv301": build_sslv301, "fv52": build_fv52,
     "sdlv401": build_sdlv401, "sdlv100": build_sdlv100, "sslv139": build_sslv139, "tplv06": build_tplv06,
     "tplv304": build_tplv304, "ttlv01": build_ttlv01, "thick_cylinder": build_thick_cylinder,
-    "tensioned_beam": build_tensioned_beam, "bowed_column": build_bowed_column,
+    "tensioned_beam": build_tensioned_beam, "bowed_column": build_bowed_column, "rotating_disc": build_rotating_disc,
 }

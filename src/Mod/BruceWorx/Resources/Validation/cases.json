@@ -1029,6 +1029,70 @@
    },
    "licence": "Textbook closed form (a derivation, no data copied)",
    "setup": "Cantilever column 500 x 10 x 10 mm, P_ref = 1 kN, the nonlinear run (large displacements) with the bow = mode 1 at 1 % of the section; the plot uses load factors from 0.3 to 0.85 of lambda_1."
+  },
+  {
+   "id": "G-RD1",
+   "title": "Thin rotating annular disc at 30 000 rpm (cylindrical stress, spin load)",
+   "tier": "G",
+   "kind": "fe",
+   "study": "static",
+   "builder": "rotating_disc",
+   "params": {
+    "a_mm": 10.0,
+    "b_mm": 50.0,
+    "thickness_mm": 2.0,
+    "rpm": 30000.0,
+    "E_MPa": 210000.0,
+    "nu": 0.3,
+    "density": 7850.0
+   },
+   "mesh": {
+    "fast": 4.0,
+    "slow": [
+     5.0,
+     4.0,
+     3.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "shoop_a",
+   "references": [
+    {
+     "key": "shoop_a",
+     "label": "hoop stress at the bore (r = 10 mm)",
+     "value": 161.15090066098708,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "shoop_b",
+     "label": "hoop stress at the rim (r = 50 mm)",
+     "value": 40.28772516524676,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "sr_mid",
+     "label": "radial stress at mid-radius (r = 30 mm)",
+     "value": 45.45281813515021,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "shoop_mid",
+     "label": "hoop stress at mid-radius (r = 30 mm)",
+     "value": 75.41035736059011,
+     "unit": "MPa",
+     "derived": true
+    }
+   ],
+   "citation": {
+    "document": "Timoshenko and Goodier, Theory of Elasticity, 3rd ed., section 32: stresses in a rotating disc (plane stress), annular disc free at both radii",
+    "location": "bruceworx_sim_post.rotating_disc; checked there: sigma_r = 0 at both radii and the bore value rho w^2/4 [(3+nu) b^2 + (1-nu) a^2]",
+    "url": ""
+   },
+   "licence": "Textbook closed form (a derivation, no data copied)",
+   "setup": "Quarter of a steel annulus a=10, b=50 mm, 2 mm thick (symmetry planes x=0, y=0 and the mid-plane), E=210 GPa, nu=0.3, rho=7850 kg/m3, spinning at 30 000 rpm about Z (a Centrifugal load, CalculiX *DLOAD CENTRIF). The radial and hoop stress are the cylindrical components about the spin axis (bruceworx_sim_post.cylindrical_stress): bore and rim values are the mean of the nodes on the circle, mid-radius values a cubic fit over the radius on the mid-plane. The 3D thin disc differs from plane stress by a fraction of a percent."
   }
  ]
 }

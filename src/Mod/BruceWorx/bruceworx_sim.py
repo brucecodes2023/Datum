@@ -954,6 +954,11 @@ def is_self_weight(obj):
     return obj.TypeId == "Fem::ConstraintSelfWeight" or getattr(getattr(obj, "Proxy", None), "Type", "") == "Fem::ConstraintSelfWeight"
 
 
+def is_spin_load(obj):
+    """FEM's Centrifugal load is a Python constraint too (SIM-04: bruceworx_sim_post adds it)."""
+    return obj.TypeId == "Fem::ConstraintCentrif" or getattr(getattr(obj, "Proxy", None), "Type", "") == "Fem::ConstraintCentrif"
+
+
 def members(analysis):
     """The study's members by role: solver, material(s), mesh, supports, loads, others, results."""
     out = {"solver": None, "materials": [], "mesh": None, "supports": [], "loads": [], "others": [], "results": []}
@@ -971,7 +976,7 @@ def members(analysis):
             out["results"].append(obj)
         elif tid in SUPPORT_TYPES:
             out["supports"].append(obj)
-        elif tid in LOAD_TYPES or is_self_weight(obj):
+        elif tid in LOAD_TYPES or is_self_weight(obj) or is_spin_load(obj):
             out["loads"].append(obj)
         elif obj.isDerivedFrom("Fem::Constraint"):
             out["others"].append(obj)
@@ -1140,7 +1145,7 @@ def precheck(analysis):
             issues.append(("warning", "The loads are ignored: a plain modal study finds the free vibration "
                                       "(Prestressed stiffens the modes with them)"))
     for obj in m["supports"] + m["loads"] + m["others"]:
-        if _references_empty(obj) and not is_self_weight(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
+        if _references_empty(obj) and not is_self_weight(obj) and not is_spin_load(obj) and obj.TypeId not in ("Fem::ConstraintSelfWeight", "Fem::ConstraintInitialTemperature"):
             issues.append(("error", f"{obj.Label}: no faces, edges or vertices chosen"))
         if obj.TypeId == "Fem::ConstraintForce" and not _value(obj, "Force"):
             issues.append(("error", f"{obj.Label}: the force is zero"))
@@ -1148,6 +1153,10 @@ def precheck(analysis):
             issues.append(("error", f"{obj.Label}: the pressure is zero"))
     if thermal_kind:
         issues += thermal.boundary_issues(analysis, m)
+    if kind == "static":  # SIM-04: the spin loads (axis, speed, density, balance)
+        import bruceworx_sim_post as post
+
+        issues += post.precheck_spin(analysis, m)
     if m["solver"] is None:
         issues.append(("error", "No solver: New Study makes a CalculiX solver"))
     if not find_ccx():
@@ -1502,6 +1511,10 @@ def _describe(obj):
         value = f"{_value(obj, 'Force', 'N') or 0:g} N" + (" (reversed)" if getattr(obj, "Reversed", False) else "")
     elif obj.TypeId == "Fem::ConstraintPressure":
         value = f"{_value(obj, 'Pressure', 'MPa') or 0:g} MPa" + (" (reversed)" if getattr(obj, "Reversed", False) else "")
+    elif is_spin_load(obj):
+        import bruceworx_sim_post as post
+
+        kind, value = "Spin", f"{post.spin_rpm(obj):g} rpm"
     elif obj.TypeId == "Fem::ConstraintDisplacement":
         locked = [a for a in "xyz" if not getattr(obj, f"{a}Free", True)]
         value = "locked " + ", ".join(locked) if locked else "nothing locked"

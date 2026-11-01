@@ -35,7 +35,7 @@ class TestCases(unittest.TestCase):
         ids = [c["id"] for c in val.load_cases()]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sorted(ids), sorted(["B-ST1", "B-ST2", "B-ST3", "B-MO1", "B-MO2", "B-MO3", "B-BU1", "B-TH1", "B-TH2",
-                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "B-CF4"]))
+                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "B-CF4"]))
         self.assertEqual([c["id"] for c in self.doc["cfd"]], ["B-CF4"])  # the SIM-06 cases (bruceworx_cfd_wash)
         for case in self.cases.values():
             if case.get("kind", "fe") == "fe":
@@ -86,6 +86,25 @@ class TestCases(unittest.TestCase):
         self.assertGreater(vc.lame_thermal(b, a, b, E, nu, alpha, dT)[1], 0)
         refs = {r["key"]: r["value"] for r in self.cases["G-TS1"]["references"]}
         self.assertAlmostEqual(refs["shoop_a"], vc.lame_thermal(a, a, b, E, nu, alpha, dT)[1])
+
+    def test_rotating_disc_closed_form(self):
+        import bruceworx_sim_post as post
+
+        rho, nu, w = 7850.0, 0.3, 30000 * 2 * math.pi / 60
+        a, b = 0.01, 0.05
+        self.assertAlmostEqual(post.rotating_disc(a, a, b, rho, w, nu)[0], 0.0, delta=1e-3)  # free at both radii
+        self.assertAlmostEqual(post.rotating_disc(b, a, b, rho, w, nu)[0], 0.0, delta=1e-3)
+        bore = post.rotating_disc(a, a, b, rho, w, nu)[1]
+        self.assertAlmostEqual(bore, rho * w * w / 4 * ((3 + nu) * b * b + (1 - nu) * a * a), delta=1e-3)
+        # the solid disc: the centre has the same stress both ways, (3 + nu) / 8 rho w^2 b^2
+        sr, st = post.rotating_disc(1e-9, 0.0, b, rho, w, nu)
+        self.assertAlmostEqual(sr, st, delta=1e-2)
+        self.assertAlmostEqual(sr, (3 + nu) / 8 * rho * w * w * b * b, delta=1e-2)
+        # the annulus tends to the solid disc away from the hole: a tiny bore changes the stress at the rim a little
+        refs = {r["key"]: r["value"] for r in self.cases["G-RD1"]["references"]}
+        for key, value in vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3).items():
+            self.assertAlmostEqual(refs[key], value, delta=1e-9 * abs(value))
+        self.assertAlmostEqual(refs["shoop_a"], bore / 1e6, delta=1e-9)
 
     def test_circular_plate_buckling_reproduces_the_manual_and_the_json(self):
         self.assertAlmostEqual(vc.circular_plate_k2("clamped"), 14.68, delta=0.005)
@@ -262,6 +281,9 @@ class TestFastSet(unittest.TestCase):
 
     def test_gap_bowed_column(self):
         self.check("G-NB1")
+
+    def test_gap_rotating_disc(self):
+        self.check("G-RD1")
 
     def test_report_of_the_run(self):
         out = val.write_report(self.vrun, folder=self.tmp, compile=bool(sim.find_tex()[0]))

@@ -36,6 +36,7 @@ FreeCAD.__unit_test__.append("TestBruceWorxAnalysis")
 FreeCAD.__unit_test__.append("TestBruceWorxHardware")
 FreeCAD.__unit_test__.append("TestBruceWorxRoutingCore")
 FreeCAD.__unit_test__.append("TestBruceWorxSimCore")
+FreeCAD.__unit_test__.append("TestBruceWorxSimRotor")
 FreeCAD.__unit_test__.append("TestBruceWorxCfd")
 FreeCAD.__unit_test__.append("TestBruceWorxMaterials")
 
