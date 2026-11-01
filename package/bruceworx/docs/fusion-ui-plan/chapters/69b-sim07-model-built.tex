@@ -82,3 +82,7 @@ real CalculiX solve (skipped without \code{ccx}). \file{TestBruceWorxSimCore} an
   \item \textbf{Hold constraints} (the spin-hold points) are recognised by their label ``Hold\ldots''. A proper type
         property on them would be safer; worth a small change in \code{hold\_for\_spin}?
 \end{enumerate}
+
+\paragraph{Your answers (1 Nov).} (1) The part stays read only in P1; swapping it becomes a deliberate \emph{Replace part}
+action in P2. (2) The library name in brackets is enough for now. (3) Yes: \code{hold\_for\_spin} gets a type property and
+the model layer recognises it by that, not by the label. Load faces will mark the mesh once P2 adds local sizes.
