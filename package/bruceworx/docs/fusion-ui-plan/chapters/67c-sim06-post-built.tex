@@ -1,0 +1,57 @@
+%======================================================================
+\subsection{SIM-06 --- Built, 31 Oct: the flow in the 3D view (and the FemPostPipeline crash)}\label{sec:sim06-post-built}
+%======================================================================
+
+\paragraph{What you can do now.} \textbf{Show in 3D} on an airflow study converts the last time with foamToVTK and
+puts the result in the 3D view inside the app: the \emph{surface pressure} on each part (a pipeline of its boundary
+patch, coloured by $p$), and the \emph{mid cut plane} (XZ) coloured by the velocity magnitude $|U|$; the volume
+pipeline itself is added to the study but hidden, because it would fill the view. The far-field patches (inlet,
+outlet, sides) are left out. Pressure and velocity stay in SI; only the points are scaled to millimetres so the flow
+sits on the model. \textbf{Streamlines} stay in ParaView: FreeCAD's FEM module has no streamline filter object in
+this build, so there is nothing to call (Open in ParaView is still there).
+
+\paragraph{The crash, and why it was not in the source.} Every \code{Fem::FemPostPipeline} created in the GUI
+crashed in \code{SoFCColorGradient::setMarkerLabel}. The stack (reproduced with a three-line script, \code{lldb} on
+the stopped frame) ends in \code{strlen} on text that is not a pointer. Reading the registers showed
+\code{setMarkerLabel} stepping through the label array in strides of 144 bytes while the array holds 128-byte
+elements. Cause: the environment moved to Coin 4.0.10 on 25 Oct, which shrank \code{sizeof(SbString)} from 144 to
+128 bytes (\code{CC\_STRING\_MIN\_SIZE} became $128-\mathrm{sizeof(char*)}-\mathrm{sizeof(size\_t)}$), but conda keeps
+the original modification time of a package's headers (22 June), so ninja never recompiled the 414 objects that
+include Inventor headers and were older than the update. They went on using the old layout against the new library.
+Nothing in \code{SoFCColorGradient} or the FEM view provider was wrong, and no BruceWorx commit touched them. The
+fix was to delete those objects and let ninja recompile them (about 25\,min on 18 cores, no source change), then
+\file{package/bruceworx/rebuild-stale-objects.sh <package> [-f]} lists or deletes the objects older than any conda
+package so the same thing cannot hide after the next \code{pixi} update. \textbf{The staged Vector Labs.app was
+built from these stale objects too}; it needs one rebuild from this tree to get the fix. The crash reports in
+\file{DiagnosticReports} from the app (\code{vectorlabs-2026-10-31-*.ips}, \code{Keystone-*.ips}) show other stacks
+(TechDraw \code{QGSPage::findParent}, a Python-callback in Coin's dragger, \code{DocInfo::slotDeleteDocument}); the
+same stale layouts are a plausible cause of some of them, but I did not test that.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{Scale the file, not the pipeline.} \code{FemPostPipeline.scale()} leaves an unstructured grid empty
+        in this build (\code{writeVTK}: ``Empty data object'', even for a factor of 1), so
+        \code{scaled\_copy} writes an \code{mm} copy of the .vtu/.vtp next to the original with the points scaled
+        (vtk and numpy, in place) and FEM reads that. The cause of the empty grid in \code{scale()} is not found.
+  \item \textbf{One pipeline per part patch} for the pressure, named for the part, so each can be hidden or coloured on
+        its own; the plane is a clip filter of the volume pipeline (the headless path already made it).
+  \item The workaround in \code{bruceworx\_sim.\_no\_post\_pipeline} (the static-study result import) is left as it is:
+        it was a choice not to make a pipeline there, and its comment still names the crash. It can go when you want
+        FEM's own post objects beside a static result.
+\end{itemize}
+
+\paragraph{Tests.} GUI, \file{TestBruceWorxCfd.py} (32 tests, 0 failures): a bare \code{Fem::FemPostPipeline} read
+from a .vtu in the window does not crash; the whole results view from a synthetic case (a Delaunay mesh with $p$ and
+$U$ plus two boundary patches, no OpenFOAM): one surface for the part and none for the inlet, the volume pipeline
+hidden, the surface coloured by $p$, the cut by $U$ with the Magnitude component. The end-to-end OpenFOAM tests now
+expect the pipeline in both the headless and the GUI run. Headless \code{-t TestBruceWorxCfd}: OK (4 skipped).
+
+\paragraph{Open questions for you.}
+\begin{enumerate}[nosep]
+  \item \textbf{Rebuild the app now?} The running app has the crash for every FEM post object until it is rebuilt
+        from this tree (the stale-object fix is in the build directory, not in a commit).
+  \item \textbf{Streamlines}: write our own (vtk's \code{vtkStreamTracer} on the mm copy, shown as a Part-less
+        Coin node or an exported .vtp pipeline), or leave them to ParaView?
+  \item \textbf{Surface pressure scale}: the colour bar autoscales to the part's range. Pin it to $\pm$ the dynamic
+        pressure $\tfrac12\rho U^2$ so two runs compare by eye?
+\end{enumerate}
