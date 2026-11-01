@@ -838,6 +838,16 @@ echo "@@ done"
 """
 
 
+# OpenFOAM-v2606's Open MPI 5 / PMIx server listens on the LAN address only, and on this Mac the ranks' connection
+# to it fails (errno 57), so each rank fell back to a singleton and MPI_Init failed with -13. Keeping PMIx on the
+# loopback fixes it; both are needed (lo0 is skipped unless loopback is retained). mpirun itself must see them.
+MPI_ENV = {"PMIX_MCA_pif_base_retain_loopback": "1", "PMIX_MCA_ptl_tcp_if_include": "lo0"}
+MPI_ENV_SH = " ".join(f"{k}={v}" for k, v in MPI_ENV.items())
+# Below this many cells parallel does not pay (pipe bench: 7k cells 6 s serial, 4 s on 8 ranks; 115k cells 534 s
+# serial, 190 s on 8 ranks).
+MPI_MIN_CELLS = 50000
+
+
 def allrun_text(n_procs, meshing=True, extra_post=""):
     lines = []
     if meshing:
@@ -849,6 +859,7 @@ def allrun_text(n_procs, meshing=True, extra_post=""):
         # fall back to a serial run and leave a note that Python turns into a marker (mpi_broken).
         lines += ['stage decomposePar', 'decomposePar -force > log.decomposePar 2>&1 || fail decomposePar',
                   'stage simpleFoam',
+                  f'export {MPI_ENV_SH}',
                   f'mpirun -np {n_procs} simpleFoam -parallel > log.simpleFoam 2>&1 &',
                   'mpipid=$!', 'n=0', 'while [ "$n" -lt 25 ] && [ ! -s log.simpleFoam ] && kill -0 $mpipid 2>/dev/null; do sleep 1; n=$((n+1)); done',
                   'if [ ! -s log.simpleFoam ]; then',
@@ -914,6 +925,8 @@ def write_case(folder, parts, setup):
     est = estimate(parts, setup, geo)
     n_procs = setup.n_procs or perf_cores()
     n_procs = max(1, min(n_procs, est["cells"] // 25000 or 1))
+    if est["cells"] < MPI_MIN_CELLS:
+        n_procs = 1
     if mpi_known_broken():
         n_procs = 1
     iterations = int(pv["iterations"])
@@ -1099,6 +1112,7 @@ def _clean_env():
     for k in list(env):
         if k.startswith(("PYTHON", "DYLD_", "QT_", "FREECAD")):
             env.pop(k)
+    env.update(MPI_ENV)
     return env
 
 
