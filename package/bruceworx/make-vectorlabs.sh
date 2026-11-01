@@ -145,8 +145,10 @@ fi
 MIGRATE
 chmod +x "$C/Resources/vectorlabs-migrate.sh"
 cat > "$stage/vectorlabs-launcher.c" <<'LAUNCHER'
-/* Vector Labs launcher: run Resources/vectorlabs-migrate.sh (first-launch settings copy), then exec
-   MacOS/vectorlabs with the same arguments. Symlinks to this file (MacOS/Keystone) resolve to the bundle. */
+/* Vector Labs launcher: point Python, fonts, certificates and Qt plugins at this bundle, run
+   Resources/vectorlabs-migrate.sh (first-launch settings copy), then exec MacOS/vectorlabs with the same
+   arguments. Symlinks to this file (MacOS/Keystone) resolve to the bundle. The paths are set here rather than
+   in Info.plist so the bundle keeps working after it is moved (it is staged in another folder first). */
 #include <limits.h>
 #include <mach-o/dyld.h>
 #include <stdio.h>
@@ -165,6 +167,23 @@ int main(int argc, char **argv)
     }
     char *slash = strrchr(dir, '/');
     if (slash) *slash = '\0';
+    char contents[PATH_MAX];
+    snprintf(path, sizeof path, "%s/..", dir);
+    if (!realpath(path, contents)) {
+        fprintf(stderr, "Vector Labs: cannot find its Contents folder\n");
+        return 1;
+    }
+    static const char *const env[][2] = {
+        {"PYTHONHOME", ""},
+        {"FONTCONFIG_FILE", "/etc/fonts.conf"},
+        {"SSL_CERT_FILE", "/ssl/cacert.pem"},
+        {"QT_PLUGIN_PATH", "/lib/qt6/plugins"},
+    };
+    for (size_t i = 0; i < sizeof env / sizeof env[0]; i++) {
+        snprintf(path, sizeof path, "%s%s", contents, env[i][1]);
+        setenv(env[i][0], path, 1);
+    }
+    setenv("PYTHONNOUSERSITE", "1", 1);
     snprintf(path, sizeof path, "%s/../Resources/vectorlabs-migrate.sh", dir);
     if (access(path, R_OK) == 0) {
         pid_t pid = fork();
@@ -187,9 +206,11 @@ cc -O2 -Wall -mmacosx-version-min=12.0 -o "$C/MacOS/$app_name" "$stage/vectorlab
 ln -sf "$app_name" "$C/MacOS/Keystone"
 
 # Qt finds its plugins from qt.conf, which Qt reads from Contents/Resources in a bundle.
+# Prefix is relative (to the executable's folder, MacOS or bin), so the bundle still works after it is moved:
+# the swap-on-quit stages it in another folder before moving it to /Applications.
 cat > "$C/Resources/qt.conf" <<QTCONF
 [Paths]
-Prefix = $dest/$app_name.app/Contents
+Prefix = ..
 Libraries = lib
 Plugins = lib/qt6/plugins
 QmlImports = lib/qt6/qml
@@ -271,13 +292,6 @@ cat > "$C/Info.plist" <<PLIST
   <key>LSArchitecturePriority</key><array><string>arm64</string></array>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSRequiresAquaSystemAppearance</key><false/>
-  <key>LSEnvironment</key><dict>
-    <key>PYTHONHOME</key><string>$dest/$app_name.app/Contents</string>
-    <key>PYTHONNOUSERSITE</key><string>1</string>
-    <key>FONTCONFIG_FILE</key><string>$dest/$app_name.app/Contents/etc/fonts.conf</string>
-    <key>SSL_CERT_FILE</key><string>$dest/$app_name.app/Contents/ssl/cacert.pem</string>
-    <key>QT_PLUGIN_PATH</key><string>$dest/$app_name.app/Contents/lib/qt6/plugins</string>
-  </dict>
   <key>CFBundleDocumentTypes</key><array><dict>
     <key>CFBundleTypeName</key><string>FreeCAD Document</string>
     <key>CFBundleTypeRole</key><string>Editor</string>
@@ -291,7 +305,7 @@ PLIST
 say "relocating libraries (a few minutes)"
 python3 "$here/vectorlabs_relocate.py" "$C" "$env" "$build" "$repo" \
     || fail "some files still point into the environment or the build tree (listed above)"
-# Python and the pyvenv-less interpreter look for their home through PYTHONHOME (Info.plist above).
+# Python and the pyvenv-less interpreter look for their home through PYTHONHOME (set by the launcher above).
 
 # ----- 7. check it starts, then install -----------------------------------------------------------------
 say "checking the staged bundle"
