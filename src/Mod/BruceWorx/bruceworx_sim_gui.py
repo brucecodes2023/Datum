@@ -43,6 +43,7 @@ import time
 
 import bruceworx_sim as sim
 import bruceworx_sim_eigen as eigen
+import bruceworx_sim_post as post
 import bruceworx_sim_thermal as thermal
 from bruceworx_slots import slot
 
@@ -76,7 +77,8 @@ TYPE_HINTS = {
                 "non-conservative; the nonlinear run seeds an imperfection from mode 1.",
 }
 
-_state = {"installed": False, "panel": None, "reopen": None, "probe": None, "shown": {}, "classes": None, "mode": {}}
+_state = {"installed": False, "panel": None, "reopen": None, "probe": None, "shown": {}, "classes": None, "mode": {},
+          "range": {}}
 MODE_FPS = 25  # mode playback: frames per second, one cycle per second
 
 
@@ -222,6 +224,8 @@ def legend_html(kind, result=None, analysis=None):
                         for c, n in zip(colors, names))
         _limit, how = thermal.hdt_limit(analysis)
         return (f"<b>Temperature against the limit</b> ({how}); each element in the band of its hottest node<br>{chips}")
+    if kind in SCALAR_KEYS and analysis is not None and _custom_paint(analysis, kind):
+        return scalar_legend(analysis, kind)
     if kind == "stress":
         return "<b>von Mises stress</b>, MPa: blue low to red high"
     if kind == "displacement":
@@ -269,6 +273,9 @@ def show_field(analysis, kind, result=None):
         return False
     if kind in ("temperature", "tempbands"):
         return show_temperature(analysis, kind, result)
+    if kind in SCALAR_KEYS and _custom_paint(analysis, kind):
+        return show_scalar(analysis, kind, result)
+    _remove_section_view(analysis)
     nodes = list(result.NodeNumbers)
     vobj = result.Mesh.ViewObject
     _hide_for_result(analysis, result)
@@ -310,6 +317,107 @@ def show_field(analysis, kind, result=None):
     _state["shown"][analysis.Name] = kind
     try:
         result.Document.recompute()
+    except Exception:
+        pass
+    return True
+
+
+# ----- the rotor contours (SIM-04): cylindrical stress, colour maps, fixed range, section ------------------------------
+
+# the shown kinds that colour with the study's own colour map and range: kind -> bruceworx_sim_post field key
+SCALAR_KEYS = {"stress": "vonMises", "displacement": "displacement", "radial": "radial", "hoop": "hoop", "axial": "axial",
+               "shear": "shear"}
+
+
+def _custom_paint(analysis, kind):
+    """True when a field is painted by show_scalar: a cylindrical stress always; von Mises and displacement when the study
+    has another colour map, a fixed range or a section (otherwise FEM's own scalar colouring, as before)."""
+    key = SCALAR_KEYS[kind]
+    return (key in post.CYLINDRICAL or post.study_colormap(analysis) != post.DEFAULT_COLORMAP
+            or post.fixed_range(analysis, key) is not None or post.study_section(analysis) != "none")
+
+
+def scalar_legend(analysis, kind):
+    shown = _state["range"].get(analysis.Name)
+    key = SCALAR_KEYS[kind]
+    label, unit, _prop = post.FIELDS[key]
+    if not shown or shown[0] != key:
+        return f"<b>{label}</b>, {unit}"
+    _key, lo, hi, cmap, pinned = shown
+    note = " (fixed range)" if pinned else ""
+    return f"<b>{label}</b>, {unit}, {cmap}{note}<br>{post.legend_chips(cmap, lo, hi)}"
+
+
+def _remove_section_view(analysis):
+    """Drops the section mesh object, so the whole result mesh shows."""
+    obj = analysis.Document.getObject("SectionMesh_" + analysis.Name)
+    if obj is not None:
+        try:
+            analysis.Document.removeObject(obj.Name)
+        except Exception:
+            pass
+
+
+def show_scalar(analysis, kind, result=None):
+    """Colours the result mesh by a per-node field with the study's colour map (Rainbow, Turbo, Jet) between the data's range
+    or the study's fixed range for the field, optionally cut open (half or quarter section about the axis).
+    kind: stress, displacement, radial, hoop, axial, shear.  Returns True when drawn."""
+    result = result or sim.latest_result(analysis)
+    if result is None:
+        _warn("No results yet: solve the study first")
+        return False
+    key = SCALAR_KEYS[kind]
+    try:
+        values = post.field_values(result, key, analysis)
+    except (post.PostError, sim.StudyError) as exc:
+        _warn(str(exc))
+        return False
+    nodes = list(result.NodeNumbers)
+    vectors = list(result.DisplacementVectors)
+    has_vectors = len(vectors) == len(nodes) and bool(nodes)
+    cmap = post.study_colormap(analysis)
+    pinned = post.fixed_range(analysis, key)
+    lo, hi = pinned or (min(values), max(values))
+    if not hi > lo:
+        lo, hi = lo - 0.5 * (abs(lo) or 1.0), hi + 0.5 * (abs(hi) or 1.0)
+    mode = post.study_section(analysis)
+    _hide_for_result(analysis, result)
+    target = result.Mesh
+    keep = None
+    if mode != "none":
+        try:
+            target, keep = post.section_mesh(analysis, result, mode)
+        except (post.PostError, sim.StudyError) as exc:
+            _warn(f"Section: {exc}")
+            mode = "none"
+    if mode == "none":
+        _remove_section_view(analysis)
+    else:
+        result.Mesh.ViewObject.Visibility = False
+        analysis.Document.recompute()
+        target.ViewObject.Visibility = True
+        try:
+            target.ViewObject.DisplayMode = "Faces & Wireframe"
+        except Exception:
+            pass
+    vobj = target.ViewObject
+    pick = [i for i, n in enumerate(nodes) if keep is None or n in keep]
+    sel_nodes = [nodes[i] for i in pick]
+    if has_vectors:
+        vobj.setNodeDisplacementByVectors(sel_nodes, [vectors[i] for i in pick])
+    _color_mode(vobj, "ByNode")
+    vobj.NodeColor = post.node_colors([values[i] for i in pick], lo, hi, cmap, ids=sel_nodes)
+    if has_vectors:
+        if kind == "displacement":
+            from femtaskpanels.task_result_mechanical import get_displacement_scale_factor
+
+            vobj.applyDisplacement(float(get_displacement_scale_factor(result)))
+        else:
+            vobj.applyDisplacement(0.0)
+    _state["shown"][analysis.Name] = kind
+    _state["range"][analysis.Name] = (key, lo, hi, cmap, pinned is not None)
+    try:
+        analysis.Document.recompute()
     except Exception:
         pass
     return True
@@ -1193,6 +1301,10 @@ def _make_classes():
                 for text, command in CONSTRAINT_COMMANDS:
                     row.addWidget(button(f"+ {text}", lambda cmd=command: self.add_constraint(cmd),
                                          f"Add a {text} constraint (the stock FEM panel; this one comes back after)"))
+                if self.kind == "static":
+                    row.addWidget(button("+ Spin", self.add_spin,
+                                         "A spinning load: centrifugal force at an rpm about the axis of the selected circular edge "
+                                         "or cylindrical face (else the model's bore or rim)"))
                 w.layout().addLayout(row)
             if self.kind in thermal.KINDS:
                 row_t = QtWidgets.QHBoxLayout()
@@ -1761,6 +1873,15 @@ def _make_classes():
             row.addWidget(button("Displacement", lambda: self.show("displacement"), "Colour by displacement, exaggerated"))
             row.addWidget(button("Safety Factor", lambda: self.show("safety"), "Colour by safety factor in the study's bands"))
             w.layout().addLayout(row)
+            row_c = QtWidgets.QHBoxLayout()
+            row_c.setSpacing(4)
+            for text, kind, tip in (("Radial", "radial", "Radial stress σrr about the spin axis"),
+                                    ("Hoop", "hoop", "Hoop (circumferential) stress σθθ about the spin axis"),
+                                    ("Axial", "axial", "Axial stress σzz along the spin axis"),
+                                    ("Shear", "shear", "Shear stress σrθ in the plane across the axis")):
+                row_c.addWidget(button(text, lambda k=kind: self.show(k), tip))
+            w.layout().addLayout(row_c)
+            w.layout().addWidget(self._build_contour_options())
             lay = form_layout()
             self.measure_combo = measure_combo(sim.study_measure(self.analysis))
             self.measure_combo.currentIndexChanged.connect(slot(self._measure_changed))
@@ -1789,6 +1910,143 @@ def _make_classes():
             self.probe_label = hint()
             w.layout().addWidget(self.probe_label)
             return w
+
+        def _build_contour_options(self):
+            """Colour map, fixed range, section and the cylindrical-stress axis of the contour views, with export and picture."""
+            a = self.analysis
+            box_ = QtWidgets.QWidget()
+            lay = form_layout()
+            box_.setLayout(lay)
+            self.cmap_combo = QtWidgets.QComboBox()
+            for name in post.COLORMAPS:
+                self.cmap_combo.addItem(name, name)
+            self.cmap_combo.setCurrentIndex(max(0, self.cmap_combo.findData(post.study_colormap(a))))
+            self.cmap_combo.currentIndexChanged.connect(slot(self._contour_changed))
+            lay.addRow("Colour map", self.cmap_combo)
+            self.section_combo = QtWidgets.QComboBox()
+            for key, label in (("none", "Whole part"), ("half", "Half cut"), ("quarter", "Quarter cut")):
+                self.section_combo.addItem(label, key)
+            self.section_combo.setCurrentIndex(max(0, self.section_combo.findData(post.study_section(a))))
+            self.section_combo.setToolTip("Cut the part open about the axis (elements on the far side are left out) to see inside a wheel")
+            self.section_combo.currentIndexChanged.connect(slot(self._contour_changed))
+            lay.addRow("Section", self.section_combo)
+            row = QtWidgets.QHBoxLayout()
+            self.range_check = QtWidgets.QCheckBox("Fixed")
+            self.range_check.setToolTip("Pin the colour bar of the shown field to this range, remembered for the study, so runs compare by eye")
+            self.range_min = temp_spin(0.0, "", -1.0e7, 1.0e7, 3)
+            self.range_max = temp_spin(1.0, "", -1.0e7, 1.0e7, 3)
+            row.addWidget(self.range_check)
+            row.addWidget(self.range_min)
+            row.addWidget(self.range_max)
+            lay.addRow("Colour range", row)
+            for widget in (self.range_min, self.range_max):
+                widget.valueChanged.connect(slot(self._range_changed))
+            self.range_check.toggled.connect(slot(self._range_changed))
+            self.axis_label = hint()
+            lay.addRow("Axis", self.axis_label)
+            row2 = QtWidgets.QHBoxLayout()
+            row2.setSpacing(4)
+            row2.addWidget(button("Pick axis", self.pick_axis, "Use the selected circular edge or cylindrical face as the axis of the "
+                                                                "radial, hoop and axial stress"))
+            row2.addWidget(button("Spin axis", lambda: self.pick_axis(clear=True), "Back to the spin load's axis (else the model's bore or rim)"))
+            row2.addStretch(1)
+            lay.addRow("", row2)
+            row3 = QtWidgets.QHBoxLayout()
+            row3.setSpacing(4)
+            row3.addWidget(button("Export .vtu", self.export_vtu, "Write the result with every field, also the cylindrical stress"))
+            row3.addWidget(button("ParaView", self.open_paraview, "Open the exported result in ParaView, coloured by the shown field"))
+            row3.addWidget(button("Picture", self.picture, "Save a picture of the shown field from the 3D view (PNG)"))
+            row3.addStretch(1)
+            lay.addRow("", row3)
+            self._sync_range_fields()
+            self._show_axis()
+            return box_
+
+        def _field_key(self):
+            kind = _state["shown"].get(self.analysis.Name)
+            return SCALAR_KEYS.get(kind)
+
+        def _sync_range_fields(self):
+            """The fixed-range boxes follow the shown field: its stored range, else the data's own."""
+            key = self._field_key() or "hoop"
+            pinned = post.fixed_range(self.analysis, key)
+            shown = _state["range"].get(self.analysis.Name)
+            lo, hi = pinned or ((shown[1], shown[2]) if shown and shown[0] == key else (0.0, 1.0))
+            for widget, value in ((self.range_min, lo), (self.range_max, hi)):
+                widget.blockSignals(True)
+                widget.setValue(value)
+                widget.blockSignals(False)
+            self.range_check.blockSignals(True)
+            self.range_check.setChecked(pinned is not None)
+            self.range_check.blockSignals(False)
+
+        def _show_axis(self):
+            try:
+                point, direction = post.default_axis(self.analysis)
+                source = "picked" if post.study_axis(self.analysis) else ("spin load" if post.spin_loads(self.analysis) else "model")
+                self.axis_label.setText(f"{source}: ({direction[0]:.2f}, {direction[1]:.2f}, {direction[2]:.2f}) through "
+                                        f"({point[0]:.4g}, {point[1]:.4g}, {point[2]:.4g}) mm")
+            except Exception:
+                self.axis_label.setText("none found: pick a circular edge or a cylindrical face")
+
+        def _contour_changed(self, *_a):
+            post.set_study_colormap(self.analysis, self.cmap_combo.currentData())
+            post.set_study_section(self.analysis, self.section_combo.currentData())
+            kind = _state["shown"].get(self.analysis.Name)
+            if kind in SCALAR_KEYS:
+                self.show(kind)
+
+        def _range_changed(self, *_a):
+            key = self._field_key()
+            if key is None:
+                return
+            was = post.fixed_range(self.analysis, key) is not None
+            if not self.range_check.isChecked() and not was:
+                return  # typing a limit changes nothing until Fixed is ticked
+            try:
+                if self.range_check.isChecked():
+                    post.set_fixed_range(self.analysis, key, self.range_min.value(), self.range_max.value())
+                else:
+                    post.set_fixed_range(self.analysis, key, None)
+            except post.PostError as exc:
+                self.legend.setText(f"<span style='color:#b00020'>{exc}</span>")
+                return
+            kind = _state["shown"][self.analysis.Name]
+            if show_field(self.analysis, kind):  # redraw without putting the boxes back to the data's range
+                self.legend.setText(legend_html(kind, sim.latest_result(self.analysis), self.analysis))
+
+        def pick_axis(self, clear=False):
+            """The axis of the cylindrical stress: the selected circular edge or cylindrical face, or back to the spin axis."""
+            try:
+                if clear:
+                    post.set_study_axis(self.analysis, None)
+                else:
+                    refs = [r for r in selected_refs() if r[1].startswith(("Edge", "Face"))]
+                    if not refs:
+                        _warn("Select a circular edge or a cylindrical face in the 3D view first")
+                        return
+                    post.set_study_axis(self.analysis, refs[0])
+            except post.PostError as exc:
+                _warn(str(exc))
+                return
+            self._show_axis()
+            kind = _state["shown"].get(self.analysis.Name)
+            if kind in post.CYLINDRICAL:
+                sim.latest_result(self.analysis) and post.cylindrical_stress(sim.latest_result(self.analysis), analysis=self.analysis)
+                self.show(kind)
+
+        def add_spin(self):
+            """+ Spin: asks for the speed; the axis is the selected circular edge or cylindrical face, else the model's."""
+            return add_spin_object(self.analysis, panel=self)
+
+        def export_vtu(self, path=None):
+            return export_result(self.analysis, path)
+
+        def open_paraview(self):
+            return open_in_paraview(self.analysis)
+
+        def picture(self, path=None):
+            return save_picture(self.analysis, path)
 
         def _build_bands(self):
             """The band editor: one row per band (its upper safety factor, its colour), hidden until Bands…."""
@@ -1949,7 +2207,7 @@ def _make_classes():
             entries = [(f"Material: {o.Label}", o) for o in m["materials"]]
             entries += [(f"Support: {d['label']} ({d['kind']}) {d['value']} {d['where']}".strip(), o)
                         for o, d in ((o, sim._describe(o)) for o in m["supports"])]
-            entries += [(f"Load: {d['label']} ({d['kind']}) {d['value']} on {d['where'] or 'nothing'}", o)
+            entries += [(f"Load: {d['label']} ({d['kind']}) {d['value']} on {d['where'] or ('the whole model' if d['kind'] in ('Spin', 'SelfWeight') else 'nothing')}", o)
                         for o, d in ((o, sim._describe(o)) for o in m["loads"])]
             entries += [(f"{d['kind']}: {d['label']} {d['where']}".strip(), o)
                         for o, d in ((o, sim._describe(o)) for o in m["others"])]
@@ -2195,6 +2453,9 @@ def _make_classes():
             result = self.selected_result() if self.kind in thermal.KINDS else None
             if show_field(self.analysis, kind, result):
                 self.legend.setText(legend_html(kind, result or sim.latest_result(self.analysis), self.analysis))
+                if hasattr(self, "range_check"):
+                    self._sync_range_fields()
+                    self._show_axis()
                 return True
             return False
 
@@ -2777,9 +3038,134 @@ def add_thermal_object(key, analysis=None, values=None, refs=None, bodies=None):
     return made
 
 
+def add_spin_object(analysis=None, rpm=None, axis=None, panel=None):
+    """Adds a Spin (centrifugal) load: ``rpm`` (asked for in a dialog when None) about ``axis`` (see
+    ``bruceworx_sim_post.add_spin``; None: the selected circular edge or cylindrical face, else the model's own).
+    Returns the load, or None with a message when it cannot."""
+    analysis = analysis or current_study()
+    if analysis is None or sim.study_kind(analysis) not in ("static", "thermal_stress"):
+        _warn("Open a Static stress study first")
+        return None
+    if axis is None:
+        refs = [r for r in selected_refs() if r[1].startswith(("Edge", "Face"))]
+        axis = refs[0] if refs else None
+    if rpm is None:
+        from PySide import QtWidgets
+
+        value, ok = QtWidgets.QInputDialog.getDouble(None, "Spin", "Speed, rpm", 10000.0, 0.001, 1.0e7, 1)
+        if not ok:
+            return None
+        rpm = value
+    doc = analysis.Document
+    doc.openTransaction("Add spin")
+    try:
+        spin = post.add_spin(analysis, rpm, axis)
+    except post.PostError as exc:
+        doc.abortTransaction()
+        _warn(f"Spin: {exc}")
+        return None
+    doc.commitTransaction()
+    status(f"Added {spin.Label}")
+    if panel is not None and _alive(panel.members_list):
+        panel.refresh()
+        panel._show_axis()
+    return spin
+
+
+def export_result(analysis, path=None):
+    """Writes the latest result to a .vtu (a file dialog asks when no path is given); returns the path or None."""
+    if sim.latest_result(analysis) is None:
+        _warn("Solve the study before exporting")
+        return None
+    if path is None:
+        from PySide import QtWidgets
+
+        base = os.path.splitext(analysis.Document.FileName)[0] if analysis.Document.FileName else os.path.join(tempfile.gettempdir(), analysis.Name)
+        path, _filter = QtWidgets.QFileDialog.getSaveFileName(None, "Export the result", base + "_result.vtu", "VTK unstructured grid (*.vtu)")
+        if not path:
+            return None
+    try:
+        post.export_vtu(analysis, path)
+    except (post.PostError, sim.StudyError) as exc:
+        _warn(f"Export: {exc}")
+        return None
+    status(f"Wrote {path}")
+    return path
+
+
+def open_in_paraview(analysis):
+    """Exports the result next to the document and opens ParaView on it with the shown field, the study's colour map and
+    section; returns the script path or None."""
+    import subprocess
+
+    import bruceworx_cfd_paraview as pv
+
+    gui, _pvpython, _pvbatch = pv.paraview_executables()
+    if gui is None:
+        _warn(pv.precheck_text())
+        return None
+    result = sim.latest_result(analysis)
+    if result is None:
+        _warn("Solve the study before opening ParaView")
+        return None
+    folder = os.path.join(os.path.dirname(analysis.Document.FileName) if analysis.Document.FileName else tempfile.gettempdir(),
+                          f"{analysis.Name}_paraview")
+    os.makedirs(folder, exist_ok=True)
+    try:
+        vtu = post.export_vtu(analysis, os.path.join(folder, "result.vtu"))
+        key = SCALAR_KEYS.get(_state["shown"].get(analysis.Name), "hoop") if _state["shown"].get(analysis.Name) in SCALAR_KEYS else "hoop"
+        script = post.write_paraview_script(analysis, vtu, key, os.path.join(folder, "view.py"))
+    except (post.PostError, sim.StudyError) as exc:
+        _warn(f"ParaView: {exc}")
+        return None
+    subprocess.Popen([gui, f"--script={script}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return script
+
+
+def save_picture(analysis, path=None, size=(1400, 900), view="iso"):
+    """Saves the 3D view as it shows the study (the field on the screen, else the hoop stress) to a PNG; returns the path."""
+    import FreeCADGui as Gui
+
+    result = sim.latest_result(analysis)
+    gview = _view(analysis.Document)
+    if result is None or gview is None:
+        _warn("A solved study and a 3D view are needed for a picture")
+        return None
+    kind = _state["shown"].get(analysis.Name)
+    if kind not in SCALAR_KEYS and kind != "safety":
+        kind = "hoop" if post.spin_loads(analysis) else "stress"
+        show_field(analysis, kind, result)
+    if path is None:
+        from PySide import QtWidgets
+
+        base = os.path.splitext(analysis.Document.FileName)[0] if analysis.Document.FileName else os.path.join(tempfile.gettempdir(), analysis.Name)
+        path, _filter = QtWidgets.QFileDialog.getSaveFileName(None, "Save the picture", f"{base}_{kind}.png", "PNG (*.png)")
+        if not path:
+            return None
+    Gui.updateGui()
+    gview.viewIsometric()
+    gview.fitAll()
+    Gui.updateGui()
+    gview.saveImage(path, size[0], size[1], "Current")
+    return path if os.path.isfile(path) else None
+
+
 def _with_thermal_study():
     study = current_study()
     return study is not None and thermal.is_thermal(study)
+
+
+def _with_static_study():
+    study = current_study()
+    return study is not None and sim.study_kind(study) == "static"
+
+
+def run_spin():
+    panel = _state.get("panel")
+    study = current_study()
+    if isinstance(panel, classes()["StudyPanel"]) and not panel.released and panel.analysis is study:
+        return panel.add_spin()
+    return add_spin_object(study)
 
 
 def run_add(key):
@@ -2824,6 +3210,12 @@ COMMANDS = (
     ("BruceWorx_SimConvection", "Convection", "FEM_ConstraintHeatflux",
      "Convection to the air on the selected faces: still air, light airflow, prop wash, or a typed h", _with_thermal_study,
      lambda: run_add("convection")),
+    ("BruceWorx_SimSpin", "Spin", "FEM_ConstraintCentrif",
+     "A spinning load: centrifugal force at an rpm about the selected circular edge or cylindrical face (a rotor, a wheel)",
+     _with_static_study, run_spin),
+    ("BruceWorx_ShowHoop", "Hoop Stress", "FEM_ResultShow",
+     "Colour the result by hoop (circumferential) stress about the spin axis; radial, axial and shear are in the Study panel",
+     _with_result, lambda: run_show("hoop")),
     ("BruceWorx_ShowTemperature", "Temperature", "FEM_ResultShow",
      "Colour the result by temperature", _with_result, lambda: run_show("temperature")),
     ("BruceWorx_ShowHDTBands", "HDT bands", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),

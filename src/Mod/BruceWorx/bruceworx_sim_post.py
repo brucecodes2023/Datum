@@ -651,6 +651,9 @@ def section_mesh(analysis, result, mode, axis=None):
     axis = resolve_axis(axis, analysis) if axis is not None else default_axis(analysis)
     fem = result.Mesh.FemMesh
     kept = kept_elements(result, mode, axis)
+    if not kept:
+        raise PostError(f"the {mode} section would leave nothing of the part (it lies on the cut side of the axis frame already, "
+                        "as a quarter model does)")
     new = Fem.FemMesh()
     used = set()
     lists = []

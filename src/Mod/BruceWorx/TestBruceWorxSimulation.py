@@ -588,6 +588,108 @@ class TestSimulationGui(unittest.TestCase):
         self.assertEqual(ch._reports(s, [pn, pn]), [report])
         panel.finish()
 
+    @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+    def test_rotor_spin_contours_section_range_and_export(self):
+        """SIM-04: + Spin, the cylindrical stress fields, colour map, fixed range, section, export and picture."""
+        import FreeCADGui as Gui
+        from PySide import QtWidgets
+
+        import bruceworx_sim_post as post
+        import bruceworx_validation_cases as vc
+
+        tmp = tempfile.mkdtemp(prefix="bw-rotor-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        close_all()
+        setup = vc.build_rotating_disc({"a_mm": 10.0, "b_mm": 50.0, "thickness_mm": 2.0, "rpm": 30000.0, "E_MPa": 210000.0,
+                                        "nu": 0.3, "density": 7850.0}, 6.0)
+        analysis = setup.analysis
+        doc = setup.doc
+        Gui.getDocument(doc.Name).activeView().viewIsometric()
+        pump()
+        panel = self.sg.classes()["StudyPanel"](analysis)
+        texts = [b.text() for b in panel.form[0].findChildren(QtWidgets.QPushButton)]
+        self.assertIn("+ Spin", texts)
+        self.assertTrue(any("Spin 30000 rpm" in panel.members_list.item(i).text() for i in range(panel.members_list.count())))
+        # + Spin from a script: a second load about the model's own axis; the pre-check still passes
+        spin = self.sg.add_spin_object(analysis, rpm=1000.0, axis="z", panel=panel)
+        self.assertIsNotNone(spin)
+        self.assertIn("1000 rpm", spin.Label)
+        doc.removeObject(spin.Name)
+        self.assertTrue(panel.solve(blocking=True))
+        result = sim.latest_result(analysis)
+        self.assertIsNotNone(result)
+        # the cylindrical fields colour the result mesh, by node, with the study's colour map
+        self.assertTrue(panel.show("hoop"))
+        self.assertEqual(self.sg.shown_field(analysis), "hoop")
+        self.assertEqual(result.Mesh.ViewObject.ColorMode, "ByNode")
+        self.assertIn("Hoop stress", panel.legend.text())
+        self.assertIn("spin load", panel.axis_label.text())
+        for kind in ("radial", "axial", "shear"):
+            self.assertTrue(panel.show(kind))
+        panel.cmap_combo.setCurrentIndex(panel.cmap_combo.findData("Turbo"))
+        self.assertEqual(post.study_colormap(analysis), "Turbo")
+        self.assertIn("Turbo", panel.legend.text())
+        # the fixed range is remembered for the study and the field
+        panel.show("hoop")
+        panel.range_min.setValue(0.0)
+        panel.range_max.setValue(300.0)
+        panel.range_check.setChecked(True)
+        self.assertEqual(post.fixed_range(analysis, "hoop"), (0.0, 300.0))
+        self.assertIn("fixed range", panel.legend.text())
+        self.assertIsNone(post.fixed_range(analysis, "radial"))
+        # von Mises keeps FEM's own colouring until the study asks for something else; with Turbo it is painted by node
+        self.assertTrue(panel.show("stress"))
+        self.assertEqual(result.Mesh.ViewObject.ColorMode, "ByNode")
+        # a quarter model has nothing left after a quarter cut: refused with the reason, the whole mesh stays
+        panel.show("hoop")
+        panel.section_combo.setCurrentIndex(panel.section_combo.findData("quarter"))
+        self.assertIsNone(doc.getObject("SectionMesh_" + analysis.Name))
+        self.assertTrue(result.Mesh.ViewObject.Visibility)
+        panel.section_combo.setCurrentIndex(panel.section_combo.findData("none"))
+        # the quarter section of a whole wheel: a mesh object of the elements that stay, the whole result mesh hidden
+        import Part
+
+        full = App.newDocument("FullWheel")
+        wheel = vc.shape_object(full, "Wheel", Part.makeCylinder(30.0, 6.0).cut(Part.makeCylinder(8.0, 6.0)))
+        fobjs = sim.new_study(full, sim.StudyPlan(name="Wheel", model=wheel, material=vc.material(), max_size=8.0))
+        fan = fobjs["analysis"]
+        vc.add_displacement(full, fan, wheel, vc.faces_where(wheel.Shape, vc.cylinder_of(8.0)), "xyz", "Bore")
+        post.add_spin(fan, 20000.0, axis="z")
+        fresult = sim.solve(fan, os.path.join(tmp, "full"))
+        post.set_study_section(fan, "quarter")
+        self.assertTrue(self.sg.show_field(fan, "hoop", fresult))
+        cut = full.getObject("SectionMesh_" + fan.Name)
+        self.assertIsNotNone(cut)
+        whole = fresult.Mesh.FemMesh.VolumeCount
+        self.assertTrue(0 < cut.FemMesh.VolumeCount < whole)
+        self.assertAlmostEqual(cut.FemMesh.VolumeCount / whole, 0.75, delta=0.1)  # a quarter is cut away
+        self.assertTrue(cut.ViewObject.Visibility)
+        self.assertFalse(fresult.Mesh.ViewObject.Visibility)
+        self.assertEqual(cut.ViewObject.ColorMode, "ByNode")
+        post.set_study_section(fan, "none")
+        self.assertTrue(self.sg.show_field(fan, "hoop", fresult))
+        self.assertIsNone(full.getObject("SectionMesh_" + fan.Name))
+        self.assertTrue(fresult.Mesh.ViewObject.Visibility)
+        post.set_study_section(fan, "half")
+        self.assertTrue(self.sg.show_field(fan, "stress", fresult))
+        self.assertTrue(self.sg.show_field(fan, "safety", fresult))  # the safety bands drop the section again
+        self.assertIsNone(full.getObject("SectionMesh_" + fan.Name))
+        # a picked axis replaces the spin axis, and "Spin axis" brings it back
+        post.set_study_axis(analysis, ((5.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+        panel._show_axis()
+        self.assertIn("picked", panel.axis_label.text())
+        panel.pick_axis(clear=True)
+        self.assertIn("spin load", panel.axis_label.text())
+        # export, ParaView script and picture
+        vtu = panel.export_vtu(os.path.join(tmp, "rotor.vtu"))
+        self.assertTrue(os.path.isfile(vtu))
+        self.assertIn("Hoop", [post.read_vtu(vtu).GetPointData().GetArrayName(i) for i in range(12)])
+        script = post.write_paraview_script(analysis, vtu, "hoop", os.path.join(tmp, "view.py"))
+        self.assertIn("Hoop", open(script, encoding="utf-8").read())
+        png = panel.picture(os.path.join(tmp, "hoop.png"))
+        self.assertTrue(png and os.path.isfile(png))
+        panel.release()
+
     def test_ribbon_commands_in_the_fem_workbench(self):
         import FreeCADGui as Gui
 
@@ -598,8 +700,10 @@ class TestSimulationGui(unittest.TestCase):
         names = [name for _gid, name, _cmds in custom["FemWorkbench"]]
         self.assertEqual(names, ["Simulation · Study", "Simulation · Setup", "Simulation · Mesh", "Simulation · Solve", "Simulation · Results", "Simulation · Validation"])
         results = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Simulation · Results"][0]
-        for name in ("BruceWorx_ShowSafetyFactor", "BruceWorx_SafetyFactorBands", "BruceWorx_StudyReport"):
+        for name in ("BruceWorx_ShowSafetyFactor", "BruceWorx_ShowHoop", "BruceWorx_SafetyFactorBands", "BruceWorx_StudyReport"):
             self.assertIn(name, results)
+        setup = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Simulation · Setup"][0]
+        self.assertIn("BruceWorx_SimSpin", setup)
         self.assertIn("BruceWorx_SolveStudy", Gui.listCommands())
 
 
