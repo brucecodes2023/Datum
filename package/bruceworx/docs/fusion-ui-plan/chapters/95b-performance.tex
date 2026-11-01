@@ -1,0 +1,49 @@
+%======================================================================
+\section{Track PRF --- Performance: a lighter FreeCAD}\label{sec:prf}
+%======================================================================
+
+Bruce, 2 Nov 2026: \emph{``we need to lighten the burden of FreeCAD on the system''}. The trigger was the
+TL-P01 toolchanger (a Voron 2.4 350 with six tools): its working files hold about 400\,MB of shape text, and
+the GUI sits on \emph{Postprocessing} for a long time while opening them.
+
+What a CAD file holds is the same everywhere: the boundary representation (faces, edges, surfaces). How it is
+written differs. FreeCAD and STEP write it as text; Parasolid (SolidWorks, NX, Onshape), ShapeManager (Fusion,
+Inventor) and Granite (Creo) write binary, and store a repeated part once. The vault already does the second
+(one file per part, assemblies link); PRF-01 does the first.
+
+\begin{center}\small
+\begin{tabular}{@{}lrrl@{}}
+\toprule
+Voron 2.4 350 (4582 objects), FreeCADCmd & Text & Binary & \\
+\midrule
+Open (two runs) & 2.3--2.4\,s & 1.3--1.4\,s & about 43\,\% faster \\
+Save & 7.9\,s & 3.7\,s & about 53\,\% faster \\
+File & 51.8\,MB & 47.5\,MB & the zip already compresses text \\
+Total solid volume & 11\,980\,648\,mm$^3$ & identical & lossless \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Headless, the same file opens in about 2\,s, so most of the GUI's \emph{Postprocessing} is display work
+(tessellation and the scene graph), not reading. Binary is the first step; PRF-02 measures the rest and PRF-03
+removes it.
+
+\begin{epic}{PRF-01}{Binary shapes by default}{M5}{\stProg}{Bruce 2 Nov}
+FreeCAD already writes binary BREP when \code{BaseApp/Preferences/Document/SaveBinaryBrep} is set (stock: off;
+the auto-saver already uses binary). The BruceWorx pack now sets it, the BruceWorx preference page has the
+checkbox (\emph{Save shapes in binary}), and \code{bruceworx\_pack.top\_up} brings keys added to the pack later
+to profiles that applied it earlier, recording their old value first so \emph{Off} still restores it. Reading
+needs nothing: FreeCAD restores both forms.
+\end{epic}
+
+\begin{epic}{PRF-02}{Where the GUI time goes}{M5}{\stTodo}{Bruce 2 Nov}
+Profile the GUI open of TL-P01: link restore, recompute, tessellation, Coin scene graph, tree view. Publish
+each phase's share with a script that reproduces it.
+\end{epic}
+
+\begin{epic}{PRF-03}{Light display of big assemblies}{M5}{\stTodo}{Bruce 2 Nov}
+From PRF-02's numbers: tessellate hidden objects only when they are shown; one tessellation per linked part
+instead of one per link; open large assemblies on the preview meshes the vault already stores (PDM-13) and load
+a part's exact shape when it is edited or measured. Target: TL-P01 opens at least three times faster and orbits
+smoothly.
+\end{epic}

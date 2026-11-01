@@ -27,6 +27,7 @@ TRACKS = {
     "AUT": "AI & automation",
     "UIX": "UI & styling",
     "KRN": "Kernel study",
+    "PRF": "Performance (lighter FreeCAD)",
 }
 
 MILESTONES = {
@@ -500,6 +501,27 @@ EPICS = [
       "FCB-P3-12/13/14",
       "A/B/C memo with effort estimates; gate.",
       "Direction picked."),
+    # Performance (lighter FreeCAD) -------------------------------------------
+    E("PRF-01", "Binary shapes by default", "M5", "In progress", [],
+      "Bruce 2 Nov",
+      "Shapes saved as OpenCascade binary BREP instead of text: FreeCAD's own SaveBinaryBrep, now on in the "
+      "BruceWorx pack (stock off), a checkbox on the BruceWorx preference page, and a pack top-up so profiles "
+      "that applied the pack earlier get it (Off still restores). Measured on the Voron 2.4 350 (TL-P01, 4582 "
+      "objects): open 2.35 -> 1.35 s, save 7.9 -> 3.7 s, 51.8 -> 47.5 MB, volume identical. Reading handles both forms.",
+      "A saved document holds .bin shapes; it opens in Vector Labs and stock FreeCAD 1.1 with the same volume; "
+      "Off in Preferences saves text again."),
+    E("PRF-02", "Where the GUI time goes", "M5", "To do", ["PRF-01"],
+      "Bruce 2 Nov",
+      "Headless, the 350 opens in about 2 s; in the GUI it stays on Postprocessing far longer. Profile the GUI "
+      "open of TL-P01 (tessellation, Coin scene graph, link restore, tree) and publish the split, so PRF-03 "
+      "works on the real cost.",
+      "A timing report for TL-P01 with each phase's share, reproducible by a script."),
+    E("PRF-03", "Light display of big assemblies", "M5", "To do", ["PRF-02"],
+      "Bruce 2 Nov",
+      "From PRF-02's findings: tessellate hidden objects only when shown; one tessellation per linked part, "
+      "not per link; open large assemblies on the vault's preview meshes (PDM-13) and load the exact shape of "
+      "a part when it is edited or measured.",
+      "TL-P01 opens in Vector Labs at least 3x faster than with stock settings, and orbits smoothly."),
 ]
 
 
