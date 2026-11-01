@@ -661,9 +661,14 @@ class Workspace:
                 todo.append(target)
         return fetched
 
-    def checkin(self, pn: str, comment: str, keep_checked_out: bool = False, made_from=None, fingerprint=None):
+    def checkin(self, pn: str, comment: str, keep_checked_out: bool = False, made_from=None, fingerprint=None,
+                transform=None):
         """Store the work copy as a new version. The comment is required. ``made_from`` and
-        ``fingerprint`` go into the journal with the version (PDM-09, pdm_folder.CHECKIN_EXTRAS)."""
+        ``fingerprint`` go into the journal with the version (PDM-09, pdm_folder.CHECKIN_EXTRAS).
+
+        ``transform(path, staging) -> path`` (PDM-14, "Include results" unticked) stores a changed copy instead:
+        the work copy becomes that copy, and the file it was is kept as ``.results/<name>`` beside the work
+        files, so nothing the user solved is lost."""
         self._writable()
         if not (comment or "").strip():
             raise ValueError("a check-in needs a comment")
@@ -673,8 +678,22 @@ class Workspace:
         self._ensure([path])
         if os.path.isdir(path):
             return self._checkin_folder(pn, path, comment.strip(), keep_checked_out)
-        version = self.vault.checkin(pn, path, comment=comment.strip(), keep_lock=keep_checked_out,
-                                     made_from=made_from, fingerprint=fingerprint)
+        stored = path
+        if transform is not None:
+            stored = transform(path, os.path.join(self.root, STATE_DIR, "stripped"))
+        try:
+            version = self.vault.checkin(pn, stored, comment=comment.strip(), keep_lock=keep_checked_out,
+                                         made_from=made_from, fingerprint=fingerprint)
+            if stored != path:
+                keep = os.path.join(self.root, ".results")
+                os.makedirs(keep, exist_ok=True)
+                shutil.copyfile(path, os.path.join(keep, os.path.basename(path)))
+                _set_writable(path, True)
+                os.replace(stored, path)
+                self._hashes.pop(path, None)
+        finally:
+            if stored != path and os.path.exists(stored):
+                os.remove(stored)
         latest = self.vault.latest_version(pn)
         if latest is not None:
             self._record_base(pn, latest.sha256)

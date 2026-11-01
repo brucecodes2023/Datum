@@ -29,8 +29,8 @@ ISO = (0.424708, 0.17592, 0.339851, 0.820473)  # Gui::Camera::isometric(), as St
 SIZE = 512  # sharp on a Retina screen; drawn at twice that and scaled down (smooth edges)
 BACKGROUND = (1.0, 1.0, 1.0)
 MARK = ("BruceWorx", "iso")
-KINDS = ("part", "assembly", "cots", "drawing")  # a drawing's picture is its first sheet (PDM-13)
-MESH_KINDS = ("part", "assembly", "cots")
+KINDS = ("part", "assembly", "cots", "drawing", "simulation")  # a drawing's picture is its first sheet (PDM-13)
+MESH_KINDS = ("part", "assembly", "cots", "simulation")
 # Not the model: left out of the picture (only there: the document and its views are untouched).
 HELPER_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point", "App::LocalCoordinateSystem",
                 "Assembly::JointGroup", "Assembly::ViewGroup", "Assembly::BomGroup")
@@ -276,12 +276,28 @@ def entries_for(doc) -> dict:
     return entries
 
 
-def stamp_saved(doc, path) -> bool:
-    """Just after ``doc`` was saved to ``path`` (a vault work file): put its iso picture and preview mesh
-    into the saved file. True when the file was rewritten."""
+def extras_for(doc, path, kind="") -> dict:
+    """PDM-14: what a save adds to the picture and mesh: the part's geometric fingerprint, or a simulation's
+    summary (bruceworx_sim_vault.extra_entries). A failure here never stops the picture."""
+    try:
+        import bruceworx_sim_vault
+
+        return bruceworx_sim_vault.extra_entries(doc, path, kind)
+    except Exception as exc:  # noqa: BLE001
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(f"BruceWorx: no simulation entries for {os.path.basename(path)} ({exc})\n")
+        return {}
+
+
+def stamp_saved(doc, path, kind="") -> bool:
+    """Just after ``doc`` was saved to ``path`` (a vault work file, or any .vlsim): put its iso picture and
+    preview mesh into the saved file, with the PDM-14 entries (a part's fingerprint, a simulation's summary).
+    True when the file was rewritten."""
     import bruceworx_previewmesh
 
     entries = entries_for(doc)
+    entries.update(extras_for(doc, path, kind))
     if not entries or not os.path.exists(path):
         return False
     bruceworx_previewmesh.rewrite(path, entries)
@@ -305,6 +321,7 @@ def stamp_work_file(s, pn) -> bool:
 
     with opened(path) as doc:
         entries = entries_for(doc)
+        entries.update(extras_for(doc, path, item.item_type))
     if THUMBNAIL not in entries:
         return False
     bruceworx_previewmesh.rewrite(path, entries)
@@ -340,7 +357,7 @@ def needs_picture(s, pn) -> bool:
     latest = s.vault.latest_version(pn)
     if item is None or item.item_type not in KINDS or latest is None:
         return False
-    if not latest.filename.lower().endswith(".fcstd"):  # a KiCad project (ECD-05): KiCad's render is its picture
+    if not latest.filename.lower().endswith((".fcstd", ".vlsim")):  # a KiCad project (ECD-05): KiCad's render is its picture
         return False
     stored = os.path.join(s.vault.root, latest.object_name)
     picture = bool(cached(latest.sha256)) or is_iso(thumbnail_of(stored))

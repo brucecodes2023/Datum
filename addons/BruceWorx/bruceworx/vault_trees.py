@@ -64,7 +64,7 @@ def structure(vault, links=None) -> dict:
     from its latest file (default: read it from the vault's object store)."""
     if links is None:
         links = lambda pn: _links_of(vault, pn)  # noqa: E731
-    items, drawings = {}, {}
+    items, drawings, simulations = {}, {}, {}
     for pn, item in vault.items.items():
         code = item.latest.code if item.latest else ""
         items[pn] = {"display": pdm.display_part_number(pn, code), "description": item.description,
@@ -72,6 +72,9 @@ def structure(vault, links=None) -> dict:
                      "obsolete": bool(getattr(item, "obsolete", False))}
         if item.drawing_of:
             drawings.setdefault(item.drawing_of, []).append(pn)
+        if getattr(item, "simulation_of", None):
+            items[pn]["simulation_of"] = item.simulation_of
+            simulations.setdefault(item.simulation_of, []).append(pn)
     bom, sources = {}, {}
     recorded = getattr(vault, "bom", {}) or {}
     for pn, item in vault.items.items():
@@ -91,9 +94,29 @@ def structure(vault, links=None) -> dict:
         if found:
             bom[pn] = [[child, qty] for child, qty in sorted(found.items())]
             sources[pn] = "links"
-    for lst in drawings.values():
+    for lst in list(drawings.values()) + list(simulations.values()):
         lst.sort()
-    return {"items": items, "bom": bom, "sources": sources, "drawings": drawings}
+    out = {"items": items, "bom": bom, "sources": sources, "drawings": drawings, "simulations": simulations,
+           "projects": {code: p.top for code, p in (getattr(vault, "projects", None) or {}).items()}}
+    out["sims"] = _sim_cards(vault, items) if hasattr(vault, "latest_version") else {}
+    return out
+
+
+def _sim_cards(vault, items) -> dict:
+    """{simulation P/N: card} for the simulation items: what the Files list, the part's Simulations tab and the
+    project pages show, read from the summary inside the latest file (never by opening the document)."""
+    from bruceworx import vault_simulations  # noqa: PLC0415
+
+    cards = {}
+    for pn, info in items.items():
+        if info["type"] != "simulation":
+            continue
+        try:
+            cards[pn] = vault_simulations.card(vault, pn)
+        except Exception as exc:  # noqa: BLE001 -- an unreadable summary leaves a bare card
+            cards[pn] = {"pn": pn, "of": info.get("simulation_of", ""), "state": info["state"], "summary": {},
+                         "judgement": "unknown", "has_results": None, "version": "", "error": str(exc)}
+    return cards
 
 
 def _links_of(vault, pn):
@@ -131,6 +154,9 @@ def file_tree(s) -> list:
         for d in s["drawings"].get(pn, ()):
             shown.add(d)
             out.append({"pn": d, "qty": None, "children": []})
+        for d in s.get("simulations", {}).get(pn, ()):
+            shown.add(d)
+            out.append({"pn": d, "qty": None, "children": []})
         return out
 
     def down(pn, qty, path):
@@ -145,7 +171,8 @@ def file_tree(s) -> list:
     out = [down(top, None, frozenset()) for top in tops(s)]
     loose = []
     for pn in sorted(s["items"]):
-        if pn in shown or (s["items"][pn]["type"] == "drawing" and s["items"].get(_owner(s, pn))):
+        if pn in shown or (s["items"][pn]["type"] == "drawing" and s["items"].get(_owner(s, pn))) or (
+                s["items"][pn]["type"] == "simulation" and s["items"].get(s["items"][pn].get("simulation_of"))):
             continue
         loose.append(down(pn, None, frozenset()))
     for pn in sorted(s["items"]):  # a drawing of an item that only sits in a cycle, say
@@ -214,7 +241,7 @@ def program_roots(s, code: str) -> list:
         if program_code(pn) != code or pn in used:
             continue
         info = s["items"][pn]
-        if info["type"] == "drawing" or info.get("obsolete"):
+        if info["type"] in ("drawing", "simulation") or info.get("obsolete"):
             continue
         out.append(pn)
     return out
@@ -224,8 +251,9 @@ def program_roots(s, code: str) -> list:
 # Every file is one row; what an assembly uses and where a file is used are shown for the selected
 # row, as SOLIDWORKS PDM and Autodesk Vault do (the user's choice: "everything should have a top line").
 
-TYPE_ORDER = ("assembly", "part", "cots", "drawing")
-TYPE_GROUPS = {"assembly": "Assemblies", "part": "Parts", "cots": "Parts", "drawing": "Drawings"}
+TYPE_ORDER = ("assembly", "part", "cots", "drawing", "simulation")
+TYPE_GROUPS = {"assembly": "Assemblies", "part": "Parts", "cots": "Parts", "drawing": "Drawings",
+               "simulation": "Simulations"}
 
 
 def used_in(s) -> dict:
@@ -253,6 +281,7 @@ def contents(s, pn) -> set:
             continue
         seen.add(p)
         seen.update(d for d in s["drawings"].get(p, ()) if d in s["items"])
+        seen.update(d for d in s.get("simulations", {}).get(p, ()) if d in s["items"])
         todo.extend(child for child, _q in s["bom"].get(p, ()))
     return seen
 
@@ -272,3 +301,90 @@ def missing_drawing(s, pn) -> bool:
 
 def type_rank(kind) -> int:
     return TYPE_ORDER.index(kind) if kind in TYPE_ORDER else len(TYPE_ORDER)
+
+
+# ----- simulations (PDM-14, 1 Nov 2026) -----------------------------------------------------------
+
+
+def _scope_parts(s, scope):
+    """The set of items whose simulations a scope wants; None for no limit.
+
+    ``scope``: None (every simulation); ``"asm:<P/N>"`` (that assembly and everything it reaches);
+    ``"project:<code>"`` (the project's top assembly and everything it reaches); a set, list or tuple of
+    part numbers (the items whose simulations to list)."""
+    if scope in (None, "", "all"):
+        return None
+    if isinstance(scope, (set, frozenset, list, tuple)):
+        return set(scope)
+    key, _sep, value = str(scope).partition(":")
+    if key == "asm":
+        return contents(s, value)
+    if key == "project":
+        top = (s.get("projects") or {}).get(value)
+        return contents(s, top) if top else set()
+    return set()
+
+
+def _fmt(value, digits=4):
+    return f"{value:.{digits}g}" if isinstance(value, (int, float)) else ""
+
+
+def result_text(summary, has_results) -> str:
+    """The Result column: "max 252.5 MPa, SF 1.31" or why there is none."""
+    summary = summary or {}
+    if not summary:
+        return "not read"
+    parts = []
+    if summary.get("max_vm") is not None:
+        parts.append(f"max {_fmt(summary['max_vm'])} MPa")
+    if summary.get("min_sf") is not None:
+        parts.append(f"SF {_fmt(summary['min_sf'], 3)}")
+    text = ", ".join(parts)
+    if not has_results:
+        return (text + " (results not included)") if text else ("no results" if summary.get("study") else "no study")
+    return text or "solved"
+
+
+def study_text(summary) -> str:
+    summary = summary or {}
+    mesh = summary.get("mesh") or {}
+    bits = [summary.get("study") or "", summary.get("study_type") or "", (summary.get("material") or {}).get("name", "")]
+    if mesh.get("nodes"):
+        bits.append(f"{mesh['nodes']:,} nodes")
+    return " · ".join(b for b in bits if b)
+
+
+def simulations(s, scope=None) -> list:
+    """Rows for the Simulations lists (PDM-14), sorted by part, then simulation number. One dict per
+    non-obsolete simulation item whose part is in ``scope`` (see :func:`_scope_parts`):
+
+    ``pn`` / ``display`` the simulation; ``of`` / ``of_display`` the part or assembly it analyses; ``state``
+    its lifecycle state; ``study`` the Study column text; ``result`` the Result column text; ``judgement``
+    "current", "part changed" or "unknown" (the Geometry column); ``changed`` True for "part changed";
+    ``has_results`` True / False / None; ``summary`` the raw summary dict; ``description``."""
+    limit = _scope_parts(s, scope)
+    rows = []
+    for pn, card in (s.get("sims") or {}).items():
+        info = s["items"].get(pn) or {}
+        owner = card.get("of") or info.get("simulation_of", "")
+        if info.get("obsolete") or (limit is not None and owner not in limit):
+            continue
+        owner_info = s["items"].get(owner) or {}
+        summary = card.get("summary") or {}
+        rows.append({"pn": pn, "display": info.get("display", pn), "of": owner,
+                     "of_display": owner_info.get("display", owner), "state": info.get("state", ""),
+                     "description": info.get("description", ""), "study": study_text(summary),
+                     "result": result_text(summary, card.get("has_results")),
+                     "judgement": card.get("judgement", "unknown"), "changed": card.get("judgement") == "part changed",
+                     "has_results": card.get("has_results"), "summary": summary})
+    rows.sort(key=lambda r: (r["of"], r["pn"]))
+    return rows
+
+
+def parts_with_changed_simulation(s) -> dict:
+    """{part P/N: [simulation P/N]} for parts that have a simulation marked "part changed" (the bubble flag)."""
+    out = {}
+    for row in simulations(s):
+        if row["changed"]:
+            out.setdefault(row["of"], []).append(row["pn"])
+    return out

@@ -12,7 +12,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bruceworx import pdm, pdm_folder, vault_setup as vs, vault_simulations as vsim  # noqa: E402
+from bruceworx import pdm, pdm_folder, vault_setup as vs, vault_simulations as vsim, vault_trees  # noqa: E402
 from bruceworx.pdm_folder import FolderVault, LifecycleError  # noqa: E402
 from bruceworx.pdm_workspace import Workspace  # noqa: E402
 
@@ -29,10 +29,21 @@ def _save(path, data):
         json.dump(data, handle)
 
 
-def vlsim(path, payload="v1"):
+def vlsim(path, payload="v1", summary=None):
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("Document.xml", "<Document/>")
         archive.writestr("payload.txt", payload)
+        if summary is not None:
+            archive.writestr(vsim.SUMMARY_ENTRY, json.dumps(summary))
+    return path
+
+
+def part_file(path, fingerprint=None, payload="p1"):
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("Document.xml", "<Document/>")
+        archive.writestr("payload.txt", payload)
+        if fingerprint:
+            archive.writestr(vsim.GEOMETRY_ENTRY, json.dumps({"fingerprint": fingerprint}))
     return path
 
 
@@ -141,11 +152,93 @@ class FolderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             vsim.new_simulation(self.v, "VL-01-09999-001", "x", make)
 
+    def test_check_in_without_results_stores_the_changed_copy(self):
+        key = vsim.new_simulation(self.v, PART, "Spin", lambda p, pn: vlsim(p, payload="small"))
+        ws = Workspace(self.v)
+        path = ws.checkout(key)
+        vlsim(path, payload="BIG" * 1000, summary={"has_results": True})  # the user solved: a big file with results
+
+        def strip(src, staging):
+            os.makedirs(staging, exist_ok=True)
+            out = os.path.join(staging, os.path.basename(src))
+            vlsim(out, payload="small2", summary={"has_results": False, "results_stripped": True})
+            return out
+
+        ws.checkin(key, "draft", transform=strip)
+        stored = os.path.join(self.v.root, self.v.latest_version(key).object_name)
+        self.assertEqual(vsim.read_entry(stored, vsim.SUMMARY_ENTRY)["has_results"], False)
+        self.assertLess(self.v.latest_version(key).size, 2000)
+        self.assertEqual(ws.status(key).code, "up_to_date")  # the work copy is the stored copy
+        kept = os.path.join(ws.root, ".results", key + ".vlsim")
+        self.assertEqual(vsim.read_entry(kept, vsim.SUMMARY_ENTRY), {"has_results": True})
+        self.assertFalse(os.path.exists(os.path.join(ws.root, ".bw", "stripped", key + ".vlsim")))
+
     def test_old_version_keeps_extension(self):
         key = vsim.new_simulation(self.v, PART, "Spin", lambda p, pn: vlsim(p))
         ws = Workspace(self.v)
         path = ws.get_revision(key, self.v.latest_version(key).sha256)
         self.assertTrue(path.endswith(".vlsim"), path)
+
+
+class ShowTests(FolderTests):
+    """Cards, rows and the "part changed" judgement, read from inside the files."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ["BW_SIM_CACHE"] = os.path.join(self.tmp, "cache")
+        self.addCleanup(os.environ.pop, "BW_SIM_CACHE", None)
+
+    def put(self, pn, path, comment="x"):
+        self.v.checkout(pn)
+        self.v.checkin(pn, path, comment)
+
+    def make(self, geometry="aaa", results=True):
+        summary = {"study": "Spin", "study_type": "static", "geometry": geometry, "has_results": results,
+                   "max_vm": 252.5, "min_sf": 1.307, "mesh": {"nodes": 514619}, "material": {"name": "Al 2618"}}
+        self.put(PART, part_file(os.path.join(self.tmp, PART + ".FCStd"), "aaa"))
+        return vsim.new_simulation(self.v, PART, "Spin", lambda p, pn: vlsim(p, summary=summary))
+
+    def test_current_then_part_changed(self):
+        sim = self.make()
+        s = vault_trees.structure(self.v, links=lambda pn: {})
+        rows = vault_trees.simulations(s)
+        self.assertEqual([(r["pn"], r["of"], r["judgement"], r["changed"]) for r in rows],
+                         [(sim, PART, "current", False)])
+        self.assertIn("252.5 MPa", rows[0]["result"])
+        self.assertIn("514,619 nodes", rows[0]["study"])
+        self.assertEqual(vault_trees.parts_with_changed_simulation(s), {})
+        self.put(PART, part_file(os.path.join(self.tmp, PART + ".FCStd"), "bbb", "p2"))
+        s = vault_trees.structure(self.v, links=lambda pn: {})
+        self.assertEqual(vault_trees.simulations(s)[0]["judgement"], "part changed")
+        self.assertEqual(vault_trees.parts_with_changed_simulation(s), {PART: [sim]})
+        self.assertEqual(len(vault_trees.simulations(s, {PART})), 1)
+        self.assertEqual(vault_trees.simulations(s, {"other"}), [])
+
+    def test_unknown_without_a_part_fingerprint_and_without_results(self):
+        self.v.checkout(PART)
+        self.v.checkin(PART, part_file(os.path.join(self.tmp, "p.FCStd")), "old part")
+        sim = vsim.new_simulation(self.v, PART, "Spin", lambda p, pn: vlsim(p, summary={"geometry": "aaa", "has_results": False,
+                                                                                           "results_stripped": True, "max_vm": 10.0}))
+        s = vault_trees.structure(self.v, links=lambda pn: {})
+        row = vault_trees.simulations(s)[0]
+        self.assertEqual(row["judgement"], "unknown")
+        self.assertIn("results not included", row["result"])
+        self.assertEqual(vsim.results_by_version(self.v, sim)[0][1], False)
+
+    def test_simulation_hangs_under_its_part_in_the_tree(self):
+        sim = self.make()
+        s = vault_trees.structure(self.v, links=lambda pn: {})
+        tree = vault_trees.file_tree(s)
+        flat = [n["pn"] for top in tree for n in [top] + top["children"]] + [c["pn"] for top in tree for n in top["children"] for c in n["children"]]
+        self.assertIn(sim, flat)
+        self.assertIn(sim, vault_trees.contents(s, PART))
+
+    def test_cache_serves_a_version_not_on_this_mac(self):
+        sim = self.make()
+        vsim.card(self.v, sim)  # fills the cache
+        version = self.v.latest_version(sim)
+        os.remove(os.path.join(self.v.root, version.object_name))
+        self.assertEqual(vsim.card(self.v, sim)["summary"]["max_vm"], 252.5)
 
 
 if __name__ == "__main__":
