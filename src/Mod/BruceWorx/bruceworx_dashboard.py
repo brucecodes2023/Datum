@@ -508,6 +508,8 @@ def classes():
             self.colours = Colours(self)
             self.colours.listeners.append(self._recolour)
             self.feed = {"days": 14, "show_all": False, "mine_only": False, "limit": FEED_FIRST}
+            self.has_projects = False
+            self._files_for = ""  # the project whose Files tab holds the Start page's Files list
             self._build()
 
         # layout
@@ -515,7 +517,17 @@ def classes():
             lay = QtWidgets.QVBoxLayout(self)
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(14)
-            head = QtWidgets.QHBoxLayout()
+            # PDM-15: All projects and a tab for each project along the top of the vault area.
+            import bruceworx_projectpage as pages
+
+            self.pages = pages.classes()
+            self.project = ""  # the project tab picked ("" = All projects)
+            self.project_tabs = self.pages["ProjectTabs"](self, self)
+            self.project_tabs.hide()
+            lay.addWidget(self.project_tabs)
+            self.head_box = QtWidgets.QWidget(self)
+            head = QtWidgets.QHBoxLayout(self.head_box)
+            head.setContentsMargins(0, 0, 0, 0)
             head.setSpacing(8)
             names = QtWidgets.QVBoxLayout()
             names.setSpacing(2)
@@ -553,7 +565,7 @@ def classes():
             self.project_button = self._button("New Project…", "bwDashPrimary", new_project)
             for b in (self.import_button, self.panel_button, self.project_button):
                 head.addWidget(b, 0, QtCore.Qt.AlignTop)
-            lay.addLayout(head)
+            lay.addWidget(self.head_box)
 
             self.tiles_box = QtWidgets.QWidget(self)
             self.tiles = QtWidgets.QGridLayout(self.tiles_box)
@@ -561,7 +573,15 @@ def classes():
             self.tiles.setHorizontalSpacing(14)
             lay.addWidget(self.tiles_box)
 
-            cols = QtWidgets.QHBoxLayout()
+            self.cards = self.pages["ProjectCards"](self, self)
+            self.cards.hide()
+            lay.addWidget(self.cards)
+            self.project_page = self.pages["ProjectPage"](self, self)
+            self.project_page.hide()
+            lay.addWidget(self.project_page)
+            self.cols_box = QtWidgets.QWidget(self)
+            cols = QtWidgets.QHBoxLayout(self.cols_box)
+            cols.setContentsMargins(0, 0, 0, 0)
             cols.setSpacing(14)
             self.left = QtWidgets.QVBoxLayout()
             self.left.setSpacing(14)
@@ -569,7 +589,7 @@ def classes():
             self.right.setSpacing(14)
             cols.addLayout(self.left, 3)
             cols.addLayout(self.right, 2)
-            lay.addLayout(cols)
+            lay.addWidget(self.cols_box)
 
             self.start_card = Section("Get started", self)
             self.projects_card = Section("Projects", self)
@@ -719,6 +739,135 @@ def classes():
                 self._fill_changes(snap)
             self._fill_activity(snap)
             self._fill_health(snap)
+            self._fill_project_ui(snap)
+
+        # ----- project tabs, cards and pages (PDM-15)
+        def _fill_project_ui(self, snap):
+            pages = snap.get("project_pages")
+            self.has_projects = bool(pages and pages.get("tabs") and not snap.get("empty"))
+            if not self.has_projects:
+                self.project = ""
+                self.release_files()
+            elif self.project not in {t["code"] for t in pages["tabs"]}:
+                self.project = ""
+            if self.has_projects:
+                import bruceworx_projectpage as pp
+
+                self.project_tabs.fill(pp.project_tab_labels(pages), snap.get("name", ""), self.project)
+                self.cards.fill(pages["cards"])
+                if self.project:
+                    self.project_page.fill(pages["pages"][self.project])
+            self._apply_view()
+
+        def _apply_view(self):
+            """All projects (header, tiles, cards, cards of work and activity) or one project's page."""
+            snap = self.snap or {}
+            empty = bool(snap.get("empty"))
+            inside = bool(self.project) and self.has_projects
+            self.project_tabs.setVisible(self.has_projects)
+            self.project_page.setVisible(inside)
+            self.head_box.setVisible(not inside)
+            self.tiles_box.setVisible(not inside and not empty)
+            self.cards.setVisible(not inside and self.has_projects)
+            self.projects_card.setVisible(not inside and not empty and not self.has_projects)
+            self.cols_box.setVisible(not inside)
+            self.recent_box.setVisible(not inside)
+
+        def set_project(self, code):
+            """A project tab (or All projects: "") was picked."""
+            self.project = code or ""
+            if not self.project:
+                self.release_files()
+            if self.snap is not None:
+                self._fill_project_ui(self.snap)
+
+        def open_files(self, _code=""):
+            open_panel()
+
+        def import_files(self):
+            self._import()
+
+        def _start_panel(self):
+            """The Start page's Files list (made when missing), or None."""
+            ensure = getattr(self.page, "_ensure_files", None)
+            if ensure is not None:
+                ensure()
+            panel = getattr(self.page, "files_panel", None)
+            try:
+                return panel if panel is not None and panel.isVisible() is not None else None
+            except RuntimeError:  # the C++ widget is gone
+                return None
+
+        def show_files_in(self, host, code):
+            """Move the Start page's Files list into a project page's Files tab, scoped to the project."""
+            panel = self._start_panel()
+            if panel is None:
+                if not getattr(self, "_no_files", None):
+                    self._no_files = self._note("The vault's files list is not ready yet.")
+                    host.addWidget(self._no_files)
+                return
+            if self._files_for == code and panel.parent() is host.parentWidget():
+                return
+            host.addWidget(panel)
+            panel.show()
+            self._files_for = code
+            self.scope_files(code, "", "", None)
+
+        def release_files(self):
+            """Put the Files list back on the Start page's Files tab."""
+            if not self._files_for:
+                return
+            self._files_for = ""
+            layout = getattr(self.page, "files_layout", None)
+            panel = getattr(self.page, "files_panel", None)
+            if layout is None or panel is None:
+                return
+            try:
+                layout.addWidget(panel)
+                panel.show()
+            except RuntimeError:
+                pass
+
+        def scope_files(self, code, scope="", query="", select=None):
+            """Scope the project's Files tab: a navigation scope and search words, selecting ``select``."""
+            panel = self._start_panel()
+            if panel is None:
+                return
+            scope = scope or f"program:{code}"
+            if scope.startswith("view:") and "program:" not in query:
+                query = f"program:{code} {query}".strip()
+            panel.kind = "all"
+            if "all" in getattr(panel, "chips", {}):
+                panel.chips["all"].setChecked(True)
+            panel.search.blockSignals(True)
+            panel.search.setText(query or "")
+            panel.search.blockSignals(False)
+            panel.set_scope(scope)
+            if select:
+                QtCore.QTimer.singleShot(150, lambda: panel.select(select))
+
+        def build_package(self, code, pns):
+            panel = self._start_panel()
+            if panel is None:
+                return
+            import bruceworx_package
+
+            bruceworx_package.export_dialog(panel, pns)
+
+        def new_part(self, code):
+            import bruceworx_vaultclient as vc
+
+            QtCore.QTimer.singleShot(0, lambda: vc.new_part(program=code))
+
+        def hideEvent(self, event):
+            super().hideEvent(event)
+            if self._files_for:  # another Start tab is coming forward: it needs its Files list back
+                QtCore.QTimer.singleShot(0, self.release_files)
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            if self.project and self.project_page.tab == "files":
+                QtCore.QTimer.singleShot(0, lambda: self.project_page.set_tab("files"))
 
         def update_header(self, checked_seconds=None):
             if self.snap is None:
@@ -958,6 +1107,9 @@ def classes():
                     icon.setPixmap(self.icon(line["icon"], ICON_ROLES.get(line["icon"], "secondary")))
                     h.addWidget(icon, 0, QtCore.Qt.AlignTop)
                     who = f"<b>{line['who']}</b> " if line["who"] else ""
+                    if line.get("project") and self.has_projects:  # PDM-15: which project it was in
+                        who = f'<span style="color:{self.colours.colour("accent").name()}">' \
+                              f'<b>{line["project"]}</b></span> ' + who
                     detail = f' <span style="color:{self.colours.colour("secondary").name()}">· ' \
                              f'{_esc(line["detail"])}</span>' if line["detail"] else ""
                     text = label(f"{who}{_esc(line['text'])}{detail}", "bwDashFeedText", r, wrap=True)
@@ -1078,7 +1230,7 @@ def classes():
             return True
 
     _classes = {"Dashboard": Dashboard, "StateBar": StateBar, "Bars": Bars, "Section": Section,
-                "CheckPanel": CheckPanel, "Click": Click}
+                "CheckPanel": CheckPanel, "Click": Click, "Elided": Elided}
     return _classes
 
 

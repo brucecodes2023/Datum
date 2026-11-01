@@ -78,6 +78,8 @@ SET(BruceWorx_SRCS
     bruceworx_statusbar.py
     bruceworx_start.py
     bruceworx_dashboard.py
+    bruceworx_projectpage.py
+    TestBruceWorxProjectPage.py
     bruceworx_vaultwizard.py
     bruceworx_preview.py
     bruceworx_previewmesh.py

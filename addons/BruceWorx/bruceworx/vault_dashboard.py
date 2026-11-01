@@ -586,6 +586,13 @@ def snapshot(vault, workspace=None, now=None, days: int = 14, show_all: bool = F
         "health": health(vault, me, now, read_ms, objects),
         "parts": {pn: {"rev": item.latest.code, "state": item.state} for pn, item in vault.items.items()},
     }
+    try:  # PDM-15: the project tabs, cards and pages; a failure leaves the dashboard as it was
+        from bruceworx import project_pages
+
+        project_pages.tag_activity(out["activity"], vault)
+        out["project_pages"] = project_pages.build(vault, now, me, changes=rows)
+    except Exception as exc:  # noqa: BLE001
+        out["project_pages_error"] = f"{type(exc).__name__}: {exc}"
     out["build_ms"] = round((time.perf_counter() - started) * 1000, 1)
     return out
 

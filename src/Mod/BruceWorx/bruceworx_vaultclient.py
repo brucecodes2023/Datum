@@ -1361,7 +1361,7 @@ def make_new_file(path, pn, kind, description, vault_root):
         FreeCAD.closeDocument(doc.Name)
 
 
-def _new_part_dialog(s):
+def _new_part_dialog(s, default_program=""):
     """(kind, description, program, category) from a small dialog, or None when cancelled."""
     from PySide import QtWidgets
 
@@ -1385,6 +1385,8 @@ def _new_part_dialog(s):
     form.addRow("Description", text)
     category = QtWidgets.QComboBox()  # optional; the vault's own categories as suggestions
     category.setEditable(True)
+    if default_program in programs:  # PDM-15: New part in <project>
+        program.setCurrentText(default_program)
     category.addItem("")
     category.addItems([c for c in sorted(category_counts(_panel_rows(s)), key=str.casefold) if c])
     category.lineEdit().setPlaceholderText("optional, e.g. Connectors")
@@ -1432,7 +1434,7 @@ def new_part(kind=None, description=None, program="", open_it=True, category="")
         _message("New Part in Vault", "Open a vault first (Preferences > BruceWorx, or the Start page).")
         return ""
     if kind is None or description is None:
-        answer = _new_part_dialog(s)
+        answer = _new_part_dialog(s, program)
         if answer is None:
             return ""
         kind, description, program, category = answer
