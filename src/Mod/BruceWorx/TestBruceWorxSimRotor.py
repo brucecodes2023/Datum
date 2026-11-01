@@ -192,19 +192,59 @@ class TestSpinSetup(unittest.TestCase):
         self.fix_bore(doc2, body2, solid2, an2, "z")  # axial only on the bore face
         self.assertFalse([t for k, t in sim.precheck(an2) if "stops the bore" in t])
 
-    def test_hold_for_spin_makes_an_axial_face_and_a_3_2_1_set(self):
+    def fixed_dirs(self, c):
+        return [i for i, ax in enumerate("xyz") if not getattr(c, f"{ax}Free")]
+
+    def vertex_of(self, body, c):
+        return body.Shape.getElement(c.References[0][1][0]).Point
+
+    def test_hold_for_spin_on_an_annulus_is_a_pure_point_set_with_an_axial_ring(self):
         doc, body, solid, an = self.study()
         post.add_spin(an, 30000, axis="z")
-        axial, a_, b_ = post.hold_for_spin(an)
-        self.assertEqual((axial.xFree, axial.yFree, axial.zFree), (True, True, False))
-        self.assertEqual((a_.xFree, a_.yFree, a_.zFree), (False, False, True))
-        self.assertEqual(sum(not getattr(b_, f"{c}Free") for c in "xyz"), 1)
-        self.assertTrue(b_.xFree is not False or b_.yFree is not False)
-        self.assertTrue(axial.References[0][1][0].startswith("Face"))
+        a_, b_, ring = post.hold_for_spin(an)
+        self.assertEqual(self.fixed_dirs(a_), [0, 1])  # both directions across the axis
         self.assertTrue(a_.References[0][1][0].startswith("Vertex"))
+        self.assertEqual(self.fixed_dirs(ring), [2])  # axial only, along a circular edge
+        self.assertTrue(ring.References[0][1][0].startswith("Edge"))
+        # B holds ONE direction and it is tangential at B (never the radial one)
+        (j,) = self.fixed_dirs(b_)
+        p = self.vertex_of(body, b_)
+        radial = [p.x, p.y, 0.0]
+        self.assertAlmostEqual(radial[j], 0.0, places=6)
+        self.assertGreater(math.hypot(p.x, p.y), 20.0)
         issues = sim.precheck(an)
         self.assertTrue(sim.ready(issues), issues)
         self.assertFalse([t for k, t in issues if "rigid-body" in t or "free" in t or "stops the bore" in t], issues)
+
+    def test_hold_for_spin_with_enough_vertices_is_a_pure_vertex_3_2_1(self):
+        import Part
+
+        doc = App.newDocument("Sector")
+        solid = Part.makeCylinder(50.0, 4.0, App.Vector(0, 0, 0), App.Vector(0, 0, 1), 70.0).cut(
+            Part.makeCylinder(10.0, 4.0, App.Vector(0, 0, 0), App.Vector(0, 0, 1), 70.0))
+        body = vc.shape_object(doc, "Sector", solid)
+        an = sim.new_study(doc, sim.StudyPlan(name="S", model=body, material=vc.material(), max_size=6.0))["analysis"]
+        post.add_spin(an, 30000, axis="z")
+        a_, b_, c_ = post.hold_for_spin(an)
+        for c in (a_, b_, c_):
+            self.assertTrue(c.References[0][1][0].startswith("Vertex"))
+        self.assertEqual(self.fixed_dirs(a_), [0, 1, 2])
+        self.assertEqual(self.fixed_dirs(c_), [2])
+        (j, k) = self.fixed_dirs(b_)
+        self.assertEqual(k, 2)
+        p = self.vertex_of(body, b_)
+        self.assertAlmostEqual([p.x, p.y, 0.0][j], 0.0, places=6)  # the held in-plane direction is tangential at B
+        pa, pb, pc = (self.vertex_of(body, c) for c in (a_, b_, c_))
+        cross = (pb.x - pa.x) * (pc.y - pa.y) - (pb.y - pa.y) * (pc.x - pa.x)
+        self.assertGreater(abs(cross), 1.0)  # C is off the line A-B
+
+    def test_hold_for_spin_with_a_face_holds_it_axially_and_refuses_a_cylinder(self):
+        doc, body, solid, an = self.study()
+        post.add_spin(an, 30000, axis="z")
+        a_, b_, axial = post.hold_for_spin(an, face=vc.faces_where(solid, vc.plane_at(2, 0.0))[0])
+        self.assertEqual(self.fixed_dirs(axial), [2])
+        self.assertTrue(axial.References[0][1][0].startswith("Face"))
+        self.assertEqual(self.fixed_dirs(a_), [0, 1])
         with self.assertRaises(post.PostError):  # a cylindrical face is refused
             post.hold_for_spin(an, face=vc.faces_where(solid, vc.cylinder_of(8.0))[0])
 
@@ -390,25 +430,25 @@ class TestRotorSolve(unittest.TestCase):
 class TestHoldForSpin(unittest.TestCase):
     """A full thin wheel (no symmetry planes) held by the helper: the bore grows freely, hoop = Timoshenko."""
 
-    def test_a_full_wheel_held_axially_keeps_its_bore_hoop_stress(self):
+    def test_a_full_wheel_held_by_the_point_set_matches_timoshenko_within_a_tenth_of_a_percent(self):
         import Part
 
         close_all()
         tmp = tempfile.mkdtemp(prefix="vl-hold-")
         try:
             doc = App.newDocument("Full")
-            solid = Part.makeCylinder(50.0, 4.0).cut(Part.makeCylinder(10.0, 4.0))
+            solid = Part.makeCylinder(50.0, 2.0, App.Vector(0, 0, -1)).cut(Part.makeCylinder(10.0, 2.0, App.Vector(0, 0, -1)))
             body = vc.shape_object(doc, "Wheel", solid)
             objs = sim.new_study(doc, sim.StudyPlan(name="Full", model=body, material=vc.material(210000.0, 0.3, 7850.0, name="Steel"),
-                                                    max_size=6.0))
+                                                    max_size=3.0))
             an = objs["analysis"]
             post.add_spin(an, 30000, axis="z")
             post.hold_for_spin(an)
             result = sim.solve(an, working_dir=tmp)
             ref = vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3)["shoop_a"]
             got = post.bore_stress(result, an)
-            self.assertAlmostEqual(got["hoop_mean"] / ref, 1.0, delta=0.08)
-            self.assertAlmostEqual(got["length"], 4.0, delta=1e-6)
+            self.assertAlmostEqual(got["hoop_mean"] / ref, 1.0, delta=0.001)
+            self.assertAlmostEqual(got["length"], 2.0, delta=1e-6)
         finally:
             close_all()
             shutil.rmtree(tmp, ignore_errors=True)

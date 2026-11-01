@@ -35,7 +35,7 @@ class TestCases(unittest.TestCase):
         ids = [c["id"] for c in val.load_cases()]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sorted(ids), sorted(["B-ST1", "B-ST2", "B-ST3", "B-MO1", "B-MO2", "B-MO3", "B-BU1", "B-TH1", "B-TH2",
-                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "B-CF4"]))
+                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "G-RD2", "B-CF4"]))
         self.assertEqual([c["id"] for c in self.doc["cfd"]], ["B-CF4"])  # the SIM-06 cases (bruceworx_cfd_wash)
         for case in self.cases.values():
             if case.get("kind", "fe") == "fe":
@@ -284,6 +284,9 @@ class TestFastSet(unittest.TestCase):
 
     def test_gap_rotating_disc(self):
         self.check("G-RD1")
+
+    def test_gap_rotating_disc_held_by_points(self):
+        self.check("G-RD2")
 
     def test_report_of_the_run(self):
         out = val.write_report(self.vrun, folder=self.tmp, compile=bool(sim.find_tex()[0]))

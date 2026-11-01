@@ -367,14 +367,27 @@ def _model_shape(analysis):
 
 
 def hold_for_spin(analysis, face=None, axis=None):
-    """Holds a spinning rotor the way that leaves it free to grow: an axial-only Displacement on one flat face, plus a
-    minimal 3-2-1 point set across the axis (point A holds the two directions across it, point B the one direction across
-    the axis that stops the turn about A).  A Fixed bore would stop the bore growing and kill the bore hoop stress.
+    """Holds a spinning rotor so it can still grow: a pure vertex 3-2-1 set, no face constraint (unless ``face`` is given).
 
-    ``face``: 'Face3' of the model, or (object, 'Face3'); None takes the largest flat face square to the axis.
-    ``axis``: as ``add_spin``; None takes the study's (its first spin load's, else the model's own).  It must lie along the
-    global X, Y or Z (a Displacement constraint holds global directions).  Returns the three constraints
-    [axial, point A, point B]; the points are vertices of the model, so they are mesh nodes."""
+    Rigid-body motion of a balanced rotor needs six numbers; a point set holds exactly those and nothing else, so the
+    stress is the free rotor's (a full annulus matches Timoshenko's bore hoop to 0.03 %, the face constraint of the first
+    version to 0.09 % on a 4 mm disc).  A balanced field has no reaction at the points, so pinning them costs no stress.
+
+    * A (the vertex nearest the axis): both directions across the axis, and the axial direction.
+    * B (a vertex whose TANGENT at B is a global direction, e.g. B on the +X radius holds Y, the largest such radius): that
+      tangential direction, and the axial direction.  Holding a radial or partly radial direction at B would pin the rim's
+      growth.  When no vertex has an axis-aligned tangent, the vertex and global direction with the most tangential share
+      is used and a warning is printed.
+    * C (a vertex off the A-B line, seen along the axis): the axial direction only.  The three axial points fix the two
+      tilts and the axial shift.  A plain annulus has no such vertex (all lie on its seam): then the axial direction is
+      held along a circular edge at A's level (no stress cost: the axial shift of a balanced rotor is the same all round
+      it), and A and B hold only their in-plane directions.
+    With ``face`` ('Face3' of the model or (object, 'Face3'), flat and square to the axis) the axial direction is held
+    over that face instead (axial-only; it holds back the Poisson thinning a little) and C is left out.
+
+    ``axis``: as ``add_spin``; None takes the study's.  It must lie along the global X, Y or Z (a Displacement constraint
+    holds global directions).  Returns the constraints [A, B, C] (or [A, B, face])."""
+    import FreeCAD
     import ObjectsFem
 
     import numpy as np
@@ -393,39 +406,44 @@ def hold_for_spin(analysis, face=None, axis=None):
     if isinstance(face, (tuple, list)) and len(face) == 2 and hasattr(face[0], "TypeId"):
         model, face = face
         shape = sim.shape_of(model)
-    if face is None:
-        best, best_area = None, 0.0
-        for i, f in enumerate(shape.Faces, 1):
-            try:
-                if f.Surface.TypeId == "Part::GeomPlane" and abs(abs(f.normalAt(0, 0).dot(__import__("FreeCAD").Vector(*a))) - 1) < 1e-6 \
-                        and f.Area > best_area:
-                    best, best_area = f"Face{i}", f.Area
-            except Exception:
-                continue
-        if best is None:
-            raise PostError("no flat face square to the spin axis to hold axially: pick one with face=")
-        face = best
-    elif shape.getElement(face).Surface.TypeId != "Part::GeomPlane":
-        raise PostError(f"{face}: hold the wheel on a flat face (axial only); a cylindrical face stops the bore growing")
+    if face is not None:
+        f = shape.getElement(face)
+        if f.Surface.TypeId != "Part::GeomPlane" or abs(abs(f.normalAt(0, 0).dot(FreeCAD.Vector(*a))) - 1) > 1e-6:
+            raise PostError(f"{face}: hold the wheel on a flat face square to the axis (axial only); a cylindrical face "
+                            "stops the bore growing")
     in_plane = [i for i in range(3) if i != k]
-    verts = [(f"Vertex{i}", np.array([v.Point.x, v.Point.y, v.Point.z])) for i, v in enumerate(shape.Vertexes, 1)]
-    if len(verts) < 2:
+    size = shape.BoundBox.DiagonalLength or 1.0
+    verts = []
+    for i, v in enumerate(shape.Vertexes, 1):
+        pos = np.array([v.Point.x, v.Point.y, v.Point.z])
+        rel = pos - point
+        rel_p = rel - (rel @ a) * a
+        verts.append((f"Vertex{i}", pos, rel_p, float(np.linalg.norm(rel_p))))
+    if len(verts) < 3 and face is None or len(verts) < 2:
         raise PostError("the model has too few vertices for a 3-2-1 set; use symmetry planes on a sector")
+    a_name, a_pos, _ap, _ar = min(verts, key=lambda it: it[3])
 
-    def radius(p):
-        rel = p - point
-        return float(np.linalg.norm(rel - (rel @ a) * a))
+    def lever(pos, j):  # the share of a turn about the axis that a fixed global direction j at pos stops
+        return float(np.cross(a, pos - a_pos)[j])
 
-    a_name, a_pos = min(verts, key=lambda it: radius(it[1]))
-    best = None
-    for name, pos in verts:
-        lever = np.cross(a, pos - a_pos)
-        for i in in_plane:
-            if best is None or abs(lever[i]) > best[0]:
-                best = (abs(lever[i]), name, i)
-    if best is None or best[0] < 1e-6 * (shape.BoundBox.DiagonalLength or 1.0):
+    best = None  # (aligned, radius, ...): the largest radius whose tangent is a global direction
+    for name, pos, rel_p, r in verts:
+        if name == a_name or r < 1e-6 * size:
+            continue
+        t = np.cross(a, rel_p / r)
+        for j in in_plane:
+            share = abs(float(t[j]))
+            if abs(lever(pos, j)) < 1e-6 * size:
+                continue
+            key = (share > 1 - 1e-6, share if share <= 1 - 1e-6 else 0.0, r)
+            if best is None or key > best[0]:
+                best = (key, name, pos, j, share)
+    if best is None:
         raise PostError("no second vertex off the first to stop the turn; use symmetry planes on a sector")
-    _lever, b_name, b_dir = best
+    _key, b_name, b_pos, b_dir, share = best
+    if share < 1 - 1e-6:
+        FreeCAD.Console.PrintWarning(f"hold_for_spin: no vertex has a tangent along X, Y or Z; {b_name} holds a direction "
+                                     f"that is {100 * share:.1f} % tangential, the rest pins the radial growth there\n")
     doc = analysis.Document
 
     def displacement(name, subs, fixed):
@@ -439,9 +457,44 @@ def hold_for_spin(analysis, face=None, axis=None):
         analysis.addObject(c)
         return c
 
-    made = [displacement("Hold axial", [face], [k]),
-            displacement("Hold point A", [a_name], in_plane),
-            displacement("Hold point B", [b_name], [b_dir])]
+    if face is not None:
+        made = [displacement("Hold point A", [a_name], in_plane), displacement("Hold point B", [b_name], [b_dir]),
+                displacement("Hold axial", [face], [k])]
+    else:
+        def off_line(it):  # the in-plane distance of a vertex from the line A-B
+            d = (b_pos - a_pos)
+            d = d - (d @ a) * a
+            w = it[1] - a_pos
+            w = w - (w @ a) * a
+            return float(np.linalg.norm(np.cross(d, w))) / (float(np.linalg.norm(d)) or 1.0)
+
+        rest = [it for it in verts if it[0] not in (a_name, b_name)]
+        c_it = max(rest, key=off_line) if rest else None
+        if c_it is not None and off_line(c_it) >= 1e-6 * size:
+            made = [displacement("Hold point A", [a_name], in_plane + [k]),
+                    displacement("Hold point B", [b_name], [b_dir, k]),
+                    displacement("Hold point C", [c_it[0]], [k])]
+        else:
+            # a plain annulus has all its vertices on one seam line: hold the axial direction along a circular edge square
+            # to the axis at A's level instead (a balanced rotor's axial growth is the same all round it, so it costs no
+            # stress), and A / B hold only their in-plane directions
+            ring = None
+            for i, e in enumerate(shape.Edges, 1):
+                try:
+                    cv = e.Curve
+                    if cv.TypeId != "Part::GeomCircle" or abs(abs(cv.Axis.dot(FreeCAD.Vector(*a))) - 1) > 1e-6:
+                        continue
+                    if abs(float(np.array([cv.Center.x, cv.Center.y, cv.Center.z]) @ a) - float(a_pos @ a)) > 1e-6 * size:
+                        continue
+                    if ring is None or cv.Radius > ring[1]:
+                        ring = (f"Edge{i}", cv.Radius)
+                except Exception:
+                    continue
+            if ring is None:
+                raise PostError("no third vertex off the line through the first two and no circular edge at their level: "
+                                "pick a flat face with face= to hold the axial direction, or use symmetry planes on a sector")
+            made = [displacement("Hold point A", [a_name], in_plane), displacement("Hold point B", [b_name], [b_dir]),
+                    displacement("Hold axial ring", [ring[0]], [k])]
     doc.recompute()
     return made
 

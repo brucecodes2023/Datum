@@ -862,9 +862,39 @@ def build_rotating_disc(params, size):
     return Setup(doc, objs, measure)
 
 
+def build_rotating_disc_full(params, size):
+    """G-RD2: the whole thin annulus of G-RD1 (no symmetry planes) held only by the ``hold_for_spin`` point set, a pure
+    vertex 3-2-1 (A: both directions across the axis, B: the tangential direction, the axial direction on a ring at A's
+    level).  A balanced rotor has no reaction at the points, so the bore and rim hoop stress are the free disc's."""
+    import Part
+
+    import bruceworx_sim_post as post
+
+    doc = App.newDocument("RotatingDiscFull")
+    a, b, t = params["a_mm"], params["b_mm"], params["thickness_mm"]
+    solid = Part.makeCylinder(b, t, App.Vector(0, 0, -t / 2.0)).cut(Part.makeCylinder(a, t, App.Vector(0, 0, -t / 2.0)))
+    body = shape_object(doc, "Disc", solid)
+    mat = material(params["E_MPa"], params["nu"], params["density"], name="Steel")
+    objs = sim.new_study(doc, sim.StudyPlan(name="Rotating disc, whole", model=body, material=mat, max_size=size))
+    an = objs["analysis"]
+    post.add_spin(an, params["rpm"], axis=((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+    post.hold_for_spin(an)
+    doc.recompute()
+
+    def measure(analysis, result):
+        values = post.cylindrical_stress(result, analysis=analysis)
+        rs = values["r"]
+        bore = [h for h, r in zip(values["hoop"], rs) if abs(r - a) < 1e-4]
+        rim = [h for h, r in zip(values["hoop"], rs) if abs(r - b) < 1e-4]
+        return {"shoop_a": sum(bore) / len(bore), "shoop_b": sum(rim) / len(rim)}
+
+    return Setup(doc, objs, measure)
+
+
 BUILDERS = {
     "le10": build_le10, "sslv07": build_sslv07, "sslv301": build_sslv301, "fv52": build_fv52,
     "sdlv401": build_sdlv401, "sdlv100": build_sdlv100, "sslv139": build_sslv139, "tplv06": build_tplv06,
     "tplv304": build_tplv304, "ttlv01": build_ttlv01, "thick_cylinder": build_thick_cylinder,
     "tensioned_beam": build_tensioned_beam, "bowed_column": build_bowed_column, "rotating_disc": build_rotating_disc,
+    "rotating_disc_full": build_rotating_disc_full,
 }
