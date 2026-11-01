@@ -596,6 +596,78 @@ class TestMeshFailures(unittest.TestCase):
             self.run_study_mesh(an, surface, True, [])
         self.assertIn("no volume elements", str(ctx.exception))
 
+    def surface_only(self, fem):
+        import Fem
+
+        surface = Fem.FemMesh()
+        for nid, v in fem.Nodes.items():
+            surface.addNode(v.x, v.y, v.z, nid)
+        for fid in fem.Faces:
+            surface.addFace(list(fem.getElementNodes(fid)), fid)
+        return surface
+
+    def real_study(self, second_order):
+        import Part
+
+        close_all()
+        doc = App.newDocument("MR")
+        body = vc.shape_object(doc, "W", Part.makeCylinder(20, 6).cut(Part.makeCylinder(8, 6)))
+        objs = sim.new_study(doc, sim.StudyPlan(name="W", model=body, material=vc.material(), max_size=6.0,
+                                                second_order=second_order))
+        return objs["analysis"], sim.members(objs["analysis"])["mesh"]
+
+    def test_a_surface_only_result_is_retried_on_a_repaired_copy(self):
+        an, mesh = self.real_study(False)
+        shape_before = mesh.Shape.Shape.copy()
+        real_in_place, tries = sim._mesh_in_place, []
+        sim._mesh_in_place = lambda m: self.surface_only(real_in_place(m))
+        said = []
+        try:
+            stats = sim.mesh_study(an, said.append)
+        finally:
+            sim._mesh_in_place = real_in_place
+        self.assertGreater(stats["elements"], 50)
+        self.assertEqual(stats["order"], "first")
+        self.assertTrue(any("repaired copy" in t for t in stats["notes"]), stats["notes"])
+        self.assertTrue(stats["fallback"])
+        self.assertTrue(any("retrying on a repaired copy" in t for t in said), said)
+        self.assertAlmostEqual(mesh.Shape.Shape.Volume, shape_before.Volume, places=6)  # the user's shape is untouched
+        self.assertEqual(len([o for o in mesh.Document.Objects if o.Name.startswith("BW_MeshRetry")]), 0)
+        self.assertFalse([d for d in App.listDocuments() if d == "BW_MeshRetry"])
+
+    def test_second_order_falls_back_to_first_order_and_tet10(self):
+        an, mesh = self.real_study(True)
+        real_in_place, real_copy, orders = sim._mesh_in_place, sim._mesh_on_copy, []
+        sim._mesh_in_place = lambda m: self.surface_only(real_in_place(m))
+
+        def copy(m, shape, second):
+            orders.append(second)
+            fem = real_copy(m, shape, second)
+            return self.surface_only(fem) if second else fem  # second order gives no volumes, first order does
+
+        sim._mesh_on_copy = copy
+        try:
+            stats = sim.mesh_study(an)
+        finally:
+            sim._mesh_in_place, sim._mesh_on_copy = real_in_place, real_copy
+        self.assertEqual(orders, [True, False])  # bounded: one try per order
+        self.assertEqual(stats["order"], "second")
+        self.assertTrue(any("first order" in t for t in stats["notes"]), stats["notes"])
+        self.assertTrue(any("upgraded" in t for t in stats["notes"]), stats["notes"])
+
+    def test_every_retry_failing_still_raises(self):
+        an, mesh = self.real_study(True)
+        real_in_place, real_copy, calls = sim._mesh_in_place, sim._mesh_on_copy, []
+        sim._mesh_in_place = lambda m: self.surface_only(real_in_place(m))
+        sim._mesh_on_copy = lambda m, shape, second: (calls.append(second), self.surface_only(real_copy(m, shape, second)))[1]
+        try:
+            with self.assertRaises(sim.StudyError) as ctx:
+                sim.mesh_study(an)
+        finally:
+            sim._mesh_in_place, sim._mesh_on_copy = real_in_place, real_copy
+        self.assertEqual(calls, [True, False])
+        self.assertIn("no volume elements", str(ctx.exception))
+
     def test_unused_nodes_are_dropped(self):
         an, fem = self.first_order_mesh(orphans=40)
         used = len(sim.used_node_ids(fem))

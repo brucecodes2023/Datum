@@ -1120,6 +1120,131 @@ def record_stage(analysis, stage):
         FreeCAD.Console.PrintWarning(f"SIM-07: could not record the {stage} fingerprint: {exc}\n")
 
 
+def _has_volumes(fem):
+    return fem is not None and bool(fem.NodeCount) and bool(fem.VolumeCount)
+
+
+def _mesh_in_place(mesh):
+    """Recomputes the study's Netgen object on the shape it links; returns its FemMesh (maybe empty or surface-only)."""
+    mesh.touch()
+    mesh.Document.recompute([mesh])
+    return mesh.FemMesh
+
+
+NETGEN_COPY_PROPS = ("MaxSize", "MinSize", "Fineness", "GrowthRate", "NbSegsPerEdge", "NbSegsPerRadius", "Optimize",
+                     "AllowQuad", "SecondOrder", "UserSizeMap", "SurfaceElementSize")
+
+
+def repaired_copy(shape):
+    """A rebuilt copy of ``shape`` (the original is not touched): written to a temporary BREP file and read back.  The copy is
+    the same geometry (distance 0, volume equal to 1e-6) but Netgen meshes it where it does not mesh the solid read from
+    a saved .FCStd (the impeller case of 1 Nov: surface only, or minutes without an answer).  ShapeFix is not used: on that
+    solid it made Netgen slower, not better.  Returns None when nothing usable comes back."""
+    import os
+    import tempfile
+
+    import Part
+
+    fixed = shape.copy()
+    tmpdir = tempfile.mkdtemp(prefix="bw-meshfix-")
+    path = os.path.join(tmpdir, "shape.brep")
+    try:
+        fixed.exportBrep(path)
+        back = Part.Shape()
+        back.read(path)
+    except Exception:
+        return None
+    finally:
+        try:
+            os.remove(path)
+            os.rmdir(tmpdir)
+        except OSError:
+            pass
+    return back if back.Solids and not back.isNull() else None
+
+
+def _mesh_on_copy(mesh, shape, second_order):
+    """Meshes ``shape`` (a repaired copy) in a scratch document with the study's Netgen settings; returns the FemMesh.
+    The user's document is not touched: the scratch document is closed again."""
+    import FreeCAD
+    import ObjectsFem
+
+    scratch = FreeCAD.newDocument("BW_MeshRetry", "BW_MeshRetry", True)
+    try:
+        feature = scratch.addObject("Part::Feature", "S")
+        feature.Shape = shape
+        scratch.recompute()
+        netgen = ObjectsFem.makeMeshNetgenLegacy(scratch, "M")
+        netgen.Shape = feature
+        for name in NETGEN_COPY_PROPS:
+            if name in netgen.PropertiesList and hasattr(mesh, name):
+                try:
+                    setattr(netgen, name, getattr(mesh, name))
+                except Exception:
+                    pass
+        netgen.SecondOrder = bool(second_order)
+        netgen.touch()
+        scratch.recompute([netgen])
+        return rebuild_mesh(netgen.FemMesh, drop_unused=False)  # detached from the scratch document
+    finally:
+        FreeCAD.closeDocument(scratch.Name)
+
+
+def _mesh_with_fallbacks(mesh, progress=None):
+    """Netgen on the study's shape; when it returns no volume elements (surface only, or nothing), retries, at most twice:
+    (1) a repaired copy of the shape at the asked order; (2) when second order was asked, the repaired copy at first
+    order (the caller upgrades the linear tetrahedra to Tet10).  Returns (FemMesh, [what was tried and used]); the
+    list is empty when the first try worked.  Each try is logged (events) and reported through ``progress``."""
+    import FreeCAD
+
+    def say(level, text):
+        FreeCAD.Console.PrintWarning(f"SIM-04: {text}\n") if level == "warning" else FreeCAD.Console.PrintMessage(f"SIM-04: {text}\n")
+        try:
+            import bruceworx_sim_events as events
+
+            events.message(level, text)
+        except Exception:
+            pass
+        if progress:
+            progress(text)
+
+    fem = _mesh_in_place(mesh)
+    if _has_volumes(fem):
+        return fem, []
+    got = f"{fem.NodeCount} nodes, {fem.FaceCount} faces, no volume elements" if fem is not None and fem.NodeCount else "no mesh"
+    try:
+        original = shape_of(getattr(mesh, "Shape", None))
+    except Exception:
+        original = None
+    if original is None or original.isNull() or not original.Solids:
+        return fem, []
+    second = bool(getattr(mesh, "SecondOrder", False))
+    say("warning", f"Netgen returned {got} for the shape as it is: retrying on a repaired copy (BREP round trip)")
+    try:
+        copy = repaired_copy(original)
+    except Exception as exc:
+        copy = None
+        say("warning", f"Could not repair the shape: {exc}")
+    if copy is None:
+        return fem, []
+    tries = [(second, "a repaired copy of the shape" + (" (second order)" if second else ""))]
+    if second:
+        tries.append((False, "a repaired copy at first order (the tetrahedra are upgraded to Tet10 after)"))
+    last = fem
+    for n, (order2, label) in enumerate(tries):
+        try:
+            last = _mesh_on_copy(mesh, copy, order2)
+        except Exception as exc:
+            say("warning", f"Meshing {label} failed: {exc}")
+            continue
+        if _has_volumes(last):
+            say("warning", f"Meshed {label}: {last.NodeCount} nodes, {last.VolumeCount} volume elements")
+            return last, [f"Netgen returned {got} for the shape as saved; meshed {label} instead"]
+        say("warning", f"{label}: {last.NodeCount} nodes, no volume elements"
+            + ("; trying first order" if n + 1 < len(tries) else ""))
+    return fem, []
+
+
 def mesh_study(analysis, progress=None):
     """Meshes the study (see ``_mesh_study``) and tells the run panes (SIM-07)."""
     import bruceworx_sim_events as events
@@ -1142,16 +1267,18 @@ def _mesh_study(analysis, progress=None):
     if progress:
         progress("Meshing…")
     t0 = time.time()
-    mesh.touch()
-    mesh.Document.recompute([mesh])
+    fem, fallback = _mesh_with_fallbacks(mesh, progress)
+    if fallback:  # made on a copy of the shape: the study's mesh object takes the result
+        mesh.FemMesh = fem
+        fem = mesh.FemMesh
     if not is_meshed(mesh):
         raise StudyError("Netgen made no mesh (an open or invalid shape?)")
-    fem = mesh.FemMesh
     if not fem.VolumeCount:
-        raise StudyError(f"Netgen made a surface mesh only ({fem.NodeCount} nodes, {fem.FaceCount} faces, no volume elements): "
+        raise StudyError(f"Netgen made a surface mesh only ({fem.NodeCount} nodes, {fem.FaceCount} faces, no volume elements)"
+                         f"{' even after: ' + '; '.join(fallback) if fallback else ''}: "
                          "the solid is probably too complex or not closed. Try a larger MaxSize, a coarser Fineness, "
                          "heal or simplify the shape, or mesh it in pieces")
-    notes = []
+    notes = list(fallback)
     first = len(fem.getElementNodes(next(iter(fem.Volumes)))) == 4
     upgrade = bool(getattr(mesh, "SecondOrder", False)) and first
     orphans = fem.NodeCount - len(used_node_ids(fem))
@@ -1171,6 +1298,7 @@ def _mesh_study(analysis, progress=None):
     stats = mesh_stats(mesh)
     stats["seconds"] = round(time.time() - t0, 1)
     stats["notes"] = notes
+    stats["fallback"] = list(fallback)
     record_stage(analysis, "mesh")
     if progress:
         progress(f"Meshed: {stats['nodes']} nodes, {stats['elements']} elements in {stats['seconds']} s")

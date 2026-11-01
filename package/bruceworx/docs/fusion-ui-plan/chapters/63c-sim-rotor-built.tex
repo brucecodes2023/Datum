@@ -264,3 +264,19 @@ later? (3) The burst margin has no pass/fail threshold; add one (many specificat
 \paragraph{Your answers (1 Nov).} (1) The blade pull keeps following the first spin load. (2) A per-seat pull on chosen
 faces, later. (3) Yes: a burst margin below 1.2 is an error in the pre-check and the results, the limit editable on the
 study.
+
+\paragraph{Follow-up, 1 Nov: surface-only meshes.} The boreless impeller (1.6\,mm blade roots, R0.8/R0.6 root fillets) read
+back from the saved \code{.FCStd} made Netgen return a surface mesh only (238\,865 nodes, 114\,543 faces, no tetrahedra) at
+MaxSize 2.0, MinSize 0.1, in both orders, while the same solid from the STEP file meshed in 17\,s. The two shapes are the
+same geometry (distance 0, common volume equal to the solid's, tolerance 3.2e-3 in both); the STEP has one extra degenerate
+edge. Writing the \code{.FCStd} shape to a BREP file and reading it back, with no repair at all, meshes in 17\,s too
+(307\,523 tets), so Netgen reacts to the form the loaded shape is in, not to its geometry. ShapeFix did not help (slower).
+\code{mesh\_study} now retries a surface-only (or empty) result at most twice, on copies in a hidden scratch document, so the
+user's shape and objects are never touched: (1) a BREP round trip of the shape at the asked order; (2) when second order was
+asked, the same copy at first order, whose linear tetrahedra the existing step upgrades to Tet10. Each try goes to the
+report view, the run log (\code{bruceworx\_sim\_events}) and the progress text; \code{stats['notes']} and \code{stats['fallback']}
+say which fallback produced the mesh, and if all fail the error names them. Impeller from the \code{.FCStd}, second order,
+MaxSize 2.0, MinSize 0.1: fallback (1) gave 514\,962 nodes and 307\,523 Tet10 elements; 305\,s in all, most of it the failed
+first try. Tests: \code{TestBruceWorxSimRotor} 53 (3 new: retry on a copy leaves the shape alone, second order falls back to
+first order plus Tet10 in two bounded tries, all tries failing still raises), \code{TestBruceWorxSimModel} 27 and
+\code{TestBruceWorxSimCore} 57, 0 failures.
