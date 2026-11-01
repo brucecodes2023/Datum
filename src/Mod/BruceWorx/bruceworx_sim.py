@@ -1204,7 +1204,10 @@ def prepare_solve(analysis, working_dir=None, progress=None):
         eigen.configure_solver(analysis, m["solver"])
     fea = ccxtools.FemToolsCcx(analysis, m["solver"])
     fea.update_objects()
-    fea.setup_working_dir(working_dir)
+    if working_dir:  # FEM falls back to a temp folder when it is missing: make it, so the ccx files land there
+        working_dir = os.path.abspath(str(working_dir))
+        os.makedirs(working_dir, exist_ok=True)
+    fea.setup_working_dir(working_dir or None)
     message = fea.check_prerequisites()
     if message:
         raise StudyError(message.strip())

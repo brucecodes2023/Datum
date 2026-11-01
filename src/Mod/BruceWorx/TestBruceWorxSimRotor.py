@@ -316,6 +316,26 @@ class TestRotorSolve(unittest.TestCase):
 
 
 @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestWorkingDir(unittest.TestCase):
+    """sim.solve(an, working_dir=...) writes the ccx files there, also when the folder does not exist yet."""
+
+    def test_the_files_land_in_the_given_folder(self):
+        close_all()
+        tmp = tempfile.mkdtemp(prefix="vl-wd-")
+        try:
+            setup = vc.build_rotating_disc(PARAMS, 8.0)
+            target = os.path.join(tmp, "not", "yet", "there")
+            result = sim.solve(setup.analysis, working_dir=target)
+            self.assertIsNotNone(result)
+            names = os.listdir(target)
+            self.assertTrue(any(n.endswith(".inp") for n in names), names)
+            self.assertTrue(any(n.endswith(".frd") for n in names), names)
+        finally:
+            close_all()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
 class TestRimTraction(unittest.TestCase):
     """A reversed Pressure on the rim is an outward traction (no new code): the Lame hoop stress at the rim."""
 
