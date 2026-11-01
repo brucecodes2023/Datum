@@ -1483,6 +1483,9 @@ STUDY_PROPS = (
     ("App::PropertyFloat", "DomainLateral", "Lateral distance in characteristic lengths", DOMAIN_FACTORS["lateral"]),
     ("App::PropertyString", "CaseFolder", "The OpenFOAM case folder of the last run", ""),
     ("App::PropertyString", "CfdSummary", "JSON summary of the last run (forces, convergence)", ""),
+    ("App::PropertyBool", "PressureFixed", "Colour the surface pressure with the fixed range below instead of the run's own", False),
+    ("App::PropertyFloat", "PressureMin", "Lower end in Pa of the fixed pressure colour range", 0.0),
+    ("App::PropertyFloat", "PressureMax", "Upper end in Pa of the fixed pressure colour range", 0.0),
 )
 
 
@@ -1626,10 +1629,57 @@ def part_patch_files(folder):
     return sorted(parts)
 
 
-def scaled_copy(path, factor=1000.0):
+def _pin_range(data, name, lo, hi):
+    """Makes the range of the point array ``name`` exactly [lo, hi]: values outside are clamped, and two points that no
+    cell uses carry lo and hi (the FEM colour bar fits the range of the point data and has no range setting in Python)."""
+    from vtkmodules.util.numpy_support import vtk_to_numpy
+
+    pd = data.GetPointData()
+    arr = pd.GetArray(name)
+    if arr is None or data.GetNumberOfPoints() == 0 or arr.GetNumberOfComponents() != 1:
+        return False
+    vtk_to_numpy(arr)[...] = vtk_to_numpy(arr).clip(lo, hi)
+    pts = data.GetPoints()
+    x0 = pts.GetPoint(0)
+    for value in (lo, hi):
+        pts.InsertNextPoint(*x0)
+        for k in range(pd.GetNumberOfArrays()):
+            a = pd.GetArray(k)
+            a.InsertNextTuple([value if a is arr else 0.0] * a.GetNumberOfComponents())
+    pts.Modified()
+    return True
+
+
+def pressure_range(files, name="p"):
+    """(min, max) of the point array ``name`` over the foamToVTK patch files (.vtp), or None."""
+    from vtkmodules.vtkIOXML import vtkXMLPolyDataReader
+
+    lo = hi = None
+    for path in files:
+        reader = vtkXMLPolyDataReader()
+        reader.SetFileName(path)
+        reader.Update()
+        arr = reader.GetOutput().GetPointData().GetArray(name)
+        if arr is None or arr.GetNumberOfTuples() == 0:
+            continue
+        a, b = arr.GetRange()
+        lo, hi = (a if lo is None else min(lo, a)), (b if hi is None else max(hi, b))
+    return None if lo is None else (lo, hi)
+
+
+def pressure_scale(analysis):
+    """The fixed (min, max) in Pa the study asks for, or None when it uses each run's own range."""
+    props = getattr(analysis, "PropertiesList", ())
+    if "PressureFixed" in props and analysis.PressureFixed and analysis.PressureMax > analysis.PressureMin:
+        return (float(analysis.PressureMin), float(analysis.PressureMax))
+    return None
+
+
+def scaled_copy(path, factor=1000.0, pin=None):
     """A copy of a foamToVTK .vtu/.vtp with the points scaled (the case is in metres, the model in mm), written to
     an ``mm`` folder beside it; the fields stay in SI. (FemPostPipeline.scale() empties an unstructured grid in this
-    build, so the file is scaled before FEM reads it.)"""
+    build, so the file is scaled before FEM reads it.)  ``pin`` = (lo, hi) pins the colour range of the pressure ``p``
+    to that interval (see _pin_range)."""
     from vtkmodules.util.numpy_support import vtk_to_numpy
 
     if path.endswith(".vtu"):
@@ -1646,6 +1696,8 @@ def scaled_copy(path, factor=1000.0):
     points = data.GetPoints().GetData()
     vtk_to_numpy(points)[...] *= factor
     points.Modified()
+    if pin is not None:
+        _pin_range(data, "p", float(pin[0]), float(pin[1]))
     writer = Writer()
     writer.SetFileName(out)
     writer.SetInputData(data)
@@ -1674,7 +1726,8 @@ def load_results(analysis, folder=None, install=None):
     """Converts the latest time to VTK and adds it to the study as FEM post-pipelines (scaled to mm so they sit on
     the model, velocity and pressure stay in SI), and in the 3D view shows
 
-    * the surface pressure on each part (a pipeline of its boundary patch, coloured by p),
+    * the surface pressure on each part (a pipeline of its boundary patch, coloured by p; one colour range for all parts,
+      the run's own min and max, or the fixed range of the study: PressureFixed, PressureMin, PressureMax),
     * a cut plane through the middle (XZ) coloured by the velocity magnitude (a filter of the volume pipeline).
 
     The volume pipeline itself is hidden (it would fill the view). FEM has no streamline filter object, so
@@ -1707,10 +1760,17 @@ def load_results(analysis, folder=None, install=None):
         FreeCAD.Console.PrintWarning(f"[cfd] cut plane not added: {exc}\n")
         cut = None
     surfaces = []
-    for path in part_patch_files(folder):
+    patch_files = part_patch_files(folder)
+    fixed = pressure_scale(analysis)
+    try:  # one colour range for every part: the fixed one of the study, else the run's own min and max
+        p_range = fixed or pressure_range(patch_files)
+    except Exception as exc:
+        FreeCAD.Console.PrintWarning(f"[cfd] pressure range not found: {exc}\n")
+        p_range = None
+    for path in patch_files:
         try:
             surf = doc.addObject("Fem::FemPostPipeline", "Pipeline_Pressure")
-            surf.read(scaled_copy(path))
+            surf.read(scaled_copy(path, pin=p_range))
             surf.Label = "Surface pressure " + os.path.splitext(os.path.basename(path))[0]
             analysis.addObject(surf)
             surfaces.append(surf)
@@ -1728,7 +1788,7 @@ def load_results(analysis, folder=None, install=None):
                 surf.ViewObject.Visibility = True
         except Exception as exc:
             FreeCAD.Console.PrintWarning(f"[cfd] result colouring failed: {exc}\n")
-    return {"result": result, "cut": cut, "surfaces": surfaces, "vtu": vtu}
+    return {"result": result, "cut": cut, "surfaces": surfaces, "vtu": vtu, "p_range": p_range, "p_fixed": fixed is not None}
 
 
 def paraview():

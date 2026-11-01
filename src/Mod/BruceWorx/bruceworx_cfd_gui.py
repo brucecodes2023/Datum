@@ -349,6 +349,20 @@ def _make_classes():
             for b in (self.load_button, self.paraview_button, self.report_button):
                 row.addWidget(b)
             w.layout().addLayout(row)
+            self.pfix_check = QtWidgets.QCheckBox("Fix pressure scale")
+            self.pfix_check.setToolTip("Colour the surface pressure with this range instead of each run's own minimum and "
+                                       "maximum, so runs can be compared by eye. Applies the next time you press Show in 3D.")
+            self.pmin = spin(self.analysis.PressureMin, -1e6, 1e6, 1, " Pa", 10.0)
+            self.pmax = spin(self.analysis.PressureMax, -1e6, 1e6, 1, " Pa", 10.0)
+            self.pfill_button = button("This run", self.fill_pressure_range, "Take the range of the pressure shown now")
+            self.pfix_check.setChecked(bool(self.analysis.PressureFixed))
+            self.pfix_check.toggled.connect(slot(self._pressure_changed))
+            for s_ in (self.pmin, self.pmax):
+                s_.valueChanged.connect(slot(self._pressure_changed))
+            row3 = QtWidgets.QHBoxLayout()
+            for b in (self.pfix_check, self.pmin, self.pmax, self.pfill_button):
+                row3.addWidget(b)
+            w.layout().addLayout(row3)
             row2 = QtWidgets.QHBoxLayout()
             self.streams_check = QtWidgets.QCheckBox("Streamlines")
             self.streams_check.setToolTip("Trace streamlines with vtkStreamTracer from seeds upstream of the body (or over "
@@ -539,6 +553,22 @@ def _make_classes():
             verdict = " — <b>converged</b>" if s["convergence"]["converged"] else " — <b>not converged</b>"
             self.conv_label.setText(s["convergence"]["text"] + verdict + (f"<br>Induced velocity at the disks: {disks}" if disks else ""))
 
+        def _pressure_changed(self):
+            a = self.analysis
+            a.PressureFixed, a.PressureMin, a.PressureMax = self.pfix_check.isChecked(), self.pmin.value(), self.pmax.value()
+
+        def fill_pressure_range(self):
+            """Puts the range of the pressure shown last (this run's own) into the fixed range."""
+            rng = getattr(self, "p_range", None)
+            if rng is None:
+                try:
+                    rng = cfd.pressure_range(cfd.part_patch_files(self.analysis.CaseFolder))
+                except Exception:
+                    rng = None
+            if rng is not None:
+                self.pmin.setValue(rng[0])
+                self.pmax.setValue(rng[1])
+
         def load_results(self):
             try:
                 out = cfd.load_results(self.analysis)
@@ -549,6 +579,11 @@ def _make_classes():
             self.result_label.setText(
                 "Showing the flow: " + (f"surface pressure on {parts} part{'s' if parts != 1 else ''}" if parts else "no part surface")
                 + (", the mid cut plane coloured by velocity" if out["cut"] else "") + ". Tick Streamlines to add the flow lines.")
+            self.p_range = out.get("p_range")
+            if self.p_range:
+                self.result_label.setText(self.result_label.text() + (
+                    f" Pressure scale {self.p_range[0]:.4g} to {self.p_range[1]:.4g} Pa "
+                    f"({'fixed' if out.get('p_fixed') else 'this run'})."))
             try:
                 import FreeCADGui
 

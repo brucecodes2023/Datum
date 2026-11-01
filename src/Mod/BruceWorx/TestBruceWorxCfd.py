@@ -488,6 +488,60 @@ def fake_case(root):
     return os.path.join(root, "VTK", "10", "internal.vtu")
 
 
+class TestPressureScale(unittest.TestCase):
+    """The colour range of the surface pressure: the run's own min and max for every part, or a fixed range."""
+
+    def setUp(self):
+        try:
+            import vtkmodules.vtkIOXML  # noqa: F401
+        except ImportError:
+            self.skipTest("needs vtk")
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.a = os.path.join(self.tmp, "A.vtp")
+        self.b = os.path.join(self.tmp, "B.vtp")
+        for path, text in ((self.a, _VTP), (self.b, _VTP.replace("-1 0 1", "2 5 9"))):
+            with open(path, "w") as f:
+                f.write(text)
+
+    @staticmethod
+    def read(path):
+        from vtkmodules.vtkIOXML import vtkXMLPolyDataReader
+
+        r = vtkXMLPolyDataReader()
+        r.SetFileName(path)
+        r.Update()
+        return r.GetOutput()
+
+    def test_range_over_all_part_patches(self):
+        self.assertEqual(cfd.pressure_range([self.a, self.b]), (-1.0, 9.0))
+        self.assertEqual(cfd.pressure_range([self.a]), (-1.0, 1.0))
+        self.assertIsNone(cfd.pressure_range([]))
+
+    def test_pinned_copy_has_exactly_the_range_and_the_same_surface(self):
+        out = cfd.scaled_copy(self.b, pin=(0.0, 4.0))
+        data = self.read(out)
+        self.assertEqual(data.GetPointData().GetArray("p").GetRange(), (0.0, 4.0))  # 2 5 9 clamped; the anchors give 0 and 4
+        self.assertEqual(data.GetNumberOfPolys(), 1)
+        self.assertEqual(data.GetNumberOfPoints(), 5)  # two unused anchor points
+        self.assertEqual([data.GetPointData().GetArray("p").GetValue(i) for i in range(3)], [2.0, 4.0, 4.0])
+        self.assertAlmostEqual(data.GetPoint(1)[0], 100.0)  # still scaled to mm
+        plain = self.read(cfd.scaled_copy(self.b))
+        self.assertEqual((plain.GetNumberOfPoints(), plain.GetPointData().GetArray("p").GetRange()), (3, (2.0, 9.0)))
+
+    def test_the_study_asks_for_a_fixed_range_only_when_it_is_valid(self):
+        class Stub:
+            PropertiesList = ["PressureFixed", "PressureMin", "PressureMax"]
+            PressureFixed, PressureMin, PressureMax = True, -50.0, 200.0
+
+        self.assertEqual(cfd.pressure_scale(Stub()), (-50.0, 200.0))
+        Stub.PressureFixed = False
+        self.assertIsNone(cfd.pressure_scale(Stub()))
+        Stub.PressureFixed, Stub.PressureMax = True, -50.0  # max not above min: ignored
+        self.assertIsNone(cfd.pressure_scale(Stub()))
+        self.assertIsNone(cfd.pressure_scale(object()))  # an older study without the properties
+
+
 def pump(n=4):
     import FreeCADGui as Gui
 
@@ -545,6 +599,30 @@ class TestAirflowGui(unittest.TestCase):
         self.assertEqual(out["surfaces"][0].ViewObject.Field, "p")
         self.assertEqual(out["cut"].ViewObject.Field, "U")
         self.assertEqual(out["cut"].ViewObject.Component, "Magnitude")
+
+    def test_surface_pressure_uses_the_runs_own_range_or_a_fixed_one(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        vtu = fake_case(tmp)
+        a = self.doc.addObject("Fem::FemAnalysis", "Study")
+        a.addProperty("App::PropertyString", "StudyType", "BruceWorx", "")
+        a.StudyType = "external_flow"
+        cfd.ensure_properties(a)
+        saved = cfd.convert_vtk
+        cfd.convert_vtk = lambda folder, install=None: vtu
+        try:
+            own = cfd.load_results(a, tmp)
+            self.assertEqual(own["p_range"], (-1.0, 1.0))  # the fake patch's own p
+            self.assertFalse(own["p_fixed"])
+            a.PressureFixed, a.PressureMin, a.PressureMax = True, -50.0, 200.0
+            fixed = cfd.load_results(a, tmp)
+        finally:
+            cfd.convert_vtk = saved
+        self.assertEqual(fixed["p_range"], (-50.0, 200.0))
+        self.assertTrue(fixed["p_fixed"])
+        out = os.path.join(tmp, "surface.vtp")
+        fixed["surfaces"][0].writeVTK(out)
+        self.assertEqual(TestPressureScale.read(out).GetPointData().GetArray("p").GetRange(), (-50.0, 200.0))
 
     def test_new_study_airflow_panel_and_run(self):
         import FreeCADGui as Gui
@@ -606,6 +684,28 @@ class TestAirflowGui(unittest.TestCase):
         self.assertTrue(os.path.isfile(out["vtu"]))
         self.assertIsNotNone(out["result"])  # the flow is shown in the 3D view
         self.assertIn("Showing the flow", study.result_label.text())
+
+    def test_pressure_scale_fields_are_remembered_per_study(self):
+        import bruceworx_sim as sim
+
+        a = sim.new_study(self.doc, sim.StudyPlan(name="S", study_type="external_flow", model=self.ball))["analysis"]
+        study = self.sg.open_study_panel(a)
+        pump()
+        self.assertFalse(study.pfix_check.isChecked())
+        self.assertFalse(a.PressureFixed)
+        study.pmin.setValue(-80.0)
+        study.pmax.setValue(120.0)
+        study.pfix_check.setChecked(True)
+        self.assertEqual((a.PressureFixed, a.PressureMin, a.PressureMax), (True, -80.0, 120.0))
+        study.p_range = (-3.5, 7.5)  # what the last Show in 3D reported
+        study.fill_pressure_range()
+        self.assertEqual((a.PressureMin, a.PressureMax), (-3.5, 7.5))
+        self.assertEqual(cfd.pressure_scale(a), (-3.5, 7.5))
+        study.release()
+        again = self.sg.open_study_panel(a)  # a second panel on the same study shows the saved values
+        pump()
+        self.assertTrue(again.pfix_check.isChecked())
+        self.assertEqual((again.pmin.value(), again.pmax.value()), (-3.5, 7.5))
 
     def test_stop_button_ends_a_run(self):
         if INSTALL is None:
