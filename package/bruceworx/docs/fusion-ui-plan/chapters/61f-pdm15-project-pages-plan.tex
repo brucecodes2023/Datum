@@ -1,0 +1,30 @@
+%======================================================================
+\subsection{BW-PDM-15 --- Plan: project pages (1 Nov 2026)}\label{sec:pdm15-plan}
+%======================================================================
+
+\begin{epic}{PDM-15}{Project pages}{M3}{\stTodo}{(new, 1 Nov)}
+Each vault project gets a page of its own, as in your mockup ``Vault project tabs'': the projects become tabs along
+the top of the vault, and a project opens on an Overview with its counts, product structure, what needs attention and
+its recent files, with tabs for its Files, Drawings, Simulations, Changes and History.
+\end{epic}
+
+\paragraph{Why.} You asked on 1 Nov to put the project Simulations list (PDM-14, question P7) on a project page and
+to start building the pages. Today a project is only a row on the vault dashboard and a scope of the Files list.
+
+\paragraph{What gets built} (your mockup, three boards):
+\begin{enumerate}[nosep]
+  \item \textbf{Vault dashboard, all projects.} A tab per project along the top; one card per project with its top
+        assembly's picture, counts of parts, assemblies and drawings, the WIP/released bar, files missing a drawing,
+        checked out to you and the last check-in; activity across projects and vault health.
+  \item \textbf{Project page.} Tabs Overview, Files, Drawings, Simulations, Changes and History, each with its count.
+        Overview: count tiles (parts made and bought, assemblies, drawings, missing a drawing), the product structure
+        with pictures, state and drawing status, \emph{Needs attention} (missing drawings, nothing released, voided
+        files, and now simulations out of date), and recent files as picture cards.
+  \item \textbf{Files filtered to the project.} The PDM-13 browser scoped to the project, its assemblies and views
+        in the navigation pane.
+\end{enumerate}
+Every number comes from the journal and the pictures already saved inside the files; nothing is opened.
+
+\paragraph{Decided without asking} (say if you want otherwise): the page lives in the Start page's vault area, where
+the dashboard is; \emph{Build package\ldots} and \emph{New part in VL\ldots} reuse the existing commands; the
+Simulations tab is PDM-14's list scoped to the project and shows ``none yet'' until PDM-14 lands.

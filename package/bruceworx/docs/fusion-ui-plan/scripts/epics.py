@@ -281,10 +281,14 @@ EPICS = [
       "(new, 31 Oct)",
       "Redesign of the Files tab on the Start page (mockup 31 Oct): a flat list with every file a top-level row, grouped Assemblies / Parts / Drawings, no drill-down; part, assembly and drawing icons; a navigation pane (projects, saved views, categories); a preview pane with interactive 3D, ISO and drawing sheet plus Uses / Where used / History / Drawing package tabs. Answers 31 Oct (chapter 61d): the ISO picture and a light preview mesh are made at Save for vault work files only, the mesh stored inside the .FCStd; a drawing package is a PDF per drawing (WIP drawings watermarked), and Build Package... from selected rows writes a folder of PDFs plus package.csv; no CAD restructure (assemblies reference parts; the browser shows it in Uses and Where used); 'missing a drawing' counts assemblies as well as parts. Step 1 (flat list, type icons) started 31 Oct.",
       "Every vault file is one row in its group; selecting a part shows its 3D preview, where used and history without opening it; saving a vault work file refreshes its ISO picture and the preview mesh inside the .FCStd; Build Package from three selected drawings writes three PDFs (WIP watermarked) and package.csv; an assembly without a drawing counts as missing a drawing."),
-    E("PDM-14", "Simulations in the vault", "M3", "To do", ["PDM-04", "PDM-13", "SIM-07"],
+    E("PDM-14", "Simulations in the vault", "M3", "In progress", ["PDM-04", "PDM-13", "SIM-07"],
       "(new, 1 Nov)",
-      "You (via the Vector Jet session, 1 Nov): simulations as a vault document type tied to their part like drawings, a Simulations tab that loads the file only when opened, and a project Simulations tab. Plan chapter 'PDM-14 plan' with mockup: item type simulation, document type 04, simulation_of, the study keeps its own copy of the solid with the part's geometric fingerprint (current / part changed), summary + picture + mesh inside the file so lists never open it, streamed storage, solver work files kept out, release warning when out of date. Questions P1-P9 waiting.",
+      "You (via the Vector Jet session, 1 Nov): simulations as a vault document type tied to their part like drawings, a Simulations tab that loads the file only when opened, and a project Simulations tab. Plan chapter 'PDM-14 plan' with mockup: item type simulation, document type 04, simulation_of, the study keeps its own copy of the solid with the part's geometric fingerprint (current / part changed), summary + picture + mesh inside the file so lists never open it, streamed storage, solver work files kept out, release warning when out of date. 1 Nov answers: P1-P3, P5 as recommended; P4 an Include results choice at check-in; P6 a bubble flag in the file explorer, no release rule; P7 on the project page (PDM-15); P8 own extension .vlsim, impeller study imported as VL-04-01001-001; P9 build now.",
       "VL-P01-110-SIM.FCStd imported as VL-04-01001-001 shows on the impeller's Simulations tab with its results without fetching the 149 MB file; re-saving the impeller without a geometry change keeps it current; changing the blade root marks it 'part changed'."),
+    E("PDM-15", "Project pages", "M3", "In progress", ["PDM-10", "PDM-13"],
+      "(new, 1 Nov)",
+      "Your 'Vault project tabs' mockup: projects as tabs on the vault, a project page with Overview (counts, product structure, needs attention, recent files) and tabs Files, Drawings, Simulations, Changes, History; started 1 Nov with PDM-14 (its Simulations tab).",
+      "Opening VL shows its counts, the engine/rotor/test-stand structure with pictures and the 10 items missing a drawing without opening any file; the Simulations tab lists the impeller study once PDM-14 imports it."),
     E("PDM-08", "Migration from Fusion", "M6", "To do", ["PDM-07"],
       "FC-T01, FCB-P2-22",
       "Bulk import Fusion exports with P/N and revision mapping; switch criteria checklist. Plan written 24 Oct (STEP per component + Fusion manifest, migration CSV, geometry check, 9 FC-T01 criteria) approved 24 Oct; the pilot starts fresh, so migration is M6 work for the other LE items, programs and history.",
@@ -522,6 +526,16 @@ EPICS = [
       "not per link; open large assemblies on the vault's preview meshes (PDM-13) and load the exact shape of "
       "a part when it is edited or measured.",
       "TL-P01 opens in Vector Labs at least 3x faster than with stock settings, and orbits smoothly."),
+    E("PRF-04", "Vault storage migration", "M5", "In progress", ["PRF-01"],
+      "Bruce 2 Nov",
+      "Bruce asked for every vault file in binary without check-outs or a version per item. Stored files are "
+      "write-once and verified by SHA-256, so each is re-encoded into a new object (a zip rewrite: text shapes "
+      "become .bin, everything else byte for byte), every shape checked against the original, and one "
+      "migrate_storage journal event maps old SHA-256 to new; drawings' made-from, BOMs, released files and work "
+      "copy status follow. Old objects stay. Copy of the vault (2 Nov): 114 of 165 files, 767 shapes, 26.9 -> 18.5 "
+      "MB, 37 of 37 files open with identical shapes.",
+      "The real vault migrated with one journal event; every item keeps its numbers, revisions and status; "
+      "drawings are not out of date; reopening replays with no problems."),
 ]
 
 
