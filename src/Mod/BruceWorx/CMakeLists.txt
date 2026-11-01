@@ -166,7 +166,9 @@ SET(BruceWorx_SRCS
     TestBruceWorxSimCore.py
     bruceworx_cfd.py
     bruceworx_cfd_gui.py
+    bruceworx_cfd_wash.py
     TestBruceWorxCfd.py
+    TestBruceWorxCfdWash.py
     bruceworx_sim_gui.py
     TestBruceWorxSimulation.py
     bruceworx_validation.py

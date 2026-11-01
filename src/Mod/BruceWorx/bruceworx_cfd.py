@@ -1464,7 +1464,8 @@ def parts_from_model(model, tolerance_mm=None):
 # ----- the study glue -----------------------------------------------------------------------------------
 
 AIR_KIND = "external_flow"
-KINDS = (AIR_KIND,)
+WASH_KIND = "prop_wash"  # actuator disks on the motors (bruceworx_cfd_wash)
+KINDS = (AIR_KIND, WASH_KIND)
 STUDY_PROPS = (
     ("App::PropertyFloat", "FlowSpeed", "Speed of the free stream in m/s", 10.0),
     ("App::PropertyFloat", "AngleOfAttack", "Angle of attack in degrees (pitch about the model's Y axis, flow along +X)", 0.0),
@@ -1492,27 +1493,44 @@ def ensure_properties(analysis):
         if name not in analysis.PropertiesList:
             analysis.addProperty(typ, name, "Airflow", "[BW] " + doc)
             setattr(analysis, name, default)
+    if is_wash(analysis):
+        wash().ensure_wash_properties(analysis)
+
+
+def is_wash(analysis):
+    return analysis is not None and "StudyType" in analysis.PropertiesList and str(analysis.StudyType) == WASH_KIND
+
+
+def wash():
+    import bruceworx_cfd_wash
+
+    return bruceworx_cfd_wash
 
 
 def apply_options(analysis, options):
     ensure_properties(analysis)
     names = {n for _t, n, _d, _v in STUDY_PROPS}
+    if is_wash(analysis):
+        names |= {n for _t, n, _d, _v in wash().WASH_PROPS}
     for key, value in (options or {}).items():
         if key not in names:
             raise CfdError(f"unknown airflow setting {key!r}")
         setattr(analysis, key, value)
 
 
-def new_airflow_study(doc, model, name="Airflow 1", options=None):
-    """An external-flow study: a Fem::FemAnalysis with the airflow settings (no CalculiX members)."""
+def new_airflow_study(doc, model, name="Airflow 1", options=None, kind=AIR_KIND):
+    """An airflow study (external flow or prop wash): a Fem::FemAnalysis with the airflow settings (no CalculiX members)."""
     import ObjectsFem
 
     from bruceworx_sim import StudyPlan, _add_study_properties
 
     analysis = ObjectsFem.makeAnalysis(doc, "Study")
     analysis.Label = f"Study: {name}"
-    plan = StudyPlan(name=name, study_type=AIR_KIND, model=model)
+    plan = StudyPlan(name=name, study_type=kind, model=model)
     _add_study_properties(analysis, plan)
+    ensure_properties(analysis)
+    if kind == WASH_KIND:
+        wash().init_study(analysis)
     apply_options(analysis, options)
     return analysis
 
@@ -1536,11 +1554,15 @@ def study_folder(analysis, root=None):
 
 
 def study_precheck(analysis):
+    if is_wash(analysis):
+        return wash().study_precheck(analysis)
     return precheck(study_parts(analysis), setup_of(analysis))
 
 
 def prepare_run(analysis, root=None):
     """Pre-check, write the case, and return (folder, info). Raises CfdError on blocking issues."""
+    if is_wash(analysis):
+        return wash().prepare_run(analysis, root)
     parts = study_parts(analysis)
     setup = setup_of(analysis)
     issues, _est = precheck(parts, setup)
@@ -1559,6 +1581,8 @@ def start_run(analysis, root=None):
 
 
 def save_summary(analysis, folder, stage_text=""):
+    if is_wash(analysis):
+        return wash().save_summary_wash(analysis, folder, stage_text)
     info = json.load(open(os.path.join(folder, "vectorlabs.json")))
     conv = convergence(folder, info)
     table = forces_table(folder, info)
@@ -1727,6 +1751,8 @@ def _tex(text):
 
 def report_section(summary):
     """The airflow section of the LaTeX report from a saved summary (a dict, see save_summary)."""
+    if summary.get("kind") == WASH_KIND:
+        return wash().report_section(summary)
     s = summary["setup"]
     a = summary["air"]
     conv = summary["convergence"]

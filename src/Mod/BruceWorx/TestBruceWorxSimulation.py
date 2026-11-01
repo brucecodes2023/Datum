@@ -69,8 +69,8 @@ class TestSimulationGui(unittest.TestCase):
         # all five structural types and the Airflow group (a heading, then External flow)
         texts = [panel.type_combo.itemText(i) for i in range(panel.type_combo.count())]
         self.assertEqual(texts, ["Static stress", "Modal frequencies", "Structural buckling", "Thermal", "Thermal stress",
-                                 "— Airflow —", "External flow"])
-        self.assertTrue(all(panel.type_combo.model().item(i).isEnabled() for i in (0, 1, 2, 3, 4, 6)))
+                                 "— Airflow —", "External flow", "Prop wash"])
+        self.assertTrue(all(panel.type_combo.model().item(i).isEnabled() for i in (0, 1, 2, 3, 4, 6, 7)))
         self.assertFalse(panel.type_combo.model().item(5).isEnabled())
         self.assertTrue(panel.modal_box.isHidden() and panel.buckling_box.isHidden() and panel.thermal_box.isHidden())
         self.assertTrue(panel.air_box.widget.isHidden())

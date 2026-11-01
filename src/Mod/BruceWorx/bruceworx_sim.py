@@ -82,7 +82,9 @@ STUDY_TYPES = (
     ("thermal", "Thermal", True),
     ("thermal_stress", "Thermal stress", True),
     ("external_flow", "External flow", True),  # the Airflow group (SIM-06, bruceworx_cfd)
+    ("prop_wash", "Prop wash", True),  # actuator disks on the motors (SIM-06 phase 2, bruceworx_cfd_wash)
 )
+AIRFLOW_KINDS = ("external_flow", "prop_wash")  # studies run by OpenFOAM, with no CalculiX members
 
 SUPPORT_TYPES = ("Fem::ConstraintFixed", "Fem::ConstraintDisplacement", "Fem::ConstraintTransform",
                  "Fem::ConstraintRigidBody")
@@ -856,11 +858,11 @@ def new_study(doc, plan):
         raise StudyError(f"{plan.study_type} studies are planned, not built yet")
     if plan.model is None or not is_model(plan.model):
         raise StudyError("the study needs a body or part with solids")
-    if plan.study_type == "external_flow":  # airflow studies have no CalculiX members (bruceworx_cfd)
+    if plan.study_type in AIRFLOW_KINDS:  # airflow studies have no CalculiX members (bruceworx_cfd)
         import bruceworx_cfd as cfd
 
         try:
-            analysis = cfd.new_airflow_study(doc, plan.model, plan.name, plan.options)
+            analysis = cfd.new_airflow_study(doc, plan.model, plan.name, plan.options, kind=plan.study_type)
         except cfd.CfdError as exc:
             raise StudyError(str(exc)) from exc
         return {"analysis": analysis, "solver": None, "material": None, "mesh": None, "shape": None}
@@ -1059,7 +1061,7 @@ def precheck(analysis):
     """
     issues = []
     kind = study_kind(analysis)
-    if kind == "external_flow":
+    if kind in AIRFLOW_KINDS:
         import bruceworx_cfd as cfd
 
         return [(level, text) for level, text in cfd.study_precheck(analysis)[0] if level != "info"]
@@ -1543,7 +1545,7 @@ def summary(analysis):
         "result": None,
         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
-    if out["type"] == "external_flow":
+    if out["type"] in AIRFLOW_KINDS:
         try:
             out["airflow"] = __import__("json").loads(analysis.CfdSummary or "null")
         except ValueError:
@@ -1705,7 +1707,7 @@ def report_source(data, figures=()):
         import bruceworx_sim_eigen as eigen
 
         lines += eigen.report_preamble(part)
-    if data.get("type") == "external_flow":
+    if data.get("type") in AIRFLOW_KINDS:
         import bruceworx_cfd as cfd
 
         lines += [r"\begin{document}", rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",

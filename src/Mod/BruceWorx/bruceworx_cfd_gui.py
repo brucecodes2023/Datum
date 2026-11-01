@@ -112,12 +112,46 @@ def _make_classes():
             lay.addRow("Turbulence", self.turbulence)
             lay.addRow("Air temperature", self.temperature)
             lay.addRow("Altitude", self.altitude)
+            self.layout = lay
+            self.diameter = spin(0.0, 0.0, 2000.0, 1, " mm", 1.0)
+            self.diameter.setSpecialValueText("enter the propeller diameter")
+            self.diameter.setToolTip("One actuator disk of this diameter on every motor marked with a ThrustAxis")
+            self.typed = spin(0.0, 0.0, 10000.0, 3, " N", 0.1)
+            self.typed.setSpecialValueText("hover share from Mass & Balance")
+            self.typed.setToolTip("Thrust of every motor; blank takes each motor's hover share of the weight")
+            self.offset = spin(0.0, 0.0, 2000.0, 1, " mm", 1.0)
+            self.offset.setSpecialValueText("just above the motor part")
+            self.offset.setToolTip("Distance from the motor's centre along its ThrustAxis to the disk")
+            lay.addRow("Propeller diameter", self.diameter)
+            lay.addRow("Thrust per motor", self.typed)
+            lay.addRow("Disk offset", self.offset)
+            self.kind = cfd.AIR_KIND
+            self.set_kind(self.kind)
+
+        def set_kind(self, kind):
+            """External flow shows the angle and the reference area; prop wash the propeller fields (speed 0 = hover)."""
+            wash = kind == cfd.WASH_KIND
+            self.speed.setMinimum(0.0 if wash else 0.001)
+            if wash != (self.kind == cfd.WASH_KIND):
+                self.speed.setValue(0.0 if wash else 10.0)
+            self.kind = kind
+            self.speed.setSpecialValueText("0 (hover)" if wash else "")
+            for widget, on in ((self.aoa, not wash), (self.area, not wash), (self.diameter, wash), (self.typed, wash),
+                               (self.offset, wash)):
+                widget.setVisible(on)
+                label = self.layout.labelForField(widget)
+                if label is not None:
+                    label.setVisible(on)
 
         def options(self):
-            return {"FlowSpeed": self.speed.value(), "AngleOfAttack": self.aoa.value(),
-                    "ReferenceArea": self.area.value(), "MeshPreset": self.preset.currentData(),
-                    "Turbulence": self.turbulence.currentData(), "AirTemperature": self.temperature.value(),
-                    "AirAltitude": self.altitude.value()}
+            out = {"FlowSpeed": self.speed.value(), "AngleOfAttack": self.aoa.value(),
+                   "ReferenceArea": self.area.value(), "MeshPreset": self.preset.currentData(),
+                   "Turbulence": self.turbulence.currentData(), "AirTemperature": self.temperature.value(),
+                   "AirAltitude": self.altitude.value()}
+            if self.kind == cfd.WASH_KIND:
+                out.update({"PropDiameter": self.diameter.value(), "TypedThrust": self.typed.value(),
+                            "DiskOffset": self.offset.value()})
+            return out
 
     class PlotWidget(QtWidgets.QWidget):
         """Lines against the iteration; log scale for the residuals."""
@@ -235,6 +269,25 @@ def _make_classes():
                 form.addRow(label, widget)
                 signal = widget.currentIndexChanged if isinstance(widget, QtWidgets.QComboBox) else widget.valueChanged
                 signal.connect(slot(self._settings_changed))
+            self.wash_fields = []
+            if cfd.is_wash(a):
+                cfd.ensure_properties(a)
+                self.diameter = spin(a.PropDiameter, 0, 2000, 1, " mm", 1.0)
+                self.diameter.setSpecialValueText("enter the propeller diameter")
+                self.typed = spin(a.TypedThrust, 0, 10000, 3, " N", 0.1)
+                self.typed.setSpecialValueText("hover share from Mass & Balance")
+                self.offset = spin(a.DiskOffset, 0, 2000, 1, " mm", 1.0)
+                self.offset.setSpecialValueText("just above the motor part")
+                self.wake = spin(a.DomainWake, 1, 100, 1, " L")
+                self.wake.setToolTip("Domain extent on the wake side, in characteristic lengths L")
+                for label, widget in (("Propeller diameter", self.diameter), ("Thrust per motor", self.typed),
+                                      ("Disk offset", self.offset), ("Wake side", self.wake)):
+                    form.addRow(label, widget)
+                    widget.valueChanged.connect(slot(self._settings_changed))
+                    self.wash_fields.append(widget)
+                for widget in (self.area, self.length):  # no Cd/Cl in a prop-wash study
+                    widget.setVisible(False)
+                    form.labelForField(widget).setVisible(False)
             w.layout().addLayout(form)
             self.model_info = hint()
             w.layout().addWidget(self.model_info)
@@ -306,6 +359,9 @@ def _make_classes():
             a.FarField = self.farfield.currentData()
             a.AirTemperature, a.AirAltitude = self.temperature.value(), self.altitude.value()
             a.DomainUpstream, a.DomainDownstream, a.DomainLateral = self.up.value(), self.down.value(), self.lat.value()
+            if self.wash_fields:
+                a.PropDiameter, a.TypedThrust, a.DiskOffset = self.diameter.value(), self.typed.value(), self.offset.value()
+                a.DomainWake = self.wake.value()
             self.check()
 
         def check(self):
@@ -368,7 +424,8 @@ def _make_classes():
                 info = json.load(open(os.path.join(self.folder, "vectorlabs.json")))
                 drag = {}
                 for part, d in info["parts"].items():
-                    drag[part] = [(r[0], r[1]) for r in cfd.part_forces(self.folder, d["name"])[-2000:]]
+                    drag[part] = (cfd.wash().plot_series(self.folder, d["name"], info) if info.get("kind") == cfd.WASH_KIND
+                                  else [(r[0], r[1]) for r in cfd.part_forces(self.folder, d["name"])[-2000:]])
                 self.force_plot.set_series(drag)
             except Exception:
                 pass
@@ -395,6 +452,8 @@ def _make_classes():
                 s = json.loads(raw)
             except ValueError:
                 return
+            if s.get("kind") == cfd.WASH_KIND:
+                return self._show_wash(s)
             rows = s["forces"]["parts"] + [dict(s["forces"]["total"], part="Total")]
             self.table.setRowCount(len(rows))
             for i, r in enumerate(rows):
@@ -404,6 +463,26 @@ def _make_classes():
                     self.table.setItem(i, j, QtWidgets.QTableWidgetItem(text))
             self.conv_label.setText(s["convergence"]["text"] + (
                 " — <b>converged</b>" if s["convergence"]["converged"] else " — <b>not converged</b>"))
+
+        def _show_wash(self, s):
+            """Prop wash: force on every part, the download as a share of the thrust, and the speed at the disks."""
+            self.table.setHorizontalHeaderLabels(["Part", "Fx N", "Fy N", "Fz N", "Download N", "Share of thrust"])
+            rows = s["forces"]["parts"] + [dict(s["forces"]["total"], part="Total")]
+            self.table.setRowCount(len(rows))
+            for i, r in enumerate(rows):
+                for j, key in enumerate(("part", "fx", "fy", "fz", "download", "fraction")):
+                    v = r.get(key)
+                    if isinstance(v, str):
+                        text = v
+                    elif v is None:
+                        text = "--"
+                    else:
+                        text = f"{v * 100:.2f} %" if key == "fraction" else f"{v:.4g}"
+                    self.table.setItem(i, j, QtWidgets.QTableWidgetItem(text))
+            disks = "; ".join(f"{d['label']}: {d['measured']:.2f} m/s (theory {d['theory']:.2f})"
+                              for d in s.get("disks", []) if d.get("measured") is not None)
+            verdict = " — <b>converged</b>" if s["convergence"]["converged"] else " — <b>not converged</b>"
+            self.conv_label.setText(s["convergence"]["text"] + verdict + (f"<br>Induced velocity at the disks: {disks}" if disks else ""))
 
         def load_results(self):
             try:

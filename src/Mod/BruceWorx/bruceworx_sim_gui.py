@@ -66,6 +66,10 @@ TYPE_HINTS = {
                "banded against the material's heat deflection temperature.",
     "thermal_stress": "Thermal stress, one way: the steady temperature field, then the stress it causes (alpha (T - T_ref)). "
                       "Needs k and alpha, a Temperature or Convection, and supports.",
+    "prop_wash": "Prop wash (OpenFOAM simpleFoam): each propeller is an actuator disk with its hover thrust from the "
+                 "Mass & Balance; the study reports the wake speed at the disks and the force on every part, "
+                 "especially the download on the arms and frame. Needs motors marked with a ThrustAxis, the "
+                 "propeller diameter and OpenFOAM-v2606.app.",
     "external_flow": "External flow (OpenFOAM simpleFoam): drag and lift on the model at a speed and angle of attack, "
                      "Cd and Cl on a reference area, surface pressure and the flow on a plane. Needs OpenFOAM-v2606.app.",
     "buckling": "Structural buckling: load factors λ under the study's loads (CalculiX *BUCKLE). Linear buckling is "
@@ -657,7 +661,7 @@ def report_study(analysis, folder=None, done=None):
     ``done(files)`` is called when it finishes; the return value then has "pdf": None, "running": True.
     """
     with tempfile.TemporaryDirectory(prefix="bw-sim-render-") as tmp:
-        images = {} if sim.study_kind(analysis) == "external_flow" else render_fields(analysis, tmp)
+        images = {} if sim.study_kind(analysis) in sim.AIRFLOW_KINDS else render_fields(analysis, tmp)
         files = sim.write_report(analysis, images, folder, compile=False)
     kind, path = sim.find_tex()
     if kind is None:
@@ -886,7 +890,7 @@ def _make_classes():
             self.type_combo = QtWidgets.QComboBox()
             air_group = False
             for key, label, available in sim.STUDY_TYPES:
-                if key == "external_flow" and not air_group:  # the Airflow group heading
+                if key in sim.AIRFLOW_KINDS and not air_group:  # the Airflow group heading
                     air_group = True
                     self.type_combo.addItem("— Airflow —", "")
                     head = self.type_combo.model().item(self.type_combo.count() - 1)
@@ -954,8 +958,9 @@ def _make_classes():
             self.modal_box.setVisible(kind == "modal")
             self.buckling_box.setVisible(kind == "buckling")
             self.thermal_box.setVisible(kind in thermal.KINDS)
-            air = kind == "external_flow"
+            air = kind in sim.AIRFLOW_KINDS
             self.air_box.widget.setVisible(air)
+            self.air_box.set_kind(kind)
             for part in self.form[2:]:  # no material or CalculiX mesh for airflow
                 part.setVisible(not air)
             self.transient_check.setVisible(kind == "thermal")
@@ -982,7 +987,7 @@ def _make_classes():
             if kind == "thermal_stress":
                 return {"InitialTemperature": self.reference_spin.value(),
                         "ReferenceTemperature": self.reference_spin.value()}
-            if kind == "external_flow":
+            if kind in sim.AIRFLOW_KINDS:
                 return self.air_box.options()
             return {}
 
@@ -1135,7 +1140,7 @@ def _make_classes():
             self.doc.commitTransaction()
             analysis = objs["analysis"]
             set_active(analysis)
-            if plan.study_type == "external_flow":
+            if plan.study_type in sim.AIRFLOW_KINDS:
                 status(f"Airflow study '{plan.name}' created: Pre-check, then Run")
                 return analysis
             if not plan.material:
@@ -2498,7 +2503,7 @@ def open_study_panel(analysis=None):
         _warn("No study in the document: New Study first")
         return None
     set_active(analysis)
-    if sim.study_kind(analysis) == "external_flow":
+    if sim.study_kind(analysis) in sim.AIRFLOW_KINDS:
         import bruceworx_cfd_gui as cfd_gui
 
         return show_panel(cfd_gui.classes()["AirflowPanel"](analysis))
