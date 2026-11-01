@@ -22,6 +22,9 @@ folds it when the command closes, so a command is a tab of its own.
 * Cmd-I hides and shows the panel (BruceWorx_RightPanel): hidden is FreeCAD's
   auto hide, so it still slides in at the window's right edge and while a
   command is open ([BW] FreeCADGui.setOverlayAutoHide).
+* A drawer (Bruce, 2 Nov: "I want this sidebar to have a drawer so I can close it"): a chevron at the
+  strip's right end closes the panel; while it is closed a pull tab at the window's right edge opens it
+  again (Cmd-I does both).
 
 Preferences/BruceWorx/RightPanelTabs (default on).
 """
@@ -334,6 +337,15 @@ def _strip_class():
             font.setPixelSize(12)
             self.setFont(font)
             self.buttons = []
+            self.close_button = QtWidgets.QToolButton(self)  # the drawer: closes the panel
+            self.close_button.setObjectName("bwRightTab")
+            self.close_button.setProperty("kind", "close")
+            self.close_button.setText("\u203a")
+            self.close_button.setToolTip("Close the panel (\u2318I). Open it again with the tab at the window's right edge.")
+            self.close_button.setAutoRaise(True)
+            self.close_button.setCursor(QtCore.Qt.PointingHandCursor)
+            self.close_button.setFixedSize(24, 26)
+            self.close_button.clicked.connect(lambda _c=False: set_hidden(True))
             self.timer = QtCore.QTimer(self)
             self.timer.setSingleShot(True)
             self.timer.setInterval(0)
@@ -445,7 +457,7 @@ def _strip_class():
 
         def _pack(self, items):
             margins = self.row.contentsMargins()
-            available = self.width() - margins.left() - margins.right()
+            available = self.width() - margins.left() - margins.right() - 28  # the drawer's chevron
             metrics = self.fontMetrics()
             more = metrics.horizontalAdvance("More") + 22
             preferred = [metrics.horizontalAdvance(text) + 16 for _i, text, _k, _c in items]
@@ -502,8 +514,65 @@ def _strip_class():
                 more.setPopupMode(QtWidgets.QToolButton.InstantPopup)
             elif not any(k == "command" for _i, _t, k, _c in visible):
                 self.row.addStretch(1)
+            self.row.addWidget(self.close_button)
 
     return TabStrip
+
+
+def _handle_class():
+    from PySide import QtCore, QtWidgets
+
+    class PullTab(QtWidgets.QToolButton):
+        """The closed drawer's handle: a narrow tab on the window's right edge that opens the panel."""
+
+        def __init__(self, area):
+            super().__init__(area)
+            self.setObjectName("bwRightPullTab")
+            self.setText("\u2039")
+            self.setToolTip("Open the panel (\u2318I)")
+            self.setCursor(QtCore.Qt.PointingHandCursor)
+            self.setFixedSize(18, 56)
+            self.setStyleSheet("#bwRightPullTab { background: palette(window); color: palette(text);"
+                               " border: 1px solid palette(mid); border-right: none;"
+                               " border-top-left-radius: 8px; border-bottom-left-radius: 8px; font-size: 16px; }"
+                               " #bwRightPullTab:hover { background: palette(highlight); color: palette(highlighted-text); }")
+            self.clicked.connect(lambda _c=False: set_hidden(False))
+            area.installEventFilter(self)
+            self.place()
+
+        def place(self):
+            area = self.parentWidget()
+            self.move(area.width() - self.width(), max(0, (area.height() - self.height()) // 2))
+            self.raise_()
+
+        def eventFilter(self, obj, event):
+            if event.type() == QtCore.QEvent.Resize:
+                self.place()
+            return False
+
+    return PullTab
+
+
+_handle = None
+_hidden = None  # the panel's drawer state as this module set it (FreeCAD has no getter)
+
+
+def _sync_handle():
+    """Show the pull tab while the panel is closed."""
+    global _handle
+    try:
+        import FreeCADGui
+
+        area = FreeCADGui.getMainWindow().centralWidget()
+    except Exception:
+        return
+    if area is None:
+        return
+    if _handle is None or not _alive(_handle):
+        _handle = _handle_class()(area)
+    _handle.setVisible(bool(_hidden) and enabled())
+    if _handle.isVisible():
+        _handle.place()
 
 
 _strip = None
@@ -576,16 +645,38 @@ class _SelectionObserver:
 def set_hidden(hidden):
     """Hide the panel (FreeCAD's auto hide: it slides away, shows at the window's right edge and while a
     command is open) or show it again. Returns whether it was hidden. FreeCAD keeps the mode."""
+    global _hidden
     import FreeCADGui
 
-    return bool(FreeCADGui.setOverlayAutoHide(RIGHT, bool(hidden)))
+    was = bool(FreeCADGui.setOverlayAutoHide(RIGHT, bool(hidden)))
+    _hidden = bool(hidden)
+    _sync_handle()
+    return was
 
 
 def toggle():
+    global _hidden
     import FreeCADGui
 
     if FreeCADGui.setOverlayAutoHide(RIGHT, True):  # it was hidden: show it
         FreeCADGui.setOverlayAutoHide(RIGHT, False)
+        _hidden = False
+    else:
+        _hidden = True
+    _sync_handle()
+
+
+def is_hidden() -> bool:
+    """Whether the panel is closed (asked once from FreeCAD, then tracked here)."""
+    global _hidden
+    if _hidden is None:
+        import FreeCADGui
+
+        was = bool(FreeCADGui.setOverlayAutoHide(RIGHT, True))
+        if not was:
+            FreeCADGui.setOverlayAutoHide(RIGHT, False)  # it was open: leave it open
+        _hidden = was
+    return _hidden
 
 
 class _ToggleCommand:
@@ -677,6 +768,7 @@ def install():
     _create_docks()
     QtCore.QTimer.singleShot(0, order_tabs)
     QtCore.QTimer.singleShot(0, _install_strip)
+    QtCore.QTimer.singleShot(1500, lambda: (is_hidden(), _sync_handle()))  # a panel closed last time: its pull tab
     _timer = QtCore.QTimer()
     _timer.setSingleShot(True)
     _timer.setInterval(0)
