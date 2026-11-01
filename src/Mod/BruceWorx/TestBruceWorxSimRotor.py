@@ -159,6 +159,21 @@ class TestSpinSetup(unittest.TestCase):
         self.assertTrue(sim.ready(issues), issues)
         self.assertFalse([i for i in issues if "centre of mass" in i[1] or "No load" in i[1]], issues)
 
+    def test_precheck_a_balanced_spin_on_a_3_2_1_support_passes_with_a_warning(self):
+        doc, body, solid, an = self.study()
+        verts = {i: v.Point for i, v in enumerate(solid.Vertexes, 1)}
+        a_ = next(f"Vertex{i}" for i, p in verts.items() if abs(p.x - 8.0) < 1e-6 and abs(p.z) < 1e-6)  # bore, bottom
+        b_ = next(f"Vertex{i}" for i, p in verts.items() if abs(p.x - 8.0) < 1e-6 and abs(p.z - 6.0) < 1e-6)  # bore, top
+        c_ = next(f"Vertex{i}" for i, p in verts.items() if abs(p.x - 30.0) < 1e-6 and abs(p.z) < 1e-6)  # rim, bottom
+        vc.add_displacement(doc, an, body, [a_], "xyz", "Pin")
+        vc.add_displacement(doc, an, body, [b_], "xy", "Line")
+        vc.add_displacement(doc, an, body, [c_], "y", "Plane")
+        post.add_spin(an, 30000, axis="z")
+        issues = sim.precheck(an)
+        self.assertTrue(sim.ready(issues), issues)
+        self.assertFalse([t for k, t in issues if "rigid-body" in t or "free" in t], issues)
+        self.assertTrue(any("Point supports" in t for k, t in issues), issues)  # warned: they pin the growth locally
+
     def test_precheck_warns_when_the_axis_misses_the_part(self):
         doc, body, solid, an = self.study(offset=30.0)
         post.add_spin(an, 30000, axis=((0, 0, 0), (0, 0, 1)))

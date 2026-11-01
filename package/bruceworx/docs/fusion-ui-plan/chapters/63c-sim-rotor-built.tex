@@ -1,0 +1,137 @@
+%======================================================================
+\subsection{BW-SIM-04 --- Built, 1 Nov: rotor stress, hoop-stress contours, sections, export and a script API}\label{sec:sim-rotor-built}
+%======================================================================
+
+Requested by the Vector Jet session (VL-P01 turbojet): centrifugal analysis of rotating wheels in the native study
+engine. Three commits: the engine and the validation case (\code{e592bd10}), the study-panel additions (\code{74e18fa3}),
+and this record with its API note. The logic is one module, \file{src/Mod/BruceWorx/bruceworx\_sim\_post.py}, with no
+GUI in it, so the planned simulation workspace (chapter~\ref{sec:sim07-plan}) can call the same functions as the
+existing Study panel and as a design script in \code{FreeCADCmd}. The panel changes are thin.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.49\linewidth]{fig/simrotor_hoop_quarter.png}\hfill
+\includegraphics[width=0.49\linewidth]{fig/simrotor_vonmises_iso.png}
+\caption{A steel wheel (bore 8, hub, 3\,mm web, rim to $R=50$\,mm; clamped to the shaft in $x$ and $y$, symmetric about
+its mid-plane) at 30\,000\,rpm, 7\,481 elements, solved in 1.5\,s. Left: \code{post.contour\_png(an, "hoop",
+view="quarter", cmap="turbo")}, a quarter cut away about the spin axis; the web carries 85--95\,MPa of hoop stress, the
+rim 55, and the hub, held by the shaft, almost none. Right: von Mises (147\,MPa at the web root), isometric, Rainbow.
+Both are off-screen renders by \code{pvbatch} in \code{FreeCADCmd}, no window.}
+\label{fig:sim-rotor}
+\end{figure}
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{A spin load.} \code{post.add\_spin(analysis, rpm, axis)} adds FEM's own \code{Fem::ConstraintCentrif}.
+        The axis is a circular edge or cylindrical face (its axis), a straight edge, \code{((x,y,z),(dx,dy,dz))}, or
+        \code{"x"/"y"/"z"}; with none given it takes the model's largest circle or cylinder. The speed is stored as FEM's
+        \code{RotationFrequency} (rpm/60 in 1/s), the label reads ``Spin 30000 rpm'', and the study counts it as a load
+        (the members list says ``on the whole model''). The CalculiX input carries the right card: for 30\,000\,rpm,
+        \code{Spin,CENTRIF,9869604.4,0,0,-42.4,0,0,1}, $\omega^2=9.8696\times10^6$\,s$^{-2}$ about $+Z$.
+  \item \textbf{In the Study panel and the ribbon.} A \textbf{+~Spin} button beside Fixed / Force / Pressure /
+        Displacement asks for the speed (default 10\,000\,rpm) and takes the axis from the selected edge or face, else the
+        model's bore or rim; the same command is in the ribbon's Setup group.
+  \item \textbf{Rim traction needs no new code.} A \emph{Pressure} with \emph{Reversed} on the rim is an outward traction:
+        a quarter annulus ($a=10$, $b=50$\,mm) with 10\,MPa reversed on the rim gives $\sigma_\theta(b)$ within 3\,\% of
+        Lam\'e's $T(b^2+a^2)/(b^2-a^2)=10.83$ and $\sigma_r=+10$ (tension) at the rim (test).
+  \item \textbf{Pre-check.} A spin-only rotor held by a face, symmetry planes or a 3-2-1 on vertices passes (tests for the
+        first and the last). It warns when the spin axis misses the part's centre of mass by more than 5\,\% of its size
+        (an unbalanced rotor: the supports carry the net centrifugal force), errors when there is no density, and warns
+        that point supports pin the rotor's growth locally (read the stress away from them). A spin with no support still
+        gets the usual ``No support'' error.
+  \item \textbf{Cylindrical stress.} \code{post.cylindrical\_stress(result, axis)} turns the CalculiX nodal tensor into
+        radial $\sigma_{rr}$, hoop $\sigma_{\theta\theta}$, axial $\sigma_{zz}$ and shear $\sigma_{r\theta}$ about the spin
+        axis (else a picked axis, else the model's). They are stored on the result as \code{StressRadial},
+        \code{StressHoop}, \code{StressAxial}, \code{StressRTheta} with the axis, and recomputed only when it changes. The
+        panel has Radial, Hoop, Axial and Shear buttons next to Stress, Displacement and Safety Factor, a ``Pick axis''
+        button (selected circular edge or cylindrical face) and a ``Spin axis'' button to go back; the ribbon has a Hoop
+        Stress command.
+  \item \textbf{Colour map, range, section.} Rainbow (the current look), Turbo and Jet; a fixed colour range per study and
+        field (the boxes and the Fixed tick in the panel, stored as \code{RangeFixed\_hoop}, \code{RangeMin\_hoop},
+        \code{RangeMax\_hoop} on the study); a half or quarter \textbf{Section} about the axis. Von Mises and displacement
+        keep FEM's own colouring until the study asks for another map, range or section.
+  \item \textbf{Export.} \code{post.export\_vtu} writes the result with the displacement, the stress tensor, von Mises, the
+        principal stresses, the safety factor and \code{Radial}, \code{Hoop}, \code{Axial}, \code{RTheta}, the axis as field
+        data, quadratic tetrahedra kept as such. The panel has \textbf{Export .vtu}, \textbf{ParaView} (writes a view script
+        with the shown field, the study's colour map, range and section, and starts the app through
+        \code{bruceworx\_cfd\_paraview.paraview\_executables}) and \textbf{Picture} (PNG from the 3D view).
+  \item \textbf{Scripts.} The whole flow runs in \code{FreeCADCmd}: \code{new\_study}, \code{add\_spin}, \code{mesh\_study},
+        \code{solve}, \code{contour\_png}, \code{radial\_plot}, \code{export\_vtu}. \file{SCRATCH/agent-rotor/API.md} has the
+        exact calls for the Vector Jet design scripts.
+\end{itemize}
+
+\paragraph{Validation, case G-RD1 (closed form, tier G).} A thin steel annulus ($a=10$, $b=50$, 2\,mm thick, a quarter with
+symmetry planes) at 30\,000\,rpm against Timoshenko and Goodier's plane-stress disc,
+$\sigma_\theta(a)=\tfrac14\rho\omega^2[(3+\nu)b^2+(1-\nu)a^2]=161.15$\,MPa. Bore and rim are the mean of the nodes on the
+circle; mid-radius ($r=30$) is a cubic fit over the radius on the mid-plane. Tolerance 3\,\%, every row passes on both
+sets:
+\begin{center}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & closed form & fast (4\,mm, 8\,821 nodes) & slow (3\,mm, 9\,580 nodes) & error (3\,mm)\\
+\midrule
+hoop at the bore $r=10$ & 161.151 & 161.136 & 161.140 & $-0.007$\,\%\\
+hoop at the rim $r=50$ & 40.288 & 40.288 & 40.288 & $+0.001$\,\%\\
+radial at $r=30$ & 45.453 & 45.739 & 45.732 & $+0.62$\,\%\\
+hoop at $r=30$ & 75.410 & 75.153 & 75.157 & $-0.34$\,\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+The closed form itself is checked in \file{TestBruceWorxValidation} (free at both radii, the bore formula, the solid disc's
+centre) and the numbers in \file{cases.json} are regenerated from it.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{FEM wants a line.} The CalculiX writer for \code{ConstraintCentrif} reads the first \emph{straight} edge of
+        its axis reference and, for anything else (a circle, a face), silently falls back to the global Z axis through the
+        origin. So \code{add\_spin} resolves the pick to point and direction and makes a hidden \code{Part::Line}
+        (\code{SpinAxis}) for FEM; a wheel on any axis spins about the right one.
+  \item \textbf{Cylindrical components are ours, from the tensor.} FEM's result object has only Cartesian stress, so the
+        components are computed per node from \code{NodeStressXX..YZ} and the node positions (numpy, no FreeCAD in the
+        maths; tested on an axisymmetric field, a tilted axis and the axis itself, where radial and hoop have no
+        direction and both take the mean in-plane normal stress).
+  \item \textbf{The GUI paints with its own colour map.} FEM's mesh view only has its built-in scale, so Turbo, Jet, a
+        fixed range and the section go through \code{NodeColor} (64 colours of the map, grouped by node); the legend is a row
+        of chips. Von Mises and displacement stay on FEM's scalar colouring while nothing else is asked, so existing
+        studies look as before.
+  \item \textbf{The panel's section is element-wise.} It makes a mesh object (outside the study) of the elements whose centre
+        is not in the removed quadrant, so the cut is jagged by one element; the pictures cut exactly (a plane clip in
+        ParaView). I did not use FEM's post clip filter in the panel because it cannot carry our colour maps. A quarter model has nothing left after a
+        quarter cut, so that is refused with the reason (the first GUI run crashed on an empty section mesh).
+  \item \textbf{Pictures are pvbatch.} \code{contour\_png} always exports the .vtu and draws it with ParaView's \code{pvbatch}
+        (the same colour table sampled from the map, so GUI and picture agree), also when called inside the GUI. Without
+        ParaView it raises a \code{PostError} with the install hint instead of hanging. The panel's \textbf{Picture} uses
+        the 3D view, as the report's renders do.
+  \item \textbf{A balanced rotor needs no particular support.} The net centrifugal force is zero, so a face on the bore, symmetry
+        planes or a 3-2-1 all work; but a point support pins the growth there (a stress spike at the pin), which is why the
+        validation model uses symmetry planes and the pre-check warns about points.
+\end{itemize}
+
+\paragraph{Tests.} Headless \file{TestBruceWorxSimRotor.py} (21, 0 failures): the cylindrical components on an axisymmetric
+field, a tilted axis and the axis itself; colour maps; the closed form; axis from a cylinder face and a circle edge (and a
+plane refused); \code{add\_spin} (the rpm $\leftrightarrow$ frequency round trip, label, a load of the study, a speed change,
+zero refused); the model's own axis; the pre-check (balanced and held by a face, 3-2-1 with its warning, an axis that misses
+the part, no density, no support, ranges and colour map stored); one solve of the G-RD1 annulus read by six tests (the
+\code{*DLOAD} card at $\omega^2$ with axis $+Z$, the closed-form stress, the stored components and their trace, the .vtu with
+every field and quadratic cells, the radial profile against the closed form within 4\,\%, a \code{pvbatch} picture); and the
+reversed-pressure rim traction against Lam\'e. \file{TestBruceWorxValidation} and \file{TestBruceWorxSimCore} with them: 105
+tests, 0 failures. GUI, \file{TestBruceWorxSimulation} (14), \file{TestBruceWorxWorkspaces} (25), \file{TestBruceWorxValidationGui}
+(1), 0 failures; the new GUI test covers the + Spin button, the four fields, Turbo, the fixed range, the quarter section of a
+whole wheel (75\,\% of the elements stay), the refused section, a picked axis and the spin axis again, the .vtu, the ParaView
+script and a picture.
+
+\paragraph{Open questions for you.}
+\begin{enumerate}[nosep]
+  \item \textbf{The section in the panel} is jagged by one element (it leaves whole elements out). A smooth cut means FEM's
+        post pipeline, which has its own colour scale (Rainbow only) and no fixed-range or Turbo option. Keep ours, or accept
+        FEM's colours for the sectioned view?
+  \item \textbf{A rotor support helper.} A full wheel with no symmetry needs the user to add a bore or hub constraint. Offer
+        a ``Hold bore'' button that adds a Fixed constraint on the selected cylindrical face (stiffer than a real shrink fit),
+        or a radial-free support (a cylindrical \code{ConstraintTransform}, not built)?
+  \item \textbf{Blade pull and thermal.} Blade centrifugal pull is a Pressure on the rim today (the user computes it).
+        Should a ``Blade mass'' load do it from the blade count, mass and radius, and should the spin combine with a thermal
+        study (hot disc, thermal stress plus centrifugal)? Today the spin load is checked and solved in static studies only.
+  \item \textbf{Burst margin.} Report a burst speed ($\sqrt{\text{UTS}/\sigma_{\text{avg hoop}}}$, ``Zwicky'' style) beside the
+        safety factor?
+\end{enumerate}
