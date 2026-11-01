@@ -173,8 +173,10 @@ SET(BruceWorx_SRCS
     TestBruceWorxCfdWash.py
     bruceworx_sim_gui.py
     TestBruceWorxSimulation.py
+    bruceworx_cfd_paraview.py
     bruceworx_validation.py
     bruceworx_validation_cases.py
+    TestBruceWorxCfdParaView.py
     bruceworx_validation_gui.py
     BruceWorx_Validation.svg
     TestBruceWorxValidation.py

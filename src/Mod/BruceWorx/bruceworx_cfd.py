@@ -1731,14 +1731,15 @@ def load_results(analysis, folder=None, install=None):
     return {"result": result, "cut": cut, "surfaces": surfaces, "vtu": vtu}
 
 
+def paraview():
+    import bruceworx_cfd_paraview
+
+    return bruceworx_cfd_paraview
+
+
 def open_in_paraview(folder):
-    app = paraview_app()
-    if app is None:
-        raise CfdError("ParaView is not installed")
-    foam = os.path.join(folder, "case.foam")
-    open(foam, "a").close()
-    subprocess.Popen(["open", "-a", app, foam])
-    return foam
+    """Opens ParaView with the case ready to view (script written by bruceworx_cfd_paraview); returns the script."""
+    return paraview().open_in_paraview(folder)
 
 
 # ----- report ----------------------------------------------------------------------------------------
