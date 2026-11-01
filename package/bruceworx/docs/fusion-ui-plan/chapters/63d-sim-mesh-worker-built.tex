@@ -94,3 +94,19 @@ recompute), \code{TestBruceWorxSimRotor} 65, \code{TestBruceWorxSimModel} 45, \c
 \textbf{Not done.} The Cancel button and the visible time limit belong to the panes agent; \code{cancel()} stays the API.
 The bundle step was run only up to the checksum and copy logic on a dev copy (\code{bash -n}); a full \file{make-vectorlabs.sh}
 run, which also relocates and signs, was not done here. Gmsh's quality at these sizes (worst-element shape) is unreviewed.
+
+\paragraph{Follow-up: Gmsh fillet sizing (1 Nov).} Vector Jet found Gmsh under-resolving the R1.5 root fillets: 160\,MPa at MaxSize 1.2
+(248\,k nodes) where Netgen reads 194\,MPa (336\,k nodes), and 187\,MPa only at MaxSize 0.8 (550\,k). \textbf{Cause.} \code{MinSize} did
+reach Gmsh (\code{-clmin}); the curvature setting did not: I had fixed \code{Mesh.MeshSizeFromCurvature} at 6 elements per full circle for
+every fineness, i.e. elements of 1.05 times the radius on a fillet. Netgen's presets set a curvature safety (element size
+$\le$ radius/safety) of 1.0, 1.5, 2.0, 3.0, 5.0 for VeryCoarse to VeryFine. \textbf{Map} (\code{bruceworx\_sim\_meshworker.gmsh\_curvature}):
+elements per circle $=2\pi\times$safety: 6.3, 9.4, \textbf{12.6 (Moderate)}, 18.8, 31.4, raised to $3\times$\code{NbSegsPerRadius} if that is larger. Netgen's
+grading is not mapped (Gmsh's default size growth from the boundary stays); nothing new is exposed. Fillet elements are now about
+half the radius at Moderate. \textbf{Check on a known concentration} (test \code{test\_gmsh\_and\_netgen\_agree\_on\_a\_fillet\_stress\_concentration}):
+a quarter of a stepped flat bar, $D=20$, $d=10$, 4\,mm thick, shoulder fillet R1 ($r/d=0.1$), tension, second order, Moderate, MinSize
+0.05; $K_t$ = peak principal stress / net-section stress. MaxSize 1.0: Netgen 6627 nodes (402 within 2\,mm of the fillet) $K_t$ 2.52,
+Gmsh 8670 nodes (481) 2.47. MaxSize 0.5: Netgen 41\,287 nodes (752) 2.56, Gmsh 46\,858 (977) 2.65, a 3.4\,\% difference. So Gmsh at a given
+MaxSize now has as many nodes at the fillet as Netgen and the same stress to a few per cent. Both converge to about 2.6, above
+Peterson's plane-stress chart value of about 2.2 for $D/d=2$, $r/d=0.1$; this is the centre of a 4\,mm thick bar (closer to plane strain), and
+I did not separate that from the chart's scatter: the test asserts Gmsh within 6\,\% of Netgen and both between 2.2 and 2.9.
+The test costs about 30\,s. No validation-suite case was added.

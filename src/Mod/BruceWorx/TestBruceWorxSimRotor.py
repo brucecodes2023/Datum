@@ -1240,6 +1240,56 @@ class TestMeshWorker(unittest.TestCase):
         self.assertTrue(any("Try 3: Gmsh" in t for t in stats["notes"]), stats["notes"])
         self.assertClean()
 
+    def stepped_bar_kt(self, mesher, size=0.5):
+        """A quarter of a stepped flat bar (d = 10, D = 20, 4 thick, shoulder fillet R1, r/d = 0.1) in tension, meshed by
+        ``mesher`` at MaxSize ``size``, Moderate: (Kt on the net section, nodes within 2 mm of the fillet, total nodes)."""
+        import math
+
+        import Part
+        from FreeCAD import Vector as V
+
+        close_all()
+        edges = [Part.LineSegment(V(0, 0, 0), V(0, 5, 0)).toShape(), Part.LineSegment(V(0, 5, 0), V(30, 5, 0)).toShape(),
+                 Part.Arc(V(30, 5, 0), V(30 + math.cos(math.radians(-45)), 6 + math.sin(math.radians(-45)), 0), V(31, 6, 0)).toShape(),
+                 Part.LineSegment(V(31, 6, 0), V(31, 10, 0)).toShape(), Part.LineSegment(V(31, 10, 0), V(50, 10, 0)).toShape(),
+                 Part.LineSegment(V(50, 10, 0), V(50, 0, 0)).toShape(), Part.LineSegment(V(50, 0, 0), V(0, 0, 0)).toShape()]
+        solid = Part.Face(Part.Wire(Part.__sortEdges__(edges))).extrude(V(0, 0, 2))
+        doc = App.newDocument("KT")
+        body = vc.shape_object(doc, "B", solid)
+        objs = sim.new_study(doc, sim.StudyPlan(name="K", model=body, material=vc.material(), max_size=size, second_order=True))
+        an = objs["analysis"]
+        mesh = sim.members(an)["mesh"]
+        mesh.MinSize = 0.05
+        for axis, name in ((0, "SX"), (1, "SY"), (2, "SZ")):
+            vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(axis, 0.0)), "xyz"[axis], name)
+        vc.add_pressure(doc, an, body, vc.faces_where(solid, vc.plane_at(0, 50.0)), 1.0, reversed_=True)  # net stress 2 MPa
+        doc.recompute()
+        an.Mesher = mesher
+        stats = sim.mesh_study(an)
+        near = sum(1 for p in mesh.FemMesh.Nodes.values() if (p.x - 30) ** 2 + (p.y - 6) ** 2 < 4.0)
+        tmp = tempfile.mkdtemp(prefix="bw-kt-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        fea = sim.prepare_solve(an, tmp)
+        self.assertEqual(fea.ccx_run(), 0)
+        return max(sim.finish_solve(fea).PrincipalMax) / 2.0, near, stats["nodes"]
+
+    def test_gmsh_and_netgen_agree_on_a_fillet_stress_concentration(self):
+        if not self.mw.gmsh_binary() or not sim.find_ccx():
+            self.skipTest("no gmsh or CalculiX")
+        kt_n, near_n, nodes_n = self.stepped_bar_kt("Netgen")
+        kt_g, near_g, nodes_g = self.stepped_bar_kt("Gmsh")
+        self.assertAlmostEqual(kt_g / kt_n, 1.0, delta=0.06, msg=f"Netgen {kt_n} Gmsh {kt_g}")
+        for kt in (kt_n, kt_g):  # Peterson's plane-stress chart gives 2.2; the centre of a 4 mm thick bar is higher
+            self.assertGreater(kt, 2.2)
+            self.assertLess(kt, 2.9)
+        self.assertGreater(near_g, 0.8 * near_n, (near_g, near_n))  # Gmsh resolves the fillet as finely as Netgen
+        self.assertLess(nodes_g, 1.4 * nodes_n)
+
+    def test_the_gmsh_curvature_follows_the_fineness(self):
+        mw = self.mw
+        got = [mw.gmsh_curvature({"Fineness": f}) for f in ("VeryCoarse", "Coarse", "Moderate", "Fine", "VeryFine")]
+        self.assertEqual(got, [6.3, 9.4, 12.6, 18.8, 31.4])
+
     def test_the_time_limit_rule(self):
         mw = self.mw
         self.assertEqual(mw.time_limit(None, 1000), 120.0)

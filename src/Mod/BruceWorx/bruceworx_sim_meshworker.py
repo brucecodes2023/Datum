@@ -280,13 +280,26 @@ def size_points_from_msz(path):
     return out
 
 
+# Netgen's fineness presets set the curvature safety (element size <= radius / safety): 1.0, 1.5, 2.0, 3.0, 5.0 from VeryCoarse
+# to VeryFine (NETGENPlugin_Mesher).  Gmsh counts elements per full circle, 2 pi x safety.  A fillet of radius R then gets
+# elements of R x 2 pi / n: Moderate 12.6 per circle (0.5 R), Fine 18.8, VeryFine 31.  (The first version used 6 for every
+# fineness and under-resolved fillets: 160 MPa where Netgen read 194.)  Netgen's grading is left to Gmsh's default size growth.
+FINENESS_CURVATURE_SAFETY = {"VeryCoarse": 1.0, "Coarse": 1.5, "Moderate": 2.0, "Fine": 3.0, "VeryFine": 5.0}
+
+
+def gmsh_curvature(settings):
+    """Gmsh Mesh.MeshSizeFromCurvature (elements per 2 pi) for the study's Netgen fineness; NbSegsPerRadius raises it when larger."""
+    safety = FINENESS_CURVATURE_SAFETY.get(str(settings.get("Fineness", "Moderate")), 2.0)
+    return round(max(2 * 3.141592653589793 * safety, 3 * int(settings.get("NbSegsPerRadius", 2) or 2)), 1)
+
+
 def gmsh_command(binary, settings, tmp):
     """The gmsh command line for ``shape.brep`` in ``tmp``: MaxSize and MinSize as -clmax and -clmin, curvature sizing
     (6 elements per full circle, or 3 x NbSegsPerRadius when larger), the order, and the local sizes of a Netgen
     ``MeshSizeFile`` as one Ball field per point (size h inside radius h, growing to MaxSize over 2 x MaxSize)."""
     big = float(settings.get("MaxSize", 5.0))
     small = float(settings.get("MinSize", 0.0) or 0.0)
-    curv = max(6, 3 * int(settings.get("NbSegsPerRadius", 2) or 2))
+    curv = gmsh_curvature(settings)
     inp = os.path.join(tmp, "shape.brep")
     points = size_points_from_msz(settings["MeshSizeFile"]) if settings.get("MeshSizeFile") else []
     if points:
