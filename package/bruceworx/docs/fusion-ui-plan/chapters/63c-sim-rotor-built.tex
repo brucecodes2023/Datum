@@ -214,3 +214,49 @@ surface-only, unused-node and Tet10 upgrade cases, the singular guard and the pi
         ``away from the supports'' minimum now also leaves out every node within $2\times$ the element size of a point support
         (a pin has a stress spike round it), and the panel and report say so with the radius.
 \end{enumerate}
+
+
+\paragraph{Follow-up, 1 Nov: blade mass, spin with heat, burst speed.}
+Your three answers, built; the tilted-axis \code{hold\_for\_spin} and the section view are as they were.
+\begin{itemize}[nosep]
+  \item \textbf{Blade mass load.} \code{post.add\_blade\_mass(analysis, faces, count, mass\_g, r\_cg\_mm)} and a \textbf{+~Blade
+        mass} button (select the rim face(s); it asks for the count, the mass and the radius). Each blade pulls with
+        $F=m\,r_{cg}\,\omega^2$ at the study's spin speed; the total $N F$ is spread \emph{evenly} over the area of the
+        selected faces, so the pressure is $N F/A$ (an outward traction: FEM's Pressure with Reversed, nothing new for the
+        solver). The blades are not placed at their angles: a real blade root loads its seat unevenly, so this is the
+        average pull; for the stress at the seats model them. $N$ is the number of blades the selected faces carry, so a
+        sector model takes its share (a quarter of a 24-blade wheel: 6; our validation eighth, a quarter cut at the
+        mid-plane: 3, a share of a blade is allowed). The load keeps the blade data on itself and follows the first spin
+        load: \code{set\_spin\_speed} refreshes it, and so does every pre-check and solve, so a speed edited in the property
+        view cannot leave a stale pull. The pre-check errors without a spin load or with a zero count, mass or radius, and
+        warns when a selected face does not face outward from the axis. The study lists it as ``Blade mass 24 x 2 g at
+        55 mm: 1085.7 N each, 26056 N over 628.3 mm$^2$''. Example: 24 blades of 2\,g at $r_{cg}=55$\,mm and 30\,000\,rpm
+        pull 1085.66\,N each, 41.47\,MPa on the rim of the G-RD1 annulus.
+  \item \textbf{Validation case G-RD3.} G-RD1's quarter annulus with that load against the Timoshenko disc plus Lam\'e's
+        outer tension (\code{post.rotating\_disc\_rim}), tolerance 3\,\%. On the 3\,mm mesh (9\,580 nodes): bore hoop
+        247.545 closed form, 247.527 solved ($-0.007$\,\%); rim hoop 85.213, 85.212 ($0.000$\,\%); radial at $r=30$ 83.850,
+        84.273 ($+0.51$\,\%); hoop at $r=30$ 123.407, 123.010 ($-0.32$\,\%). The pull adds 86\,MPa at the bore to the 161.15
+        of the plain disc. Unit tests: the closed forms (zero traction is the plain disc, $\sigma_r(b)=T$, $\sigma_r(a)=0$),
+        the pressure times the area equals $N F$, the load follows the speed, the errors and the outward warning.
+  \item \textbf{Spin with heat.} The spin load, the blade mass and \textbf{+~Hold for spin} are checked and solved in
+        thermal stress studies too (before only in static ones; CalculiX's \code{*DLOAD CENTRIF} rides in the same step as the
+        temperature, and the panel offers the buttons). Superposition on the quarter annulus (bore 120\,$^\circ$C, rim
+        20\,$^\circ$C, $T_{ref}=20$, steady conduction), 3\,mm mesh, hoop stress: bore $-184.15$ (heat only) $+161.14$
+        (spin only, a static study) $=-23.01$, combined solve $-23.01$ (difference below 0.001\,MPa); rim $67.79+40.29=108.08$,
+        combined $108.08$. Against the closed form (Timoshenko disc plus the thermal disc by quadrature,
+        \code{post.thermal\_disc}): bore $-23.06$ ($-0.20$\,\%), rim $108.08$ ($0.00$\,\%).
+  \item \textbf{Burst speed.} $n_{burst}=n\sqrt{\mathrm{UTS}/\sigma_{avg}}$, $\sigma_{avg}$ the hoop stress averaged over the
+        disc's meridional section: each tetrahedron counts with its volume$/(2\pi r)$ (its section area) and the mean of
+        its corner hoop stresses. UTS is the \code{UltimateTensileStrength} of the study's material card, without the
+        knockdown, named in the line (``the material card has no ultimate tensile strength'' gives no figure and says so).
+        The panel, the summary text and the report print the burst speed and the margin $n_{burst}/n$ beside the safety
+        factor; the bore safety factor and the part's are unchanged. G-RD1 annulus at 30\,000\,rpm with UTS 900\,MPa: average
+        hoop 80.11\,MPa (the closed form's mean over the radius agrees within 1\,\%), $n_{burst}=100\,554$\,rpm, margin 3.35, while
+        the part's safety factor against a 355\,MPa yield is 2.20. The hot disc gives the same 80.12\,MPa: heat stress balances
+        over the section, so it hardly moves the average. The estimate assumes the stress grows with $n^2$, which thermal
+        stress does not, and uses the card's room temperature UTS; the report says so.
+\end{itemize}
+\textbf{Tests.} \code{TestBruceWorxSimRotor} 49 (was 35), \code{TestBruceWorxSimCore} 57 and \code{TestBruceWorxValidation} 32, 0
+failures. \textbf{Open questions.} (1) Should the blade pull follow the spin automatically when a study has several spin loads
+(today the first)? (2) A real blade root loads its seat unevenly; do you want a per-seat pull on a chosen set of faces
+later? (3) The burst margin has no pass/fail threshold; add one (many specifications ask for 1.2 or more)?

@@ -35,7 +35,7 @@ class TestCases(unittest.TestCase):
         ids = [c["id"] for c in val.load_cases()]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sorted(ids), sorted(["B-ST1", "B-ST2", "B-ST3", "B-MO1", "B-MO2", "B-MO3", "B-BU1", "B-TH1", "B-TH2",
-                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "G-RD2", "B-CF4"]))
+                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "G-RD2", "G-RD3", "B-CF4"]))
         self.assertEqual([c["id"] for c in self.doc["cfd"]], ["B-CF4"])  # the SIM-06 cases (bruceworx_cfd_wash)
         for case in self.cases.values():
             if case.get("kind", "fe") == "fe":
@@ -105,6 +105,42 @@ class TestCases(unittest.TestCase):
         for key, value in vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3).items():
             self.assertAlmostEqual(refs[key], value, delta=1e-9 * abs(value))
         self.assertAlmostEqual(refs["shoop_a"], bore / 1e6, delta=1e-9)
+
+    def test_the_rim_load_closed_form_and_the_blade_case(self):
+        import bruceworx_sim_post as post
+
+        rho, nu, w = 7850.0, 0.3, 30000 * 2 * math.pi / 60
+        a, b, t = 0.01, 0.05, 0.002
+        # no traction: the plain rotating disc; a traction T: sigma_r(b) = T and sigma_r(a) = 0 (free bore)
+        self.assertEqual(post.rotating_disc_rim(0.03, a, b, rho, w, nu, 0.0), post.rotating_disc(0.03, a, b, rho, w, nu))
+        self.assertAlmostEqual(post.rotating_disc_rim(b, a, b, rho, w, nu, 40e6)[0], 40e6, delta=1e-3)
+        self.assertAlmostEqual(post.rotating_disc_rim(a, a, b, rho, w, nu, 40e6)[0], 0.0, delta=1e-3)
+        blades = {"count": 24, "mass_g": 2.0, "r_cg_mm": 55.0}
+        force, total = post.blade_pull(24, 2.0, 55.0, 30000.0)
+        self.assertAlmostEqual(force, 0.002 * 0.055 * w * w, delta=1e-9)
+        self.assertAlmostEqual(total, 24 * force, delta=1e-9)
+        self.assertAlmostEqual(vc.blade_traction(50.0, 2.0, 30000.0, blades), total / (2 * math.pi * b * t) / 1e6, delta=1e-9)
+        case = self.cases["G-RD3"]
+        self.assertEqual(case["params"]["blades"], blades)
+        refs = {r["key"]: r["value"] for r in case["references"]}
+        for key, value in vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3, blades=blades).items():
+            self.assertAlmostEqual(refs[key], value, delta=1e-9 * abs(value))
+        self.assertGreater(refs["shoop_a"], self.cases["G-RD1"]["references"][0]["value"] + 50)  # the pull adds to the bore
+
+    def test_thermal_disc_closed_form(self):
+        import bruceworx_sim_post as post
+
+        a, b, E, alpha = 0.01, 0.05, 210e9, 12e-6
+        # a uniform rise gives no stress in a free annulus; a hot bore puts the bore in compression and the rim in tension
+        for r in (a, 0.03, b):
+            sr, st = post.thermal_disc(r, a, b, E, alpha, lambda x: 50.0)
+            self.assertAlmostEqual(sr, 0.0, delta=1.0)
+            self.assertAlmostEqual(st, 0.0, delta=1.0)
+        hot = lambda x: 100.0 * (1 - math.log(x / a) / math.log(b / a))  # noqa: E731 -- steady conduction, bore 100 K, rim 0 K
+        self.assertAlmostEqual(post.thermal_disc(a, a, b, E, alpha, hot)[0], 0.0, delta=1e3)  # sigma_r free at both radii
+        self.assertAlmostEqual(post.thermal_disc(b, a, b, E, alpha, hot)[0], 0.0, delta=1e3)
+        self.assertLess(post.thermal_disc(a, a, b, E, alpha, hot)[1], 0)
+        self.assertGreater(post.thermal_disc(b, a, b, E, alpha, hot)[1], 0)
 
     def test_circular_plate_buckling_reproduces_the_manual_and_the_json(self):
         self.assertAlmostEqual(vc.circular_plate_k2("clamped"), 14.68, delta=0.005)
@@ -287,6 +323,9 @@ class TestFastSet(unittest.TestCase):
 
     def test_gap_rotating_disc_held_by_points(self):
         self.check("G-RD2")
+
+    def test_gap_rotating_disc_with_blade_mass(self):
+        self.check("G-RD3")
 
     def test_report_of_the_run(self):
         out = val.write_report(self.vrun, folder=self.tmp, compile=bool(sim.find_tex()[0]))

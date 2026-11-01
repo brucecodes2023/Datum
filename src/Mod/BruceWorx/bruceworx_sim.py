@@ -1215,6 +1215,13 @@ def precheck(analysis):
         import bruceworx_cfd as cfd
 
         return [(level, text) for level, text in cfd.study_precheck(analysis)[0] if level != "info"]
+    if kind in ("static", "thermal_stress"):  # SIM-04: the blade mass pressure follows the spin speed
+        try:
+            import bruceworx_sim_post as post
+
+            post.update_blade_loads(analysis.Document, analysis=analysis)
+        except Exception:
+            pass
     prestressed = kind == "modal" and bool(getattr(analysis, "Prestressed", False))
     thermal_kind = kind in ("thermal", "thermal_stress")
     if thermal_kind:
@@ -1298,10 +1305,11 @@ def precheck(analysis):
             issues.append(("error", f"{obj.Label}: the pressure is zero"))
     if thermal_kind:
         issues += thermal.boundary_issues(analysis, m)
-    if kind == "static":  # SIM-04: the spin loads (axis, speed, density, balance)
+    if kind in ("static", "thermal_stress"):  # SIM-04: the spin loads (axis, speed, density, balance), also with heat
         import bruceworx_sim_post as post
 
         issues += post.precheck_spin(analysis, m)
+        issues += post.precheck_blades(analysis, m)
     if m["solver"] is None:
         issues.append(("error", "No solver: New Study makes a CalculiX solver"))
     if not find_ccx():
@@ -1677,6 +1685,15 @@ def result_extrema(result):
     out["support_radius"] = float(getattr(result, "SupportExcludeRadius", 0.0) or 0.0)
     out["measure"] = str(getattr(result, "StressMeasure", "") or "vonMises")
     out["max_eq"] = float(getattr(result, "MaxEquivalentStress", 0.0) or out["max_vm"])
+    out["burst"] = {}
+    try:  # SIM-04: a spinning rotor reports its burst speed beside the safety factor
+        import bruceworx_sim_post as post
+
+        an = study_of(result)
+        if an is not None and post.spin_loads(an):
+            out["burst"] = post.burst_speed(result, an)
+    except Exception:
+        pass
     out["bore"] = {}
     try:  # SIM-04: a spinning rotor with a bore reports it (mean, max and mid-plane hoop, von Mises max)
         import bruceworx_sim_post as post
@@ -1732,6 +1749,10 @@ def _describe(obj):
     value = ""
     if obj.TypeId == "Fem::ConstraintForce":
         value = f"{_value(obj, 'Force', 'N') or 0:g} N" + (" (reversed)" if getattr(obj, "Reversed", False) else "")
+    elif obj.TypeId == "Fem::ConstraintPressure" and "BladeCount" in obj.PropertiesList:
+        kind = "Blade mass"
+        value = (f"{obj.BladeCount:g} x {obj.BladeMassG:g} g at {obj.BladeCgRadius.Value:g} mm: {obj.BladePullN:.4g} N each, "
+                 f"{obj.BladeTotalN:.5g} N over {obj.BladeArea:.4g} mm2 = {_value(obj, 'Pressure', 'MPa') or 0:.4g} MPa")
     elif obj.TypeId == "Fem::ConstraintPressure":
         value = f"{_value(obj, 'Pressure', 'MPa') or 0:g} MPa" + (" (reversed)" if getattr(obj, "Reversed", False) else "")
     elif is_spin_load(obj):
@@ -2058,6 +2079,16 @@ def report_source(data, figures=()):
                     if res.get("support_radius") else "")
             lines.append(rf"Min safety factor away from the supports & \textbf{{{e(_fmt(res['min_sf_away'], 3, cap=True))}}} "
                          rf"(node {res['min_sf_away_node']}; {res['support_nodes']} nodes on supports left out{e(near)})\\")
+        burst = res.get("burst") or {}
+        if burst:
+            if burst.get("burst_rpm"):
+                lines.append(rf"Burst speed (Zwicky) & \textbf{{{_fmt(burst['burst_rpm'], 5)}}} rpm = "
+                             rf"{_fmt(burst['margin'], 3)} $\times$ the {_fmt(burst['rpm'], 5)} rpm of the study\\")
+                lines.append(rf"Burst margin $n_{{\mathrm{{burst}}}}/n$ & \textbf{{{_fmt(burst['margin'], 3)}}} "
+                             rf"(average hoop stress over the meridional section {_tex_value(burst['avg_hoop'], 4, 'MPa')}, "
+                             rf"UTS {_tex_value(burst['uts'], 4, 'MPa')}: {e(burst['uts_source'])})\\")
+            else:
+                lines.append(rf"Burst speed & {e(burst.get('note') or 'not available')}\\")
         bore = res.get("bore") or {}
         if bore:
             lines.append(rf"Bore (radius {_tex_value(bore['radius'], 4, 'mm')}, {_tex_value(bore['length'], 3, 'mm')} long, "
@@ -2071,6 +2102,11 @@ def report_source(data, figures=()):
                              r"(the bore's nodes, \emph{not} the part's: see Min safety factor above)\\")
             lines.append(rf"Safety factor basis & {e(measure_label(measure))} equivalent stress, never the hoop stress\\")
         lines.append(r"\end{tabular}")
+        if burst.get("burst_rpm"):
+            lines.append(r"\par{\small Burst speed: $n_{\mathrm{burst}} = n\sqrt{\mathrm{UTS}/\sigma_{\mathrm{avg}}}$, with "
+                         r"$\sigma_{\mathrm{avg}}$ the hoop stress averaged over the disc's meridional section; it assumes the "
+                         r"stress grows with the square of the speed (thermal stress does not) and uses the card's room "
+                         r"temperature strength.}")
         if bore and bore["length"] > 0.5 * bore["radius"]:
             lines.append(r"\par{\small On a long bore the mean hoop stress understates the bore: the axial stress adds to "
                          r"the von Mises stress and the hoop stress varies along the bore. Read the mid-plane and von Mises "

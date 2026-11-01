@@ -1143,6 +1143,75 @@
    },
    "licence": "Textbook closed form (a derivation, no data copied)",
    "setup": "The whole steel annulus a=10, b=50 mm, 2 mm thick (no symmetry planes), E=210 GPa, nu=0.3, rho=7850 kg/m3, spinning at 30 000 rpm about Z. Held only by bruceworx_sim_post.hold_for_spin: point A (nearest the axis) holds both directions across the axis, point B on the +X radius holds the tangential direction Y, and the axial direction is held along the circular edge at A's level (a plain annulus has no third vertex off the A-B line). A balanced rotor has no reaction at these points, so the bore and rim hoop stress (the mean of the nodes on each circle) are the free disc's; a Fixed bore would stop the bore growing and is refused by the pre-check. The 3D thin disc differs from plane stress by a fraction of a percent."
+  },
+  {
+   "id": "G-RD3",
+   "title": "Thin rotating annular disc at 30 000 rpm with a blade mass load on the rim (24 blades, 2 g, r_cg 55 mm)",
+   "tier": "G",
+   "kind": "fe",
+   "study": "static",
+   "builder": "rotating_disc_blades",
+   "params": {
+    "a_mm": 10.0,
+    "b_mm": 50.0,
+    "thickness_mm": 2.0,
+    "rpm": 30000.0,
+    "E_MPa": 210000.0,
+    "nu": 0.3,
+    "density": 7850.0,
+    "blades": {
+     "count": 24,
+     "mass_g": 2.0,
+     "r_cg_mm": 55.0
+    }
+   },
+   "mesh": {
+    "fast": 4.0,
+    "slow": [
+     5.0,
+     4.0,
+     3.0
+    ]
+   },
+   "tolerance": 0.03,
+   "primary": "shoop_a",
+   "references": [
+    {
+     "key": "shoop_a",
+     "label": "hoop stress at the bore (r = 10 mm)",
+     "value": 247.54469863470638,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "shoop_b",
+     "label": "hoop stress at the rim (r = 50 mm)",
+     "value": 85.2125001115808,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "sr_mid",
+     "label": "radial stress at mid-radius (r = 30 mm)",
+     "value": 83.85006167902544,
+     "unit": "MPa",
+     "derived": true
+    },
+    {
+     "key": "shoop_mid",
+     "label": "hoop stress at mid-radius (r = 30 mm)",
+     "value": 123.40691179043417,
+     "unit": "MPa",
+     "derived": true
+    }
+   ],
+   "citation": {
+    "document": "Timoshenko and Goodier, Theory of Elasticity, 3rd ed., section 32 (rotating annular disc) plus the Lame solution for a uniform tension on the outer radius (section 28), superposed (plane stress)",
+    "location": "bruceworx_sim_post.rotating_disc_rim; the blade pull is F = m r_cg omega^2 per blade (bruceworx_sim_post.blade_pull)",
+    "url": ""
+   },
+   "licence": "Textbook closed form (a derivation, no data copied)",
+   "setup": "As G-RD1 (quarter annulus a=10, b=50 mm, 2 mm thick, symmetry planes x=0, y=0 and the mid-plane, 30 000 rpm about Z) with a Blade mass load on the rim face: 24 blades on the whole wheel of 2 g each with the centre of mass at r=55 mm, so F = m r omega^2 = 1085.7 N per blade and 26055.76 N in all, spread evenly over the rim as a uniform outward pressure of 41.47 MPa (the model, an eighth of the wheel, carries 3 blades; the load divides N F by the area of the faces it is put on). The reference is the Timoshenko disc plus Lame's outer tension T = N F / (2 pi b t), superposed. Bore and rim values are the mean of the nodes on the circle, mid-radius a cubic fit over the radius on the mid-plane."
   }
  ]
 }

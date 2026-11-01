@@ -221,6 +221,10 @@ def set_spin_speed(spin, rpm):
     """Sets a spin load's speed in rpm and keeps its label in step."""
     spin.RotationFrequency = f"{float(rpm) * RPM_TO_HZ} 1/s"
     spin.Label = f"{SPIN_NAME} {float(rpm):g} rpm"
+    try:  # the blade mass loads that follow this spin
+        update_blade_loads(spin.Document, spin)
+    except Exception:
+        pass
     return spin
 
 
@@ -251,6 +255,156 @@ def add_spin(analysis, rpm, axis=None, name=SPIN_NAME):
     analysis.addObject(spin)
     doc.recompute()
     return spin
+
+
+# ----- the blade mass load ----------------------------------------------------------------------------------------------
+
+BLADE_NAME = "Blade mass"
+
+
+def is_blade_load(obj):
+    """A blade mass load is a Pressure (reversed: an outward traction) that carries the blade data."""
+    return getattr(obj, "TypeId", "") == "Fem::ConstraintPressure" and "BladeCount" in obj.PropertiesList
+
+
+def blade_loads(analysis):
+    return [o for o in getattr(analysis, "Group", []) or [] if is_blade_load(o)]
+
+
+def blade_pull(count, mass_g, r_cg_mm, rpm):
+    """(F per blade, total) in N: F = m r_cg omega^2 for a blade of ``mass_g`` grams whose centre of mass is ``r_cg_mm`` from the
+    axis, at ``rpm``; the total is ``count`` blades."""
+    omega = float(rpm) * 2.0 * math.pi / 60.0
+    force = float(mass_g) * 1e-3 * float(r_cg_mm) * 1e-3 * omega * omega
+    return force, force * float(count)
+
+
+def blade_area(obj):
+    """The total area (mm^2) of the faces a blade mass load acts on."""
+    total = 0.0
+    for ref, subs in getattr(obj, "References", None) or []:
+        for sub in subs if isinstance(subs, (list, tuple)) else [subs]:
+            if sub.startswith("Face"):
+                total += float(ref.getSubObject(sub).Area)
+    return total
+
+
+def blade_spin(obj, analysis=None):
+    """The spin load a blade mass follows: its link, else the study's first spin load."""
+    analysis = analysis or sim.study_of(obj)
+    link = getattr(obj, "BladeSpin", None)
+    if link is not None and is_spin(link) and analysis is not None and link in (analysis.Group or []):
+        return link
+    spins = spin_loads(analysis) if analysis is not None else []
+    return spins[0] if spins else None
+
+
+def update_blade_loads(doc, spin=None, analysis=None):
+    """Sets the pressure of every blade mass load from its data and the spin speed: P = N m r_cg omega^2 / A, spread evenly over
+    the area A of the selected faces (so the faces carry the pull of ``BladeCount`` blades together).  Without ``analysis`` it
+    runs over every study of the document; with ``spin`` only the loads that follow that spin.  Returns the loads updated."""
+    studies = [analysis] if analysis is not None else [o for o in doc.Objects if sim.is_study(o)]
+    done = []
+    for an in studies:
+        for obj in blade_loads(an):
+            mine = blade_spin(obj, an)
+            if mine is None or (spin is not None and mine != spin):
+                continue
+            area = blade_area(obj)
+            force, total = blade_pull(obj.BladeCount, obj.BladeMassG, obj.BladeCgRadius.Value, spin_rpm(mine))
+            obj.BladePullN, obj.BladeTotalN, obj.BladeArea = force, total, area
+            obj.Reversed = True
+            obj.Pressure = f"{total / area if area > 0 else 0.0:.9g} MPa"
+            obj.Label = f"{BLADE_NAME} {obj.BladeCount:g} x {float(obj.BladeMassG):g} g at {obj.BladeCgRadius.Value:g} mm"
+            done.append(obj)
+    return done
+
+
+def add_blade_mass(analysis, faces, count, mass_g, r_cg_mm, spin=None, name=BLADE_NAME):
+    """Adds a blade mass load: the pull of ``count`` blades of ``mass_g`` grams each, centre of mass at ``r_cg_mm`` from the axis,
+    as one outward pressure on ``faces`` ([(object, 'FaceN'), ...]; the rim, or the blade root seats).
+
+    Each blade pulls with F = m r_cg omega^2 at the study's spin speed; the total ``count`` x F is spread evenly over the area of
+    the faces, so the pressure is count x F / area.  ``count`` is the number of blades the selected faces carry: a sector model
+    of a 24 blade wheel holds its share (a quarter: 6; a quarter cut at the mid-plane too: 3, so a share of a blade is fine).  It follows ``spin`` (default: the study's first spin load) when the speed changes
+    (``set_spin_speed``, and every solve).  The load is FEM's own Pressure with Reversed set, so the solver needs nothing new."""
+    import ObjectsFem
+
+    if not sim.is_study(analysis) or sim.study_kind(analysis) not in ("static", "thermal_stress"):
+        raise PostError("a blade mass load belongs to a static or thermal stress study")
+    spin = spin or (spin_loads(analysis) or [None])[0]
+    if spin is None:
+        raise PostError("add the spin load first: the blades pull with the spin speed")
+    if float(count) <= 0 or float(mass_g) <= 0 or float(r_cg_mm) <= 0:
+        raise PostError("a blade mass load needs a blade count, a mass and a radius above zero")
+    refs = {}
+    for ref, sub in faces:
+        refs.setdefault(ref, []).extend(sub if isinstance(sub, (list, tuple)) else [sub])
+    doc = analysis.Document
+    load = ObjectsFem.makeConstraintPressure(doc, name)
+    load.References = [(o, subs) for o, subs in refs.items()]
+    group = "Blade mass"
+    load.addProperty("App::PropertyFloat", "BladeCount", group, "[BW] Blades the selected faces carry (a share of a blade when the model is a slice)")
+    load.addProperty("App::PropertyFloat", "BladeMassG", group, "[BW] Mass of one blade, g")
+    load.addProperty("App::PropertyLength", "BladeCgRadius", group, "[BW] Radius of one blade's centre of mass from the spin axis")
+    load.addProperty("App::PropertyLink", "BladeSpin", group, "[BW] The spin load whose speed the blades follow")
+    load.addProperty("App::PropertyFloat", "BladePullN", group, "[BW] Pull of one blade, m r omega^2, N (set by the study)")
+    load.addProperty("App::PropertyFloat", "BladeTotalN", group, "[BW] Pull of all the blades, N (set by the study)")
+    load.addProperty("App::PropertyFloat", "BladeArea", group, "[BW] Area the pull is spread over, mm^2 (set by the study)")
+    load.BladeCount, load.BladeMassG, load.BladeCgRadius, load.BladeSpin = float(count), float(mass_g), f"{float(r_cg_mm)} mm", spin
+    analysis.addObject(load)
+    update_blade_loads(doc, analysis=analysis)
+    doc.recompute()
+    return load
+
+
+def set_blade_data(load, count=None, mass_g=None, r_cg_mm=None):
+    """Changes a blade mass load's data and refreshes its pressure."""
+    if count is not None:
+        load.BladeCount = float(count)
+    if mass_g is not None:
+        load.BladeMassG = float(mass_g)
+    if r_cg_mm is not None:
+        load.BladeCgRadius = f"{float(r_cg_mm)} mm"
+    update_blade_loads(load.Document, analysis=sim.study_of(load))
+    return load
+
+
+def precheck_blades(analysis, m=None):
+    """Errors and warnings for the blade mass loads of a study: [(level, text)]."""
+    loads = blade_loads(analysis)
+    if not loads:
+        return []
+    import numpy as np
+
+    issues = []
+    for obj in loads:
+        spin = blade_spin(obj, analysis)
+        if spin is None:
+            issues.append(("error", f"{obj.Label}: no spin load in the study: the blades pull with the spin speed"))
+            continue
+        if float(obj.BladeCount) <= 0 or float(obj.BladeMassG) <= 0 or obj.BladeCgRadius.Value <= 0:
+            issues.append(("error", f"{obj.Label}: needs a blade count, a mass and a radius above zero"))
+        if not any(sub.startswith("Face") for _o, subs in obj.References or [] for sub in subs):
+            issues.append(("error", f"{obj.Label}: pick the rim face(s) the blades pull on"))
+            continue
+        try:
+            axis = spin_axis(spin)
+            point, a, _u, _v = axis_frame(axis)
+            for ref, subs in obj.References:
+                for sub in subs:
+                    f = ref.getSubObject(sub)
+                    u0, u1, v0, v1 = f.ParameterRange
+                    uv = (0.5 * (u0 + u1), 0.5 * (v0 + v1))
+                    p, n = f.valueAt(*uv), f.normalAt(*uv)
+                    rel = np.array([p.x, p.y, p.z]) - point
+                    rhat = rel - (rel @ a) * a
+                    if np.linalg.norm(rhat) > 1e-9 and float(np.array([n.x, n.y, n.z]) @ rhat) / np.linalg.norm(rhat) < 0.5:
+                        issues.append(("warning", f"{obj.Label}: {ref.Label}.{sub} does not face outward from the axis; the "
+                                                  "pull is along its outward normal"))
+        except Exception:
+            pass
+    return issues
 
 
 # ----- the pre-check of a spinning study -----------------------------------------------------------------------------
@@ -623,6 +777,66 @@ def bore_stress(result, analysis=None, axis=None, band=0.05):
     }
 
 
+def burst_speed(result, analysis=None):
+    """The burst speed of a spinning rotor, Zwicky style: n_burst = n sqrt(UTS / sigma_avg), where sigma_avg is the average hoop
+    stress over the disc's meridional section (the (r, z) half plane) and UTS the ultimate tensile strength of the study's
+    material card.  The average weights each element by its meridional area, volume / (2 pi r) of its centroid, with the mean of
+    its corner hoop stresses, so it needs no assumption about the shape (a bore, a hub, blades all count by their section).
+
+    Returns {} for a study without a spin load, else a dict: rpm, avg_hoop (MPa), uts (MPa or None), uts_source (text: the
+    card), burst_rpm and margin = burst_rpm / rpm (None when something is missing; ``note`` says what).  The estimate assumes
+    every stress grows with the square of the speed (centrifugal and blade pull do; thermal stress does not, so a hot disc's
+    figure is only approximate) and takes the card's room temperature UTS."""
+    import numpy as np
+
+    analysis = analysis or sim.study_of(result)
+    spins = spin_loads(analysis) if analysis is not None else []
+    if not spins:
+        return {}
+    rpm = spin_rpm(spins[0])
+    out = {"rpm": rpm, "avg_hoop": None, "uts": None, "uts_source": "", "burst_rpm": None, "margin": None, "note": ""}
+    material = sim.study_material(analysis) or {}
+    uts = material.get("uts")
+    out["uts"] = uts
+    out["uts_source"] = (f"ultimate tensile strength of the material card \"{material.get('name', '')}\"" if uts
+                         else "the material card has no ultimate tensile strength")
+    resolved = default_axis(analysis)
+    values = cylindrical_stress(result, resolved, analysis)
+    hoop = np.array(values["hoop"], dtype=float)
+    ids = list(result.NodeNumbers)
+    index = {n: i for i, n in enumerate(ids)}
+    _ids, xyz = node_positions(result)
+    point, a, _u, _v = axis_frame(resolved)
+    fem = result.Mesh.FemMesh
+    weight = total = 0.0
+    for vid in fem.Volumes:
+        nodes = fem.getElementNodes(vid)
+        if len(nodes) not in (4, 10):
+            out["note"] = "the average hoop stress needs a tetrahedral mesh"
+            return out
+        pts = xyz[[index[n] for n in nodes[:4]]]
+        vol = abs(float(np.linalg.det(pts[1:] - pts[0]))) / 6.0
+        rel = pts.mean(axis=0) - point
+        radius = float(np.linalg.norm(rel - (rel @ a) * a))
+        if radius < 1e-9 or vol <= 0.0:
+            continue
+        w = vol / (2.0 * math.pi * radius)
+        weight += w
+        total += w * float(hoop[[index[n] for n in nodes[:4]]].mean())
+    if weight <= 0.0:
+        out["note"] = "no meridional area"
+        return out
+    out["avg_hoop"] = total / weight
+    if not uts:
+        out["note"] = "no burst speed: the material card has no ultimate tensile strength"
+    elif out["avg_hoop"] <= 0.0:
+        out["note"] = "no burst speed: the average hoop stress is not tensile"
+    else:
+        out["burst_rpm"] = rpm * math.sqrt(uts / out["avg_hoop"])
+        out["margin"] = out["burst_rpm"] / rpm
+    return out
+
+
 # ----- the closed form of a rotating disc -----------------------------------------------------------------------
 
 
@@ -643,6 +857,35 @@ def rotating_disc(r, a, b, rho, omega, nu):
         return k * (b * b - r * r), k * (b * b - c * r * r)
     ab = a * a * b * b / (r * r)
     return k * (a * a + b * b - ab - r * r), k * (a * a + b * b + ab - c * r * r)
+
+
+def rotating_disc_rim(r, a, b, rho, omega, nu, traction):
+    """(sigma_r, sigma_theta) of the thin annulus of ``rotating_disc`` with a uniform outward traction ``traction`` (tension, same
+    stress unit as the result) on the rim r = b, the bore free: the rotation plus Lame's solution
+    (T b^2 / (b^2 - a^2)) (1 -/+ a^2 / r^2) by superposition.  This is what a blade mass load on the rim does; at ``traction`` 0
+    it is ``rotating_disc``."""
+    sr, st = rotating_disc(r, a, b, rho, omega, nu)
+    k = traction * b * b / (b * b - a * a)
+    return sr + k * (1.0 - a * a / (r * r)), st + k * (1.0 + a * a / (r * r))
+
+
+def thermal_disc(r, a, b, E, alpha, temperature, steps=4000):
+    """(sigma_r, sigma_theta) of a thin annulus free at both radii with the radial temperature rise ``temperature(r)`` above its
+    stress-free temperature (plane stress, Timoshenko and Goodier section 142), by trapezoid sums over ``steps``:
+    sigma_r = alpha E / r^2 [(r^2 - a^2)/(b^2 - a^2) I(a, b) - I(a, r)], sigma_theta = alpha E / r^2 [(r^2 + a^2)/(b^2 - a^2)
+    I(a, b) + I(a, r) - T r^2], with I(x, y) the integral of T r dr.  Any consistent units."""
+    def integral(lo, hi):
+        if hi <= lo:
+            return 0.0
+        h = (hi - lo) / steps
+        total = 0.5 * (temperature(lo) * lo + temperature(hi) * hi)
+        total += sum(temperature(lo + i * h) * (lo + i * h) for i in range(1, steps))
+        return total * h
+
+    whole, part = integral(a, b), integral(a, r)
+    c = alpha * E / (r * r)
+    return (c * ((r * r - a * a) / (b * b - a * a) * whole - part),
+            c * ((r * r + a * a) / (b * b - a * a) * whole + part - temperature(r) * r * r))
 
 
 # ----- cylindrical stress components ----------------------------------------------------------------------------

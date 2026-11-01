@@ -757,5 +757,212 @@ class TestRimTraction(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+BLADES = {"count": 24, "mass_g": 2.0, "r_cg_mm": 55.0}  # the whole wheel's; the model (an eighth) carries 3
+
+
+class TestBladeMass(unittest.TestCase):
+    """A Blade mass load: N m r_cg omega^2 over the rim faces, following the spin speed (SIM-04, 1 Nov)."""
+
+    def setUp(self):
+        close_all()
+
+    def tearDown(self):
+        close_all()
+
+    def study(self):
+        import Part
+
+        doc = App.newDocument("Blades")
+        solid = Part.makeCylinder(50.0, 2.0).cut(Part.makeCylinder(10.0, 2.0))
+        body = vc.shape_object(doc, "Wheel", solid)
+        an = sim.new_study(doc, sim.StudyPlan(name="Wheel", model=body, material=vc.material(), max_size=5.0))["analysis"]
+        spin = post.add_spin(an, 30000, axis="z")
+        rim = [(body, f) for f in vc.faces_where(solid, vc.cylinder_of(50.0))]
+        return doc, body, an, spin, rim
+
+    def test_the_pressure_is_the_total_pull_over_the_rim_area(self):
+        _doc, _body, an, _spin, rim = self.study()
+        load = post.add_blade_mass(an, rim, 24, 2.0, 55.0)
+        w = 30000 * 2 * math.pi / 60
+        force = 0.002 * 0.055 * w * w
+        self.assertAlmostEqual(load.BladePullN, force, delta=1e-6)
+        self.assertAlmostEqual(load.BladeTotalN, 24 * force, delta=1e-5)
+        self.assertAlmostEqual(load.BladeArea, 2 * math.pi * 50.0 * 2.0, delta=1e-6)  # the whole rim face
+        pressure = load.Pressure.getValueAs("MPa").Value
+        self.assertAlmostEqual(pressure * load.BladeArea, 24 * force, delta=1e-3)
+        self.assertAlmostEqual(pressure, vc.blade_traction(50.0, 2.0, 30000.0, BLADES), delta=1e-6)
+        self.assertTrue(load.Reversed)  # outward
+        self.assertIn(load, sim.members(an)["loads"])
+        self.assertIn("Blade mass", sim._describe(load)["kind"])
+        self.assertTrue(post.is_blade_load(load))
+
+    def test_it_follows_the_spin_speed(self):
+        _doc, _body, an, spin, rim = self.study()
+        load = post.add_blade_mass(an, rim, 24, 2.0, 55.0)
+        before = load.Pressure.getValueAs("MPa").Value
+        post.set_spin_speed(spin, 15000)
+        self.assertAlmostEqual(load.Pressure.getValueAs("MPa").Value, before / 4.0, delta=1e-6)  # omega squared
+        post.set_blade_data(load, mass_g=4.0)
+        self.assertAlmostEqual(load.Pressure.getValueAs("MPa").Value, before / 2.0, delta=1e-6)
+        spin.RotationFrequency = f"{30000 / 60} 1/s"  # changed behind our back: the pre-check refreshes it
+        sim.precheck(an)
+        self.assertAlmostEqual(load.Pressure.getValueAs("MPa").Value, before * 2.0, delta=1e-6)
+
+    def test_the_load_needs_a_spin_and_sane_numbers(self):
+        _doc, _body, an, spin, rim = self.study()
+        with self.assertRaises(post.PostError):
+            post.add_blade_mass(an, rim, 0, 2.0, 55.0)
+        with self.assertRaises(post.PostError):
+            post.add_blade_mass(an, rim, 24, -1.0, 55.0)
+        load = post.add_blade_mass(an, rim, 24, 2.0, 55.0)
+        self.assertEqual([t for lv, t in post.precheck_blades(an) if lv == "error"], [])
+        an.removeObject(spin)
+        errors = [t for lv, t in post.precheck_blades(an) if lv == "error"]
+        self.assertTrue(any("no spin load" in t for t in errors), errors)
+        with self.assertRaises(post.PostError):
+            post.add_blade_mass(an, rim, 24, 2.0, 55.0)
+        self.assertIsNotNone(load)
+
+    def test_a_face_that_does_not_face_outward_is_warned(self):
+        _doc, body, an, _spin, _rim = self.study()
+        bore = [(body, f) for f in vc.faces_where(body.Shape, vc.cylinder_of(10.0))]
+        post.add_blade_mass(an, bore, 24, 2.0, 55.0)
+        warnings = [t for lv, t in post.precheck_blades(an) if lv == "warning"]
+        self.assertTrue(any("does not face outward" in t for t in warnings), warnings)
+
+
+class TestBladeMassSolve(unittest.TestCase):
+    """The G-RD3 quarter (an eighth of a 24 blade wheel) against the Timoshenko disc plus Lame's rim traction."""
+
+    def test_the_rim_pull_matches_the_closed_form(self):
+        close_all()
+        tmp = tempfile.mkdtemp(prefix="vl-blades-")
+        try:
+            setup = vc.build_rotating_disc_blades(dict(PARAMS, blades=BLADES), SIZE)
+            result, _stats = val.solve_setup(setup, tmp)
+            refs = vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3, blades=BLADES)
+            got = setup.measure(setup.analysis, result)
+            for key in ("shoop_a", "shoop_b", "sr_mid", "shoop_mid"):
+                self.assertAlmostEqual(got[key] / refs[key], 1.0, delta=0.03, msg=key)
+            # the same wheel without the blades: the pull adds about 86 MPa at the bore
+            plain = vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3)
+            self.assertGreater(got["shoop_a"], plain["shoop_a"] + 80)
+        finally:
+            close_all()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def hot_spinning_disc(doc, kind, size=4.0):
+    """The G-RD1 quarter annulus as a ``kind`` ('static' / 'thermal_stress') study: symmetry planes, a spin at 30 000 rpm and, for
+    thermal stress, the bore at 120 deg C and the rim at 20 deg C (the stress-free temperature is 20)."""
+    import Part
+
+    import bruceworx_sim_thermal as thermal
+
+    solid = Part.makeCylinder(50.0, 1.0).cut(Part.makeCylinder(10.0, 1.0)).common(Part.makeBox(50.0, 50.0, 1.0))
+    body = vc.shape_object(doc, "Disc", solid)
+    mat = vc.material(210000.0, 0.3, 7850.0, k=50.0, cp=480.0, alpha=12e-6, name="Steel")
+    mat["uts"] = 900.0
+    options = {"ReferenceTemperature": 20.0, "InitialTemperature": 20.0} if kind == "thermal_stress" else {}
+    plan = sim.StudyPlan(name=kind, model=body, material=mat, max_size=size, study_type=kind, options=options)
+    an = sim.new_study(doc, plan)["analysis"]
+    vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(0, 0.0)), "x", "SymX")
+    vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(1, 0.0)), "y", "SymY")
+    vc.add_displacement(doc, an, body, vc.faces_where(solid, vc.plane_at(2, 0.0)), "z", "MidPlane")
+    if kind == "thermal_stress":
+        thermal.add_temperature(an, [(body, f) for f in vc.faces_where(solid, vc.cylinder_of(10.0))], 120.0, "Hot bore")
+        thermal.add_temperature(an, [(body, f) for f in vc.faces_where(solid, vc.cylinder_of(50.0))], 20.0, "Cool rim")
+    doc.recompute()
+    return body, an
+
+
+def ring_hoop(result, an, radius):
+    values = post.cylindrical_stress(result, axis="z", analysis=an)
+    rows = [h for h, r in zip(values["hoop"], values["r"]) if abs(r - radius) < 1e-4]
+    return sum(rows) / len(rows)
+
+
+class TestSpinWithHeat(unittest.TestCase):
+    """The spin load also solves in a thermal stress study: hot disc = thermal stress + centrifugal stress."""
+
+    def test_thermal_plus_spin_is_the_sum_of_the_two(self):
+        close_all()
+        tmp = tempfile.mkdtemp(prefix="vl-hotspin-")
+        try:
+            doc = App.newDocument("HotSpin")
+            _body, an = hot_spinning_disc(doc, "thermal_stress")
+            self.assertEqual([t for lv, t in sim.precheck(an) if lv == "error"], [])
+            heat = sim.solve(an, working_dir=os.path.join(tmp, "heat"))
+            self.assertTrue(math.isfinite(sum(heat.vonMises)))
+            hot = {r: ring_hoop(heat, an, r) for r in (10.0, 50.0)}
+            self.assertLess(hot[10.0], -50.0)  # the hot bore is squeezed by the cool rim
+            spin = post.add_spin(an, 30000, axis="z")
+            self.assertEqual([t for lv, t in sim.precheck(an) if lv == "error"], [])  # a spin is checked in this study too
+            both = sim.solve(an, working_dir=os.path.join(tmp, "both"))
+            doc2 = App.newDocument("SpinOnly")
+            _body2, an2 = hot_spinning_disc(doc2, "static")
+            post.add_spin(an2, 30000, axis="z")
+            spun = sim.solve(an2, working_dir=os.path.join(tmp, "spin"))
+            self.assertIn("CENTRIF", open(os.path.join(tmp, "both", "Mesh.inp"), errors="replace").read())
+            for radius in (10.0, 50.0):
+                total = ring_hoop(both, an, radius)
+                parts = hot[radius] + ring_hoop(spun, an2, radius)
+                self.assertAlmostEqual(total, parts, delta=0.005 * abs(parts) + 0.5, msg=f"r = {radius}")
+            # the closed forms: Timoshenko's rotating disc plus the thermal disc (steady conduction: T = T_bore ln(b/r)/ln(b/a))
+            a, b, E, nu, rho = 0.01, 0.05, 210e9, 0.3, 7850.0
+            omega = 30000 * 2 * math.pi / 60
+            temperature = lambda r: 100.0 * math.log(b / r) / math.log(b / a)  # noqa: E731
+            for radius in (10.0, 50.0):
+                r = radius / 1000.0
+                expected = (post.thermal_disc(r, a, b, E, 12e-6, temperature)[1] + post.rotating_disc(r, a, b, rho, omega, nu)[1]) / 1e6
+                self.assertAlmostEqual(ring_hoop(both, an, radius), expected, delta=0.03 * abs(expected), msg=f"closed form r = {radius}")
+            self.assertEqual(post.spin_loads(an), [spin])
+            ext = sim.result_extrema(both)
+            self.assertTrue(ext["burst"]["burst_rpm"])  # the burst speed is reported for a hot disc too
+        finally:
+            close_all()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestBurstSpeed(unittest.TestCase):
+    """n_burst = n sqrt(UTS / average hoop stress over the meridional section) against the closed form of the thin disc."""
+
+    def test_burst_speed_of_the_thin_annulus(self):
+        close_all()
+        tmp = tempfile.mkdtemp(prefix="vl-burst-")
+        try:
+            doc = App.newDocument("Burst")
+            _body, an = hot_spinning_disc(doc, "static", size=3.0)
+            post.add_spin(an, 30000, axis="z")
+            result = sim.solve(an, working_dir=tmp)
+            a, b, rho, nu = 0.01, 0.05, 7850.0, 0.3
+            omega = 30000 * 2 * math.pi / 60
+            steps = 2000
+            mean = sum(post.rotating_disc(a + (b - a) * (i + 0.5) / steps, a, b, rho, omega, nu)[1] for i in range(steps)) / steps / 1e6
+            got = post.burst_speed(result, an)
+            self.assertAlmostEqual(got["avg_hoop"] / mean, 1.0, delta=0.01)
+            self.assertAlmostEqual(got["burst_rpm"], 30000 * math.sqrt(900.0 / mean), delta=0.006 * got["burst_rpm"])
+            self.assertAlmostEqual(got["margin"], got["burst_rpm"] / 30000, delta=1e-9)
+            self.assertIn("Steel", got["uts_source"])
+            ext = sim.result_extrema(result)
+            self.assertEqual(ext["burst"]["burst_rpm"], got["burst_rpm"])
+            tex = open(sim.report_tex(an)["tex"], encoding="utf-8").read()
+            self.assertIn("Burst speed (Zwicky)", tex)
+            self.assertIn("Burst margin", tex)
+            # without an ultimate strength there is no burst speed, and the reason is given
+            mat = sim.members(an)["materials"][0]
+            card = dict(mat.Material)
+            card.pop("UltimateTensileStrength", None)
+            mat.Material = card
+            analysis_uuid = an.MaterialUUID if "MaterialUUID" in an.PropertiesList else ""
+            if not analysis_uuid:
+                none = post.burst_speed(result, an)
+                self.assertIsNone(none["burst_rpm"])
+                self.assertIn("ultimate", none["note"])
+        finally:
+            close_all()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

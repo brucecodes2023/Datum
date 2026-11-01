@@ -1301,7 +1301,7 @@ def _make_classes():
                 for text, command in CONSTRAINT_COMMANDS:
                     row.addWidget(button(f"+ {text}", lambda cmd=command: self.add_constraint(cmd),
                                          f"Add a {text} constraint (the stock FEM panel; this one comes back after)"))
-                if self.kind == "static":
+                if self.kind in ("static", "thermal_stress"):
                     row.addWidget(button("+ Spin", self.add_spin,
                                          "A spinning load: centrifugal force at an rpm about the axis of the selected circular edge "
                                          "or cylindrical face (else the model's bore or rim)"))
@@ -1309,6 +1309,9 @@ def _make_classes():
                                          "Holds a spinning wheel so it can still grow: axial-only on the selected flat face "
                                          "(else the biggest one square to the axis) plus a minimal 3-2-1 point set. A Fixed "
                                          "bore would stop the bore growing and kill its hoop stress"))
+                    row.addWidget(button("+ Blade mass", self.add_blade_mass,
+                                         "The pull of the blades on the selected rim face(s): blade count, mass and radius of the "
+                                         "centre of mass; F = m r omega^2 per blade at the spin speed, spread over the faces"))
                 w.layout().addLayout(row)
             if self.kind in thermal.KINDS:
                 row_t = QtWidgets.QHBoxLayout()
@@ -1530,6 +1533,8 @@ def _make_classes():
                     ext = sim.result_extrema(result)
                     lines.append(f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b>, max displacement <b>{ext['max_disp']:.4g} mm</b>"
                                  + (f", min safety factor <b>{ext['min_sf']:.3g}</b>" if ext["min_sf"] is not None else ""))
+                    if ext.get("burst"):
+                        lines.append(burst_html(ext["burst"]).replace("<br>", "", 1))
             self.summary.setText("<br>".join(lines))
             kind = shown_field(a)
             self.legend.setText(legend_html(kind, self.selected_result(), a) if kind else "")
@@ -2046,6 +2051,9 @@ def _make_classes():
         def hold_for_spin(self):
             return hold_for_spin_object(self.analysis, panel=self)
 
+        def add_blade_mass(self):
+            return add_blade_object(self.analysis, panel=self)
+
         def export_vtu(self, path=None):
             return export_result(self.analysis, path)
 
@@ -2268,6 +2276,7 @@ def _make_classes():
                         + (f"out, every node within {ext['support_radius']:.3g} mm of a point support included: " if ext.get("support_radius")
                            else "out: ")
                         + "a fixed face's edges and a point pin are stress singularities that grow with mesh refinement)</span>")
+            burst_text = burst_html(ext.get("burst"))
             bore = ext.get("bore") or {}
             bore_text = ""
             if bore:
@@ -2280,7 +2289,7 @@ def _make_classes():
             self.summary.setText(
                 f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b> (node {ext['max_vm_node']})<br>"
                 f"Max displacement <b>{ext['max_disp']:.4g} mm</b> (node {ext['max_disp_node']})<br>"
-                f"Min safety factor, whole part: {sf_text}{away}{bore_text}")
+                f"Min safety factor, whole part: {sf_text}{away}{burst_text}{bore_text}")
             kind = shown_field(self.analysis)
             self.legend.setText(legend_html(kind, result, self.analysis) if kind else "")
 
@@ -3056,6 +3065,59 @@ def add_thermal_object(key, analysis=None, values=None, refs=None, bodies=None):
     return made
 
 
+def burst_html(burst):
+    """The panel's burst speed line(s) (after a line break), '' when the study does not spin."""
+    if not burst:
+        return ""
+    if burst.get("burst_rpm"):
+        return (f"<br>Burst speed <b>{burst['burst_rpm']:.5g} rpm</b>, margin n<sub>burst</sub>/n "
+                f"<b>{burst['margin']:.3g}</b> <span style='color:#777'>(average hoop stress over the section "
+                f"{burst['avg_hoop']:.4g} MPa, UTS {burst['uts']:.4g} MPa from {burst['uts_source']}; assumes stress "
+                "grows with speed squared)</span>")
+    return f"<br><span style='color:#8a6d00'>{burst.get('note') or 'No burst speed'}</span>"
+
+
+def add_blade_object(analysis=None, count=None, mass_g=None, r_cg=None, faces=None, panel=None):
+    """Adds a Blade mass load on the selected faces (the rim): blades ``count`` x ``mass_g`` grams, centre of mass ``r_cg`` mm from
+    the axis (each asked for in a dialog when None); see ``bruceworx_sim_post.add_blade_mass``.  Returns the load or None."""
+    analysis = analysis or current_study()
+    if analysis is None or sim.study_kind(analysis) not in ("static", "thermal_stress"):
+        _warn("Open a Static stress or Thermal stress study first")
+        return None
+    if faces is None:
+        faces = [r for r in selected_refs() if r[1].startswith("Face")]
+    if not faces:
+        _warn("Select the rim face(s) the blades pull on first")
+        return None
+    from PySide import QtWidgets
+
+    def ask(label, value, low, high, decimals):
+        got, ok = QtWidgets.QInputDialog.getDouble(None, "Blade mass", label, value, low, high, decimals)
+        return got if ok else None
+
+    if count is None:
+        count = ask("Blades carried by the selected faces (a share of the wheel's for a sector model)", 24, 1e-6, 10000, 3)
+    if count is not None and mass_g is None:
+        mass_g = ask("Mass of one blade, g", 10.0, 1e-6, 1e6, 4)
+    if mass_g is not None and r_cg is None:
+        r_cg = ask("Radius of a blade's centre of mass, mm", 50.0, 1e-6, 1e5, 3)
+    if None in (count, mass_g, r_cg):
+        return None
+    doc = analysis.Document
+    doc.openTransaction("Add blade mass")
+    try:
+        load = post.add_blade_mass(analysis, faces, count, mass_g, r_cg)
+    except post.PostError as exc:
+        doc.abortTransaction()
+        _warn(f"Blade mass: {exc}")
+        return None
+    doc.commitTransaction()
+    status(f"Added {load.Label}: {load.BladePullN:.4g} N per blade, {load.Pressure}")
+    if panel is not None and _alive(panel.members_list):
+        panel.refresh()
+    return load
+
+
 def add_spin_object(analysis=None, rpm=None, axis=None, panel=None):
     """Adds a Spin (centrifugal) load: ``rpm`` (asked for in a dialog when None) about ``axis`` (see
     ``bruceworx_sim_post.add_spin``; None: the selected circular edge or cylindrical face, else the model's own).
@@ -3093,7 +3155,7 @@ def add_spin_object(analysis=None, rpm=None, axis=None, panel=None):
 def hold_for_spin_object(analysis=None, face=None, panel=None):
     """+ Hold for spin: ``bruceworx_sim_post.hold_for_spin`` on the selected flat face (else the biggest one square to the axis)."""
     analysis = analysis or current_study()
-    if analysis is None or sim.study_kind(analysis) != "static":
+    if analysis is None or sim.study_kind(analysis) not in ("static", "thermal_stress"):
         _warn("Open a Static stress study first")
         return None
     if face is None:

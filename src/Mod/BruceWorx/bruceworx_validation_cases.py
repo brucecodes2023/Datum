@@ -811,18 +811,32 @@ def build_bowed_column(params, size):
 # ----- gap: a rotating annular disc (SIM-04) -----------------------------------------------------------------------
 
 
-def disc_references(a, b, rpm, rho, nu):
+def blade_traction(b, thickness, rpm, blades):
+    """The rim traction (MPa) of ``blades`` = {"count": N (the whole wheel), "mass_g", "r_cg_mm"}: N m r_cg omega^2 spread over
+    the rim 2 pi b t."""
+    import bruceworx_sim_post as post
+
+    _force, total = post.blade_pull(blades["count"], blades["mass_g"], blades["r_cg_mm"], rpm)
+    return total / (2.0 * math.pi * b * thickness)
+
+
+def disc_references(a, b, rpm, rho, nu, blades=None, thickness=2.0):
     """Bore and rim hoop stress and the radial and hoop stress at mid-radius of a thin rotating annulus, MPa
-    (bruceworx_sim_post.rotating_disc, lengths in mm, density in kg/m^3)."""
+    (bruceworx_sim_post.rotating_disc, lengths in mm, density in kg/m^3); with ``blades`` the blade pull is a uniform rim
+    traction on top (bruceworx_sim_post.rotating_disc_rim)."""
     import bruceworx_sim_post as post
 
     omega = rpm * 2.0 * math.pi / 60.0
     mid = 0.5 * (a + b)
-    at = lambda r: post.rotating_disc(r / 1000.0, a / 1000.0, b / 1000.0, rho, omega, nu)  # noqa: E731 -- Pa
+    if blades:
+        traction = blade_traction(b, thickness, rpm, blades) * 1e6  # Pa
+        at = lambda r: post.rotating_disc_rim(r / 1000.0, a / 1000.0, b / 1000.0, rho, omega, nu, traction)  # noqa: E731
+    else:
+        at = lambda r: post.rotating_disc(r / 1000.0, a / 1000.0, b / 1000.0, rho, omega, nu)  # noqa: E731 -- Pa
     return {"shoop_a": at(a)[1] / 1e6, "shoop_b": at(b)[1] / 1e6, "sr_mid": at(mid)[0] / 1e6, "shoop_mid": at(mid)[1] / 1e6}
 
 
-def build_rotating_disc(params, size):
+def build_rotating_disc(params, size, blades=None):
     """A quarter of a thin steel annulus (a = 10, b = 50 mm, 2 mm thick, so plane stress to a fraction of a percent) with
     symmetry planes on x = 0, y = 0 and the mid-plane, spinning at 30 000 rpm about Z (a spin load, CalculiX
     *DLOAD CENTRIF).  The cylindrical stress components about the spin axis are averaged over the nodes on the bore and
@@ -843,6 +857,9 @@ def build_rotating_disc(params, size):
     add_displacement(doc, an, body, faces_where(solid, plane_at(1, 0.0)), "y", "SymmetryY0")
     add_displacement(doc, an, body, faces_where(solid, plane_at(2, 0.0)), "z", "MidPlane")
     post.add_spin(an, params["rpm"], axis=((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+    if blades:  # the blades of the whole wheel; this eighth (a quarter, half the thickness) carries an eighth
+        post.add_blade_mass(an, [(body, f) for f in faces_where(solid, cylinder_of(b))], blades["count"] / 8.0,
+                            blades["mass_g"], blades["r_cg_mm"])
     doc.recompute()
 
     def measure(analysis, result):
@@ -860,6 +877,13 @@ def build_rotating_disc(params, size):
                 "shoop_mid": local_fit([rs[i] for i in mid_plane], [values["hoop"][i] for i in mid_plane], r0, w)}
 
     return Setup(doc, objs, measure)
+
+
+def build_rotating_disc_blades(params, size):
+    """G-RD3: G-RD1's quarter annulus with a Blade mass load on the rim: 24 blades on the whole wheel (3 on this eighth: a quarter, half the thickness), 2 g each,
+    centre of mass at r = 55 mm, so F = m r omega^2 = 1.086 kN each and 41.5 MPa on the rim, on top of the spin.  The reference
+    is the Timoshenko disc plus Lame's rim traction (rotating_disc_rim)."""
+    return build_rotating_disc(params, size, blades=params["blades"])
 
 
 def build_rotating_disc_full(params, size):
@@ -896,5 +920,6 @@ BUILDERS = {
     "sdlv401": build_sdlv401, "sdlv100": build_sdlv100, "sslv139": build_sslv139, "tplv06": build_tplv06,
     "tplv304": build_tplv304, "ttlv01": build_ttlv01, "thick_cylinder": build_thick_cylinder,
     "tensioned_beam": build_tensioned_beam, "bowed_column": build_bowed_column, "rotating_disc": build_rotating_disc,
+    "rotating_disc_blades": build_rotating_disc_blades,
     "rotating_disc_full": build_rotating_disc_full,
 }
