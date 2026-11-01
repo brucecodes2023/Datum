@@ -135,3 +135,63 @@ case written, report section). The GUI test checks the New Study fields (diamete
         changes the download on every real drone; I did not add it without asking.
   \item \textbf{Results in 3D} (cut plane, streamlines) belong to the results-display work of phase 1.
 \end{itemize}
+
+%----------------------------------------------------------------------
+\paragraph{Follow-up, 31 Oct evening: hub, per-motor propeller, why the ROB-03 run does not converge, pressure scale.}
+%----------------------------------------------------------------------
+Your answers to the \emph{Open} list above, in the order of that list (swirl stays off, streamlines are ParaView's job; neither was touched).
+\begin{itemize}[nosep]
+  \item \textbf{Hub (commit \code{SIM-06: propeller hub}).} A disk is now a ring: \code{cylinderToCell} gets \code{innerRadius}, the
+        thrust is spread over the ring's cells, so it acts on $A=\pi(D^2-d^2)/4$. The hub diameter $d$ is the motor part's
+        \code{HubDiameter} (mm), else the study's \emph{Hub diameter}, else $0.2\,D$. I chose $0.2\,D$ because the hub of a
+        3~inch quad propeller is 12 to 16\,mm on 76\,mm (16 to 21\,\%); a hub of 0.2\,D takes 4\,\% of the area, so $v_i$ rises 2\,\%.
+  \item \textbf{Benchmark B-CF4 with the hub.} The reference changes only through the area: $v_i=\sqrt{T/2\rho A_{ring}}$
+        $=9.765$\,m/s ($9.567$ without hub) at the ring and $2v_i=19.53$\,m/s in the far wake. The run (same 12\,500-cell wedge,
+        $T=1$\,N, $d=15.2$\,mm) gives $10.61$\,m/s at the ring ($+8.7\,\%$) and $17.00$\,m/s in the wake core ($-13\,\%$; the hole
+        fills in about one diameter downstream, the on-axis speed is $16.4$ against $17.3$ at $r=0.3R$). The hubless case is
+        unchanged ($10.35$, $+8.2\,\%$). New test \code{test\_disk\_with\_a\_hub\_against\_the\_ring\_area\_theory} accepts 10\,\% at
+        the ring and 15\,\% in the wake; the wake margin is thin (13\,\%).
+  \item \textbf{Propeller diameter per motor.} Nothing existed (only the study's \code{PropDiameter}). \code{mark\_motor} now adds
+        \code{PropDiameter} and \code{HubDiameter} (mm, 0 = take the study's value) to the motor part next to \code{ThrustAxis};
+        the disk, its offset above the motor and its hub follow each motor's own values, so mixed propeller sizes work. The
+        study's diameter may stay blank when every motor part carries its own.
+  \item \textbf{ROB-03 frame with the hub} (coarse preset, 3 cores, 1500 iterations, hover, $4\times0.952$\,N): total download
+        $0.755$\,N $=19.8\,\%$ of the thrust (before: $0.798$\,N, $21.0\,\%$). Each motor takes $0.111$\,N, $2.9\,\%$ (before
+        $0.124$\,N, $3.3\,\%$), each arm $0.076$\,N, $2.0\,\%$ (before $2.0\,\%$), plate and battery $0.1\,\%$. The hub is smaller than
+        the 28\,mm motor, so most of the pressure under the disk still reaches the motor; the saving is 12\,\% of the motor load.
+  \item \textbf{Convergence of that run: the geometry is not the cause.} The test model's solids do overlap (arms in the
+        plate and in each other at the centre; the motors sit on the arm's top face). I ran the same case on (a) the ten separate
+        parts and (b) one fused solid (\code{multiFuse}, one watertight body, 241\,628 against 241\,606 cells). checkMesh is
+        the same (non-orthogonality max $64.65^\circ$, skewness $3.2$, Mesh OK), the download is the same ($19.87$ against
+        $19.84\,\%$) and neither converges; $U_x$ residuals are $2\times10^{-3}$ (separate) and $9\times10^{-3}$ (fused).
+        What fails is a swing of the forces of 0.5 to 3.6\,\% of a part's own load over the last 200 iterations (arm and motor 3:
+        3.6\,\%; the tiny plate and battery forces, $0.003$\,N, swing by 10 to 30\,\%, which alone fails the plan's rule) while
+        the total is steady to 0.2\,\%. This is the unsteadiness of four impinging jets in steady RANS.
+  \item \textbf{Solver-side tries} (same case, 3 cores, 4 minutes each): SIMPLE without \code{consistent} and relaxation
+        $p\,0.3$, $U\,0.7$: no change ($U_x$ $1.8\times10^{-3}$, swings as before). \code{div(phi,U)} \code{upwind}: residuals drop to
+        $4\times10^{-4}$, arm swings to $0.02\,\%$ and motor swings to $0.6\,\%$, but the disks run at $10.5$ against $9.53$\,m/s
+        (+10\,\%; linearUpwind gives +5\,\%) and the download is $20.6\,\%$. \code{limitedLinearV 1}: swings as with
+        linearUpwind, download $19.4\,\%$. Upwind with 3000 iterations: residuals stay at $4.5\times10^{-4}$, motor swings $0.5$ to
+        $0.66\,\%$. None meets the plan's $10^{-4}$ and $0.5\,\%$, so \textbf{I changed no default}: first-order upwind
+        trades accuracy for calm, and the verdict would still read ``not converged''.
+  \item \textbf{Pressure colour scale (commit \code{SIM-06: pressure colour scale}).} All parts now share one range, the run's own
+        minimum and maximum (before, each part fitted itself). The results panel has \emph{Fix pressure scale}, a min and a max in
+        Pa and a \emph{This run} button that copies the range just shown; the three values are saved on the study, so
+        external flow and prop wash runs are compared with the same colours. It applies at the next \emph{Show in 3D}. FEM's colour
+        bar has no range setting reachable from Python, so each saved mm copy of a patch has $p$ clamped to the range and two
+        points that no cell uses, carrying the end values; the surface is unchanged and the values in the case are untouched.
+\end{itemize}
+
+\paragraph{Tests} added: ring area and induced velocity, hub through \code{Disk} dict and rotation, \code{innerRadius} in
+\code{topoSetDict}, the ring benchmark, motor-part diameter and hub (study, part, default), the New Study hub field,
+pressure range over patches, pinned copy (range exact, one polygon, two anchor points), \code{pressure\_scale}, the
+fixed range in the 3D view, and the panel fields remembered per study.
+
+\paragraph{Open.}
+\begin{itemize}[nosep]
+  \item The convergence verdict of a prop-wash study reads ``not converged'' on every real frame. Options: judge the forces on the
+        total and on parts above, say, 2\,\% of the thrust (the battery's 0.003\,N is noise); and for the residuals, accept
+        $10^{-3}$ for jets, or average the last 500 iterations. Say which; I did not weaken the plan's test myself.
+  \item A transient (PIMPLE) run of the frame would show whether the wake is truly unsteady; it is a larger job.
+  \item The wake-core check of the ring benchmark is 13\,\% low: the plan's 10\,\% is not met there either.
+\end{itemize}
