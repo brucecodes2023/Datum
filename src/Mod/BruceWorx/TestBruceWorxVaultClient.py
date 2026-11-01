@@ -581,6 +581,208 @@ class TestVaultCategories(unittest.TestCase):
         self.assertIsNotNone(c)
 
 
+class FakeStrings:
+    """The parameter-group string calls the column preference uses."""
+
+    def __init__(self, **strings):
+        self.strings = dict(strings)
+
+    def GetString(self, name, default=""):
+        return self.strings.get(name, default)
+
+    def SetString(self, name, value):
+        self.strings[name] = value
+
+
+class TestFileColumns(unittest.TestCase):
+    """PDM-13: the Files table's columns, chosen in Columns… (Bruce, 2 Nov: "see file size, and other data")."""
+
+    def test_nothing_chosen_is_the_six_columns_of_old(self):
+        self.assertEqual(vc.parse_columns(""), ("part_number", "description", "used_in", "drawing", "state", "status"))
+        self.assertEqual(vc.parse_columns(None), vc.DEFAULT_COLUMNS)
+        self.assertEqual(vc.parse_columns("nonsense, more"), vc.DEFAULT_COLUMNS)
+        self.assertEqual([vc.COLUMN_TITLES[k] for k in vc.DEFAULT_COLUMNS],
+                         ["Part number", "Description", "Used in", "Drawing", "State", "Status"])
+
+    def test_parse_keeps_order_and_always_shows_part_number_and_description(self):
+        self.assertEqual(vc.parse_columns("size, modified"), ("part_number", "description", "size", "modified"))
+        self.assertEqual(vc.parse_columns("status,description,part_number,size,size,bogus"),
+                         ("part_number", "status", "description", "size"))
+        self.assertEqual(vc.serialize_columns(["modified", "part_number", "description"]),
+                         "part_number,modified,description")
+        self.assertEqual(vc.parse_columns(vc.serialize_columns(vc.DEFAULT_COLUMNS + ("size",))),
+                         vc.DEFAULT_COLUMNS + ("size",))
+
+    def test_every_offered_column(self):
+        self.assertEqual([k for k, _t, _w, _a in vc.FILE_COLUMNS][6:],
+                         ["revision", "type", "category", "size", "modified", "modified_by", "checked_out_by",
+                          "versions", "comment", "program"])
+        self.assertEqual(vc.COLUMN_TITLES["size"], "File size")
+
+    def test_prefs_round_trip_and_the_default_is_kept_as_nothing(self):
+        g = FakeStrings()
+        self.assertEqual(vc.column_prefs(g), vc.DEFAULT_COLUMNS)
+        self.assertEqual(vc.save_column_prefs(["part_number", "description", "size", "status"], g),
+                         ("part_number", "description", "size", "status"))
+        self.assertEqual(g.strings[vc.COLUMNS_PREF], "part_number,description,size,status")
+        self.assertEqual(vc.column_prefs(g), ("part_number", "description", "size", "status"))
+        vc.save_column_prefs(vc.DEFAULT_COLUMNS, g)
+        self.assertEqual(g.strings[vc.COLUMNS_PREF], "")
+
+    def test_move_keeps_part_number_first(self):
+        order = ["part_number", "description", "size", "modified"]
+        self.assertEqual(vc.move_column(order, "size", -1), ["part_number", "size", "description", "modified"])
+        self.assertEqual(vc.move_column(order, "size", 1), ["part_number", "description", "modified", "size"])
+        self.assertEqual(vc.move_column(order, "description", -1), order)  # nothing goes above Part number
+        self.assertEqual(vc.move_column(order, "part_number", 1), order)
+        self.assertEqual(vc.move_column(order, "modified", 1), order)
+        self.assertEqual(vc.move_column(order, "absent", 1), order)
+
+    def test_date_text(self):
+        now = dt.datetime(2026, 11, 2, 12, 0).astimezone()  # noon, local time
+        self.assertEqual(vc.date_text((now - dt.timedelta(minutes=55)).isoformat(), now), "Today, 11:05")
+        self.assertEqual(vc.date_text((now - dt.timedelta(days=1)).isoformat(), now), "Yesterday, 12:00")
+        self.assertEqual(vc.date_text(dt.datetime(2026, 10, 14, 9, 12).astimezone().isoformat(), now),
+                         "14 Oct 2026, 09:12")
+        self.assertEqual(vc.date_text("", now), "")
+        self.assertEqual(vc.date_text("not a date", now), "")
+
+    def test_cells_from_the_vault_records(self):
+        now = dt.datetime(2026, 11, 2, 12, 0).astimezone()
+        row = {"part_number": "TL-01-01001-001", "display": "TL-01-01001-001-01", "revision": "01",
+               "description": "Dock plate", "state": "WIP", "item_type": "cots", "category": "Fasteners",
+               "status_text": "Checked in · you, 2 h ago", "size": 1_234_567, "at": (now - dt.timedelta(hours=2)).isoformat(),
+               "actor": "bruce@mac", "lock": "anna@mbp", "versions": 3, "comment": "Thicker plate\nand two holes",
+               "program": "TL"}
+        cell = {k: vc.column_cell(k, row, "bruce@mac", now)[0] for k in vc.COLUMN_TITLES}
+        self.assertEqual(cell["size"], "1.2 MB")
+        self.assertEqual(cell["modified"], "Today, 10:00")
+        self.assertEqual(cell["modified_by"], "you")
+        self.assertEqual(cell["checked_out_by"], "anna")
+        self.assertEqual(cell["versions"], "3")
+        self.assertEqual(cell["comment"], "Thicker plate")
+        self.assertEqual((cell["type"], cell["category"], cell["program"], cell["revision"]), ("COTS", "Fasteners", "TL", "01"))
+        self.assertEqual((cell["part_number"], cell["description"], cell["state"]), ("TL-01-01001-001-01", "Dock plate", "WIP"))
+        self.assertEqual((cell["used_in"], cell["drawing"]), ("", ""))  # the panel draws these from the structure
+        self.assertEqual(vc.column_cell("checked_out_by", dict(row, lock=""), "bruce@mac"), ("", None))
+        self.assertEqual(vc.column_cell("size", dict(row, size=None)), ("", None))
+        self.assertEqual(vc.column_cell("size", dict(row, size=512)), ("512 bytes", 512))
+        self.assertEqual(vc.column_cell("type", {"item_type": "change", "kind": "ECO"})[0], "ECO")
+        self.assertEqual(vc.column_cell("versions", {"item_type": "change", "versions": 0}), ("", None))
+        self.assertEqual(vc.column_cell("versions", dict(row, versions=0)), ("0", 0))
+        self.assertEqual(vc.column_cell("nothing", row), ("", None))
+
+    def test_sizes_dates_and_counts_sort_as_numbers(self):
+        rows = [{"size": 900, "versions": 10, "at": "2026-11-02T09:00:00+00:00"},
+                {"size": 10_000, "versions": 9, "at": "2026-11-02T08:00:00-06:00"},  # 14:00 UTC: the latest
+                {"size": 2_000_000, "versions": 2, "at": "2026-10-30T23:00:00+00:00"}]
+
+        def by(key, value):
+            return [vc.column_cell(key, r)[0] for r in sorted(rows, key=lambda r: vc.column_cell(key, r)[value])]
+
+        self.assertEqual(by("size", 1), ["900 bytes", "10.0 KB", "2.0 MB"])
+        self.assertNotEqual(by("size", 0), by("size", 1))  # as text, "10.0 KB" < "2.0 MB" < "900 bytes"
+        self.assertEqual(by("versions", 1), ["2", "9", "10"])
+        self.assertEqual([r["size"] for r in sorted(rows, key=lambda r: vc.column_cell("modified", r)[1])],
+                         [2_000_000, 900, 10_000])
+
+
+class TestFilesTableColumns(unittest.TestCase):
+    """PDM-13 in a GUI FreeCAD: the chosen columns build the header and rows at once, the Get latest
+    button and the other key-drawn cells follow their column, and the Simulations chip keeps its own."""
+
+    def test_choose_columns_in_the_panel(self):
+        import shutil
+
+        from bruceworx import vault_setup as vs
+        from PySide import QtCore
+
+        tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-cols-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ref = vs.create_vault(vs.VaultSetup(name="Cols", folder=os.path.join(tmp, "vault"),
+                                            numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("LE")])),
+                              actor="bruce@mac").ref_path
+        prefs = vc._prefs()
+        old = prefs.GetString("VaultPath", "")
+        old_cols = prefs.GetString(vc.COLUMNS_PREF, "")
+        prefs.SetString("VaultPath", ref)
+        prefs.SetString(vc.COLUMNS_PREF, "")
+        self.addCleanup(prefs.SetString, "VaultPath", old)
+        self.addCleanup(prefs.SetString, vc.COLUMNS_PREF, old_cols)
+        a = vc.new_part("part", "Housing", open_it=False)
+        vc.new_part("part", "Terminal", open_it=False)
+        panel = vc._classes()["VaultPanel"]()
+        self.addCleanup(panel.deleteLater)
+        panel.refresh()
+
+        def labels():
+            return [panel.model.headerData(c, QtCore.Qt.Horizontal) for c in range(panel.model.columnCount())]
+
+        self.assertEqual(labels(), ["Part number", "Description", "Used in", "Drawing", "State", "Status"])
+        panel.set_columns(list(vc.DEFAULT_COLUMNS) + ["size", "modified", "versions", "checked_out_by"])
+        self.assertEqual(labels()[6:], ["File size", "Modified", "Versions", "Checked out by"])
+        self.assertEqual(prefs.GetString(vc.COLUMNS_PREF, ""),
+                         "part_number,description,used_in,drawing,state,status,size,modified,versions,checked_out_by")
+        row = panel.rows[a]
+        self.assertGreater(row["size"], 0)
+        self.assertRegex(panel.cell_text("size", row), r"^[\d.]+ (bytes|KB|MB)$")
+        self.assertEqual(panel.cell_text("versions", row), "1")  # WIP 01, checked in once
+        self.assertEqual(panel.cell_text("checked_out_by", row), "you")
+        self.assertTrue(panel.cell_text("modified", row).startswith("Today, "))
+        files = panel.model.index(0, 0)  # the Parts group
+        self.assertEqual(panel.model.columnCount(files), 10)
+        # Status moved: the Get latest button and the cells follow the key, not the place.
+        panel.set_columns(["part_number", "status", "size", "description"])
+        self.assertEqual(labels(), ["Part number", "Status", "File size", "Description"])
+        self.assertEqual([panel.column_key(c) for c in range(4)], ["part_number", "status", "size", "description"])
+        self.assertIsNone(panel.column_key(4))
+        # Header-click sorting: numbers as numbers, a second click reverses.
+        panel.sort_by_column(2)
+        self.assertEqual((panel.sort_column, panel.sort_descending), ("size", False))
+        self.assertTrue(panel.list.header().isSortIndicatorShown())
+        panel.sort_by_column(2)
+        self.assertTrue(panel.sort_descending)
+        self.assertEqual(panel.sort.text(), "File size")
+        files = panel.model.index(0, 0)  # the rows were built again
+        sizes = [panel.rows[panel.model.index(r, 0, files).data(QtCore.Qt.UserRole)]["size"]
+                 for r in range(panel.model.rowCount(files))]
+        self.assertEqual(sizes, sorted(sizes, reverse=True))
+        # The Simulations chip keeps its six columns; back on All the choice is there again.
+        panel.set_kind("simulations")
+        self.assertEqual(labels(), list(vc.SIM_COLUMNS))
+        self.assertFalse(panel.list.header().isSortIndicatorShown())
+        panel.set_kind("all")
+        self.assertEqual(labels(), ["Part number", "Status", "File size", "Description"])
+        # A new panel starts with the choice kept; Reset to Default goes back to the six.
+        again = vc._classes()["VaultPanel"]()
+        self.addCleanup(again.deleteLater)
+        self.assertEqual(again.columns, ("part_number", "status", "size", "description"))
+        again.set_columns(vc.DEFAULT_COLUMNS)
+        self.assertEqual(prefs.GetString(vc.COLUMNS_PREF, "x"), "")
+        self.assertIsNone(again.sort_column)
+
+    def test_columns_dialog(self):
+        dialog = vc._classes()["ColumnsDialog"](["part_number", "description", "size"])
+        self.addCleanup(dialog.deleteLater)
+        self.assertEqual(dialog.chosen(), ["part_number", "description", "size"])
+        self.assertEqual(dialog.order()[:3], ["part_number", "description", "size"])
+        self.assertEqual(len(dialog.order()), len(vc.FILE_COLUMNS))
+        dialog.list.setCurrentRow(2)
+        dialog.move(-1)
+        self.assertEqual(dialog.chosen(), ["part_number", "size", "description"])
+        self.assertEqual(dialog.list.currentRow(), 1)
+        self.assertFalse(dialog.up.isEnabled())  # nothing goes above Part number
+        from PySide import QtCore
+
+        modified = dialog.order().index("modified")
+        dialog.list.item(modified).setCheckState(QtCore.Qt.Checked)
+        self.assertEqual(dialog.chosen(), ["part_number", "size", "description", "modified"])
+        first = dialog.list.item(0)
+        self.assertFalse(first.flags() & QtCore.Qt.ItemIsUserCheckable)  # Part number: always shown
+        dialog.reset.click()
+        self.assertEqual(dialog.chosen(), list(vc.DEFAULT_COLUMNS))
+
+
 class TestICloudDownload(unittest.TestCase):
     def setUp(self):
         import shutil

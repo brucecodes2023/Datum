@@ -19,7 +19,7 @@ The engine is the hooks add-on's bruceworx/pdm_workspace.py (status, check out, 
   of a file inside the vault (every check-in is a version; the user's answer, 23 Oct).
   The first edit of such a document offers a check-out; its tab shows a lock.
 * The vault's file list (thumbnails, P/N-REV, state chip and status icon, search and
-  filters) on the Start page's Files tab: the vault is browsed on the dashboard only
+  filters; more columns, such as file size, from Columns… or the header) on the Start page's Files tab: the vault is browsed on the dashboard only
   (the user's choice, 25 Oct; the floating card over the window was see-through).
 * Browser badges (bruceworx_browser.ROW_EXTRAS) and the status-bar readout
   ("Vault <name> · 2 checked out · 1 newer"; a click opens the Files tab).
@@ -437,6 +437,149 @@ def size_text(size):
             return f"{size:.0f} {unit}" if unit == "bytes" else f"{size:.1f} {unit}"
         size /= 1000.0
     return ""
+
+
+# ----- the Files table's columns (PDM-13: Bruce, 2 Nov: "I should also be able to see file size") ------
+
+# Every column the Files table can show, in the order Columns… offers them: (key, header, width, align).
+# All of them come from the vault's own records (items, versions, locks), never from the files, so a
+# vault of hundreds of items still lists at once. Part number and Description are always shown.
+FILE_COLUMNS = (
+    ("part_number", "Part number", 300, "left"),
+    ("description", "Description", 0, "left"),  # 0: stretches to fill the row
+    ("used_in", "Used in", 60, "right"),
+    ("drawing", "Drawing", 78, "left"),
+    ("state", "State", 84, "left"),
+    ("status", "Status", 170, "left"),
+    ("revision", "Revision", 70, "left"),
+    ("type", "Type", 80, "left"),
+    ("category", "Category", 110, "left"),
+    ("size", "File size", 76, "right"),
+    ("modified", "Modified", 130, "left"),
+    ("modified_by", "Modified by", 96, "left"),
+    ("checked_out_by", "Checked out by", 110, "left"),
+    ("versions", "Versions", 66, "right"),
+    ("comment", "Last comment", 220, "left"),
+    ("program", "Program", 70, "left"),
+)
+COLUMN_TITLES = {key: title for key, title, _w, _a in FILE_COLUMNS}
+DEFAULT_COLUMNS = ("part_number", "description", "used_in", "drawing", "state", "status")
+REQUIRED_COLUMNS = ("part_number", "description")
+COLUMNS_PREF = "VaultColumns"  # Preferences/BruceWorx: the Files table's column keys, comma-separated, in order
+TYPE_NAMES = {"part": "Part", "assembly": "Assembly", "drawing": "Drawing", "cots": "COTS",
+              "simulation": "Simulation"}
+
+
+def parse_columns(text):
+    """The Files table's column keys from the preference (comma-separated): known keys, each once, in
+    the saved order, Part number first and Description always in. Nothing saved gives the six of old."""
+    keys = []
+    for word in str(text or "").split(","):
+        key = word.strip()
+        if key in COLUMN_TITLES and key not in keys:
+            keys.append(key)
+    if not keys:
+        return DEFAULT_COLUMNS
+    keys = [k for k in keys if k != "part_number"]
+    if "description" not in keys:
+        keys.insert(0, "description")
+    return ("part_number",) + tuple(keys)
+
+
+def serialize_columns(keys):
+    return ",".join(parse_columns(",".join(keys)))
+
+
+def column_prefs(group=None):
+    """The chosen column keys (Preferences/BruceWorx/VaultColumns)."""
+    try:
+        group = group if group is not None else _prefs()
+        return parse_columns(group.GetString(COLUMNS_PREF, ""))
+    except Exception:  # noqa: BLE001 -- no preferences: the default columns
+        return DEFAULT_COLUMNS
+
+
+def save_column_prefs(keys, group=None):
+    """Keep the choice; the default is kept as "" (nothing chosen), so it follows a later default."""
+    keys = parse_columns(",".join(keys))
+    try:
+        group = group if group is not None else _prefs()
+        group.SetString(COLUMNS_PREF, "" if keys == DEFAULT_COLUMNS else serialize_columns(keys))
+    except Exception as exc:  # noqa: BLE001 -- a preference that cannot be kept is not worth an error
+        _console(f"Vault: column choice not remembered ({exc})", "log")
+    return keys
+
+
+def move_column(order, key, step):
+    """order with key moved one place up (step -1) or down (+1); Part number stays first."""
+    order = list(order)
+    if key not in order or key == "part_number":
+        return order
+    i = order.index(key)
+    j = i + step
+    if j < 0 or j >= len(order) or order[j] == "part_number":
+        return order
+    order[i], order[j] = order[j], order[i]
+    return order
+
+
+def date_text(text, now=None):
+    """ "Today, 14:05", "Yesterday, 09:12", "14 Oct 2026, 09:12" (local time): a column of dates."""
+    when = parse_time(text) if not isinstance(text, _dt.datetime) else text
+    if when is None:
+        return ""
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    local, today = when.astimezone(), now.astimezone().date()
+    clock = local.strftime("%H:%M")
+    if local.date() == today:
+        return f"Today, {clock}"
+    if (today - local.date()).days == 1:
+        return f"Yesterday, {clock}"
+    return f"{local.day} {local.strftime('%b')} {local.year}, {clock}"
+
+
+def column_cell(key, row, me="", now=None):
+    """(text, sort value) of one Files-table cell from its row (the dict VaultPanel.refresh builds).
+    The sort value is a number for sizes, dates and counts, so they sort as numbers; None when the
+    cell is empty (sorted last). Used in and Drawing need the vault's structure: the panel fills them."""
+    def text(value):
+        value = str(value or "")
+        return value, (value.casefold() or None)
+
+    if key == "part_number":
+        return text(row.get("display") or row.get("part_number"))
+    if key == "description":
+        return text(row.get("description"))
+    if key == "state":
+        return text(row.get("state"))
+    if key == "status":
+        return text(row.get("status_text"))
+    if key == "revision":
+        return text(row.get("revision"))
+    if key == "type":
+        kind = row.get("item_type") or ""
+        return text(row.get("kind") if kind == "change" else TYPE_NAMES.get(kind, kind.title()))
+    if key == "category":
+        return text(row.get("category"))
+    if key == "program":
+        return text(row.get("program"))
+    if key == "modified_by":
+        return text(actor_name(row.get("actor"), me))
+    if key == "checked_out_by":
+        return text(actor_name(row.get("lock"), me))
+    if key == "comment":
+        lines = str(row.get("comment") or "").strip().splitlines()
+        return text(lines[0] if lines else "")
+    if key == "size":
+        size = row.get("size")
+        return (size_text(size), size) if isinstance(size, int) and not isinstance(size, bool) else ("", None)
+    if key == "modified":
+        when = parse_time(row.get("at")) if row.get("at") else None
+        return (date_text(when, now), when.timestamp()) if when else ("", None)
+    if key == "versions":
+        count = row.get("versions")
+        return (str(count), count) if isinstance(count, int) and row.get("item_type") != "change" else ("", None)
+    return "", None
 
 
 # ----- icons (SVG, one source for commands and the panel) ---------------------------------
@@ -2350,7 +2493,12 @@ def _make_classes():
 
     ROW_HEIGHT = 36  # room for the thumbnail (PDM-13)
     FOOTER = "Double-click opens · select a file to see where it is used · editing offers Check Out"
-    COLUMNS = ("Part number", "Description", "Used in", "Drawing", "State", "Status")
+    # The columns are chosen by key (FILE_COLUMNS, Columns…); the Simulations chip has its own (PDM-14).
+    SIM_KEYS = ("part_number", "sim_of", "sim_study", "sim_result", "sim_geometry", "status")
+    SIM_WIDTHS = {"sim_study": 230, "sim_result": 170, "sim_geometry": 110, "status": 170}
+    FILE_WIDTHS = {key: width for key, _t, width, _a in FILE_COLUMNS}
+    RIGHT_ALIGNED = {key for key, _t, _w, align in FILE_COLUMNS if align == "right"}
+    STRETCH = ("description", "sim_of")
     THUMB = QtCore.QSize(34, 26)
     PN_ROLE = QtCore.Qt.UserRole
     QTY_ROLE = QtCore.Qt.UserRole + 1
@@ -2389,6 +2537,7 @@ def _make_classes():
             rect = option.rect
             first = index.siblingAtColumn(0)
             column = index.column()
+            key = self.panel.column_key(column)
             painter.save()
             painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
             group = first.data(GROUP_ROLE)
@@ -2414,7 +2563,7 @@ def _make_classes():
             secondary = view.colour("dim" if dim else "secondary")
             r = rect.adjusted(4 if column == 0 else 8, 0, -6, 0)
             middle = QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft
-            if column == 0:
+            if key == "part_number":
                 kind = row.get("item_type") or ""
                 if kind != "change":  # the file's type and picture (PDM-13)
                     icon_kind = {"assembly": "assembly", "drawing": "drawing", "simulation": "simulation"}.get(kind, "part")
@@ -2446,26 +2595,26 @@ def _make_classes():
                     painter.setPen(QtCore.Qt.NoPen)
                     painter.setBrush(view.colour("warn"))
                     painter.drawEllipse(QtCore.QRectF(rect.right() - 16, rect.center().y() - 5, 10, 10))
-            elif column == 1 and self.panel.sim_mode():
+            elif key == "sim_of":
                 sim = self.panel.sim_info.get(row["part_number"]) or {}
                 painter.setFont(self.panel.body_font)
                 fm = QtGui.QFontMetrics(self.panel.body_font)
                 painter.setPen(text_colour)
                 text = f"{sim.get('of_display', '')}  {(self.panel.rows.get(sim.get('of')) or {}).get('description', '')}"
                 painter.drawText(r, middle, fm.elidedText(text.strip(), QtCore.Qt.ElideRight, r.width()))
-            elif column == 2 and self.panel.sim_mode():
+            elif key == "sim_study":
                 sim = self.panel.sim_info.get(row["part_number"]) or {}
                 painter.setFont(self.panel.small_font)
                 fm = QtGui.QFontMetrics(self.panel.small_font)
                 painter.setPen(secondary)
                 painter.drawText(r, middle, fm.elidedText(sim.get("study", ""), QtCore.Qt.ElideRight, r.width()))
-            elif column == 3 and self.panel.sim_mode():
+            elif key == "sim_result":
                 sim = self.panel.sim_info.get(row["part_number"]) or {}
                 painter.setFont(self.panel.small_font)
                 fm = QtGui.QFontMetrics(self.panel.small_font)
                 painter.setPen(secondary)
                 painter.drawText(r, middle, fm.elidedText(sim.get("result", ""), QtCore.Qt.ElideRight, r.width()))
-            elif column == 4 and self.panel.sim_mode():
+            elif key == "sim_geometry":
                 sim = self.panel.sim_info.get(row["part_number"]) or {}
                 text = sim.get("judgement", "")
                 role = {"current": "ok", "part changed": "warn"}.get(text, "secondary")
@@ -2479,18 +2628,18 @@ def _make_classes():
                     painter.setFont(self.panel.chip_font)
                     painter.setPen(secondary if dim else view.colour(role))
                     painter.drawText(chip, QtCore.Qt.AlignCenter, text)
-            elif column == 1:
+            elif key == "description":
                 painter.setFont(self.panel.body_font)
                 fm = QtGui.QFontMetrics(self.panel.body_font)
                 painter.setPen(text_colour)
                 painter.drawText(r, middle, fm.elidedText(row.get("description") or "", QtCore.Qt.ElideRight, r.width()))
-            elif column == 2:  # Used in: how many assemblies use the file (PDM-13)
+            elif key == "used_in":  # how many assemblies use the file (PDM-13)
                 text = self.panel.used_in_text(row["part_number"])
                 if text:
                     painter.setFont(self.panel.body_font)
                     painter.setPen(secondary)
                     painter.drawText(r, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, text)
-            elif column == 3:  # Drawing: Yes, None (a gap), COTS
+            elif key == "drawing":  # Yes, None (a gap), COTS
                 text, role = self.panel.drawing_cell(row)
                 if text:
                     painter.setFont(self.panel.small_font)
@@ -2502,7 +2651,7 @@ def _make_classes():
                         x += 13
                     painter.setPen(secondary)
                     painter.drawText(QtCore.QRect(x, rect.top(), r.right() - x, rect.height()), middle, text)
-            elif column == 4:
+            elif key == "state":
                 chip_text, chip_role = row.get("chip") or STATE_CHIPS.get(row.get("state"), (
                     (row.get("state") or "").upper(), "secondary"))
                 if chip_text:
@@ -2515,7 +2664,7 @@ def _make_classes():
                     painter.setFont(self.panel.chip_font)
                     painter.setPen(secondary if dim else view.colour(chip_role))
                     painter.drawText(chip, QtCore.Qt.AlignCenter, chip_text)
-            elif column == 5:
+            elif key == "status":
                 dpr = view.devicePixelRatioF()
                 x = r.left()
                 for kind, role in status_icons(row["code"]):
@@ -2538,11 +2687,20 @@ def _make_classes():
                 width = max(10, right - x)
                 painter.drawText(QtCore.QRect(x, rect.top(), width, rect.height()), middle,
                                  fm.elidedText(row["status_text"], QtCore.Qt.ElideRight, width))
+            elif key:  # the columns chosen in Columns…: plain text from the vault's records (PDM-13)
+                text = self.panel.cell_text(key, row)
+                if text:
+                    painter.setFont(self.panel.small_font)
+                    fm = QtGui.QFontMetrics(self.panel.small_font)
+                    painter.setPen(secondary)
+                    align = QtCore.Qt.AlignVCenter | (QtCore.Qt.AlignRight if key in RIGHT_ALIGNED else
+                                                      QtCore.Qt.AlignLeft)
+                    painter.drawText(r, align, fm.elidedText(text, QtCore.Qt.ElideRight, r.width()))
             painter.restore()
 
         def editorEvent(self, event, model, option, index):
             if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton \
-                    and index.column() == len(COLUMNS) - 1:
+                    and self.panel.column_key(index.column()) == "status":
                 row = self.panel.row_for(index)
                 if row is not None and row["code"] == NEWER and \
                         self.button_rect(option.rect).contains(event.position().toPoint()):
@@ -2555,10 +2713,13 @@ def _make_classes():
             row = self.panel.row_for(index)
             if row is not None and event.type() == QtCore.QEvent.ToolTip:
                 status = STATUS_LABELS.get(row["code"], "")
-                if index.column() == 0:  # the file name: its picture, as Explorer and Finder do
+                key = self.panel.column_key(index.column())
+                if key == "part_number":  # the file name: its picture, as Explorer and Finder do
                     QtWidgets.QToolTip.showText(event.globalPos(), self.panel.tooltip_html(row), view)
-                elif index.column() == 2:  # Used in: the assemblies, by name
+                elif key == "used_in":  # the assemblies, by name
                     QtWidgets.QToolTip.showText(event.globalPos(), self.panel.where_used_text(row), view)
+                elif key == "comment" and row.get("comment"):  # the whole comment: the cell shows its first line
+                    QtWidgets.QToolTip.showText(event.globalPos(), row["comment"], view)
                 else:
                     QtWidgets.QToolTip.showText(event.globalPos(), f"{row['display']} — {status}", view)
                 return True
@@ -2624,6 +2785,80 @@ def _make_classes():
 
     browser = bruceworx_vaultbrowser.make_classes({"icon_pixmap": icon_pixmap, "soft": soft, "ChipFlow": ChipFlow})
 
+    class ColumnsDialog(QtWidgets.QDialog):
+        """Columns…: the data the Files table shows, and their order (PDM-13). Part number stays first and,
+        with Description, is always shown; Reset to Default brings back the six columns of old."""
+
+        def __init__(self, keys, parent=None):
+            super().__init__(parent)
+            self.setObjectName("bwVaultColumns")
+            self.setWindowTitle("Columns")
+            lay = QtWidgets.QVBoxLayout(self)
+            note = QtWidgets.QLabel("Tick the data the file list shows; Move Up and Move Down set the order.\n"
+                                    "Part number and Description are always shown.")
+            note.setWordWrap(True)
+            lay.addWidget(note)
+            row = QtWidgets.QHBoxLayout()
+            self.list = QtWidgets.QListWidget()
+            self.list.setMinimumHeight(320)
+            self.list.currentRowChanged.connect(lambda _r: self.update_buttons())
+            row.addWidget(self.list, 1)
+            side = QtWidgets.QVBoxLayout()
+            self.up = QtWidgets.QPushButton("Move Up")
+            self.up.clicked.connect(lambda _c=False: self.move(-1))
+            self.down = QtWidgets.QPushButton("Move Down")
+            self.down.clicked.connect(lambda _c=False: self.move(1))
+            self.reset = QtWidgets.QPushButton("Reset to Default")
+            self.reset.clicked.connect(lambda _c=False: self.fill(DEFAULT_COLUMNS))
+            for button in (self.up, self.down):
+                side.addWidget(button)
+            side.addStretch(1)
+            side.addWidget(self.reset)
+            row.addLayout(side)
+            lay.addLayout(row)
+            buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+            buttons.accepted.connect(self.accept)
+            buttons.rejected.connect(self.reject)
+            lay.addWidget(buttons)
+            self.fill(parse_columns(",".join(keys)))
+
+        def fill(self, keys, order=None, current=None):
+            """The chosen columns first, in their order, then the others as FILE_COLUMNS lists them."""
+            order = order or list(keys) + [k for k, _t, _w, _a in FILE_COLUMNS if k not in keys]
+            self.list.clear()
+            for key in order:
+                item = QtWidgets.QListWidgetItem(COLUMN_TITLES[key])
+                item.setData(QtCore.Qt.UserRole, key)
+                flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+                if key in REQUIRED_COLUMNS:
+                    item.setToolTip("Always shown")
+                else:
+                    flags |= QtCore.Qt.ItemIsUserCheckable
+                item.setFlags(flags)
+                item.setCheckState(QtCore.Qt.Checked if key in keys or key in REQUIRED_COLUMNS else QtCore.Qt.Unchecked)
+                self.list.addItem(item)
+            self.list.setCurrentRow(order.index(current) if current in order else 0)
+            self.update_buttons()
+
+        def order(self):
+            return [self.list.item(i).data(QtCore.Qt.UserRole) for i in range(self.list.count())]
+
+        def chosen(self):
+            return [self.list.item(i).data(QtCore.Qt.UserRole) for i in range(self.list.count())
+                    if self.list.item(i).checkState() == QtCore.Qt.Checked]
+
+        def move(self, step):
+            item = self.list.currentItem()
+            if item is None:
+                return
+            key = item.data(QtCore.Qt.UserRole)
+            self.fill(self.chosen(), move_column(self.order(), key, step), key)
+
+        def update_buttons(self):
+            row = self.list.currentRow()
+            self.up.setEnabled(row > 1)  # nothing goes above Part number
+            self.down.setEnabled(0 < row < self.list.count() - 1)
+
     class VaultPanel(QtWidgets.QWidget):
         """The Files tab (PDM-13): navigation at the left; in the middle the header, search, filter chips,
         one row per file and a footer; the selected file's preview at the right."""
@@ -2653,6 +2888,11 @@ def _make_classes():
             self._mesh_sig = None
             self._contents_cache = {}
             self.sort_by_time = False  # by part number; the sort button swaps
+            self.sort_column, self.sort_descending = None, False  # a click on a column's header (PDM-13)
+            self.columns = column_prefs()  # the Files table's column keys (Columns…)
+            self.widths = {}  # key -> the width the user gave a file column, kept across chips
+            self._shown = None  # (keys, simulations) the header was last built for
+            self._applying = False
             base = QtGui.QFont(self.font())
             self.title_font = QtGui.QFont(base)
             self.title_font.setPixelSize(13)
@@ -2797,15 +3037,17 @@ def _make_classes():
             self.list.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
             self.list.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
             self.list.setFrameShape(QtWidgets.QFrame.NoFrame)
-            self.model = QtGui.QStandardItemModel(0, len(COLUMNS), self.list)
-            self.model.setHorizontalHeaderLabels(list(COLUMNS))
+            self.model = QtGui.QStandardItemModel(0, len(self.columns), self.list)
             self.list.setModel(self.model)
             header = self.list.header()
             header.setStretchLastSection(False)
-            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
-            for column, width in ((0, 300), (2, 60), (3, 78), (4, 84), (5, 170)):
-                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
-                self.list.setColumnWidth(column, width)
+            header.setFirstSectionMovable(False)  # Part number stays first: the tree hangs from it
+            header.setSectionsClickable(True)
+            header.sectionClicked.connect(self.sort_by_column)
+            header.sectionMoved.connect(self.column_moved)  # dragging a header keeps the new order
+            header.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            header.customContextMenuRequested.connect(self.header_menu)
+            self.apply_columns()
             self.delegate = Delegate(self)
             self.list.setItemDelegate(self.delegate)
             self.list.doubleClicked.connect(self.open_index)
@@ -2906,6 +3148,8 @@ def _make_classes():
             except Exception:
                 pass
             if s is not None:
+                from bruceworx import vault_trees
+
                 now = _dt.datetime.now(_dt.timezone.utc)
                 for pn, st in s.statuses().items():
                     versions = s.vault.versions.get(pn, [])
@@ -2919,6 +3163,10 @@ def _make_classes():
                         "former": " ".join(s.vault.former_numbers(pn)),  # PDM-12: search finds the old number
                         "sha": last.sha256 if last else "", "object": os.path.join(s.root, last.object_name)
                         if last else "", "at": last.at if last else "", "active": pn == active,
+                        # Columns… (PDM-13): the latest version, the lock and the program, never the file
+                        "size": last.size if last else None, "actor": last.actor if last else "",
+                        "comment": last.comment if last else "", "versions": len(versions), "lock": st.lock,
+                        "program": vault_trees.program_code(pn),
                     }
                 try:  # ECRs and ECOs, under the Changes chip (PDM-05)
                     import bruceworx_changes
@@ -3061,7 +3309,7 @@ def _make_classes():
             self.count.setText(f"{shown} {word}{'s' if shown != 1 else ''}" +
                                (f" of {total}" if shown != total else "") +
                                (f" · {self._hidden_items} in hidden categories" if self._hidden_items else ""))
-            self.sort.setText("Modified" if self.sort_by_time else "Part number")
+            self.sort.setText(COLUMN_TITLES.get(self.sort_column) or ("Modified" if self.sort_by_time else "Part number"))
             s = _state["session"]
             if s is None:
                 self.empty.setText(_state["error"] and f"The vault cannot be read:\n{_state['error']}" or
@@ -3092,7 +3340,12 @@ def _make_classes():
                 return self.rows.get(n["pn"]) or {}
 
             out.sort(key=lambda n: n["pn"] or "")
-            if self.sort_by_time:
+            if self.sort_column:  # a column's header: numbers as numbers, empty cells last either way
+                values = {id(n): self.sort_value(self.sort_column, row(n)) for n in out}
+                out.sort(key=lambda n: (0, "") if values[id(n)] is None else (1, values[id(n)]),
+                         reverse=self.sort_descending)
+                out.sort(key=lambda n: values[id(n)] is None)
+            elif self.sort_by_time:
                 out.sort(key=lambda n: row(n).get("at") or "", reverse=True)
             out.sort(key=lambda n: (n["pn"] is None, row(n).get("item_type") != "drawing"))
             return out
@@ -3107,7 +3360,7 @@ def _make_classes():
             first.setData(node.get("key"), KEY_ROLE)
             first.setData(path, PATH_ROLE)
             first.setData(node.get("kind"), KIND_ROLE)
-            items = [first] + [QtGui.QStandardItem() for _c in COLUMNS[1:]]
+            items = [first] + [QtGui.QStandardItem() for _c in self.column_keys()[1:]]
             for item in items:
                 item.setEditable(False)
             for child in node["children"]:
@@ -3314,16 +3567,131 @@ def _make_classes():
 
         def set_kind(self, key):
             self.kind = key
-            self.model.setHorizontalHeaderLabels(list(SIM_COLUMNS if key == "simulations" else COLUMNS))
-            header = self.list.header()
-            for column, width in ((2, 230 if key == "simulations" else 60), (3, 170 if key == "simulations" else 78),
-                                  (4, 110 if key == "simulations" else 84)):
-                self.list.setColumnWidth(column, width)
+            self.apply_columns()
             self.fill()
 
         def toggle_sort(self):
-            self.sort_by_time = not self.sort_by_time
+            if self.sort_column:  # from a column's order back to the button's own
+                self.sort_column, self.sort_by_time = None, False
+            else:
+                self.sort_by_time = not self.sort_by_time
+            self.update_sort_indicator()
             self.fill()
+
+        # --- the columns (PDM-13): chosen in Columns… or the header's menu, kept in VaultColumns
+        def column_keys(self):
+            return SIM_KEYS if self.sim_mode() else self.columns
+
+        def column_key(self, column):
+            keys = self.column_keys()
+            return keys[column] if 0 <= column < len(keys) else None
+
+        def cell_text(self, key, row):
+            s = _state["session"]
+            return column_cell(key, row, s.me if s is not None else "")[0]
+
+        def sort_value(self, key, row):
+            if not row:
+                return None
+            if key == "used_in":
+                return len(self.used.get(row["part_number"], ())) or None
+            if key == "drawing":
+                return self.drawing_cell(row)[0].casefold() or None
+            s = _state["session"]
+            return column_cell(key, row, s.me if s is not None else "")[1]
+
+        def apply_columns(self):
+            """The header for the chosen columns (or the Simulations chip's), the rows emptied for the
+            fill that follows. Widths the user gave the file columns are kept by key."""
+            header = self.list.header()
+            if self._shown is not None and not self._shown[1]:
+                for column, key in enumerate(self._shown[0]):
+                    if key not in STRETCH and column < self.model.columnCount():
+                        self.widths[key] = self.list.columnWidth(column)
+            keys, sim = self.column_keys(), self.sim_mode()
+            self._applying = True
+            self._filling = True
+            try:
+                self.model.removeRows(0, self.model.rowCount())
+                self.model.setColumnCount(len(keys))
+                self.model.setHorizontalHeaderLabels(list(SIM_COLUMNS) if sim else [COLUMN_TITLES[k] for k in keys])
+                for column in range(len(keys)):  # a dragged header: the new order is in keys now
+                    header.moveSection(header.visualIndex(column), column)
+                for column, key in enumerate(keys):
+                    if key in STRETCH:
+                        header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+                        continue
+                    header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+                    width = SIM_WIDTHS.get(key) if sim else self.widths.get(key)
+                    self.list.setColumnWidth(column, width or FILE_WIDTHS.get(key) or 100)
+            finally:
+                self._applying = False
+                self._filling = False
+            self._shown = (keys, sim)
+            self.update_sort_indicator()
+
+        def set_columns(self, keys):
+            """Show these columns, in this order, at once; remembered in the preferences."""
+            self.columns = save_column_prefs(keys)
+            if self.sort_column not in self.columns:
+                self.sort_column = None
+            if not self.sim_mode():
+                self.apply_columns()
+                self.fill()
+
+        def show_column(self, key, on):
+            keys = [k for k in self.columns if k != key] + ([key] if on else [])
+            self.set_columns(keys)
+
+        def column_moved(self, _logical, _old, _new):
+            if self._applying or self.sim_mode():
+                return
+            header = self.list.header()
+            order = [self.column_key(header.logicalIndex(v)) for v in range(header.count())]
+            QtCore.QTimer.singleShot(0, lambda: _alive(self) and self.set_columns([k for k in order if k]))
+
+        def header_menu(self, pos):
+            """Right-click on the header: a tick per column, Columns… and Reset to default."""
+            if self.sim_mode():
+                return
+            menu = QtWidgets.QMenu(self)
+            for key, title, _w, _a in FILE_COLUMNS:
+                act = menu.addAction(title)
+                act.setCheckable(True)
+                act.setChecked(key in self.columns)
+                act.setEnabled(key not in REQUIRED_COLUMNS)
+                act.toggled.connect(lambda on, k=key: self.show_column(k, on))
+            menu.addSeparator()
+            menu.addAction("Columns…").triggered.connect(lambda _c=False: self.columns_dialog())
+            act = menu.addAction("Reset to Default")
+            act.setEnabled(self.columns != DEFAULT_COLUMNS)
+            act.triggered.connect(lambda _c=False: self.set_columns(DEFAULT_COLUMNS))
+            menu.exec(self.list.header().mapToGlobal(pos))
+
+        def columns_dialog(self):
+            dialog = ColumnsDialog(self.columns, self)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                self.set_columns(dialog.chosen())
+
+        def sort_by_column(self, column):
+            """A click on a column's header sorts each group by it; a second click reverses."""
+            key = self.column_key(column)
+            if self.sim_mode() or key is None:
+                return
+            if key == self.sort_column:
+                self.sort_descending = not self.sort_descending
+            else:
+                self.sort_column, self.sort_descending = key, False
+            self.update_sort_indicator()
+            self.fill()
+
+        def update_sort_indicator(self):
+            header = self.list.header()
+            shown = bool(self.sort_column) and not self.sim_mode() and self.sort_column in self.columns
+            header.setSortIndicatorShown(shown)
+            if shown:
+                header.setSortIndicator(self.columns.index(self.sort_column),
+                                        QtCore.Qt.DescendingOrder if self.sort_descending else QtCore.Qt.AscendingOrder)
 
         def select(self, pn):
             if self.find(pn):
@@ -3434,6 +3802,9 @@ def _make_classes():
                            "were made at check-in; kept on this Mac, the vault is not changed")
             act.setEnabled(_state["session"] is not None and self.pictures is None)
             act.triggered.connect(lambda _c=False: self.refresh_pictures())
+            act = self.more_menu.addAction("Columns…")
+            act.setToolTip("Choose the data the file list shows (file size, modified, ...) and their order")
+            act.triggered.connect(lambda _c=False: self.columns_dialog())
             self.more_menu.addSeparator()
             act = self.more_menu.addAction("Show in Finder")
             s = _state["session"]
@@ -3721,7 +4092,8 @@ def _make_classes():
     def _html(text):
         return (str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
-    return {"VaultPanel": VaultPanel, "CheckInPanel": CheckInPanel, "VaultList": VaultList}
+    return {"VaultPanel": VaultPanel, "CheckInPanel": CheckInPanel, "VaultList": VaultList,
+            "ColumnsDialog": ColumnsDialog}
 
 
 def _after_checkin(paths, close, relinked=()):
