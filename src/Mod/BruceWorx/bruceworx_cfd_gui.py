@@ -17,6 +17,7 @@ import os
 import time
 
 import bruceworx_cfd as cfd
+import bruceworx_cfd_paraview as pvm
 import bruceworx_sim as sim
 from bruceworx_slots import slot
 
@@ -234,6 +235,11 @@ def _make_classes():
             self.timer = QtCore.QTimer()
             self.timer.setInterval(1000)
             self.timer.timeout.connect(slot(self._tick))
+            self.pv_job = None  # background ParaView pictures (bruceworx_cfd_paraview.RenderJob)
+            self.pv_timer = QtCore.QTimer()
+            self.pv_timer.setInterval(700)
+            self.pv_timer.timeout.connect(slot(self._poll_pictures))
+            self._streams = None  # (FemPostPipeline, seed count) of the streamlines in the 3D view
             self.form = [self._build_setup(), self._build_run(), self._build_results()]
             self._show_summary()
             self.check()
@@ -343,12 +349,47 @@ def _make_classes():
             for b in (self.load_button, self.paraview_button, self.report_button):
                 row.addWidget(b)
             w.layout().addLayout(row)
+            row2 = QtWidgets.QHBoxLayout()
+            self.streams_check = QtWidgets.QCheckBox("Streamlines")
+            self.streams_check.setToolTip("Trace streamlines with vtkStreamTracer from seeds upstream of the body (or over "
+                                          "each propeller) and show them in the 3D view, coloured by speed")
+            self.streams_check.toggled.connect(slot(self.toggle_streamlines))
+            self.seeds_spin = QtWidgets.QSpinBox()
+            self.seeds_spin.setRange(10, 2000)
+            self.seeds_spin.setValue(pvm.SEEDS)
+            self.seeds_spin.setSuffix(" seeds")
+            self.seeds_spin.setToolTip("Number of seed points; each is followed upstream and downstream")
+            self.seeds_spin.editingFinished.connect(slot(self._seeds_changed))
+            self.pictures_button = button("Pictures", self.render_pictures,
+                                          "Render iso, side and cut-plane pictures with ParaView in the background")
+            for b in (self.streams_check, self.seeds_spin, self.pictures_button):
+                row2.addWidget(b)
+            w.layout().addLayout(row2)
+            self.picture_choice = QtWidgets.QComboBox()
+            for kind, caption in pvm.IMAGES:
+                self.picture_choice.addItem({"iso": "Isometric", "side": "Side", "cut": "Cut plane"}[kind], kind)
+            self.picture_choice.currentIndexChanged.connect(slot(self._show_picture))
+            self.picture = QtWidgets.QLabel()
+            self.picture.setAlignment(QtCore.Qt.AlignCenter)
+            self.picture.setMinimumHeight(1)
+            w.layout().addWidget(self.picture_choice)
+            w.layout().addWidget(self.picture)
+            self.picture_choice.hide()
+            self.picture.hide()
             self.result_label = hint()
             self.result_label.setOpenExternalLinks(True)
             w.layout().addWidget(self.result_label)
+            note = pvm.precheck_text()
+            self.pictures_button.setEnabled(not note)
+            if note:
+                self.pictures_button.setToolTip(note)
             self.paraview_button.setEnabled(cfd.paraview_app() is not None)
             if cfd.paraview_app() is None:
-                self.paraview_button.setToolTip("ParaView.app is not installed")
+                self.paraview_button.setToolTip(pvm.precheck_text())
+            else:
+                self.paraview_button.setToolTip("Open ParaView with the case ready: surface pressure, a mid cut plane "
+                                                "coloured by speed and streamlines")
+            self._show_picture()
             return w
 
         # --- state
@@ -357,6 +398,9 @@ def _make_classes():
 
         def release(self):
             self.timer.stop()
+            self.pv_timer.stop()
+            if self.pv_job is not None:
+                self.pv_job.stop()
             return super().release()
 
         def _settings_changed(self, *_a):
@@ -451,6 +495,8 @@ def _make_classes():
                     self.conv_label.setText(summary["convergence"]["text"] + (
                         " — <b>converged</b>" if summary["convergence"]["converged"] else " — <b>not converged</b>"))
                     self._show_summary()
+                    if not pvm.precheck_text():
+                        self.render_pictures()
                 self.check()
 
         def _show_summary(self):
@@ -502,7 +548,7 @@ def _make_classes():
             parts = len(out.get("surfaces") or [])
             self.result_label.setText(
                 "Showing the flow: " + (f"surface pressure on {parts} part{'s' if parts != 1 else ''}" if parts else "no part surface")
-                + (", the mid cut plane coloured by velocity" if out["cut"] else "") + ". Streamlines: Open in ParaView.")
+                + (", the mid cut plane coloured by velocity" if out["cut"] else "") + ". Tick Streamlines to add the flow lines.")
             try:
                 import FreeCADGui
 
@@ -516,6 +562,80 @@ def _make_classes():
                 cfd.open_in_paraview(self.analysis.CaseFolder)
             except Exception as exc:
                 self.result_label.setText(f"<span style='color:#b00020'>{exc}</span>")
+
+        # --- streamlines in the 3D view (vtkStreamTracer of the app's VTK)
+        def toggle_streamlines(self, on=None):
+            on = self.streams_check.isChecked() if on is None else bool(on)
+            if not on:
+                if self._streams is not None:
+                    self._streams[0].ViewObject.Visibility = False
+                return None
+            return self.show_streamlines()
+
+        def _seeds_changed(self):
+            if self.streams_check.isChecked() and (self._streams is None or self._streams[1] != self.seeds_spin.value()):
+                self.show_streamlines()
+
+        def show_streamlines(self):
+            count = self.seeds_spin.value()
+            if self._streams is not None and self._streams[1] == count:
+                self._streams[0].ViewObject.Visibility = True
+                return self._streams[0]
+            timings = {}
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+            try:
+                path = pvm.compute_streamlines(self.analysis.CaseFolder, count, timings=timings)
+                if self._streams is not None:
+                    self.doc.removeObject(self._streams[0].Name)
+                    self._streams = None
+                obj = pvm.show_streamlines(self.analysis, path)
+            except Exception as exc:
+                self.result_label.setText(f"<span style='color:#b00020'>Streamlines: {exc}</span>")
+                return None
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+            self._streams = (obj, count)
+            self.result_label.setText(f"Streamlines from {count} seeds in {timings.get('total', 0):.1f} s "
+                                      f"(tracing {timings.get('trace', 0):.1f} s).")
+            return obj
+
+        # --- the ParaView pictures (a pvbatch child process, polled by a timer)
+        def render_pictures(self):
+            if self.pv_job is not None and self.pv_job.running():
+                return
+            folder = self.analysis.CaseFolder
+            self.pv_job = pvm.start_render(folder)
+            if not self.pv_job.running():
+                self.result_label.setText(self.pv_job.message)
+                return
+            self.pictures_button.setEnabled(False)
+            self.result_label.setText("Rendering pictures with ParaView in the background…")
+            self.pv_timer.start()
+
+        def _poll_pictures(self):
+            if not g._alive(self.result_label):
+                self.pv_timer.stop()
+                return
+            if self.pv_job is None or not self.pv_job.poll():
+                return
+            self.pv_timer.stop()
+            self.pictures_button.setEnabled(not pvm.precheck_text())
+            self.result_label.setText("Pictures: " + self.pv_job.message if self.pv_job.state == "done"
+                                      else f"<span style='color:#8a6d00'>No pictures: {self.pv_job.message}</span>")
+            self._show_picture()
+
+        def _show_picture(self, *_a):
+            folder = self.analysis.CaseFolder
+            path = pvm.images(folder).get(self.picture_choice.currentData()) if folder else None
+            if not path:
+                self.picture.hide()
+                self.picture_choice.hide()
+                return
+            pix = QtGui.QPixmap(path)
+            self.picture.setPixmap(pix.scaledToWidth(360, QtCore.Qt.SmoothTransformation))
+            self.picture.setToolTip(path)
+            self.picture.show()
+            self.picture_choice.show()
 
         def report(self):
             if not self.analysis.CfdSummary:

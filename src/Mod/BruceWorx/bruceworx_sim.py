@@ -1655,6 +1655,10 @@ def report_tex(analysis, images=None, folder=None, data=None):
     data["ccx_version"] = data.get("ccx_version") or ccx_version(data.get("ccx") or None)
     paths = report_paths(analysis, folder)
     os.makedirs(paths["dir"], exist_ok=True)
+    if data.get("type") in AIRFLOW_KINDS:  # the ParaView pictures of the case, when they exist
+        import bruceworx_cfd_paraview as pvm
+
+        data["airflow_figures"] = pvm.report_figures(getattr(analysis, "CaseFolder", ""), paths["dir"])
     figures = []
     wanted = FIGURES
     if data.get("thermal"):
@@ -1714,6 +1718,7 @@ def report_source(data, figures=()):
                   rf"{{\small\color{{black!60}} Vector Labs simulation report, {e(data['date'])}}}", ""]
         if data.get("airflow"):
             lines.append(cfd.report_section(data["airflow"]))
+            lines.append(cfd.paraview().report_figures_tex(data.get("airflow_figures")))
         else:
             lines.append("Not run yet.")
         lines += _report_precheck(data.get("issues") or [])
