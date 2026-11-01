@@ -135,3 +135,38 @@ script and a picture.
   \item \textbf{Burst margin.} Report a burst speed ($\sqrt{\text{UTS}/\sigma_{\text{avg hoop}}}$, ``Zwicky'' style) beside the
         safety factor?
 \end{enumerate}
+
+\subsection*{Follow-up: review by the Vector Jet session}
+
+The Vector Jet session cross-checked the rotor stress on a real turbine disc (hoop and radial stress agree with its own
+reading to 0.0000\,MPa on 26\,776 nodes) and found six things; all are fixed and tested.
+
+\begin{enumerate}[nosep]
+  \item \textbf{Wrong support advice.} A Fixed face on the bore stops the bore growing and kills the bore hoop stress. The
+        how-to, the pre-check and the panel now say: axial-only on a flat face plus a minimal 3-2-1 point set, or symmetry
+        planes on a sector. A Fixed (or radially fixing Displacement) on a cylindrical face coaxial with a spin axis is a
+        pre-check \emph{error} with that explanation. The helper you were asked about is built:
+        \code{post.hold\_for\_spin(analysis, face=...)} and a \emph{+ Hold for spin} button add the axial-only face, point A
+        (the vertex nearest the axis, both directions across it) and point B (the vertex with the longest lever arm, one
+        direction). The axis must lie along X, Y or Z. Test: a full thin wheel with no symmetry planes, held by the helper,
+        gives the Timoshenko bore hoop within 8\,\%.
+  \item \textbf{Bore reporting.} The mean hoop over the bore is right for a thin disc only (a 14\,mm hub: mean 340, mid-plane
+        404, von Mises 512\,MPa). \code{post.bore\_stress(result, analysis)} gives hoop mean, max and mid-plane, von Mises
+        max and mid-plane and the lowest safety factor on the bore; the summary, the panel and the report show them. The
+        safety factor divides the study's equivalent stress (von Mises by default), never the hoop stress; the report says so.
+  \item \textbf{\code{working\_dir}.} FEM fell back to a temporary folder when the given one did not exist yet;
+        \code{prepare\_solve} now creates it. Tested with a nested missing folder.
+  \item \textbf{Faceted pictures.} \code{contour\_png} sets \code{NonlinearSubdivisionLevel = 2}, so quadratic tetrahedra are
+        curved, and hides ParaView's orientation triad (\code{axes=True} brings it back).
+  \item \textbf{Mesh failures.} \code{mesh\_study} raises a clear error for a mesh with no volume elements; when second order
+        was asked and Netgen returned linear tetrahedra it upgrades them to Tet10 with straight mid-edge nodes (FEM order
+        1-2, 2-3, 3-1, 1-4, 2-4, 3-4, checked against Netgen's own) and says so; an upgraded mesh solves to the closed form.
+  \item \textbf{Unused nodes and singular solves.} A failed second-order step left about 135\,000 nodes that no element uses;
+        a nearest-node support could land on one and ccx returned $10^9$\,MPa without an error. \code{mesh\_study} now drops
+        nodes no element uses, and a static solve whose largest displacement exceeds $10^3$ times the model size raises
+        ``unsupported or singular''. The 1\,GB impeller STEP itself was not re-run; the cases are synthetic.
+\end{enumerate}
+
+\paragraph{Tests.} \file{TestBruceWorxSimRotor} now has 35 tests (was 21): the fixed-bore error (Fixed and Displacement), the
+axial-only bore face accepted, \code{hold\_for\_spin}, the full held wheel, \code{bore\_stress}, \code{working\_dir}, the
+surface-only, unused-node and Tet10 upgrade cases, the singular guard and the picture script.

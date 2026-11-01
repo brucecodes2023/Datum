@@ -653,8 +653,9 @@ class TestSimulationGui(unittest.TestCase):
         wheel = vc.shape_object(full, "Wheel", Part.makeCylinder(30.0, 6.0).cut(Part.makeCylinder(8.0, 6.0)))
         fobjs = sim.new_study(full, sim.StudyPlan(name="Wheel", model=wheel, material=vc.material(), max_size=8.0))
         fan = fobjs["analysis"]
-        vc.add_displacement(full, fan, wheel, vc.faces_where(wheel.Shape, vc.cylinder_of(8.0)), "xyz", "Bore")
         post.add_spin(fan, 20000.0, axis="z")
+        self.sg.hold_for_spin_object(fan)  # the + Hold for spin helper: axial face + 3-2-1 points (a Fixed bore is an error)
+        self.assertEqual(len([o for o in fan.Group if o.Name.startswith("Hold")]), 3, [o.Name for o in fan.Group])
         fresult = sim.solve(fan, os.path.join(tmp, "full"))
         post.set_study_section(fan, "quarter")
         self.assertTrue(self.sg.show_field(fan, "hoop", fresult))
