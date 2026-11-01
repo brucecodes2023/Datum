@@ -109,7 +109,9 @@ SET(BruceWorx_SRCS
     bruceworx_browser.py
     TestBruceWorxBrowser.py
     bruceworx_picktrace.py
+    bruceworx_fastopen.py
     TestBruceWorxPickTrace.py
+    TestBruceWorxFastOpen.py
     TestBruceWorxTimeline.py
     bruceworx_inspector.py
     bruceworx_rightpanel.py

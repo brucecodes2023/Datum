@@ -251,6 +251,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx pick-to-feature and error chips were not installed: {exc}")
 
 try:
+    import bruceworx_fastopen
+
+    bruceworx_fastopen.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Fast Open was not installed: {exc}")
+
+try:
     import bruceworx_inspector
 
     bruceworx_inspector.install()
