@@ -259,3 +259,66 @@ writes only the mesh; the picture follows at the next GUI save or \emph{Refresh 
   \item STEP and DXF are not in the default package; \emph{Build package} can add them later if you ask.
   \item No questions are open. Building starts with step~1.
 \end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{7. Built (1 Nov 2026)}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\linewidth]{fig/pdm13_built_files.png}
+\caption{The Files tab as built, on a copy of the \emph{Vector} vault: projects with their assemblies, views and
+categories at the left; one row per file, grouped by type, with icon, picture, Used in and Drawing; the engine in 3D
+at the right with its tabs.}
+\label{fig:pdm13-built}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.48\linewidth]{fig/pdm13_built_section.png}\hfill
+\includegraphics[width=0.48\linewidth]{fig/pdm13_built_package.png}
+\caption{Left: the engine's section in the preview, through its centre and square to the view. Right: a sheet
+of a built package, the outer casing drawing, WIP and therefore stamped IN PROGRESS.}
+\end{figure}
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item Find any file in one row: every assembly, part and drawing has its own line, under Assemblies, Parts or
+        Drawings, with its type icon and picture. The engine and the test stand both have rows.
+  \item Pick a project, one of its assemblies (it shows itself and everything it uses), a view or a category on
+        the left. The breadcrumb says where you are.
+  \item Select a file to see it in 3D without opening it: drag to orbit, scroll to zoom, right-drag to pan,
+        double-click to fit, \emph{Section} to cut it through the centre. \emph{ISO} shows its picture,
+        \emph{Drawing} its first sheet. The tabs show its properties, drawings, what it uses, where it is used and
+        its history.
+  \item Save a vault file and its ISO picture and preview mesh are written into it; a drawing gets the picture of
+        its sheet. \emph{Make Previews} does this for files saved before, into the cache on this Mac.
+  \item Right-click one or more rows, \emph{Build Package\ldots}, or \emph{Export Package\ldots} in the Drawings tab:
+        a PDF of each drawing, WIP ones stamped IN PROGRESS, and \file{package.csv}.
+\end{itemize}
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{The 3D view draws its own frames.} pivy's \code{QuarterWidget} cannot import its GL widget in this
+        build and crashes with it patched in. The view renders with \code{SoQtOffscreenRenderer} (50\,ms a frame for
+        the engine at 800\,$\times$\,600) and shows the image. That renderer ignores Coin clip planes and sets its own
+        near plane, and keeps what it drew of a scene, so the section drops the triangles in front of the cut
+        (numpy, 15\,ms for the engine) and every new scene gets a new renderer.
+  \item \textbf{A search counts matches.} A category or type group shows how many rows match, not how many the
+        category holds.
+  \item \textbf{An instance in another vault is left out of the 3D view.} The NEMA 17 arm links its motor from
+        Standard Libraries; the preview shows the arm only. Following links across vaults is a later step.
+  \item \textbf{Make Previews is slow for drawings.} A drawing opened hidden waits for TechDraw to compute its views,
+        about 11\,s a sheet, so the first Make Previews on the \emph{Vector} vault (77 files, 31 drawings) took
+        6 minutes. A drawing saved in the GUI gets its picture at once.
+\end{itemize}
+
+\paragraph{Tests.} \file{TestBruceWorxVaultBrowser.py} (12), \file{TestBruceWorxPackage.py} (5),
+\file{TestBruceWorxPreviewMesh.py} (7), \file{TestBruceWorxPreview.py} (12), \file{TestBruceWorxVaultClient.py}
+(38, the category test updated) and the addon's \file{test\_vault\_trees.py} (14): all pass. Off screen on a
+copy of the vault: Make Previews for 77 files; the engine, turbine and test stand in 3D; the section; a drawing
+sheet; a package of three drawings (three PDFs and \file{package.csv}); a save of a checked-out assembly writing its
+picture and mesh with the 3D view untouched.
+
+\paragraph{Open.} \emph{Make Previews} on your own vault (it writes only to the cache on your Mac). The docs GUI test
+\file{test\_vault\_work.py} still looks for the floating Vault card removed on 25 Oct; it needs a rewrite for the
+Files tab.
