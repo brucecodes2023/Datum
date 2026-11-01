@@ -76,16 +76,18 @@ class TestDefinition(unittest.TestCase):
         self.assertEqual(ws.tab_toolbars(cam, "Manufacture"), [])
         self.assertEqual(ws.group_toolbars(cam), [])
 
-    def test_simulation_tab(self):
+    def test_simulation_tabs(self):
         sim = ws.workspace(self.defn, "Simulation")
-        self.assertEqual([g["caption"] for g in sim["tabs"][0]["groups"]], ["Study", "Setup", "Mesh", "Solve", "Results", "Validation"])
-        self.assertEqual(ws.place_of(self.defn, "BruceWorx_Validation"), ("Simulation", "Simulation", "Validation"))
-        self.assertIn("Simulation · Results", ws.tab_toolbars(sim, "Simulation"))
-        self.assertEqual(ws.place_of(self.defn, "BruceWorx_ShowSafetyFactor"), ("Simulation", "Simulation", "Results"))
+        self.assertEqual([t["name"] for t in sim["tabs"]],
+                         ["Home", "Definitions", "Geometry", "Materials", "Physics", "Mesh", "Study", "Results", "Project"])
+        self.assertEqual(ws.place_of(self.defn, "BruceWorx_Validation"), ("Simulation", "Project", "Validation"))
+        self.assertIn("Results · Stress", ws.tab_toolbars(sim, "Results", "static"))
+        self.assertNotIn("Results · Stress", ws.tab_toolbars(sim, "Results", "prop_wash"))
+        self.assertEqual(ws.place_of(self.defn, "BruceWorx_ShowSafetyFactor"), ("Simulation", "Results", "Stress"))
         for name in ("BruceWorx_SimTemperature", "BruceWorx_SimHeatFlux", "BruceWorx_SimHeatSource", "BruceWorx_SimConvection"):
-            self.assertEqual(ws.place_of(self.defn, name), ("Simulation", "Simulation", "Setup"))
+            self.assertEqual(ws.place_of(self.defn, name), ("Simulation", "Physics", "Thermal"))
         for name in ("BruceWorx_ShowTemperature", "BruceWorx_ShowHDTBands"):
-            self.assertEqual(ws.place_of(self.defn, name), ("Simulation", "Simulation", "Results"))
+            self.assertEqual(ws.place_of(self.defn, name), ("Simulation", "Results", "Temperature"))
         self.assertIn("Mechanical Boundary Conditions and Loads", ws.replaced_toolbars(self.defn))
 
     def test_custom_toolbars_per_workbench(self):

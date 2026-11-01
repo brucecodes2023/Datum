@@ -139,12 +139,44 @@ def tab(ws, name):
     return next((t for t in ws.get("tabs", []) if t["name"] == name), None)
 
 
-def tab_toolbars(ws, tab_name):
-    """Toolbar names a group tab shows (empty for a workbench tab)."""
+# Study-dependent groups (SIM-07 P1). A workspace with "byStudy" shows, per tab, only the groups whose "studies"
+# list names the active study's type (a group without the list always shows). An entry is a study type or one of
+# these families. With no study (kind None) only the groups without a list show.
+ALL = object()  # "no filtering": the kind argument's default
+STUDY_FAMILIES = {
+    "structural": ("static", "modal", "buckling", "thermal_stress"),
+    "solid": ("static", "modal", "buckling", "thermal", "thermal_stress"),
+    "thermal": ("thermal", "thermal_stress"),
+    "airflow": ("external_flow", "prop_wash"),
+}
+
+
+def group_applies(group, kind=ALL):
+    """True when the group shows for the study type ``kind`` (ALL: always)."""
+    wanted = group.get("studies")
+    if kind is ALL or not wanted:
+        return True
+    if kind is None:
+        return False
+    return any(kind == w or kind in STUDY_FAMILIES.get(w, ()) for w in wanted)
+
+
+def tab_groups(ws, tab_name, kind=ALL):
     found = tab(ws, tab_name)
     if not found or found.get("toolbars") == WORKBENCH_TABS:
         return []
-    return [toolbar_name(found["name"], g["caption"]) for g in found.get("groups", [])]
+    return [g for g in found.get("groups", []) if group_applies(g, kind)]
+
+
+def tab_toolbars(ws, tab_name, kind=ALL):
+    """Toolbar names a group tab shows (empty for a workbench tab), for the study type ``kind`` if given."""
+    found = tab(ws, tab_name)
+    return [toolbar_name(found["name"], g["caption"]) for g in tab_groups(ws, tab_name, kind)] if found else []
+
+
+def study_tab_names(ws, kind=ALL):
+    """The tabs that have at least one group for the study type (all tabs when kind is ALL)."""
+    return [t["name"] for t in ws.get("tabs", []) if kind is ALL or t.get("toolbars") == WORKBENCH_TABS or tab_groups(ws, t["name"], kind)]
 
 
 def group_toolbars(ws):
@@ -199,9 +231,9 @@ def more_workbenches(available, disabled, defn):
     return [wb for wb in available if wb not in taken and wb not in disabled]
 
 
-def tab_names(ws, saved, sketch=False):
-    """(tab names to show, the selected one). saved is the last tab used."""
-    names = [t["name"] for t in ws.get("tabs", [])]
+def tab_names(ws, saved, sketch=False, kind=ALL):
+    """(tab names to show, the selected one). saved is the last tab used; kind the active study type."""
+    names = study_tab_names(ws, kind if ws.get("byStudy") else ALL)
     if sketch:
         return names + ["Sketch"], "Sketch"
     return names, saved if saved in names else names[0]
@@ -336,6 +368,7 @@ def _make_bar():
             self.workspace = None  # workspace dict, or None for a More workbench
             self.workbench = None
             self.sketch = False
+            self.study_kind = ALL  # the active study's type, in a workspace with "byStudy"
             self._pending = False
 
             self.button = QtWidgets.QToolButton(self)
@@ -433,8 +466,15 @@ def _make_bar():
             elif self.workspace is None:
                 # A sketch opened from a More workbench: keep showing that one.
                 self.workbench = self.workbench or name
+            if self.workspace is not None and self.workspace.get("byStudy") and self.study_kind is ALL:
+                try:
+                    import bruceworx_sim_workspace
+
+                    self.study_kind = bruceworx_sim_workspace.active_kind()
+                except Exception:
+                    self.study_kind = None
             if self.workspace is not None:
-                names, current = tab_names(self.workspace, _saved_tab(self.workspace["name"]), self.sketch)
+                names, current = tab_names(self.workspace, _saved_tab(self.workspace["name"]), self.sketch, self.study_kind)
                 label = self.workspace["name"]
                 icon = _workbench_icon(self.workspace["workbench"])
             else:
@@ -461,6 +501,17 @@ def _make_bar():
             self.tabs.setCurrentIndex(names.index(current) if current in names else 0)
             self.tabs.blockSignals(False)
 
+        def set_study_kind(self, kind):
+            """The active study changed type (None: no study): the tabs and their groups follow."""
+            if kind == self.study_kind:
+                return
+            self.study_kind = kind
+            if self.workspace is not None and self.workspace.get("byStudy"):
+                keep = self.current_tab()
+                names, current = tab_names(self.workspace, keep or _saved_tab(self.workspace["name"]), self.sketch, kind)
+                self.set_tabs(names, current)
+                self.apply()
+
         def select_tab(self, name):
             for index in range(self.tabs.count()):
                 if self.tabs.tabData(index) == name:
@@ -483,7 +534,8 @@ def _make_bar():
                 return
             mw = self.parentWidget()
             current = self.current_tab()
-            shown = set() if current == "Sketch" else set(tab_toolbars(self.workspace, current))
+            kind = self.study_kind if self.workspace.get("byStudy") else ALL
+            shown = set() if current == "Sketch" else set(tab_toolbars(self.workspace, current, kind))
             groups = set(group_toolbars(self.workspace))
             for bar in mw.findChildren(QtWidgets.QToolBar):
                 if bar.parent() is mw and bar.objectName() in groups:

@@ -140,6 +140,12 @@ def close_dialog():
         pass
 
 
+def _events():
+    import bruceworx_sim_events
+
+    return bruceworx_sim_events
+
+
 def show_panel(panel):
     import FreeCADGui as Gui
 
@@ -2317,6 +2323,7 @@ def _make_classes():
 
         def precheck(self):
             issues = sim.precheck(self.analysis)
+            _events().from_precheck(issues)
             if not issues:
                 self.issues.setText("<span style='color:#1f7a46'>Ready to solve.</span>")
             else:
@@ -2374,6 +2381,7 @@ def _make_classes():
             if self.process is not None and _alive(self.process) and self.process.state() != QtCore.QProcess.NotRunning:
                 self.say("CalculiX is still running")
                 return False
+            _events().run_started(getattr(self.analysis, "Label", ""))
             issues = self.precheck()
             if not sim.ready(issues):
                 self._fail("Not ready: " + "; ".join(t for k, t in issues if k == "error"))
@@ -2388,6 +2396,7 @@ def _make_classes():
             self.player.stop()
             if blocking:
                 self.say("Solving with CalculiX…")
+                _events().stage_started("Solve")
                 code = self.fea.ccx_run()
                 return self._finished(code, QtCore.QProcess.NormalExit, blocking=True)
             self.fea.setup_ccx()
@@ -2400,23 +2409,40 @@ def _make_classes():
             env.insert("PASTIX_MIXED_PRECISION", "1" if getattr(self.fea.solver, "PastixMixedPrecision", False) else "0")
             self.process = QtCore.QProcess()
             self.process.setProcessEnvironment(env)
+            self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+            self.process.readyReadStandardOutput.connect(slot(self._ccx_output))
             self.process.setWorkingDirectory(os.path.dirname(self.fea.inp_file_name))
             self.process.finished.connect(slot(self._finished))
             self.process.errorOccurred.connect(slot(self._process_error))
             base = os.path.splitext(os.path.basename(self.fea.inp_file_name))[0]
             self.solve_button.setEnabled(False)
             self.say("Solving with CalculiX… (the window stays live)")
+            _events().stage_started("Solve")
             self.process.start(self.fea.ccx_binary, ["-i", base])
             return True
 
+        def _ccx_output(self):
+            """The solver's own output to the Log pane, line by line."""
+            try:
+                text = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
+            except Exception:
+                return
+            for line in text.splitlines():
+                _events().log(line)
+
         def _process_error(self, error):
+            _events().stage_finished("Solve", time.time() - self.started, False)
+            _events().message("error", f"CalculiX did not run ({error})")
             self.solve_button.setEnabled(True)
             self._fail(f"CalculiX did not run ({error})")
 
         def _finished(self, code, exit_status, blocking=False):
             if _alive(self.solve_button):
                 self.solve_button.setEnabled(True)
-            if exit_status != QtCore.QProcess.NormalExit or code:
+            ok = exit_status == QtCore.QProcess.NormalExit and not code
+            _events().stage_finished("Solve", time.time() - self.started, ok)
+            if not ok:
+                _events().message("error", f"CalculiX finished with exit code {code}")
                 self._fail(f"CalculiX finished with exit code {code}")
                 return False
             try:
@@ -2425,6 +2451,7 @@ def _make_classes():
                 self._fail(f"Results: {exc}")
                 return False
             self.say(f"Solved in {time.time() - self.started:.1f} s")
+            _events().message("ok", f"Solved in {time.time() - self.started:.1f} s")
             self.refresh()
             if self.kind in ("modal", "buckling"):
                 if self.modes_table.rowCount():

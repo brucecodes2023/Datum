@@ -465,7 +465,7 @@
       ],
       "tabs": [
         {
-          "name": "Simulation",
+          "name": "Home",
           "groups": [
             {
               "caption": "Study",
@@ -479,21 +479,71 @@
               ]
             },
             {
-              "caption": "Setup",
+              "caption": "Run",
+              "commands": [
+                "BruceWorx_StudyPreCheck",
+                "BruceWorx_SolveStudy"
+              ]
+            },
+            {
+              "caption": "Report",
+              "commands": [
+                "BruceWorx_StudyReport"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Definitions",
+          "groups": [
+            {
+              "caption": "Parameters",
+              "commands": [
+                "BruceWorx_SimParameters",
+                "BruceWorx_SimSelections"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Geometry",
+          "groups": [
+            {
+              "caption": "Model",
+              "commands": [
+                "BruceWorx_SimGeometry"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Materials",
+          "groups": [
+            {
+              "caption": "Material",
+              "studies": [
+                "solid"
+              ],
               "commands": [
                 "FEM_MaterialSolid",
+                "FEM_MaterialEditor"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Physics",
+          "groups": [
+            {
+              "caption": "Supports",
+              "studies": [
+                "structural"
+              ],
+              "commands": [
                 "FEM_ConstraintFixed",
-                "FEM_ConstraintForce",
-                "FEM_ConstraintPressure",
-                "FEM_ConstraintDisplacement",
-                "BruceWorx_SimSpin",
-                "BruceWorx_SimTemperature",
-                "BruceWorx_SimHeatFlux",
-                "BruceWorx_SimHeatSource",
-                "BruceWorx_SimConvection"
+                "FEM_ConstraintDisplacement"
               ],
               "more": [
-                "FEM_ConstraintSelfWeight",
                 "FEM_ConstraintContact",
                 "FEM_ConstraintTie",
                 "FEM_ConstraintSpring",
@@ -502,16 +552,62 @@
                 "FEM_ConstraintPulley",
                 "FEM_ConstraintPlaneRotation",
                 "FEM_ConstraintTransform",
-                "FEM_ConstraintRigidBody",
-                "FEM_ConstraintCentrif",
-                "FEM_ConstraintTemperature",
-                "FEM_ConstraintHeatflux",
-                "FEM_ConstraintInitialTemperature",
-                "FEM_MaterialEditor"
+                "FEM_ConstraintRigidBody"
               ]
             },
             {
+              "caption": "Loads",
+              "studies": [
+                "static",
+                "buckling",
+                "thermal_stress"
+              ],
+              "commands": [
+                "FEM_ConstraintForce",
+                "FEM_ConstraintPressure",
+                "BruceWorx_SimSpin"
+              ],
+              "more": [
+                "FEM_ConstraintSelfWeight",
+                "FEM_ConstraintCentrif"
+              ]
+            },
+            {
+              "caption": "Thermal",
+              "studies": [
+                "thermal"
+              ],
+              "commands": [
+                "BruceWorx_SimTemperature",
+                "BruceWorx_SimHeatFlux",
+                "BruceWorx_SimHeatSource",
+                "BruceWorx_SimConvection"
+              ],
+              "more": [
+                "FEM_ConstraintTemperature",
+                "FEM_ConstraintHeatflux",
+                "FEM_ConstraintInitialTemperature"
+              ]
+            },
+            {
+              "caption": "Airflow",
+              "studies": [
+                "airflow"
+              ],
+              "commands": [
+                "BruceWorx_AirflowSetup"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Mesh",
+          "groups": [
+            {
               "caption": "Mesh",
+              "studies": [
+                "solid"
+              ],
               "commands": [
                 "BruceWorx_StudyMesh",
                 "BruceWorx_StudyRefine"
@@ -524,9 +620,14 @@
                 "FEM_MeshDisplayInfo",
                 "FEM_MeshClear"
               ]
-            },
+            }
+          ]
+        },
+        {
+          "name": "Study",
+          "groups": [
             {
-              "caption": "Solve",
+              "caption": "Run",
               "commands": [
                 "BruceWorx_StudyPreCheck",
                 "BruceWorx_SolveStudy"
@@ -536,20 +637,54 @@
                 "FEM_SolverControl",
                 "FEM_SolverRun"
               ]
-            },
+            }
+          ]
+        },
+        {
+          "name": "Results",
+          "groups": [
             {
-              "caption": "Results",
+              "caption": "Stress",
+              "studies": [
+                "static",
+                "thermal_stress"
+              ],
               "commands": [
                 "BruceWorx_ShowStress",
                 "BruceWorx_ShowDisplacement",
                 "BruceWorx_ShowSafetyFactor",
                 "BruceWorx_ShowHoop",
-                "BruceWorx_SafetyFactorBands",
-                "BruceWorx_ShowTemperature",
-                "BruceWorx_ShowHDTBands",
-                "BruceWorx_StudyProbe",
+                "BruceWorx_SafetyFactorBands"
+              ]
+            },
+            {
+              "caption": "Modes",
+              "studies": [
+                "modal",
+                "buckling"
+              ],
+              "commands": [
                 "BruceWorx_ModeShapes",
-                "BruceWorx_StudyReport"
+                "BruceWorx_ShowDisplacement"
+              ]
+            },
+            {
+              "caption": "Temperature",
+              "studies": [
+                "thermal"
+              ],
+              "commands": [
+                "BruceWorx_ShowTemperature",
+                "BruceWorx_ShowHDTBands"
+              ]
+            },
+            {
+              "caption": "Inspect",
+              "studies": [
+                "solid"
+              ],
+              "commands": [
+                "BruceWorx_StudyProbe"
               ],
               "more": [
                 "FEM_ResultShow",
@@ -561,6 +696,33 @@
               ]
             },
             {
+              "caption": "Airflow",
+              "studies": [
+                "airflow"
+              ],
+              "commands": [
+                "BruceWorx_AirflowResults",
+                "BruceWorx_AirflowParaView"
+              ]
+            },
+            {
+              "caption": "Report",
+              "commands": [
+                "BruceWorx_StudyReport"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Project",
+          "groups": [
+            {
+              "caption": "Project",
+              "commands": [
+                "BruceWorx_SimProject"
+              ]
+            },
+            {
               "caption": "Validation",
               "commands": [
                 "BruceWorx_Validation"
@@ -568,7 +730,8 @@
             }
           ]
         }
-      ]
+      ],
+      "byStudy": true
     },
     {
       "name": "Manufacture",

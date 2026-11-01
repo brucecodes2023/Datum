@@ -699,12 +699,16 @@ class TestSimulationGui(unittest.TestCase):
         custom = ws.custom_toolbars(ws.definition())
         self.assertIn("FemWorkbench", custom)
         names = [name for _gid, name, _cmds in custom["FemWorkbench"]]
-        self.assertEqual(names, ["Simulation · Study", "Simulation · Setup", "Simulation · Mesh", "Simulation · Solve", "Simulation · Results", "Simulation · Validation"])
-        results = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Simulation · Results"][0]
+        tabs = []
+        for name in names:  # SIM-07 P1: one tab per step, groups by study type
+            if name.split(" · ")[0] not in tabs:
+                tabs.append(name.split(" · ")[0])
+        self.assertEqual(tabs, ["Home", "Definitions", "Geometry", "Materials", "Physics", "Mesh", "Study", "Results", "Project"])
+        results = [c for _gid, name, cmds in custom["FemWorkbench"] if name.startswith("Results · ") for c in cmds]
         for name in ("BruceWorx_ShowSafetyFactor", "BruceWorx_ShowHoop", "BruceWorx_SafetyFactorBands", "BruceWorx_StudyReport"):
             self.assertIn(name, results)
-        setup = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Simulation · Setup"][0]
-        self.assertIn("BruceWorx_SimSpin", setup)
+        loads = [cmds for _gid, name, cmds in custom["FemWorkbench"] if name == "Physics · Loads"][0]
+        self.assertIn("BruceWorx_SimSpin", loads)
         self.assertIn("BruceWorx_SolveStudy", Gui.listCommands())
 
 

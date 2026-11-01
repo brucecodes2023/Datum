@@ -1121,6 +1121,16 @@ def record_stage(analysis, stage):
 
 
 def mesh_study(analysis, progress=None):
+    """Meshes the study (see ``_mesh_study``) and tells the run panes (SIM-07)."""
+    import bruceworx_sim_events as events
+
+    with events.stage("Mesh"):
+        stats = _mesh_study(analysis, events.tee(progress))
+    events.message("ok", f"Meshed: {stats['nodes']} nodes, {stats['elements']} elements in {stats['seconds']} s")
+    return stats
+
+
+def _mesh_study(analysis, progress=None):
     """Generates the study's mesh (recompute of the Netgen object); returns mesh_stats.
 
     A mesh without volume elements (Netgen sometimes returns the surface only for a complex solid) is an error. Nodes no
@@ -1346,7 +1356,9 @@ def _purge_results(analysis):
 def prepare_solve(analysis, working_dir=None, progress=None):
     """Meshes when needed, checks, writes the CalculiX input; returns the FemToolsCcx to run."""
     from femtools import ccxtools
+    import bruceworx_sim_events
 
+    progress = bruceworx_sim_events.tee(progress)
     issues = precheck(analysis, results=False)  # an old result must not block the next solve
     if not ready(issues):
         raise StudyError("; ".join(text for kind, text in issues if kind == "error"))
@@ -1376,7 +1388,10 @@ def prepare_solve(analysis, working_dir=None, progress=None):
         raise StudyError(message.strip())
     if progress:
         progress("Writing the CalculiX input…")
-    fea.write_inp_file()
+    import bruceworx_sim_events as events
+
+    with events.stage("Write input"):
+        fea.write_inp_file()
     if not fea.inp_file_name:
         raise StudyError("the CalculiX input file was not written")
     if eigen is not None:
@@ -1434,9 +1449,13 @@ def check_displacement(result, analysis=None):
 
 
 def finish_solve(fea, progress=None):
-    """Loads the results of a finished ccx run (see ``_finish_solve``) and records the solution's fingerprint."""
-    result = _finish_solve(fea, progress)
+    """Loads the results of a finished ccx run (see ``_finish_solve``) and tells the run panes (SIM-07)."""
+    import bruceworx_sim_events as events
+
+    with events.stage("Read results"):
+        result = _finish_solve(fea, events.tee(progress))
     record_stage(fea.analysis, "solution")
+    events.message("ok", "Results read")
     return result
 
 
@@ -1477,11 +1496,17 @@ def _finish_solve(fea, progress=None):
 
 def solve(analysis, working_dir=None, progress=None):
     """The whole run, blocking: mesh if needed, write, ccx, read, safety factor. Returns the result."""
+    import bruceworx_sim_events as events
+
+    events.run_started(getattr(analysis, "Label", ""))
+    progress = events.tee(progress)
     fea = prepare_solve(analysis, working_dir, progress)
     if progress:
         progress("Solving with CalculiX…")
     t0 = time.time()
+    events.stage_started("Solve")
     code = fea.ccx_run()
+    events.stage_finished("Solve", time.time() - t0, not code)
     if code:
         raise StudyError(f"CalculiX finished with exit code {code}: {(fea.ccx_stderr or '')[-400:]}")
     if progress:

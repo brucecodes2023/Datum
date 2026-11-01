@@ -411,6 +411,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx simulation studies were not installed: {exc}")
 
 try:
+    import bruceworx_sim_workspace
+
+    bruceworx_sim_workspace.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx simulation window shell (SIM-07) was not installed: {exc}")
+
+try:
     import bruceworx_validation_gui
 
     bruceworx_validation_gui.install()

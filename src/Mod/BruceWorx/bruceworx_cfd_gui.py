@@ -19,6 +19,7 @@ import time
 import bruceworx_cfd as cfd
 import bruceworx_cfd_paraview as pvm
 import bruceworx_sim as sim
+import bruceworx_sim_events as events
 from bruceworx_slots import slot
 
 _classes = None
@@ -455,6 +456,7 @@ def _make_classes():
                 issues, est = [("error", f"Pre-check failed: {exc}")], None
             colors = {"error": "#b00020", "warning": "#8a6d00", "info": "#555"}
             self.issues.setText("<br>".join(f"<span style='color:{colors[l]}'>{t}</span>" for l, t in issues))
+            events.from_precheck(issues)
             self.run_button.setEnabled(not any(l == "error" for l, _t in issues) and not self._running())
             return issues
 
@@ -478,6 +480,8 @@ def _make_classes():
                 return
             self.folder = info["folder"]
             self.reader = cfd.LogReader(self.folder)
+            events.run_started(getattr(self.analysis, "Label", ""))
+            self.feed = events.FoamFeed(self.folder)
             self.run_button.setEnabled(False)
             self.stop_button.setEnabled(True)
             self.stage_label.setText(f"Running in {self.folder} on {info['n_procs']} core(s)…")
@@ -494,6 +498,10 @@ def _make_classes():
                 self.timer.stop()
                 return
             self.reader.update()
+            try:
+                self.feed.poll()
+            except Exception:
+                pass
             self.res_plot.set_series({f: v[-2000:] for f, v in self.reader.residuals.items()})
             try:
                 info = json.load(open(os.path.join(self.folder, "vectorlabs.json")))
@@ -510,6 +518,10 @@ def _make_classes():
                 self.timer.stop()
                 self.stop_button.setEnabled(False)
                 result = self.runner.result()
+                try:
+                    self.feed.finish(result)
+                except Exception:
+                    pass
                 note = " (MPI did not start on this Mac: ran on one core)" if cfd.mpi_known_broken() else ""
                 self.stage_label.setText(f"Run {result}{note}.")
                 if result == "done":
