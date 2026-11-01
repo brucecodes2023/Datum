@@ -25,6 +25,7 @@ import bruceworx_physical as bp
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 THRUST_AXIS, THRUST_TABLE, CAPACITY = "ThrustAxis", "ThrustTable", "CapacitymAh"
+PROP_DIAMETER, HUB_DIAMETER = "PropDiameter", "HubDiameter"  # mm, on the motor part (prop wash disks)
 GROUP = "BruceWorx"
 WIRE_TYPE = "BruceWorx::Wire"
 SKIP_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Placement")
@@ -321,8 +322,9 @@ def _ensure(obj, kind, name, doc, default=None):
     return name
 
 
-def mark_motor(part, axis=(0.0, 0.0, 1.0), table_path=""):
-    """Mark ``part`` (the motor part, not a link) with ThrustAxis and ThrustTable."""
+def mark_motor(part, axis=(0.0, 0.0, 1.0), table_path="", prop_diameter=0.0, hub_diameter=0.0):
+    """Mark ``part`` (the motor part, not a link) with ThrustAxis and ThrustTable, and the size of its propeller
+    (``prop_diameter``, ``hub_diameter`` in mm; 0 = the prop-wash study's own value) for the airflow study."""
     import FreeCAD
 
     _ensure(part, "App::PropertyVector", THRUST_AXIS, "Direction of thrust in the part's frame (marks a motor)",
@@ -331,6 +333,22 @@ def mark_motor(part, axis=(0.0, 0.0, 1.0), table_path=""):
             "CSV thrust table for this motor and propeller: throttle %, thrust g, current A, voltage V")
     if table_path:
         setattr(part, THRUST_TABLE, table_path)
+    _ensure(part, "App::PropertyFloat", PROP_DIAMETER, "Diameter of this motor's propeller in mm (airflow prop wash); "
+            "0 = the value in the study", 0.0)
+    _ensure(part, "App::PropertyFloat", HUB_DIAMETER, "Diameter of the propeller hub in mm (no air is moved inside it); "
+            "0 = 20 % of the propeller diameter", 0.0)
+    if prop_diameter:
+        setattr(part, PROP_DIAMETER, float(prop_diameter))
+    if hub_diameter:
+        setattr(part, HUB_DIAMETER, float(hub_diameter))
+
+
+def motor_prop_sizes(inst):
+    """(propeller diameter mm, hub diameter mm) typed on the motor part of this occurrence; 0 where not set."""
+    t = inst.target
+    props = getattr(t, "PropertiesList", ())
+    return (float(getattr(t, PROP_DIAMETER)) if PROP_DIAMETER in props else 0.0,
+            float(getattr(t, HUB_DIAMETER)) if HUB_DIAMETER in props else 0.0)
 
 
 def set_battery_capacity(part, mah):

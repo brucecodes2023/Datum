@@ -85,6 +85,15 @@ class TestMomentumTheory(unittest.TestCase):
     def test_no_thrust_no_flow(self):
         self.assertEqual(wash.induced_velocity(0.0, 1.2, 0.1), 0.0)
 
+    def test_a_hub_makes_the_disk_a_ring_and_raises_the_induced_velocity(self):
+        rho = cfd.air_properties(20.0, 0.0)["rho"]
+        D, hub = 0.076, 0.0152
+        self.assertAlmostEqual(wash.disk_area(D, hub), math.pi * (D * D - hub * hub) / 4, places=12)
+        self.assertAlmostEqual(wash.disk_area(D, hub) / wash.disk_area(D), 0.96, places=12)
+        vi = wash.induced_velocity(1.0, rho, D, hub=hub)
+        self.assertAlmostEqual(vi, math.sqrt(1.0 / (2 * rho * wash.disk_area(D, hub))), places=9)
+        self.assertAlmostEqual(vi / wash.induced_velocity(1.0, rho, D), 1 / math.sqrt(0.96), places=9)
+
 
 class TestDisks(unittest.TestCase):
     def test_axis_is_normalised_and_the_wake_goes_against_it(self):
@@ -99,6 +108,14 @@ class TestDisks(unittest.TestCase):
         self.assertAlmostEqual(r.axis[0], 1.0, places=9)  # Z turns into +X about Y
         self.assertAlmostEqual(r.center[2], -0.1, places=9)
         self.assertEqual(wash.rotated_disks([d], 0.0, (0, 0, 0))[0].center, d.center)
+
+    def test_hub_is_kept_through_dict_and_rotation_and_is_limited(self):
+        d = wash.Disk("a", (0.1, 0, 0.05), (0, 0, 1), 0.076, 1.0, hub=0.015)
+        self.assertEqual(wash.Disk.from_dict(d.to_dict()).hub, 0.015)
+        self.assertEqual(wash.rotated_disks([d], 30.0, (0, 0, 0))[0].hub, 0.015)
+        self.assertAlmostEqual(d.area, wash.disk_area(0.076, 0.015))
+        self.assertEqual(wash.Disk("b", (0, 0, 0), (0, 0, 1), 0.076, 1.0).hub, 0.0)
+        self.assertAlmostEqual(wash.Disk("c", (0, 0, 0), (0, 0, 1), 0.076, 1.0, hub=0.2).hub, 0.9 * 0.076)  # never a closed disk
 
     def test_rim_points_lie_on_the_disk(self):
         d = wash.Disk("a", (0.1, 0.2, 0.3), (1, 1, 0), 0.08, 1.0)
@@ -130,6 +147,23 @@ class TestWashCaseWriter(unittest.TestCase):
             self.assertTrue(os.path.isfile(path), rel)
             self.assertTrue(parse_ok(path), rel + " does not parse")
         self.assertIn("stage topoSet", open(os.path.join(folder, "Allrun")).read())
+
+    def test_a_hub_is_an_inner_radius_of_the_cell_zone_and_the_thrust_stays(self):
+        parts, disks = xquad(0.5)
+        for d in disks:
+            d.hub = 0.0152
+        setup = wash.WashSetup(preset="coarse", n_procs=1)
+        info = wash.write_wash_case(os.path.join(self.tmp, "hub"), parts, disks, setup)
+        top = open(os.path.join(info["folder"], "system", "topoSetDict")).read()
+        self.assertEqual(top.count("innerRadius 0.0076;"), 4)
+        self.assertTrue(parse_ok(os.path.join(info["folder"], "system", "topoSetDict")))
+        plain = self.write("plain")[0]
+        self.assertNotIn("innerRadius", open(os.path.join(plain["folder"], "system", "topoSetDict")).read())
+        rho = info["air"]["rho"]
+        self.assertAlmostEqual(info["disk_area"], 4 * wash.disk_area(0.076, 0.0152))
+        theory = wash.induced_velocity(0.5, rho, 0.076, hub=0.0152)
+        self.assertAlmostEqual(info["disks"][0]["v_induced"], theory, places=9)
+        self.assertEqual(info["disks"][0]["hub"], 0.0152)
 
     def test_each_disk_pushes_the_air_down_with_the_thrust(self):
         info, disks = self.write(thrust=0.5)
@@ -255,6 +289,25 @@ class TestDiskBenchmark(unittest.TestCase):
             self.assertLess(abs(err_wake), 0.15)
 
     @needs_foam
+    def test_disk_with_a_hub_against_the_ring_area_theory(self):
+        """B-CF4 with a hub of 0.2 D: the same thrust on the ring (96 % of the area), so v_i = sqrt(T / 2 rho A_ring) =
+        9.77 m/s at the disk and 2 v_i = 19.5 m/s in the far wake.  The hole fills in a few radii downstream."""
+        with tempfile.TemporaryDirectory() as t:
+            folder = os.path.join(t, "ring")
+            info = wash.write_disk_case(folder, thrust=1.0, diameter=0.076, hub=0.0152)
+            run = cfd.Runner(folder, INSTALL).start()
+            run.wait()
+            self.assertEqual(run.result(), "done", cfd._read(os.path.join(folder, "log.run")))
+            v = wash.disk_benchmark_values(folder)
+            err_disk = (v["v_disk"] - info["v_induced"]) / info["v_induced"]
+            err_wake = (v["v_wake"] - 2 * info["v_induced"]) / (2 * info["v_induced"])
+            print(f"\n[ring] v at the ring {v['v_disk']:.2f} m/s (theory {info['v_induced']:.2f}, {err_disk * 100:+.1f} %), wake core "
+                  f"{v['v_wake']:.2f} m/s ({2 * info['v_induced']:.2f}, {err_wake * 100:+.1f} %)")
+            self.assertAlmostEqual(info["v_induced"], 9.765, delta=0.01)
+            self.assertLess(abs(err_disk), 0.10)
+            self.assertLess(abs(err_wake), 0.15)
+
+    @needs_foam
     def test_thrust_scales_the_velocity_as_the_square_root(self):
         """Quarter the thrust, half the speed: a quick check on the source's normalisation (coarse wedge, 12 s)."""
         out = {}
@@ -371,6 +424,29 @@ class TestPropWashStudy(unittest.TestCase):
         # the disk sits above the motor's top (the motor part spans Z 4 to 22 mm): 22 mm + 0.1 D
         self.assertAlmostEqual(disks[0].center[2], 0.022 + 0.0076, delta=1e-4)
 
+    def test_hub_defaults_to_a_fifth_of_the_diameter_and_the_study_value_replaces_it(self):
+        disks, _n = wash.study_disks(self.study(PropDiameter=76.0))
+        self.assertTrue(all(abs(d.hub - 0.0152) < 1e-9 for d in disks))
+        disks, _n = wash.study_disks(self.study(PropDiameter=76.0, HubDiameter=12.0))
+        self.assertTrue(all(abs(d.hub - 0.012) < 1e-9 for d in disks))
+
+    def test_the_motor_part_carries_its_own_propeller_and_hub(self):
+        motor = self.doc.getObject("Motor")
+        for name in ("ThrustAxis", "PropDiameter", "HubDiameter"):
+            self.assertIn(name, motor.PropertiesList)
+        self.assertEqual((motor.PropDiameter, motor.HubDiameter), (0.0, 0.0))
+        motor.PropDiameter, motor.HubDiameter = 100.0, 14.0
+        disks, _n = wash.study_disks(self.study(PropDiameter=76.0, HubDiameter=12.0))
+        self.assertTrue(all(abs(d.diameter - 0.1) < 1e-9 and abs(d.hub - 0.014) < 1e-9 for d in disks))
+        self.assertAlmostEqual(disks[0].center[2], 0.022 + 0.0100, delta=1e-4)  # the offset follows the motor's own D
+        motor.HubDiameter = 0.0
+        disks, _n = wash.study_disks(self.study(PropDiameter=76.0, HubDiameter=12.0))
+        self.assertAlmostEqual(disks[0].hub, 0.012)  # no hub on the part: the study value
+        # a diameter on every motor part makes the study's own blank value fine
+        disks, _n = wash.study_disks(self.study())
+        self.assertAlmostEqual(disks[0].diameter, 0.1)
+        self.assertAlmostEqual(disks[0].hub, 0.02)  # 0.2 D
+
     def test_typed_thrust_and_explicit_offset_override(self):
         a = self.study(PropDiameter=76.0, TypedThrust=1.5, DiskOffset=20.0)
         disks, _notes = wash.study_disks(a)
@@ -464,14 +540,16 @@ class TestPropWashGui(unittest.TestCase):
         Gui.updateGui()
         box = panel.air_box
         self.assertFalse(box.widget.isHidden())
-        self.assertFalse(box.diameter.isHidden() or box.typed.isHidden() or box.offset.isHidden())
+        self.assertFalse(box.diameter.isHidden() or box.typed.isHidden() or box.offset.isHidden() or box.hub.isHidden())
         self.assertTrue(box.aoa.isHidden() and box.area.isHidden())
         self.assertEqual(box.speed.value(), 0.0)  # hover
         box.diameter.setValue(76.0)
+        box.hub.setValue(15.0)
         panel.name_edit.setText("Wash")
         analysis = panel.create()
         self.assertIsNotNone(analysis)
         self.assertEqual((analysis.StudyType, analysis.PropDiameter, analysis.FlowSpeed), ("prop_wash", 76.0, 0.0))
+        self.assertEqual(analysis.HubDiameter, 15.0)
         panel.type_combo.setCurrentIndex(panel.type_combo.findData("external_flow"))  # back: the angle returns, speed 10
         Gui.updateGui()
         self.assertFalse(box.aoa.isHidden())
@@ -486,6 +564,9 @@ class TestPropWashGui(unittest.TestCase):
         self.assertTrue(all(level != "error" or "OpenFOAM" in text for level, text in issues), issues)
         study.diameter.setValue(80.0)
         self.assertEqual(analysis.PropDiameter, 80.0)
+        self.assertEqual(study.hub.value(), 15.0)
+        study.hub.setValue(0.0)
+        self.assertEqual(analysis.HubDiameter, 0.0)
         summary = {
             "kind": "prop_wash", "thrust_total": 3.8,
             "convergence": {"text": "ok", "converged": True},

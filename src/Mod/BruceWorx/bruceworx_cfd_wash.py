@@ -43,14 +43,18 @@ DISK_LAYERS = 3  # thickness of the disk's cell zone, in cells of the disk level
 # ----- momentum theory ----------------------------------------------------------------------------------
 
 
-def disk_area(diameter):
-    return math.pi * diameter * diameter / 4.0
+HUB_FRACTION = 0.2  # default hub diameter / propeller diameter (a 3 inch quad prop: 12 to 16 mm hub on 76 mm)
 
 
-def induced_velocity(thrust, rho, diameter, free_stream=(0.0, 0.0, 0.0), wake_dir=(0.0, 0.0, -1.0)):
+def disk_area(diameter, hub=0.0):
+    """Area (m^2) of the disk: a ring when ``hub`` (the hub diameter) is given, where the propeller moves no air."""
+    return math.pi * (diameter * diameter - hub * hub) / 4.0
+
+
+def induced_velocity(thrust, rho, diameter, free_stream=(0.0, 0.0, 0.0), wake_dir=(0.0, 0.0, -1.0), hub=0.0):
     """Induced velocity v_i (m/s) of a disk: T = 2 rho A v_i |V + v_i w| (w the unit wake direction, V the free stream).
-    Hover (V = 0) is sqrt(T / 2 rho A); the far wake is 2 v_i."""
-    area = disk_area(diameter)
+    Hover (V = 0) is sqrt(T / 2 rho A); the far wake is 2 v_i.  A is the ring area when the disk has a hub."""
+    area = disk_area(diameter, hub)
     if thrust <= 0 or area <= 0:
         return 0.0
 
@@ -74,9 +78,10 @@ def induced_velocity(thrust, rho, diameter, free_stream=(0.0, 0.0, 0.0), wake_di
 
 
 class Disk:
-    """One propeller as an actuator disk (metres, model frame): centre, unit thrust axis, diameter, thrust (N)."""
+    """One propeller as an actuator disk (metres, model frame): centre, unit thrust axis, diameter, thrust (N), and the
+    diameter of the hub (a hole in the disk, 0 = none)."""
 
-    def __init__(self, name, center, axis, diameter, thrust, label=None, motor=None):
+    def __init__(self, name, center, axis, diameter, thrust, label=None, motor=None, hub=0.0):
         n = math.sqrt(sum(c * c for c in axis)) or 1.0
         self.name = name
         self.center = tuple(float(c) for c in center)
@@ -85,6 +90,11 @@ class Disk:
         self.thrust = float(thrust)
         self.label = label or name
         self.motor = motor or name
+        self.hub = max(0.0, min(float(hub or 0.0), 0.9 * self.diameter))
+
+    @property
+    def area(self):
+        return disk_area(self.diameter, self.hub)
 
     @property
     def wake_dir(self):
@@ -92,11 +102,11 @@ class Disk:
 
     def to_dict(self):
         return {"name": self.name, "center": list(self.center), "axis": list(self.axis), "diameter": self.diameter,
-                "thrust": self.thrust, "label": self.label, "motor": self.motor}
+                "thrust": self.thrust, "label": self.label, "motor": self.motor, "hub": self.hub}
 
     @classmethod
     def from_dict(cls, d):
-        return cls(d["name"], d["center"], d["axis"], d["diameter"], d["thrust"], d.get("label"), d.get("motor"))
+        return cls(d["name"], d["center"], d["axis"], d["diameter"], d["thrust"], d.get("label"), d.get("motor"), d.get("hub", 0.0))
 
 
 def _rotate_vec_y(v, angle_deg):
@@ -115,7 +125,7 @@ def rotated_disks(disks, aoa, about):
         rel = tuple(d.center[k] - about[k] for k in range(3))
         c = _rotate_vec_y(rel, aoa)
         out.append(Disk(d.name, tuple(c[k] + about[k] for k in range(3)), _rotate_vec_y(d.axis, aoa), d.diameter,
-                        d.thrust, d.label, d.motor))
+                        d.thrust, d.label, d.motor, d.hub))
     return out
 
 
@@ -224,7 +234,7 @@ def estimate_wash(parts, disks, setup, geo=None):
         dxd = geo["dx0"] / 2 ** lvl
         n_disk += (math.pi * (0.75 * d.diameter) ** 2 * 2.0 * d.diameter) / dxd ** 3
         n_disk += (math.pi * (1.0 * d.diameter) ** 2 * 5.0 * d.diameter) / (2 * dxd) ** 3
-    vmax = max([2 * induced_velocity(d.thrust, air["rho"], d.diameter) for d in disks] + [setup.speed, 1e-3])
+    vmax = max([2 * induced_velocity(d.thrust, air["rho"], d.diameter, hub=d.hub) for d in disks] + [setup.speed, 1e-3])
     layers = pv["layers"]
     first = (0.4 * dxs) / 1.2 ** (layers - 1) if layers else dxs
     length = geo["length"]
@@ -255,9 +265,10 @@ def topo_set_dict(disks, geo, setup):
         p1 = tuple(d.center[k] - d.axis[k] * t / 2 for k in range(3))
         p2 = tuple(d.center[k] + d.axis[k] * t / 2 for k in range(3))
         z = zones[d.name]
+        inner = f" innerRadius {d.hub / 2:.9g};" if d.hub > 0 else ""  # the hub: no cells, no force
         actions.append(f"""    {{
         name {z}_cells; type cellSet; action new; source cylinderToCell;
-        point1 {_vec(p1)}; point2 {_vec(p2)}; radius {d.diameter / 2:.9g};
+        point1 {_vec(p1)}; point2 {_vec(p2)}; radius {d.diameter / 2:.9g};{inner}
     }}
     {{
         name {z}; type cellZoneSet; action new; source setToCellZone; set {z}_cells;
@@ -483,7 +494,7 @@ def write_wash_case(folder, parts, disks, setup):
     w(folder, "system/snappyHexMeshDict", snappy_extra(snappy, disks_f, geo, setup))
     w(folder, "system/topoSetDict", topo_set_dict(disks_f, geo, setup))
     w(folder, "constant/fvOptions", fv_options(disks_f, air))
-    vmax = max(2 * induced_velocity(d.thrust, air["rho"], d.diameter) for d in disks_f)
+    vmax = max(2 * induced_velocity(d.thrust, air["rho"], d.diameter, hub=d.hub) for d in disks_f)
     if setup.hover:
         fields = hover_fields(groups, setup.turbulence, vmax, max(d.diameter for d in disks_f))
     else:
@@ -500,8 +511,8 @@ def write_wash_case(folder, parts, disks, setup):
     with open(allrun, "w") as f:
         f.write(with_toposet(cfd.allrun_text(n_procs)))
     os.chmod(allrun, 0o755)
-    area = sum(disk_area(d.diameter) for d in disks_f)
-    vi = {d.name: induced_velocity(d.thrust, air["rho"], d.diameter, (setup.speed, 0.0, 0.0), d.wake_dir)
+    area = sum(d.area for d in disks_f)
+    vi = {d.name: induced_velocity(d.thrust, air["rho"], d.diameter, (setup.speed, 0.0, 0.0), d.wake_dir, d.hub)
           for d in disks_f}
     info = {
         "kind": WASH_KIND, "folder": folder,
@@ -509,7 +520,7 @@ def write_wash_case(folder, parts, disks, setup):
         "disks": [dict(d.to_dict(), zone=disk_zone_names(disks_f)[d.name], v_induced=vi[d.name],
                        thickness=disk_thickness(d, geo["dx0"], setup.preset)) for d in disks_f],
         "thrust_total": sum(d.thrust for d in disks_f), "disk_area": area,
-        "flow_ref": sum(vi[d.name] * disk_area(d.diameter) for d in disks_f),
+        "flow_ref": sum(vi[d.name] * d.area for d in disks_f),
         "flow_patches": flow_patches(setup),
         "air": air, "setup": setup.to_dict(), "geometry": {k: v for k, v in geo.items()}, "refs": refs,
         "estimate": est, "n_procs": n_procs, "iterations": iterations, "turbulence": setup.turbulence,
@@ -540,7 +551,7 @@ def disk_velocities(folder, info=None):
         u = rows[-1][-3:]
         wake = _unit([-c for c in d["axis"]])
         out.append({"name": d["name"], "label": d.get("label", d["name"]), "thrust": d["thrust"], "diameter": d["diameter"],
-                    "measured": sum(u[k] * wake[k] for k in range(3)), "theory": d["v_induced"], "velocity": u})
+                    "hub": d.get("hub", 0.0), "measured": sum(u[k] * wake[k] for k in range(3)), "theory": d["v_induced"], "velocity": u})
     return out
 
 
@@ -651,11 +662,11 @@ def _graded(length, d0, ratio):
 
 
 def write_disk_case(folder, thrust=1.0, diameter=0.076, temperature_c=20.0, altitude_m=0.0, turbulence="kOmegaSST",
-                    cells_across=48, domain=(4.0, 14.0, 5.0), iterations=1500, wedge_deg=5.0):
+                    cells_across=48, domain=(4.0, 14.0, 5.0), iterations=1500, wedge_deg=5.0, hub=0.0):
     """A single actuator disk in free air as an axisymmetric wedge about the X axis: the disk at x = 0 pushes the air
     towards +X.  Every face of the domain is open (totalPressure).  The disk's cells are a cellZone made by topoSet (a box
     in the wedge), the source is the same vectorSemiImplicitSource as the study uses.  ``domain`` = (upstream,
-    downstream, radius) in diameters.  Ascii output so the benchmark can read the fields."""
+    downstream, radius) in diameters; ``hub`` is the hub diameter (m), the hole of the ring.  Ascii output so the benchmark can read the fields."""
     air = cfd.air_properties(temperature_c, altitude_m)
     rho = air["rho"]
     D = diameter
@@ -754,7 +765,11 @@ runTimeModifiable true;
 """)
     cfd._w(folder, "system/fvSchemes", cfd.fv_schemes(turbulence))
     cfd._w(folder, "system/fvSolution", cfd.fv_solution(turbulence, residual=1e-6, p_residual=1e-6))
-    p1 = (-t / 2 - 1e-9, 0.0, 0.0)
+    hole = (f"""    {{
+        name disk_1_cells; type cellSet; action subtract; source boxToCell;
+        box (-{t / 2:.9g} -1 -1) ({t / 2:.9g} {hub / 2:.9g} 1);
+    }}
+""" if hub > 0 else "")
     cfd._w(folder, "system/topoSetDict", f"""
 actions
 (
@@ -762,14 +777,14 @@ actions
         name disk_1_cells; type cellSet; action new; source boxToCell;
         box (-{t / 2:.9g} -1 -1) ({t / 2:.9g} {R:.9g} 1);
     }}
-    {{
+{hole}    {{
         name disk_1; type cellZoneSet; action new; source setToCellZone; set disk_1_cells;
     }}
 );
 """)
-    disk = Disk("1", (0.0, 0.0, 0.0), (-1.0, 0.0, 0.0), D, thrust)  # thrust axis -X: the wake goes +X
+    disk = Disk("1", (0.0, 0.0, 0.0), (-1.0, 0.0, 0.0), D, thrust, hub=hub)  # thrust axis -X: the wake goes +X
     cfd._w(folder, "constant/fvOptions", fv_options([disk], air, fraction=wedge_deg / 360.0))
-    vi = induced_velocity(thrust, rho, D)
+    vi = induced_velocity(thrust, rho, D, hub=hub)
     openb = open_boundary(1.5 * (0.05 * 2 * vi) ** 2, 1.0)
     k0 = 1.5 * (0.05 * 2 * vi) ** 2
     omega0 = max(math.sqrt(k0) / (0.09 ** 0.25 * 0.07 * D), 1e-3)
@@ -799,7 +814,7 @@ simpleFoam > log.simpleFoam 2>&1 || fail simpleFoam
 stage postProcess
 postProcess -latestTime -funcs '(writeCellCentres writeCellVolumes)' > log.postProcess 2>&1 || fail postProcess"""))
     os.chmod(allrun, 0o755)
-    info = {"kind": "disk_benchmark", "air": air, "thrust": thrust, "diameter": D, "thickness": t, "v_induced": vi,
+    info = {"kind": "disk_benchmark", "air": air, "thrust": thrust, "diameter": D, "hub": hub, "thickness": t, "v_induced": vi,
             "cells": [nxs, nrs], "iterations": iterations, "turbulence": turbulence}
     with open(os.path.join(folder, "vectorlabs.json"), "w") as fh:
         json.dump(info, fh)
@@ -812,6 +827,7 @@ def disk_benchmark_values(folder, wake_from=0.9, wake_to=1.1, core=0.6):
     info = json.load(open(os.path.join(folder, "vectorlabs.json")))
     D, t = info["diameter"], info["thickness"]
     R = D / 2
+    r_hub = info.get("hub", 0.0) / 2
     times = [d for d in os.listdir(folder) if re.fullmatch(r"\d+(\.\d+)?", d) and d != "0"]
     if not times:
         raise CfdError("the disk run wrote no time directory")
@@ -823,7 +839,7 @@ def disk_benchmark_values(folder, wake_from=0.9, wake_to=1.1, core=0.6):
     axis_peak = (0.0, 0.0)
     for ui, ci, vi_ in zip(u, c, v):
         x, r = ci[0], math.hypot(ci[1], ci[2])
-        if abs(x) < t / 2 and r < R:
+        if abs(x) < t / 2 and r_hub <= r < R:
             sd += ui[0] * vi_
             vd += vi_
         if wake_from * D <= x <= wake_to * D and r < core * R:
@@ -855,22 +871,26 @@ def motor_top(parts, centre, axis):
     return max(sum((pt[k] - centre[k]) * axis[k] for k in range(3)) for t in best.tris for pt in t)
 
 
-def disks_from_model(model, parts, diameter_mm, offset_mm=0.0, typed_thrust=0.0, report=None):
+def disks_from_model(model, parts, diameter_mm, offset_mm=0.0, typed_thrust=0.0, report=None, hub_mm=0.0):
     """([Disk], notes): one actuator disk per motor of the assembly (a part with a ThrustAxis).  The thrust is the
     motor's hover share from the Mass & Balance (the weight split by the CG offset), or ``typed_thrust`` N for every
     motor; the disk sits on the motor's axis just above its part, or ``offset_mm`` from the motor's centre.  Raises
-    CfdError for a missing diameter or when no motor is marked."""
+    CfdError for a missing diameter or when no motor is marked.
+
+    Each motor's propeller diameter and hub diameter come from properties on the motor part (``PropDiameter``,
+    ``HubDiameter``, mm) and fall back to ``diameter_mm`` / ``hub_mm`` of the study; a hub of 0 is HUB_FRACTION of the
+    diameter (the disk is a ring: the propeller moves no air inside its hub)."""
     import bruceworx_massreport as mr
     from bruceworx import balance
 
-    if diameter_mm <= 0:
-        raise CfdError("Enter the propeller diameter (mm) in the study: every motor gets a disk of that diameter.")
     report = report or mr.build_report(model.Document, [model])
     try:
         result, notes = mr.balance_of(report)
     except balance.ThrustError as exc:
         raise CfdError(str(exc)) from exc
     motors = mr.motors_of(report)
+    if diameter_mm <= 0 and not all(mr.motor_prop_sizes(inst)[0] > 0 for inst, _a, _p in motors):
+        raise CfdError("Enter the propeller diameter (mm) in the study: every motor gets a disk of that diameter.")
     notes = list(notes)
     disks = []
     for n, (inst, axis, _path) in enumerate(motors):
@@ -880,7 +900,9 @@ def disks_from_model(model, parts, diameter_mm, offset_mm=0.0, typed_thrust=0.0,
             raise CfdError(f"{inst.label}: the hover share is zero (the weight is not set or the motors cannot trim it)")
         unit = _unit(axis)
         centre = tuple(c * 1e-3 for c in inst.centre)
-        D = diameter_mm * 1e-3
+        own_d, own_hub = mr.motor_prop_sizes(inst)
+        D = (own_d if own_d > 0 else diameter_mm) * 1e-3
+        hub = (own_hub if own_hub > 0 else hub_mm if hub_mm > 0 else HUB_FRACTION * D * 1e3) * 1e-3
         if offset_mm > 0:
             off = offset_mm * 1e-3
         else:
@@ -889,7 +911,8 @@ def disks_from_model(model, parts, diameter_mm, offset_mm=0.0, typed_thrust=0.0,
         pos = tuple(centre[k] + unit[k] * off for k in range(3))
         if typed_thrust <= 0 and share.throttle is None:
             notes.append(f"{inst.label}: {share.share:.0f} g is above the thrust table's maximum, so this motor cannot hover")
-        disks.append(Disk(f"m{n + 1}", pos, unit, D, thrust, label=f"{inst.label} #{n + 1}", motor=inst.label))
+        disks.append(Disk(f"m{n + 1}", pos, unit, D, thrust, label=f"{inst.label} #{n + 1}", motor=inst.label,
+                          hub=hub))
     return disks, notes
 
 
@@ -930,8 +953,9 @@ def precheck_wash(parts, disks, setup, install="auto", notes=()):
                                f"around the {len(disks)} disks."))
     air = cfd.air_properties(setup.temperature_c, setup.altitude_m)
     for d in disks:
-        vi = induced_velocity(d.thrust, air["rho"], d.diameter)
-        issues.append(("info", f"{d.label}: thrust {d.thrust:.3g} N on a {d.diameter * 1000:.0f} mm disk: induced velocity "
+        vi = induced_velocity(d.thrust, air["rho"], d.diameter, hub=d.hub)
+        hub = f" with a {d.hub * 1000:.0f} mm hub" if d.hub > 0 else ""
+        issues.append(("info", f"{d.label}: thrust {d.thrust:.3g} N on a {d.diameter * 1000:.0f} mm disk{hub}: induced velocity "
                                f"{vi:.2f} m/s at the disk, {2 * vi:.2f} m/s in the far wake."))
     if est["yplus"] > 300 and setup.turbulence != "laminar":
         issues.append(("warning", f"y+ is about {est['yplus']:.0f}; wall functions want 30 to 300. Choose a finer preset."))
@@ -953,6 +977,8 @@ def precheck_wash(parts, disks, setup, install="auto", notes=()):
 
 WASH_PROPS = (
     ("App::PropertyFloat", "PropDiameter", "Propeller diameter in mm (one disk of this diameter on every marked motor)", 0.0),
+    ("App::PropertyFloat", "HubDiameter", "Propeller hub diameter in mm for motors that do not carry their own; "
+                                           "0 = 20 % of the propeller diameter (the disk is a ring)", 0.0),
     ("App::PropertyFloat", "DiskOffset", "Distance in mm from the motor's centre along its ThrustAxis to the disk; "
                                           "0 = just above the motor part", 0.0),
     ("App::PropertyFloat", "TypedThrust", "Thrust per motor in N; 0 = the hover share from the Mass & Balance", 0.0),
@@ -992,7 +1018,8 @@ def setup_of(analysis):
 def study_disks(analysis, parts=None):
     parts = parts if parts is not None else cfd.study_parts(analysis)
     g = lambda n, d=0.0: getattr(analysis, n) if n in analysis.PropertiesList else d
-    return disks_from_model(analysis.Model, parts, g("PropDiameter"), g("DiskOffset"), g("TypedThrust"))
+    return disks_from_model(analysis.Model, parts, g("PropDiameter"), g("DiskOffset"), g("TypedThrust"),
+                            hub_mm=g("HubDiameter"))
 
 
 def study_precheck(analysis):

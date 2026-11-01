@@ -122,7 +122,12 @@ def _make_classes():
             self.offset = spin(0.0, 0.0, 2000.0, 1, " mm", 1.0)
             self.offset.setSpecialValueText("just above the motor part")
             self.offset.setToolTip("Distance from the motor's centre along its ThrustAxis to the disk")
+            self.hub = spin(0.0, 0.0, 1000.0, 1, " mm", 1.0)
+            self.hub.setSpecialValueText("20 % of the diameter")
+            self.hub.setToolTip("Hub of every propeller that does not carry its own HubDiameter: the disk is a ring, "
+                                "no air is moved inside the hub")
             lay.addRow("Propeller diameter", self.diameter)
+            lay.addRow("Hub diameter", self.hub)
             lay.addRow("Thrust per motor", self.typed)
             lay.addRow("Disk offset", self.offset)
             self.kind = cfd.AIR_KIND
@@ -136,8 +141,8 @@ def _make_classes():
                 self.speed.setValue(0.0 if wash else 10.0)
             self.kind = kind
             self.speed.setSpecialValueText("0 (hover)" if wash else "")
-            for widget, on in ((self.aoa, not wash), (self.area, not wash), (self.diameter, wash), (self.typed, wash),
-                               (self.offset, wash)):
+            for widget, on in ((self.aoa, not wash), (self.area, not wash), (self.diameter, wash), (self.hub, wash),
+                               (self.typed, wash), (self.offset, wash)):
                 widget.setVisible(on)
                 label = self.layout.labelForField(widget)
                 if label is not None:
@@ -149,7 +154,7 @@ def _make_classes():
                    "Turbulence": self.turbulence.currentData(), "AirTemperature": self.temperature.value(),
                    "AirAltitude": self.altitude.value()}
             if self.kind == cfd.WASH_KIND:
-                out.update({"PropDiameter": self.diameter.value(), "TypedThrust": self.typed.value(),
+                out.update({"PropDiameter": self.diameter.value(), "HubDiameter": self.hub.value(), "TypedThrust": self.typed.value(),
                             "DiskOffset": self.offset.value()})
             return out
 
@@ -274,13 +279,16 @@ def _make_classes():
                 cfd.ensure_properties(a)
                 self.diameter = spin(a.PropDiameter, 0, 2000, 1, " mm", 1.0)
                 self.diameter.setSpecialValueText("enter the propeller diameter")
+                self.hub = spin(a.HubDiameter, 0, 1000, 1, " mm", 1.0)
+                self.hub.setSpecialValueText("20 % of the diameter")
                 self.typed = spin(a.TypedThrust, 0, 10000, 3, " N", 0.1)
                 self.typed.setSpecialValueText("hover share from Mass & Balance")
                 self.offset = spin(a.DiskOffset, 0, 2000, 1, " mm", 1.0)
                 self.offset.setSpecialValueText("just above the motor part")
                 self.wake = spin(a.DomainWake, 1, 100, 1, " L")
                 self.wake.setToolTip("Domain extent on the wake side, in characteristic lengths L")
-                for label, widget in (("Propeller diameter", self.diameter), ("Thrust per motor", self.typed),
+                for label, widget in (("Propeller diameter", self.diameter), ("Hub diameter", self.hub),
+                                      ("Thrust per motor", self.typed),
                                       ("Disk offset", self.offset), ("Wake side", self.wake)):
                     form.addRow(label, widget)
                     widget.valueChanged.connect(slot(self._settings_changed))
@@ -361,6 +369,7 @@ def _make_classes():
             a.DomainUpstream, a.DomainDownstream, a.DomainLateral = self.up.value(), self.down.value(), self.lat.value()
             if self.wash_fields:
                 a.PropDiameter, a.TypedThrust, a.DiskOffset = self.diameter.value(), self.typed.value(), self.offset.value()
+                a.HubDiameter = self.hub.value()
                 a.DomainWake = self.wake.value()
             self.check()
 
