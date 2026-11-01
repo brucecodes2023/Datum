@@ -110,6 +110,49 @@ class TestCells(unittest.TestCase):
         self.assertEqual(vb.coin_matrix(m), [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15])
 
 
+class TestSimulations(unittest.TestCase):
+    """PDM-14: the Simulations chip, the out-of-date view, the bubble flag's data and history marks."""
+
+    def setUp(self):
+        self.s, self.rows = turbojet()
+        self.s["items"]["VL-04-01001-001"] = {"type": "simulation", "description": "Spin", "obsolete": False,
+                                              "simulation_of": "VL-01-01001-001", "display": "VL-04-01001-001-01", "state": "WIP"}
+        self.s["simulations"] = {"VL-01-01001-001": ["VL-04-01001-001"]}
+        self.s["sims"] = {"VL-04-01001-001": {"pn": "VL-04-01001-001", "of": "VL-01-01001-001", "judgement": "part changed",
+                                              "summary": {"study": "Spin", "max_vm": 252.5, "min_sf": 1.3, "has_results": True},
+                                              "has_results": True}}
+        self.rows["VL-04-01001-001"] = {"part_number": "VL-04-01001-001", "item_type": "simulation", "state": "WIP",
+                                        "code": "up_to_date", "description": "Spin", "category": ""}
+
+    def test_chip_filters_to_simulations(self):
+        self.assertIn(("simulations", "Simulations"), vc.FILTERS)
+        hits = [pn for pn, r in self.rows.items() if vc.matches(r, "simulations")]
+        self.assertEqual(hits, ["VL-04-01001-001"])
+        self.assertEqual([pn for pn, r in self.rows.items() if vc.matches(r, "all", "type:simulations")], hits)
+        self.assertEqual(vc.SIM_COLUMNS[1:5], ("Simulation of", "Study", "Result", "Geometry"))
+
+    def test_out_of_date_view(self):
+        hits = [pn for pn, r in self.rows.items() if vb.in_scope("view:simout", pn, r, self.s)]
+        self.assertEqual(hits, ["VL-04-01001-001"])
+        self.assertIn("view:simout", [k for k, _t in vb.VIEWS])
+        self.assertIn("simulations", [k for k, _t in vb.TABS])
+
+    def test_groups_and_tree(self):
+        nodes = [{"pn": pn, "qty": None, "children": []} for pn in sorted(self.rows)]
+        kinds = [g.get("kind") for g in vc.group_by_type(nodes, self.rows)]
+        self.assertEqual(kinds, ["assembly", "part", "drawing", "simulation", None])
+        from bruceworx import vault_trees
+
+        self.assertEqual(vault_trees.parts_with_changed_simulation(self.s), {"VL-01-01001-001": ["VL-04-01001-001"]})
+
+    def test_history_shows_which_versions_carry_results(self):
+        versions = [SimpleNamespace(comment="first", at="2026-11-01T10:00:00+00:00", size=150 * 1048576, sha256="a"),
+                    SimpleNamespace(comment="draft", at="2026-11-01T11:00:00+00:00", size=3 * 1048576, sha256="b")]
+        rows = vb.history_rows(versions, {"a": True, "b": False})
+        self.assertEqual(rows[0][3], "3.0 MB · no results")
+        self.assertEqual(rows[1][3], "150.0 MB · with results")
+
+
 class TestGroupByType(unittest.TestCase):
     def test_assemblies_parts_drawings_then_the_rest(self):
         _s, rows = turbojet()

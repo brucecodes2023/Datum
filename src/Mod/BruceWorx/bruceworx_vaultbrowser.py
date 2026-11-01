@@ -29,9 +29,10 @@ VIEWS = (
     ("view:missing", "Missing a drawing"),
     ("view:checked_out", "Checked out to me"),
     ("view:wip", "Work in progress"),
+    ("view:simout", "Simulation out of date"),
 )
-TABS = (("preview", "Preview"), ("props", "Properties"), ("drawings", "Drawings"), ("uses", "Uses"),
-        ("used", "Where used"), ("history", "History"))
+TABS = (("preview", "Preview"), ("props", "Properties"), ("drawings", "Drawings"), ("simulations", "Simulations"),
+        ("uses", "Uses"), ("used", "Where used"), ("history", "History"))
 WRITABLE = ("modified", "checked_out")  # bruceworx_vaultclient.WRITABLE
 
 
@@ -58,6 +59,8 @@ def in_scope(scope, pn, row, structure, contents_of=None) -> bool:
         return row.get("item_type") == "drawing"
     if scope == "view:missing":
         return vault_trees.missing_drawing(structure, pn)
+    if scope == "view:simout":  # PDM-14: simulations made from an older version of their part
+        return bool(((structure.get("sims") or {}).get(pn) or {}).get("judgement") == "part changed")
     if scope == "view:checked_out":
         return row.get("code") in WRITABLE
     if scope == "view:wip":
@@ -135,8 +138,9 @@ def drawing_cell(structure, pn, row) -> tuple:
     return "None", "warn"
 
 
-def history_rows(versions) -> list:
-    """[(version label, comment, when, size)] newest first, from FileVersion records."""
+def history_rows(versions, results=None) -> list:
+    """[(version label, comment, when, size)] newest first, from FileVersion records. ``results`` (PDM-14):
+    {sha256: True|False|None} for a simulation's versions: "with results" or "no results" follows the size."""
     out = []
     for i, v in enumerate(versions, 1):
         comment = (getattr(v, "comment", "") or "Checked in").strip()
@@ -144,7 +148,11 @@ def history_rows(versions) -> list:
             comment = "Imported from " + os.path.basename(comment[len("Imported from "):].strip())
         when = (getattr(v, "at", "") or "")[:16].replace("T", " ")
         size = getattr(v, "size", 0) or 0
-        out.append((f"v{i}", comment, when, f"{size / 1024:.0f} kB" if size else ""))
+        size_text = f"{size / 1024:.0f} kB" if size else ""
+        if size and size >= 1024 * 1024:
+            size_text = f"{size / 1048576:.1f} MB"
+        mark = {True: "with results", False: "no results"}.get((results or {}).get(getattr(v, "sha256", "")))
+        out.append((f"v{i}", comment, when, " · ".join(t for t in (size_text, mark) if t)))
     return list(reversed(out))
 
 
@@ -709,7 +717,18 @@ def make_classes(vc):
 
             # Drawings, Uses, Where used, History
             self.lists = {}
-            for key in ("drawings", "uses", "used", "history"):
+            for key in ("drawings", "simulations", "uses", "used", "history"):
+                if key == "simulations":  # PDM-14: a card per simulation
+                    self.sim_page = QtWidgets.QScrollArea()
+                    self.sim_page.setWidgetResizable(True)
+                    self.sim_page.setFrameShape(QtWidgets.QFrame.NoFrame)
+                    inner = QtWidgets.QWidget()
+                    self.sim_box = QtWidgets.QVBoxLayout(inner)
+                    self.sim_box.setContentsMargins(0, 6, 0, 0)
+                    self.sim_box.setSpacing(8)
+                    self.sim_page.setWidget(inner)
+                    self.pages.addWidget(self.sim_page)
+                    continue
                 page = QtWidgets.QWidget()
                 v = QtWidgets.QVBoxLayout(page)
                 v.setContentsMargins(0, 6, 0, 0)
@@ -779,13 +798,13 @@ def make_classes(vc):
 
         @staticmethod
         def _icon_kind(kind):
-            return {"assembly": "assembly", "drawing": "drawing"}.get(kind, "part")
+            return {"assembly": "assembly", "drawing": "drawing", "simulation": "simulation"}.get(kind, "part")
 
         def _update_counts(self):
             pn, s = self.pn, self._structure()
             from bruceworx import vault_trees
 
-            counts = {"drawings": len(self._drawings()), "uses": len(s["bom"].get(pn, ())),
+            counts = {"drawings": len(self._drawings()), "simulations": len(self._sims()), "uses": len(s["bom"].get(pn, ())),
                       "used": len(vault_trees.used_in(s).get(pn, ())), "history": len(self._versions())}
             for i, (key, text) in enumerate(TABS):
                 self.tabs.setTabText(i, f"{text} {counts[key]}" if key in counts else text)
@@ -817,7 +836,7 @@ def make_classes(vc):
 
         def _fill_tab(self):
             fill = {"preview": self._fill_preview, "props": self._fill_props, "drawings": self._fill_drawings,
-                    "uses": self._fill_uses, "used": self._fill_used, "history": self._fill_history}[self.tab]
+                    "simulations": self._fill_simulations, "uses": self._fill_uses, "used": self._fill_used, "history": self._fill_history}[self.tab]
             fill()
 
         @staticmethod
@@ -841,7 +860,7 @@ def make_classes(vc):
             pn, row = self.pn, self._row(self.pn)
             kind = row.get("item_type")
             sheets = [d for d in self._drawings() if d]
-            has_3d = kind in ("part", "assembly", "cots")
+            has_3d = kind in ("part", "assembly", "cots", "simulation")
             mode = self.mode
             if kind == "drawing":
                 mode = "sheet"
@@ -902,7 +921,7 @@ def make_classes(vc):
                                 ("Description", row.get("description") or "—"), ("Type", row.get("item_type") or "—"),
                                 ("State", row.get("state") or "—"), ("Category", row.get("category") or "Uncategorized"),
                                 ("Project", vault_trees.program_code(pn) or "—"), ("Status", row.get("status_text") or "—"),
-                                ("Former numbers", row.get("former") or "—"), ("File", f"{pn}.FCStd")):
+                                ("Former numbers", row.get("former") or "—"), ("File", f"{pn}.vlsim" if row.get("item_type") == "simulation" else f"{pn}.FCStd")):
                 self._fact(self.props, label, text)
 
         def _item(self, lst, pn, extra=""):
@@ -931,6 +950,139 @@ def make_classes(vc):
             else:
                 note.setText("")
 
+        # --- PDM-14: simulations
+        def _sims(self):
+            """The simulation rows (vault_trees.simulations) of the selected part, or of a simulation itself."""
+            info = self.panel.sim_info
+            if self._row(self.pn).get("item_type") == "simulation":
+                return [info[self.pn]] if self.pn in info else []
+            return [r for r in info.values() if r["of"] == self.pn]
+
+        def _report_for(self, sim_pn):
+            """The newest <P/N>_*_report.pdf of a simulation in this user's work folder, or ""."""
+            session = self.panel.session()
+            if session is None:
+                return ""
+            from bruceworx import sim_reports
+
+            found = sim_reports.reports_beside(session.work.path(sim_pn))
+            return found[0] if found else ""
+
+        def _fill_simulations(self):
+            while self.sim_box.count():
+                item = self.sim_box.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.hide()  # at once: deleteLater alone leaves it drawn until the next event loop turn
+                    widget.setParent(None)
+                    widget.deleteLater()
+            sims = self._sims()
+            row = self._row(self.pn)
+            can_make = row.get("item_type") in ("part", "assembly", "cots")
+            if can_make:
+                make = QtWidgets.QPushButton("New simulation of this part")
+                make.setObjectName("bwVaultChip")
+                make.setToolTip("Number a simulation of this part, copy its solid into a new .vlsim file and "
+                                "check it out to you")
+                make.clicked.connect(lambda: self._new_simulation())
+                bar = QtWidgets.QHBoxLayout()
+                bar.addWidget(make)
+                imp = QtWidgets.QPushButton("Import study file…")
+                imp.setObjectName("bwVaultChip")
+                imp.setToolTip("Bring in an existing study (.FCStd or .vlsim) as a simulation of this part")
+                imp.clicked.connect(lambda: self._import_simulation())
+                bar.addWidget(imp)
+                bar.addStretch(1)
+                holder = QtWidgets.QWidget()
+                holder.setLayout(bar)
+                self.sim_box.addWidget(holder)
+            for sim in sims:
+                self.sim_box.addWidget(self._card(sim))
+            if not sims:
+                note = QtWidgets.QLabel("No simulation of this part yet." if can_make else "")
+                note.setObjectName("bwVaultPreviewHint")
+                note.setWordWrap(True)
+                self.sim_box.addWidget(note)
+            self.sim_box.addStretch(1)
+
+        def _card(self, sim):
+            """A simulation's card: its picture, summary, whether it is current, and the actions. Read from the
+            summary inside the file; the study file itself is fetched only by Open study."""
+            lc = self.panel.list.colour
+            frame = QtWidgets.QFrame()
+            frame.setObjectName("bwVaultSimCard")
+            frame.setStyleSheet(f"#bwVaultSimCard {{ border: 1px solid {lc('border').name()}; border-radius: 8px; }}")
+            lay = QtWidgets.QHBoxLayout(frame)
+            lay.setContentsMargins(8, 8, 8, 8)
+            sim_row = self._row(sim["pn"])
+            pic = QtWidgets.QLabel()
+            pic.setFixedSize(120, 90)
+            pic.setAlignment(QtCore.Qt.AlignCenter)
+            path = self.panel.thumb_file(sim_row) if sim_row else ""
+            pix = QtGui.QPixmap(path) if path else QtGui.QPixmap()
+            if pix.isNull():
+                pic.setText("no picture")
+            else:
+                pic.setPixmap(pix.scaled(120, 90, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+            lay.addWidget(pic)
+            col = QtWidgets.QVBoxLayout()
+            col.setSpacing(2)
+            title = QtWidgets.QLabel(f"<b>{sim['display']}</b>  {sim['description']}")
+            title.setWordWrap(True)
+            col.addWidget(title)
+            for text in (sim["study"], sim["result"]):
+                if text:
+                    line = QtWidgets.QLabel(text)
+                    line.setObjectName("bwVaultPreviewHint")
+                    line.setWordWrap(True)
+                    col.addWidget(line)
+            role = {"current": "ok", "part changed": "warn"}.get(sim["judgement"], "secondary")
+            chip = QtWidgets.QLabel(sim["judgement"].upper() if sim["judgement"] != "unknown" else "NOT CHECKED")
+            chip.setStyleSheet(f"color: {lc(role).name()}; font-weight: 600;")
+            chip.setToolTip({"current": "The study's copy of the solid matches the part's latest version.",
+                             "part changed": "The part was checked in with different geometry after this study "
+                                             "was made. Open the study and refresh its copy, or re-solve.",
+                             "unknown": "Either the part or the study has no geometry fingerprint yet (a file "
+                                        "from before PDM-14, or not saved since)."}[sim["judgement"]])
+            col.addWidget(chip)
+            buttons = QtWidgets.QHBoxLayout()
+            for text, fn in (("Open study", lambda _c=False, p=sim["pn"]: self._open_study(p)),
+                             ("Check out", lambda _c=False, p=sim["pn"]: self._check_out(p))):
+                b = QtWidgets.QPushButton(text)
+                b.setObjectName("bwVaultChip")
+                b.clicked.connect(fn)
+                buttons.addWidget(b)
+            report = self._report_for(sim["pn"])
+            if report:
+                b = QtWidgets.QPushButton("Report PDF")
+                b.setObjectName("bwVaultChip")
+                b.clicked.connect(lambda _c=False, p=report: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(p)))
+                buttons.addWidget(b)
+            buttons.addStretch(1)
+            col.addLayout(buttons)
+            lay.addLayout(col, 1)
+            return frame
+
+        def _open_study(self, pn):
+            import bruceworx_vaultclient as vcl
+
+            QtCore.QTimer.singleShot(0, lambda: vcl.open_from_vault(pn))
+
+        def _check_out(self, pn):
+            import bruceworx_vaultclient as vcl
+
+            QtCore.QTimer.singleShot(0, lambda: vcl.run_for("BruceWorx_VaultCheckOut", pn))
+
+        def _new_simulation(self):
+            import bruceworx_sim_vault_ui as ui
+
+            QtCore.QTimer.singleShot(0, lambda: ui.new_simulation_dialog(self.pn))
+
+        def _import_simulation(self):
+            import bruceworx_sim_vault_ui as ui
+
+            QtCore.QTimer.singleShot(0, lambda: ui.import_study_dialog(self.pn))
+
         def _fill_uses(self):
             lst, note = self.lists["uses"]
             lst.clear()
@@ -958,7 +1110,13 @@ def make_classes(vc):
         def _fill_history(self):
             lst, note = self.lists["history"]
             lst.clear()
-            for label, comment, when, size in history_rows(self._versions()):
+            results = None
+            session = self.panel.session()
+            if session is not None and self._row(self.pn).get("item_type") == "simulation":
+                from bruceworx import vault_simulations as vsim
+
+                results = {v.sha256: flag for v, flag in vsim.results_by_version(session.vault, self.pn)}
+            for label, comment, when, size in history_rows(self._versions(), results):
                 item = QtWidgets.QListWidgetItem(f"{label}  {comment}\n{when} UTC" + (f" · {size}" if size else ""))
                 item.setFlags(QtCore.Qt.ItemIsEnabled)
                 lst.addItem(item)

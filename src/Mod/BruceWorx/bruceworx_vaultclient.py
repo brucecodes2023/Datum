@@ -82,8 +82,10 @@ STATE_CHIPS = {
     OBSOLETE: ("OBSOLETE", "dim"),
 }
 FILTERS = (("all", "All"), ("parts", "Parts"), ("assemblies", "Assemblies"), ("drawings", "Drawings"),
-           ("checked_out", "Checked out"), ("changes", "Changes"))  # changes: ECRs and ECOs (bruceworx_changes)
-FILTER_TYPES = {"parts": ("part", "cots"), "assemblies": ("assembly",), "drawings": ("drawing",)}
+           ("simulations", "Simulations"), ("checked_out", "Checked out"), ("changes", "Changes"))  # changes: ECRs and ECOs (bruceworx_changes)
+FILTER_TYPES = {"parts": ("part", "cots"), "assemblies": ("assembly",), "drawings": ("drawing",),
+                "simulations": ("simulation",)}
+SIM_COLUMNS = ("Simulation", "Simulation of", "Study", "Result", "Geometry", "Status")  # the Simulations chip (PDM-14)
 
 
 # ----- pure helpers (unit tested) ---------------------------------------------------------
@@ -99,7 +101,7 @@ def part_number_for_file(path, work_root):
         return ""
     folder, name = os.path.split(os.path.abspath(path))
     stem, ext = os.path.splitext(name)
-    if ext.lower() != SUFFIX.lower() or not stem:
+    if ext.lower() not in (SUFFIX.lower(), ".vlsim") or not stem:  # .vlsim: a simulation item (PDM-14)
         return ""
     if os.path.realpath(folder) != os.path.realpath(work_root):
         return ""
@@ -242,7 +244,8 @@ def query_word_matches(row, key, value):
         return row.get("state") == wanted
     if key == "type":
         return str(row.get("item_type", "")).lower() == {"parts": "part", "assemblies": "assembly",
-                                                         "drawings": "drawing", "bought": "cots"}.get(value, value)
+                                                         "drawings": "drawing", "bought": "cots",
+                                                         "simulations": "simulation"}.get(value, value)
     if key == "lock":
         if value == "none":
             return row.get("code") not in QUERY_LOCKS["any"]
@@ -344,7 +347,7 @@ def group_by_category(nodes, rows, hidden=(), show_hidden=False):
 
 
 TYPE_GROUPS = (("assembly", "Assemblies", ("assembly",)), ("part", "Parts", ("part", "cots")),
-               ("drawing", "Drawings", ("drawing",)))
+               ("drawing", "Drawings", ("drawing",)), ("simulation", "Simulations", ("simulation",)))
 
 
 def group_by_type(nodes, rows, prefix=""):
@@ -495,6 +498,10 @@ _SVG = {
                 'fill="none" stroke="{c}" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.2l5.1 2.9v5.7'
                 'L12 21.6l-5.1-2.9v-5.7z" fill="{c}" fill-opacity=".34" stroke="{c}" stroke-width="1.6" '
                 'stroke-linejoin="round"/>',
+    # PDM-14: a simulation is a block with a stress curve through it.
+    "simulation": '<path d="M12 2.7l8.4 4.8v9L12 21.3l-8.4-4.8v-9z" fill="{c}" fill-opacity=".12" stroke="{c}" '
+                  'stroke-width="1.6" stroke-linejoin="round"/><path d="M6.5 15.5c2-1 2.5-6.5 5.5-6.5s3.5 5.5 5.5 6.5" '
+                  'fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round"/>',
     "drawing": '<path d="M4.5 2.7h10.5l4.5 4.5v14.1h-15z" fill="{c}" fill-opacity=".12" stroke="{c}" '
                'stroke-width="1.7" stroke-linejoin="round"/><path d="M15 2.7v4.5h4.5M7.8 16.5h8.4M12.9 13.5v6.3'
                'M7.8 9.5h4.8" fill="none" stroke="{c}" stroke-width="1.6"/>',
@@ -1378,6 +1385,8 @@ def _new_part_dialog(s, default_program=""):
     form.addRow("Type", kind)
     program = QtWidgets.QComboBox()
     program.addItems(programs)
+    if default_program in programs:  # PDM-15: New part in <project>
+        program.setCurrentText(default_program)
     if len(programs) > 1:
         form.addRow("Program", program)
     text = QtWidgets.QLineEdit()
@@ -1385,8 +1394,6 @@ def _new_part_dialog(s, default_program=""):
     form.addRow("Description", text)
     category = QtWidgets.QComboBox()  # optional; the vault's own categories as suggestions
     category.setEditable(True)
-    if default_program in programs:  # PDM-15: New part in <project>
-        program.setCurrentText(default_program)
     category.addItem("")
     category.addItems([c for c in sorted(category_counts(_panel_rows(s)), key=str.casefold) if c])
     category.lineEdit().setPlaceholderText("optional, e.g. Connectors")
@@ -1601,11 +1608,12 @@ def checkin_links(s, pns, import_outside=True):
     return changed, left, reports
 
 
-def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=True, notes=None):
+def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=True, notes=None, include_results=True):
     """Save unsaved ones, fix links, then check in every ticked row. Returns (done [pn], failed [(pn, text)]).
 
     notes (a dict) receives "imported" [(path, pn)], "not_imported" [(path, why)], "left"
     [LinkFix] and "relinked" (paths whose links changed).
+    ``include_results`` (PDM-14): False stores a simulation's copy without its result objects and result meshes.
     """
     import FreeCAD
 
@@ -1654,7 +1662,12 @@ def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=Tru
                 _console(f"Vault: {pn}: check-in extras not recorded ({exc})", "warn")
         try:
             data = [(hook, hook.prepare(s, pn, notes)) for hook in CHECKIN_HOOKS]  # may refuse
-            s.work.checkin(pn, comment, keep_checked_out=keep, **extras)
+            transform = None
+            if not include_results and s.vault.items[pn].item_type == "simulation":
+                import bruceworx_sim_vault
+
+                transform = bruceworx_sim_vault.stripped_copy
+            s.work.checkin(pn, comment, keep_checked_out=keep, transform=transform, **extras)
             done.append(pn)
         except Exception as exc:
             failed.append((pn, str(exc)))
@@ -1666,6 +1679,19 @@ def run_checkin(s, rows, comment, keep=False, fix_links=True, import_outside=Tru
                 failed.append((pn, f"checked in, but: {exc}"))
     changed()
     return done, failed
+
+
+def _include_results_pref() -> bool:
+    """The "Include results" box as the user left it (per user: their FreeCAD profile); results in by default."""
+    import FreeCAD
+
+    return FreeCAD.ParamGet(PREFS_PATH).GetBool("SimIncludeResults", True)
+
+
+def _set_include_results_pref(on: bool) -> None:
+    import FreeCAD
+
+    FreeCAD.ParamGet(PREFS_PATH).SetBool("SimIncludeResults", bool(on))
 
 
 # Check-in hooks: objects with prepare(s, pn, notes) -> data (raise to refuse, before the file is
@@ -1751,6 +1777,13 @@ class _DocumentObserver:
         self.was_modified = {}
 
     def slotStartSaveDocument(self, doc, filename):
+        if str(filename).lower().endswith(".vlsim"):  # PDM-14: the summary the file has, before the save drops it
+            try:
+                import bruceworx_sim_vault
+
+                bruceworx_sim_vault.remember_previous(filename)
+            except Exception:  # noqa: BLE001 -- never a reason to refuse a save
+                pass
         s = session()
         if s is None or not inside(filename, s.root):
             return
@@ -1773,11 +1806,17 @@ class _DocumentObserver:
             changed()
             pn = s.item_pn_for(filename)
             item = s.vault.items.get(pn) if pn else None
-            if item is not None and item.item_type in ("part", "assembly", "cots", "drawing"):
+            if item is not None and item.item_type in ("part", "assembly", "cots", "drawing", "simulation"):
                 from PySide import QtCore
 
-                # After the save has returned: the iso picture and the preview mesh into the saved file (PDM-13).
+                # After the save has returned: the iso picture and the preview mesh into the saved file (PDM-13);
+                # PDM-14: also a part's fingerprint, a simulation's summary.
                 QtCore.QTimer.singleShot(0, lambda name=doc.Name, path=filename: _stamp_saved(name, path))
+                return
+        if str(filename).lower().endswith(".vlsim"):  # PDM-14: a simulation file anywhere gets its summary at every save
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(0, lambda name=doc.Name, path=filename: _stamp_saved(name, path))
 
     def slotOpenTransaction(self, doc, name):
         """The first edit of a read-only vault file offers a check-out (once per document)."""
@@ -1839,7 +1878,12 @@ def _stamp_saved(name, path):
     try:
         import bruceworx_preview
 
-        if bruceworx_preview.stamp_saved(doc, path):
+        kind = "simulation" if str(path).lower().endswith(".vlsim") else ""
+        s = _state["session"]
+        pn = s.item_pn_for(path) if s is not None else ""
+        if pn and not kind:
+            kind = s.vault.items[pn].item_type
+        if bruceworx_preview.stamp_saved(doc, path, kind):
             changed()
     except Exception as exc:  # noqa: BLE001 -- the save itself is done; only its picture is missing
         _console(f"BruceWorx vault: no picture for {os.path.basename(path)} ({exc})", "warn")
@@ -2333,7 +2377,7 @@ def _make_classes():
             if column == 0:
                 kind = row.get("item_type") or ""
                 if kind != "change":  # the file's type and picture (PDM-13)
-                    icon_kind = {"assembly": "assembly", "drawing": "drawing"}.get(kind, "part")
+                    icon_kind = {"assembly": "assembly", "drawing": "drawing", "simulation": "simulation"}.get(kind, "part")
                     painter.drawPixmap(QtCore.QPointF(r.left(), rect.center().y() - 8),
                                        icon_pixmap(icon_kind, self.panel.type_colour(kind), 16, view.devicePixelRatioF()))
                     box = QtCore.QRectF(r.left() + 22, rect.center().y() - THUMB.height() / 2, THUMB.width(),
@@ -2358,6 +2402,43 @@ def _make_classes():
                 painter.drawText(r, middle, pn_text)
                 painter.setPen(secondary)
                 painter.drawText(r.adjusted(fm.horizontalAdvance(pn_text), 0, 0, 0), middle, rev)
+                if self.panel.bubbles.get(pn):  # PDM-14: a simulation of this part was made from older geometry
+                    painter.setPen(QtCore.Qt.NoPen)
+                    painter.setBrush(view.colour("warn"))
+                    painter.drawEllipse(QtCore.QRectF(rect.right() - 16, rect.center().y() - 5, 10, 10))
+            elif column == 1 and self.panel.sim_mode():
+                sim = self.panel.sim_info.get(row["part_number"]) or {}
+                painter.setFont(self.panel.body_font)
+                fm = QtGui.QFontMetrics(self.panel.body_font)
+                painter.setPen(text_colour)
+                text = f"{sim.get('of_display', '')}  {(self.panel.rows.get(sim.get('of')) or {}).get('description', '')}"
+                painter.drawText(r, middle, fm.elidedText(text.strip(), QtCore.Qt.ElideRight, r.width()))
+            elif column == 2 and self.panel.sim_mode():
+                sim = self.panel.sim_info.get(row["part_number"]) or {}
+                painter.setFont(self.panel.small_font)
+                fm = QtGui.QFontMetrics(self.panel.small_font)
+                painter.setPen(secondary)
+                painter.drawText(r, middle, fm.elidedText(sim.get("study", ""), QtCore.Qt.ElideRight, r.width()))
+            elif column == 3 and self.panel.sim_mode():
+                sim = self.panel.sim_info.get(row["part_number"]) or {}
+                painter.setFont(self.panel.small_font)
+                fm = QtGui.QFontMetrics(self.panel.small_font)
+                painter.setPen(secondary)
+                painter.drawText(r, middle, fm.elidedText(sim.get("result", ""), QtCore.Qt.ElideRight, r.width()))
+            elif column == 4 and self.panel.sim_mode():
+                sim = self.panel.sim_info.get(row["part_number"]) or {}
+                text = sim.get("judgement", "")
+                role = {"current": "ok", "part changed": "warn"}.get(text, "secondary")
+                if text:
+                    fm = QtGui.QFontMetrics(self.panel.chip_font)
+                    cw = fm.horizontalAdvance(text) + 10
+                    chip = QtCore.QRectF(r.left(), rect.center().y() - (fm.height() + 3) / 2, cw, fm.height() + 3)
+                    painter.setPen(QtCore.Qt.NoPen)
+                    painter.setBrush(soft(view.colour(role), 26 if dim else 46))
+                    painter.drawRoundedRect(chip, 4, 4)
+                    painter.setFont(self.panel.chip_font)
+                    painter.setPen(secondary if dim else view.colour(role))
+                    painter.drawText(chip, QtCore.Qt.AlignCenter, text)
             elif column == 1:
                 painter.setFont(self.panel.body_font)
                 fm = QtGui.QFontMetrics(self.panel.body_font)
@@ -2514,6 +2595,8 @@ def _make_classes():
             self.rows = {}
             self.nodes = []
             self.structure = {"items": {}, "bom": {}, "sources": {}, "drawings": {}}
+            self.sim_info = {}  # simulation P/N -> vault_trees.simulations row (PDM-14)
+            self.bubbles = {}  # part P/N -> [simulation P/N] marked "part changed"
             self.thumb_files = {}
             self.links_cache = {}
             self.collapsed = set()
@@ -2837,10 +2920,13 @@ def _make_classes():
 
             try:
                 self.structure = vault_trees.structure(s.vault, links=links)
+                self.sim_info = {r["pn"]: r for r in vault_trees.simulations(self.structure)}
+                self.bubbles = vault_trees.parts_with_changed_simulation(self.structure)
                 return vault_trees.file_tree(self.structure)
             except Exception as exc:  # noqa: BLE001 -- a damaged vault still lists its files, flat
                 _console(f"Vault: the Files tree could not be built ({exc}); listing the files flat", "warn")
                 self.structure = {"items": {}, "bom": {}, "sources": {}, "drawings": {}}
+                self.sim_info, self.bubbles = {}, {}
                 return [{"pn": pn, "qty": None, "children": []} for pn in sorted(self.rows)]
 
         def update_header(self):
@@ -3138,6 +3224,10 @@ def _make_classes():
             status = STATUS_LABELS.get(row["code"], "")
             if status:
                 lines.append(f'<span style="color:{self.list.colour("secondary").name()}">{_esc(status)}</span>')
+            changed = self.bubbles.get(row["part_number"])
+            if changed:  # the bubble flag (PDM-14)
+                lines.append(f'<span style="color:{self.list.colour("warn").name()}">Simulation out of date: '
+                             f'{_esc(", ".join(changed))} was made from an older version of this part</span>')
             picture = ""
             path = self.thumb_file(row)
             if path:
@@ -3179,8 +3269,16 @@ def _make_classes():
             return self.thumb_files[sha]
 
         # --- interaction
+        def sim_mode(self):
+            return self.kind == "simulations"
+
         def set_kind(self, key):
             self.kind = key
+            self.model.setHorizontalHeaderLabels(list(SIM_COLUMNS if key == "simulations" else COLUMNS))
+            header = self.list.header()
+            for column, width in ((2, 230 if key == "simulations" else 60), (3, 170 if key == "simulations" else 78),
+                                  (4, 110 if key == "simulations" else 84)):
+                self.list.setColumnWidth(column, width)
             self.fill()
 
         def toggle_sort(self):
@@ -3471,9 +3569,21 @@ def _make_classes():
                 self.form.append(links)
             options = box("Options")
             ol = QtWidgets.QVBoxLayout(options)
+            self.include_results = None
+            if any(self.s.vault.items[r["part_number"]].item_type == "simulation" for r in self.rows
+                   if r["part_number"] in self.s.vault.items):  # PDM-14: results are big; you choose
+                self.include_results = QtWidgets.QCheckBox("Include results (simulations)")
+                self.include_results.setObjectName("bwVaultIncludeResults")
+                self.include_results.setChecked(_include_results_pref())
+                self.include_results.setToolTip(
+                    "Unticked, the version keeps the study, the solid copy, the mesh settings and the summary but "
+                    "not the result objects or result meshes (a few MB instead of 150). Your work copy loses them "
+                    "too; the file you had is kept in the work folder's .results folder.")
             self.keep = QtWidgets.QCheckBox("Keep checked out after check-in")
             self.close = QtWidgets.QCheckBox("Close the checked-in files")
             self.close.setChecked(True)
+            if self.include_results is not None:
+                ol.addWidget(self.include_results)
             ol.addWidget(self.keep)
             ol.addWidget(self.close)
             self.keep.toggled.connect(lambda on: self.close.setEnabled(not on))
@@ -3541,7 +3651,11 @@ def _make_classes():
             close = self.close.isChecked() and not keep
             notes = {}
             importing = self.import_files is not None and self.import_files.isChecked()
-            done, failed = run_checkin(self.s, rows, text.strip(), keep, import_outside=importing, notes=notes)
+            include = self.include_results is None or self.include_results.isChecked()
+            if self.include_results is not None:
+                _set_include_results_pref(include)
+            done, failed = run_checkin(self.s, rows, text.strip(), keep, import_outside=importing, notes=notes,
+                                       include_results=include)
             if failed:
                 _message("Check In", "Not checked in:\n" + "\n".join(f"{pn}: {why}" for pn, why in failed),
                          "warning")

@@ -157,6 +157,24 @@ def _now() -> str:
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def solid_mesh(doc) -> bytes:
+    """The preview mesh (bruceworx_previewmesh format) of the study's solid, shown or not; b"" without one."""
+    import MeshPart
+    import bruceworx_previewmesh as pm
+
+    shape = model_shape(doc)
+    if shape is None or not shape.Faces:
+        return b""
+    box = shape.BoundBox
+    mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=max(box.DiagonalLength * pm.DEFLECTION, pm.MIN_DEFLECTION),
+                                  AngularDeflection=pm.ANGULAR, Relative=False)
+    points, facets = mesh.Topology
+    if not facets:
+        return b""
+    return pm.encode([{"name": "Model", "color": pm.GREY, "points": [c for p in points for c in (p.x, p.y, p.z)],
+                       "triangles": [i for f in facets for i in f]}])
+
+
 def is_simulation_path(path) -> bool:
     return str(path or "").lower().endswith(vs.SUFFIX)
 
@@ -180,6 +198,9 @@ def extra_entries(doc, path: str, kind: str) -> dict:
         previous = _PREVIOUS.pop(os.path.realpath(path), None) or (
             vs.read_entry(path, vs.SUMMARY_ENTRY) if os.path.exists(path) else None)
         entries[vs.SUMMARY_ENTRY] = json.dumps(summary_of(doc, path, previous), indent=1).encode("utf-8")
+        mesh = solid_mesh(doc)  # a study hides its solid under the result: the preview shows the solid anyway
+        if mesh:
+            entries["bruceworx/preview.bin"] = mesh
         return entries
     if kind in ("part", "assembly", "cots"):
         geo = geometry_of_doc(doc)
@@ -338,6 +359,8 @@ def import_study(s, part: str, path: str, description: str = "", checkout: bool 
         shutil.copyfile(path, staged)
         with preview.opened(staged) as doc:
             set_source(doc, part, sha, "")
+            own = summary_of(doc).get("geometry", "")  # the study's own solid: what the card compares with the part
+            set_source(doc, part, sha, own)
             doc.save()
             stamp(doc, staged)
 
