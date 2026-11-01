@@ -90,3 +90,7 @@ pictures. \code{TestBruceWorxCfd}: see the commit messages for the result of the
   \item \textbf{Tracing off the GUI thread?} At 1 to 4\,s it is a wait cursor; a QThread would need the VTK call to
         release the GIL (it does for most filters), which I have not measured.
 \end{enumerate}
+
+\paragraph{Your answers (1 Nov).} (1) Yes, pictures after every run. (2) Yes, a prop-wash set along the thrust axis.
+(3) Move tracing off the GUI thread if it is slow on a real frame (measure on the ROB-03 case first).
+
