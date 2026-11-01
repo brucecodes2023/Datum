@@ -1779,7 +1779,9 @@ def offers_first_edit(doc_name, active_name, edit_name=None):
     document is in edit while the assembly is active). A part opened to be linked gets transactions from the
     assembly's command (the vault writing its LifecycleState), which are not edits of the part. Saving any
     vault file still asks for its check-out."""
-    return active_name is None or active_name == doc_name or (edit_name is not None and edit_name == doc_name)
+    if edit_name is not None:  # an edit is running: only the document being edited is (not the assembly hosting it)
+        return edit_name == doc_name
+    return active_name is None or active_name == doc_name
 
 
 def _edit_document_name():
@@ -1787,12 +1789,14 @@ def _edit_document_name():
     try:
         import FreeCADGui
 
-        gui = FreeCADGui.editDocument()
-        if gui is not None:
-            return gui.Document.Name
-        active = FreeCADGui.ActiveDocument
-        vp = active.getInEdit() if active is not None else None
-        return vp.Object.Document.Name if vp is not None else None
+        # In place, the 3D view editing is the assembly's (editDocument) while the object in edit is the part's:
+        # the part's document is the one being edited (live check 2 Nov: the assembly was offered, not the part).
+        gui = FreeCADGui.editDocument() or FreeCADGui.ActiveDocument
+        vp = gui.getInEdit() if gui is not None else None
+        obj = getattr(vp, "Object", None) if vp is not None else None
+        if obj is not None:
+            return obj.Document.Name
+        return FreeCADGui.editDocument().Document.Name if FreeCADGui.editDocument() is not None else None
     except Exception:  # noqa: BLE001
         return None
 

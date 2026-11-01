@@ -629,6 +629,8 @@ class TestFirstEditOffer(unittest.TestCase):
         self.assertTrue(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001", "LE_01_01003_001"))
         self.assertFalse(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001", "LE_01_01004_001"))
         self.assertFalse(vc.offers_first_edit("LE_01_01003_001", "LE_02_01002_001", None))
+        # In place: the assembly hosting the edit of its part is not being edited (live check, 2 Nov)
+        self.assertFalse(vc.offers_first_edit("LE_02_01002_001", "LE_02_01002_001", "LE_01_01003_001"))
 
     def test_open_is_read_only_unless_the_old_question_is_switched_on(self):
         import FreeCAD
