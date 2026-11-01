@@ -315,6 +315,158 @@ class TestRotorSolve(unittest.TestCase):
             post.contour_png(self.analysis, "hoop", view="nonsense", path=os.path.join(self.tmp, "x.png"), result=self.result)
 
 
+class FakeMeshObject:
+    """Stands in for the Netgen object: recompute does nothing, FemMesh is what the test set."""
+
+    class _Doc:
+        def recompute(self, _objs=None):
+            pass
+
+    def __init__(self, fem, second_order):
+        self.FemMesh, self.SecondOrder, self.MaxSize, self.Fineness = fem, second_order, 5.0, "Moderate"
+        self.Document = self._Doc()
+
+    def touch(self):
+        pass
+
+
+class TestMeshFailures(unittest.TestCase):
+    """Netgen on a bladed impeller returned surface-only meshes, or linear tets with ~135k unused nodes (SIM-04 follow-up)."""
+
+    def first_order_mesh(self, orphans=0):
+        import Fem
+        import Part
+
+        close_all()
+        doc = App.newDocument("M")
+        solid = Part.makeCylinder(20, 6).cut(Part.makeCylinder(8, 6))
+        body = vc.shape_object(doc, "W", solid)
+        objs = sim.new_study(doc, sim.StudyPlan(name="W", model=body, material=vc.material(), max_size=6.0, second_order=False))
+        sim.mesh_study(objs["analysis"])
+        fem = sim.rebuild_mesh(sim.members(objs["analysis"])["mesh"].FemMesh, drop_unused=False)  # the mesh object's is immutable
+        top = max(fem.Nodes)
+        for k in range(orphans):  # nodes no element uses
+            fem.addNode(1.0 + k, 2.0, 3.0, top + 1 + k)
+        return objs["analysis"], fem
+
+    def run_study_mesh(self, an, fem, second_order, messages):
+        fake = FakeMeshObject(fem, second_order)
+        real = sim.members
+        sim.members = lambda a: dict(real(a), mesh=fake)
+        try:
+            return sim.mesh_study(an, messages.append), fake
+        finally:
+            sim.members = real
+
+    def test_a_surface_only_mesh_is_an_error(self):
+        import Fem
+
+        an, fem = self.first_order_mesh()
+        surface = Fem.FemMesh()
+        for nid, v in fem.Nodes.items():
+            surface.addNode(v.x, v.y, v.z, nid)
+        for fid in fem.Faces:
+            surface.addFace(list(fem.getElementNodes(fid)), fid)
+        self.assertEqual(surface.VolumeCount, 0)
+        with self.assertRaises(sim.StudyError) as ctx:
+            self.run_study_mesh(an, surface, True, [])
+        self.assertIn("no volume elements", str(ctx.exception))
+
+    def test_unused_nodes_are_dropped(self):
+        an, fem = self.first_order_mesh(orphans=40)
+        used = len(sim.used_node_ids(fem))
+        self.assertEqual(fem.NodeCount, used + 40)
+        said = []
+        stats, fake = self.run_study_mesh(an, fem, False, said)
+        self.assertEqual(fake.FemMesh.NodeCount, used)
+        self.assertEqual(stats["nodes"], used)
+        self.assertEqual(len(sim.used_node_ids(fake.FemMesh)), used)
+        self.assertTrue(any("40 nodes" in t for t in said), said)
+
+    def test_linear_tets_are_upgraded_to_tet10_in_fem_order(self):
+        an, fem = self.first_order_mesh(orphans=5)
+        n4, elements = len(sim.used_node_ids(fem)), fem.VolumeCount
+        said = []
+        stats, fake = self.run_study_mesh(an, fem, True, said)
+        new = fake.FemMesh
+        self.assertEqual(stats["order"], "second")
+        self.assertEqual(new.VolumeCount, elements)
+        self.assertGreater(new.NodeCount, n4)
+        self.assertEqual(len(sim.used_node_ids(new)), new.NodeCount)  # no unused nodes
+        self.assertTrue(any("Tet10" in t for t in said), said)
+        nodes = new.Nodes
+        for vid in new.Volumes:
+            ids = list(new.getElementNodes(vid))
+            self.assertEqual(len(ids), 10)
+            p = [nodes[i] for i in ids]
+            for k, (i, j) in enumerate(sim.TET10_EDGES):
+                mid = p[4 + k]
+                self.assertAlmostEqual(mid.x, 0.5 * (p[i].x + p[j].x), places=9)
+                self.assertAlmostEqual(mid.y, 0.5 * (p[i].y + p[j].y), places=9)
+                self.assertAlmostEqual(mid.z, 0.5 * (p[i].z + p[j].z), places=9)
+
+    def test_the_fem_tet10_order_is_the_one_netgen_makes(self):
+        import Part
+
+        close_all()
+        doc = App.newDocument("N")
+        solid = Part.makeCylinder(20, 6).cut(Part.makeCylinder(8, 6))
+        body = vc.shape_object(doc, "W", solid)
+        objs = sim.new_study(doc, sim.StudyPlan(name="W", model=body, material=vc.material(), max_size=8.0, second_order=True))
+        sim.mesh_study(objs["analysis"])
+        fem = sim.members(objs["analysis"])["mesh"].FemMesh
+        nodes = fem.Nodes
+        ids = list(fem.getElementNodes(next(iter(fem.Volumes))))
+        self.assertEqual(len(ids), 10)
+        p = [nodes[i] for i in ids]
+        import math as m
+
+        for k in range(6):  # curved edges bend the mid node: it must still be nearest to its own edge's midpoint
+            def gap(pair):
+                i, j = pair
+                return m.dist((p[4 + k].x, p[4 + k].y, p[4 + k].z),
+                              (0.5 * (p[i].x + p[j].x), 0.5 * (p[i].y + p[j].y), 0.5 * (p[i].z + p[j].z)))
+
+            self.assertEqual(min(sim.TET10_EDGES, key=gap), sim.TET10_EDGES[k])
+
+    @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+    def test_an_upgraded_mesh_solves_to_the_closed_form(self):
+        close_all()
+        tmp = tempfile.mkdtemp(prefix="vl-up-")
+        try:
+            setup = vc.build_rotating_disc(PARAMS, 5.0)
+            mesh = sim.members(setup.analysis)["mesh"]
+            mesh.SecondOrder = False
+            sim.mesh_study(setup.analysis)
+            self.assertEqual(sim.mesh_stats(mesh)["order"], "first")
+            mesh.FemMesh = sim.rebuild_mesh(mesh.FemMesh, upgrade=True)
+            self.assertEqual(sim.mesh_stats(mesh)["order"], "second")
+            result = sim.solve(setup.analysis, working_dir=tmp)
+            ref = vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3)
+            self.assertAlmostEqual(setup.measure(setup.analysis, result)["shoop_a"] / ref["shoop_a"], 1.0, delta=0.03)
+        finally:
+            close_all()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_a_singular_solution_is_refused(self):
+        class R:
+            DisplacementLengths = [0.1, 5.0e6]
+
+            class Mesh:
+                class FemMesh:
+                    class _V:
+                        def __init__(self, x):
+                            self.x, self.y, self.z = x, 0.0, 0.0
+
+                    Nodes = {1: _V(0.0), 2: _V(100.0)}
+
+        with self.assertRaises(sim.StudyError) as ctx:
+            sim.check_displacement(R, None)
+        self.assertIn("singular", str(ctx.exception))
+        R.DisplacementLengths = [0.1, 5.0]
+        sim.check_displacement(R, None)  # a sane one passes
+
+
 @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
 class TestWorkingDir(unittest.TestCase):
     """sim.solve(an, working_dir=...) writes the ccx files there, also when the folder does not exist yet."""

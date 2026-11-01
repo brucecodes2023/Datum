@@ -1003,8 +1003,65 @@ def is_meshed(mesh_obj):
     return bool(fm is not None and fm.NodeCount)
 
 
+TET10_EDGES = ((0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3))  # mid-edge nodes 5..10 of a Tet10: 1-2, 2-3, 3-1, 1-4, 2-4, 3-4
+
+
+def used_node_ids(fem):
+    """The ids of the nodes some volume element uses (else some face or edge element, for a surface mesh)."""
+    used = set()
+    kinds = (fem.Volumes,) if fem.VolumeCount else (fem.Faces, fem.Edges)
+    for ids in kinds:
+        for eid in ids:
+            used.update(fem.getElementNodes(eid))
+    return used
+
+
+def rebuild_mesh(fem, drop_unused=True, upgrade=False):
+    """A new FemMesh with the same elements; ``drop_unused`` leaves out the nodes no element uses (a failed second-order
+    step of Netgen leaves ~100k of them: a support picked by nearest node can land on one and the wheel is then free),
+    ``upgrade`` turns linear tetrahedra into Tet10 with straight mid-edge nodes (FEM / Abaqus C3D10 order: edges 1-2, 2-3,
+    3-1, 1-4, 2-4, 3-4).  Node and element ids are kept; the new mid-edge nodes number on from the largest id."""
+    import Fem
+
+    keep = used_node_ids(fem) if drop_unused else None
+    new = Fem.FemMesh()
+    nodes = fem.Nodes
+    for nid, v in nodes.items():
+        if keep is None or nid in keep:
+            new.addNode(v.x, v.y, v.z, nid)
+    mids = {}
+    top = [max(nodes) if nodes else 0]
+
+    def mid(a, b):
+        key = (a, b) if a < b else (b, a)
+        if key not in mids:
+            top[0] += 1
+            va, vb = nodes[a], nodes[b]
+            new.addNode(0.5 * (va.x + vb.x), 0.5 * (va.y + vb.y), 0.5 * (va.z + vb.z), top[0])
+            mids[key] = top[0]
+        return mids[key]
+
+    def quad(ids, pairs):
+        return list(ids) + [mid(ids[i], ids[j]) for i, j in pairs]
+
+    for vid in fem.Volumes:
+        ids = list(fem.getElementNodes(vid))
+        new.addVolume(quad(ids, TET10_EDGES) if upgrade and len(ids) == 4 else ids, vid)
+    for fid in fem.Faces:
+        ids = list(fem.getElementNodes(fid))
+        new.addFace(quad(ids, ((0, 1), (1, 2), (2, 0))) if upgrade and len(ids) == 3 else ids, fid)
+    for eid in fem.Edges:
+        ids = list(fem.getElementNodes(eid))
+        new.addEdge(quad(ids, ((0, 1),)) if upgrade and len(ids) == 2 else ids, eid)
+    return new
+
+
 def mesh_study(analysis, progress=None):
-    """Generates the study's mesh (recompute of the Netgen object); returns mesh_stats."""
+    """Generates the study's mesh (recompute of the Netgen object); returns mesh_stats.
+
+    A mesh without volume elements (Netgen sometimes returns the surface only for a complex solid) is an error. Nodes no
+    element uses are dropped. When second order was asked and Netgen returned linear tetrahedra, they are upgraded to Tet10
+    with straight mid-edge nodes (said in the progress text and in ``stats['notes']``)."""
     mesh = members(analysis)["mesh"]
     if mesh is None:
         raise StudyError("the study has no mesh object")
@@ -1015,8 +1072,27 @@ def mesh_study(analysis, progress=None):
     mesh.Document.recompute([mesh])
     if not is_meshed(mesh):
         raise StudyError("Netgen made no mesh (an open or invalid shape?)")
+    fem = mesh.FemMesh
+    if not fem.VolumeCount:
+        raise StudyError(f"Netgen made a surface mesh only ({fem.NodeCount} nodes, {fem.FaceCount} faces, no volume elements): "
+                         "the solid is probably too complex or not closed. Try a larger MaxSize, a coarser Fineness, "
+                         "heal or simplify the shape, or mesh it in pieces")
+    notes = []
+    first = len(fem.getElementNodes(next(iter(fem.Volumes)))) == 4
+    upgrade = bool(getattr(mesh, "SecondOrder", False)) and first
+    orphans = fem.NodeCount - len(used_node_ids(fem))
+    if upgrade or orphans:
+        if upgrade:
+            notes.append("Second order was asked but Netgen returned linear tetrahedra: upgraded them to Tet10 with straight mid-edge nodes")
+        if orphans:
+            notes.append(f"Dropped {orphans} nodes no element uses (left by a failed second-order step)")
+        for text in notes:
+            if progress:
+                progress(text)
+        mesh.FemMesh = rebuild_mesh(fem, drop_unused=True, upgrade=upgrade)
     stats = mesh_stats(mesh)
     stats["seconds"] = round(time.time() - t0, 1)
+    stats["notes"] = notes
     if progress:
         progress(f"Meshed: {stats['nodes']} nodes, {stats['elements']} elements in {stats['seconds']} s")
     return stats
@@ -1247,6 +1323,29 @@ class _no_post_pipeline:
         return False
 
 
+DISPLACEMENT_LIMIT = 1e3  # x the model size: beyond it the model is unsupported or singular
+
+
+def check_displacement(result, analysis=None):
+    """Raises StudyError when the largest displacement is over 1e3 times the model size: ccx returns such a solution (1e9 MPa,
+    kilometre-scale displacements) without an error when the supports hold nothing, e.g. a support node no element uses."""
+    lengths = list(getattr(result, "DisplacementLengths", []) or [])
+    if not lengths:
+        return
+    top = max(lengths)
+    size = 0.0
+    try:
+        nodes = result.Mesh.FemMesh.Nodes.values()
+        xs, ys, zs = zip(*((v.x, v.y, v.z) for v in nodes))
+        size = math.sqrt((max(xs) - min(xs)) ** 2 + (max(ys) - min(ys)) ** 2 + (max(zs) - min(zs)) ** 2)
+    except Exception:
+        pass
+    if size and top > DISPLACEMENT_LIMIT * size:
+        raise StudyError(f"The solution is singular: the largest displacement is {top:.3g} mm on a model {size:.3g} mm across "
+                         f"(over {DISPLACEMENT_LIMIT:g} times). The model is unsupported (a support on a node no element uses, "
+                         "or too few supports) or the supports leave a rigid-body motion; check them and solve again")
+
+
 def finish_solve(fea, progress=None):
     """Loads the results of a finished ccx run, adds the safety factor; returns the result object.
 
@@ -1277,6 +1376,7 @@ def finish_solve(fea, progress=None):
         except thermal.ThermalError as exc:
             raise StudyError(str(exc)) from exc
     result = results[-1]
+    check_displacement(result, analysis)
     add_safety_factor(result, analysis)
     return result
 
