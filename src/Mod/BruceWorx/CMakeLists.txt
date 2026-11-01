@@ -80,6 +80,8 @@ SET(BruceWorx_SRCS
     bruceworx_dashboard.py
     bruceworx_vaultwizard.py
     bruceworx_preview.py
+    bruceworx_previewmesh.py
+    TestBruceWorxPreviewMesh.py
     bruceworx_vaultclient.py
     bruceworx_changes.py
     TestBruceWorxChanges.py
