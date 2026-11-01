@@ -27,6 +27,15 @@ asked ``is it possible to have a 3D view in the preview too?''
   \item \textbf{The look:} the mockup in figure~\ref{fig:pdm13-mockup}, made from the real vault (``this is a good
         look to start with'').
   \item \textbf{Who builds it:} the Vector Labs session, in this repository, after this plan.
+  \item \textbf{Assemblies reference parts; the CAD stays as it is:} ``It should be a file list. But the assemblies
+        reference the parts in the vault. Like commercial softwares do.'' The rotor assembly stays a separate file that
+        references the same parts as the engine; the browser shows those references in \emph{Uses} and
+        \emph{Where used}.
+  \item \textbf{Saves that make the picture and mesh:} files in a vault work folder only. Other files save exactly as
+        FreeCAD does today.
+  \item \textbf{Where the mesh lives:} inside the \file{.FCStd}, so it travels with every version and copy.
+  \item \textbf{Drawing packages:} a PDF of each drawing, with WIP drawings included and watermarked. ``Allow me to
+        build packages too'': you pick the files and the package is made from them (C, \emph{Build package}).
 \end{itemize}
 
 \begin{figure}[!htbp]
@@ -149,8 +158,15 @@ selected file's icon, name, P/N-REV, design ref and state. The tabs are:
         Under the viewer: type, revision and versions, last check-in, drawing.
   \item \textbf{Properties:} the data card. P/N, revision, name, design ref, type, state, category, project, who
         has it checked out, file.
-  \item \textbf{Drawings:} the drawing package. Each drawing of the file, with its sheet and its state, and what a
-        package exports: one PDF per released drawing and the model's STEP.
+  \item \textbf{Drawings:} the drawing package. Each drawing of the file, with its sheet and its state. \emph{Export
+        package} writes one PDF per drawing into a folder you pick: released drawings as they are, WIP drawings with an
+        \emph{IN PROGRESS} watermark across each sheet. For an assembly the package holds the drawings of the assembly
+        and of every file it uses, at any depth.
+  \item \textbf{Build package} (your own packages): select any rows in the list (Shift and Command extend the
+        selection), right-click, \emph{Build Package\ldots}. A dialog lists the drawings that come with them, each with
+        its state; you untick what you don't want, name the package and pick the folder. A package is a folder of PDFs
+        plus \file{package.csv} (P/N, revision, state, sheet file), so a supplier sees what is released. The vault
+        records nothing; a package is a copy for sending.
   \item \textbf{Uses} (assemblies): the BOM lines, with quantities. Clicking one selects that row.
   \item \textbf{Where used:} the assemblies that use the file, with quantities.
   \item \textbf{History:} every version, newest first, with its comment, time, who checked it in and its size.
@@ -224,7 +240,7 @@ writes only the mesh; the picture follows at the next GUI save or \emph{Refresh 
         instance placements against \code{Shape.BoundBox}; a damaged entry falls back to the ISO picture.
   \item \textbf{3D viewer} (\code{QuarterWidget}): orbit, fit, section, edges; one widget reused. Tests: off-screen
         render of the engine, rotor and test stand compared with the ISO picture's silhouette.
-  \item \textbf{Save hook}: ISO picture and mesh after every save, as answered in question~1. Tests: the picture
+  \item \textbf{Save hook}: ISO picture and mesh after every save, for vault work files only. Tests: the picture
         and the mesh are in the saved file; no view moved; a save outside the vault (if chosen); a 2\,MB assembly
         under 0.3\,s.
   \item \textbf{Turbojet}: \emph{Refresh Pictures} on the \emph{Vector} vault (cache only), then the next check-in
@@ -232,20 +248,11 @@ writes only the mesh; the picture follows at the next GUI save or \emph{Refresh 
 \end{enumerate}
 
 %----------------------------------------------------------------------
-\subsubsection*{6. Questions for Bruce}
+\subsubsection*{6. Decided while planning}
 
-\begin{enumerate}[nosep]
-  \item \textbf{Which saves make the picture and the mesh?} This touches the save path of every document.
-        (a) Every save of a file inside a vault work folder (recommended). (b) Every save of any file, vault or not.
-        (c) Only check-ins, as today.
-  \item \textbf{Where does the preview mesh live?} (a) Inside the \file{.FCStd} as \file{bruceworx/preview.bin}, so it
-        travels with every version and copy (recommended; about 30\,kB per part). (b) Beside the vault's objects,
-        keyed by the file's SHA-256, so the files stay as FreeCAD writes them.
-  \item \textbf{The drawing package:} PDF of each drawing plus the model's STEP (recommended)? Add DXF for flat
-        parts? Only released drawings, or WIP too, watermarked?
-  \item \textbf{Assemblies without a drawing:} should the engine (\code{VL-P01-100}) and the test stand
-        (\code{VL-P01-190}) count as \emph{missing a drawing}? Today the view counts parts only.
-  \item \textbf{The rotor assembly} (\code{VL-P01-105}) uses the same six parts the engine links directly. Keep it as
-        a separate balancing assembly, or make it a sub-assembly of the engine? The browser shows either; this is a
-        CAD question for the turbojet pipeline.
-\end{enumerate}
+\begin{itemize}[nosep]
+  \item \emph{Parts missing a drawing} becomes \emph{Missing a drawing} and counts assemblies too (the engine and the
+        test stand have none). COTS envelopes are left out.
+  \item STEP and DXF are not in the default package; \emph{Build package} can add them later if you ask.
+  \item No questions are open. Building starts with step~1.
+\end{itemize}
