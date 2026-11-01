@@ -41,11 +41,13 @@ SST with wall layers, 70\,k cells) converged in 172 iterations and 17\,s.
 
 \paragraph{Decided while building.}
 \begin{itemize}[nosep]
-  \item \textbf{No MPI here.} \code{mpirun} hangs in the PMIx handshake of OpenFOAM-v2606's Open MPI 5 on this Mac
-        (every \code{-parallel} start, with or without the sandbox, with the interface options tried). The run script
-        starts \code{decomposePar} and \code{mpirun} on the performance cores, and if \code{simpleFoam} has written nothing
-        after 25\,s it falls back to one core and the study remembers it for a day. The parallel path itself (its
-        success branch with \code{reconstructPar}) has therefore not run yet.
+  \item \textbf{MPI (fixed the same evening).} At first \code{mpirun} failed in the PMIx handshake of OpenFOAM-v2606's
+        Open MPI 5: the PMIx server listened on the LAN address only, the ranks' connection to it failed (errno 57),
+        and each rank fell back to a singleton (\code{MPI\_Init} ``Not found'', $-13$). Keeping PMIx on the loopback
+        (\code{PMIX\_MCA\_pif\_base\_retain\_loopback=1}, \code{PMIX\_MCA\_ptl\_tcp\_if\_include=lo0}, set by the runner and in
+        the case's \file{Allrun}) fixes it. The sphere benchmark now runs on 4 ranks in 12\,s (serial 23\,s) with the
+        same $C_d=1.110$. Parallel is used from 50k cells: a 115k-cell pipe took 534\,s serial, 314\,s on 4 ranks and
+        190\,s on 8. The 25\,s fallback to one core stays as a guard.
   \item \textbf{Spaces in the folder.} OpenFOAM aborts on a case path with a space, and the cache folder is
         \file{Vector Labs}; the runner works through a space-free symlink in the temp folder.
   \item \textbf{Convergence.} The solver stops at residuals of $10^{-5}$, ten times under the limit, so the report's
@@ -56,5 +58,6 @@ SST with wall layers, 70\,k cells) converged in 172 iterations and 17\,s.
         (\code{SoFCColorGradient::setMarkerLabel}, known since 27 Oct), so the GUI converts to VTK and relies on ParaView
         until that is fixed. This build has no streamline filter either.
 \end{itemize}
-\paragraph{Open.} Streamlines and surface pressure inside Vector Labs wait on the pipeline crash. The preset cell counts
+\paragraph{Open.} Surface pressure and the cut plane now show inside Vector Labs (\S\ref{sec:sim06-post-built}); streamlines
+stay with ParaView, which is installed (6.2.0). The preset cell counts
 (about 0.3\,M, 1\,M, 3\,M for a drone-sized model) are estimates until measured on the SP-01 frame in phase 2.
