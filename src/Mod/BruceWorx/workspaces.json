@@ -628,6 +628,10 @@
           "groups": [
             {
               "caption": "Run",
+              "studies": [
+                "solid",
+                "airflow"
+              ],
               "commands": [
                 "BruceWorx_StudyPreCheck",
                 "BruceWorx_SolveStudy"
@@ -707,6 +711,10 @@
             },
             {
               "caption": "Report",
+              "studies": [
+                "solid",
+                "airflow"
+              ],
               "commands": [
                 "BruceWorx_StudyReport"
               ]

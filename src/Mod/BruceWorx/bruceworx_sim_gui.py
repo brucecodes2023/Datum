@@ -2398,6 +2398,8 @@ def _make_classes():
                 self.say("Solving with CalculiX…")
                 _events().stage_started("Solve")
                 code = self.fea.ccx_run()
+                for line in (getattr(self.fea, "ccx_stdout", "") or "").splitlines():
+                    _events().log(line)  # the solver's own output, as the QProcess path sends it
                 return self._finished(code, QtCore.QProcess.NormalExit, blocking=True)
             self.fea.setup_ccx()
             if not getattr(self.fea, "ccx_binary_present", False):

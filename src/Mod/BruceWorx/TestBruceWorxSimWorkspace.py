@@ -153,6 +153,10 @@ class TestRibbonByStudy(unittest.TestCase):
         names = ws.study_tab_names(self.sim, None)
         self.assertIn("Home", names)
         self.assertNotIn("Physics", names)
+        self.assertNotIn("Study", names)  # SIM-07: the Study and Results tabs wait for a study
+        self.assertNotIn("Results", names)
+        self.assertIn("Study", ws.study_tab_names(self.sim, "static"))
+        self.assertIn("Results", ws.study_tab_names(self.sim, "prop_wash"))
         self.assertEqual(self.commands("Home", None)[:2], ["BruceWorx_NewStudy", "BruceWorx_Study"])
 
     def test_all_kinds_keep_the_old_commands_somewhere(self):
@@ -161,6 +165,10 @@ class TestRibbonByStudy(unittest.TestCase):
                      "BruceWorx_StudyRefine", "BruceWorx_SafetyFactorBands", "FEM_MaterialSolid"):
             self.assertIn(name, placed)
 
+    def test_stylesheet_has_the_compact_rows(self):
+        self.assertIn("21px", sw.stylesheet())
+        self.assertFalse(hasattr(sw, "layout_mode"))  # one stacked sidebar: no columns switch
+
     def test_tab_names_use_the_kind(self):
         names, current = ws.tab_names(self.sim, "Physics", kind="prop_wash")
         self.assertNotIn("Materials", names)
@@ -168,11 +176,6 @@ class TestRibbonByStudy(unittest.TestCase):
         self.assertEqual(ws.tab_names(self.sim, "Mesh", kind="prop_wash")[1], "Home")
         design = ws.workspace(self.defn, "Design")
         self.assertEqual(ws.tab_names(design, "Solid", kind="prop_wash")[0], ws.tab_names(design, "Solid")[0])
-
-    def test_layout_mode(self):
-        self.assertEqual(sw.layout_mode(1499), "stacked")
-        self.assertEqual(sw.layout_mode(1500), "columns")
-        self.assertIn("21px", sw.stylesheet())
 
 
 def _settle(seconds=0.5):
@@ -215,52 +218,63 @@ class TestShellInWindow(unittest.TestCase):
         ws.activate_workspace("Simulation")
         _settle(0.8)
 
-    def test_docks_appear_and_disappear_with_the_workspace(self):
+    def left_tabs(self):
+        left = sw._left()
+        return [(left.tabText(i), left.tabBar().isTabVisible(i)) for i in range(left.count())]
+
+    def test_the_sidebar_is_a_tab_next_to_the_model_tree(self):
         self.assertFalse(sw.active())
-        self.assertFalse(any(self.docks_visible()))
+        self.assertNotIn(("Simulation", True), self.left_tabs() if sw._left() is not None else [])
+        doc = App.newDocument("Sidebar")  # the left panel only shows with a document open
+        doc.addObject("Part::Box", "Box")
+        doc.recompute()
+        _settle(0.5)
         self.go_simulation()
         self.assertTrue(sw.active())
-        self.assertTrue(all(self.docks_visible()))
-        names = {d.objectName() for d in sw.docks().values()}
-        self.assertEqual(names, {"BWSimModelBuilder", "BWSimSettings", "BWSimBottom"})
+        self.assertEqual(sorted(sw.docks()), ["BWSimBottom"])
+        self.assertTrue(sw.docks()["BWSimBottom"].isVisible())
+        dock = sw.sidebar_dock()
+        self.assertEqual(dock.objectName(), "BWSimSidebar")
+        tabs = self.left_tabs()
+        self.assertEqual(len(tabs), 2)  # the model tree's tab and the Simulation tab
+        self.assertEqual(tabs[-1], ("Simulation", True))
+        self.assertTrue(sw._left().tabBar().isVisible())
+        self.assertTrue(sw.sidebar_shown())  # entering selects the Simulation tab
         self.assertIsNotNone(sw.model_builder_host())
         self.assertIsNotNone(sw.settings_host())
+        # the Model Builder is over Settings in one splitter, with a splitter handle between them
+        split = sw._s["split"]
+        self.assertEqual(split.count(), 2)
+        mb, st = sw.model_builder_host(), sw.settings_host()
+        self.assertLess(mb.mapTo(split, mb.rect().bottomLeft()).y(), st.mapTo(split, st.rect().topLeft()).y() + 2)
         pane = sw.messages_pane()
         self.assertEqual([pane.tabText(i) for i in range(pane.count())], ["Messages", "Progress", "Log", "Table"])
+        # the model tree is the other tab: one click brings it back, and the Simulation tab comes back with one
+        self.assertTrue(sw.select_model_tab(True))
+        _settle(0.3)
+        self.assertFalse(sw.sidebar_shown())
+        self.assertTrue(sw.select_model_tab(False))
+        _settle(0.3)
+        self.assertTrue(sw.sidebar_shown())
         ws.activate_workspace("Design")
         _settle(0.8)
         self.assertFalse(sw.active())
-        self.assertFalse(any(self.docks_visible()))
+        self.assertFalse(sw.docks()["BWSimBottom"].isVisible())
+        self.assertEqual(self.left_tabs()[-1], ("Simulation", False))
+        self.assertFalse(sw._left().tabBar().isVisible())  # the fork's own setting is back
+        self.assertEqual(sw._left().currentIndex(), 0)
 
-    def test_model_tree_is_put_away_and_comes_back(self):
+    def test_the_model_tree_is_not_put_away(self):
         import FreeCADGui as Gui
 
-        before = sw.model_tree_shown()
-        Gui.updateGui()
+        before = Gui.setOverlayAutoHide("OverlayLeft", False)
         self.go_simulation()
-        self.assertFalse(sw.model_tree_shown())
-        sw.set_model_tree(True)  # the header button
-        self.assertTrue(sw.model_tree_shown())
-        sw.set_model_tree(False)
+        Gui.updateGui()
+        self.assertFalse(Gui.setOverlayAutoHide("OverlayLeft", False))  # still not auto hidden
+        Gui.setOverlayAutoHide("OverlayLeft", before)
         ws.activate_workspace("Design")
         _settle(0.8)
-        self.assertEqual(sw.model_tree_shown(), before)
-
-    def test_stacked_below_1500_px(self):
-        if self.mw.isFullScreen():
-            self.skipTest("full screen")
-        self.mw.showNormal()
-        self.mw.resize(1300, 800)
-        self.go_simulation()
-        _settle(0.6)
-        self.assertEqual(sw.current_mode(), "stacked")
-        mb, st = sw.docks()["BWSimModelBuilder"], sw.docks()["BWSimSettings"]
-        self.assertLess(mb.geometry().bottom(), st.geometry().top() + 2)
-        self.assertAlmostEqual(mb.geometry().x(), st.geometry().x(), delta=4)
-        self.mw.resize(1700, 800)
-        _settle(0.6)
-        self.assertEqual(sw.current_mode(), "columns")
-        self.assertLess(mb.geometry().right(), st.geometry().left() + 2)
+        self.assertEqual(Gui.setOverlayAutoHide("OverlayLeft", before), before)
 
     def test_view_gradient_and_triad_restored(self):
         import FreeCADGui as Gui
@@ -344,7 +358,7 @@ class TestShellInWindow(unittest.TestCase):
         bar = self.bar
         self.assertIsNone(sw.active_kind())
         names = [bar.tabs.tabData(i) for i in range(bar.tabs.count())]
-        self.assertEqual(names, ["Home", "Definitions", "Geometry", "Study", "Results", "Project"])
+        self.assertEqual(names, ["Home", "Definitions", "Geometry", "Project"])  # no Study or Results tab without a study
         bar.set_study_kind("static")
         _settle()
         names = [bar.tabs.tabData(i) for i in range(bar.tabs.count())]
@@ -367,6 +381,240 @@ class TestShellInWindow(unittest.TestCase):
         ws.activate_workspace("Design")
         _settle(0.5)
         self.assertEqual(bar.workspace["name"], "Design")
+
+
+STEEL = {"uuid": "", "name": "Steel (test)", "library": "", "E": 210000.0, "nu": 0.3, "yield": 355.0, "uts": None,
+         "density": 7850.0}
+
+
+@unittest.skipUnless(App.GuiUp, "needs a GUI FreeCAD")
+class TestPanesInWindow(unittest.TestCase):
+    """The Model Builder tree and the Settings form (SIM-07 P1) in the real window."""
+
+    def setUp(self):
+        import FreeCADGui as Gui
+        import bruceworx_sim_panes as panes
+
+        self.panes = panes
+        self.bar = ws.bar()
+        if self.bar is None:
+            self.skipTest("the workspace bar is off")
+        self.mw = Gui.getMainWindow()
+        self.workbench = Gui.activeWorkbench().name()
+        self.geometry = self.mw.geometry()
+        self.addCleanup(self.restore)
+        ws.activate_workspace("Design")
+        _settle()
+        ws.activate_workspace("Simulation")
+        _settle(0.8)
+        self.assertTrue(panes.attached())
+
+    def restore(self):
+        import FreeCADGui as Gui
+
+        for doc in list(App.listDocuments().values()):
+            App.closeDocument(doc.Name)
+        Gui.activateWorkbench(self.workbench)
+        self.mw.setGeometry(self.geometry)
+        _settle()
+
+    def show(self, study):
+        import FemGui
+
+        FemGui.setActiveAnalysis(study)
+        self.panes.set_study(study)
+        _settle(0.2)
+
+    def keys(self):
+        return [r[0] for r in self.panes.rows()]
+
+    def test_trees_for_the_study_types(self):
+        import bruceworx_cfd as cfd
+
+        doc = App.newDocument("Kinds")
+        box = doc.addObject("Part::Box", "B")
+        doc.recompute()
+        static = sim.new_study(doc, sim.StudyPlan(name="S", study_type="static", model=box, material=dict(STEEL)))["analysis"]
+        modal = sim.new_study(doc, sim.StudyPlan(name="M", study_type="modal", model=box, material=dict(STEEL)))["analysis"]
+        thermal = sim.new_study(doc, sim.StudyPlan(name="T", study_type="thermal", model=box, material=dict(STEEL)))["analysis"]
+        wash = cfd.new_airflow_study(doc, box, "wash", kind="prop_wash")
+        expect = {static: ["results/stress", "results/displacement", "results/safety", "step/main", "mesh/main"],
+                  modal: ["results/modes", "step/main"], thermal: ["results/temperature", "phys/InitialTemperature"],
+                  wash: ["phys/farfield", "phys/disks", "mesh/main", "results/pressure"]}
+        for study, wanted in expect.items():
+            self.show(study)
+            keys = self.keys()
+            for key in wanted:
+                self.assertIn(key, keys, f"{study.Label}: {key}")
+            self.assertEqual(keys[0], "study")
+            self.assertEqual(self.panes.row_height(), 21)
+        self.assertNotIn("results/stress", self.keys())  # the prop-wash tree
+        self.assertEqual(self.panes.current_key(), "study")
+
+    def test_marks_follow_an_edit_and_a_wrong_unit_writes_nothing(self):
+        import bruceworx_sim_model as model
+
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        self.assertTrue(self.panes.compute("mesh/main"))
+        self.assertTrue(self.panes.compute("step/main", blocking=True))
+        _settle(0.4)
+        self.panes.flush_now()
+        marks = self.panes.marks()
+        for key in ("mesh/main", "step/main", "results/stress", "phys/TipLoad", "phys/Fixed"):
+            self.assertEqual(marks[key], "ok", key)
+        self.assertTrue(self.panes.select_key("phys/TipLoad"))
+        self.assertIn("Force", self.panes.field_names())
+        self.assertEqual(self.panes.field_text("Force"), "1000 N")
+        before = len(doc.UndoNames)
+        self.assertTrue(self.panes.edit("Force", "1500 N"))
+        self.assertEqual(len(doc.UndoNames), before + 1)  # one undo step
+        self.panes.flush_now()
+        marks = self.panes.marks()
+        self.assertEqual(marks["step/main"], "stale")
+        self.assertEqual(marks["results/stress"], "stale")
+        self.assertEqual(marks["mesh/main"], "ok")
+        self.assertEqual(marks["phys/TipLoad"], "ok")
+        self.assertEqual(marks["results"], "stale")
+        # a wrong unit: the error shows under the field and nothing is written
+        self.assertFalse(self.panes.edit("Force", "5 mm"))
+        self.assertIn("expected a value in N", self.panes.field_error("Force"))
+        self.assertEqual(model.get_value(model.find_node(study, "phys/TipLoad"), "Force"), 1500.0)
+        self.assertEqual(len(doc.UndoNames), before + 1)
+        self.assertTrue(self.panes.edit("Force", "2 kN"))
+        self.assertEqual(self.panes.field_error("Force"), "")
+        self.assertEqual(self.panes.field_text("Force"), "2000 N")
+        self.assertFalse(self.panes.edit("Force", "-3 N"))  # out of range
+        self.assertIn("below", self.panes.field_error("Force"))
+
+    def test_face_picking_adds_and_removes(self):
+        import bruceworx_sim_model as model
+
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        self.assertTrue(self.panes.select_key("phys/Fixed"))
+        node = model.find_node(study, "phys/Fixed")
+        self.assertEqual(model.get_value(node, "References"), [("Beam", "Face1")])
+        self.assertEqual(self.panes.field_text("References"), ["Beam \u00b7 Face1"])
+        self.assertIn(("Beam", "Face1"), self.panes.highlighted())
+        self.assertTrue(self.panes.pick("Beam", "Face4"))
+        self.assertEqual(model.get_value(node, "References"), [("Beam", "Face1"), ("Beam", "Face4")])
+        self.assertEqual(sorted(self.panes.highlighted()), [("Beam", "Face1"), ("Beam", "Face4")])
+        self.assertEqual(len(self.panes.field_text("References")), 2)
+        self.assertTrue(self.panes.pick("Beam", "Face1"))  # a click on a listed face takes it out
+        self.assertEqual(model.get_value(node, "References"), [("Beam", "Face4")])
+        self.assertEqual(self.panes.highlighted(), [("Beam", "Face4")])
+        self.assertFalse(self.panes.pick("Beam", ""))  # not an element
+        self.assertTrue(self.panes.select_key("study"))  # a node without a selection ignores clicks
+        self.assertFalse(self.panes.pick("Beam", "Face2"))
+        self.assertEqual(model.get_value(node, "References"), [("Beam", "Face4")])
+
+    def test_compute_from_the_panes_and_result_nodes(self):
+        import bruceworx_sim_gui as sg
+        import bruceworx_sim_post as post
+
+        if not sim.find_ccx():
+            self.skipTest("CalculiX (ccx) is not installed")
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        pane = sw.messages_pane()
+        self.assertEqual(self.panes.marks()["step/main"], "todo")  # nothing solved yet
+        self.assertTrue(self.panes.select_key("mesh/main"))
+        self.assertIn("Compute", self.panes._p["buttons"])
+        self.panes._p["buttons"]["Compute"].click()
+        _settle(0.5)
+        self.assertEqual(self.panes.marks()["mesh/main"], "ok")
+        self.assertIn("Meshed:", " ".join(t for _l, t in pane.message_rows()))
+        self.assertTrue(self.panes.select_key("study"))
+        self.panes._p["buttons"]["Compute"].click()
+        end = time.time() + 120
+        while time.time() < end and (self.panes.running() or "Solved in" not in " ".join(t for _l, t in pane.message_rows())):
+            _settle(0.3)
+        _settle(0.6)
+        self.panes.flush_now()
+        stages = [r[0] for r in pane.stage_rows()]
+        self.assertIn("Solve", stages)
+        self.assertIn("Read results", stages)
+        self.assertEqual(self.panes.marks()["step/main"], "ok")
+        self.assertEqual(self.panes.marks()["study"], "ok")
+        self.assertIn("Solved in", " ".join(t for _l, t in pane.message_rows()))
+        # a result node shows its field; its form has the quantity and the fixed range
+        self.assertTrue(self.panes.select_key("results/stress"))
+        self.assertEqual(self.panes.shown_plot(), "results/stress")
+        self.assertEqual(sg.shown_field(study), "stress")
+        self.assertIn("StressMeasure", self.panes.field_names())
+        self.assertTrue(self.panes.set_range(0, 120))
+        self.assertEqual(post.fixed_range(study, "vonMises"), (0.0, 120.0))
+        self.assertTrue(self.panes.select_key("results/displacement"))
+        self.assertEqual(sg.shown_field(study), "displacement")
+        self.assertTrue(self.panes.select_key("results/safety"))
+        self.assertEqual(sg.shown_field(study), "safety")
+        self.assertIn("Plot", self.panes._p["buttons"])
+
+    def test_blocking_solve_sends_the_solver_output_to_the_log(self):
+        if not sim.find_ccx():
+            self.skipTest("CalculiX (ccx) is not installed")
+        doc, objs, _theory = sim.cantilever()
+        self.show(objs["analysis"])
+        self.assertTrue(self.panes.compute("step/main", blocking=True))
+        _settle(0.4)
+        text = sw.messages_pane().log_text()
+        self.assertIn("Writing the CalculiX input", text)
+        self.assertTrue(any(w in text for w in ("CalculiX", "Job finished", "calculix", "ccx")), text[:400])
+
+    def test_add_delete_and_message_click(self):
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        pane = sw.messages_pane()
+        self.assertIn(("force", "Force"), self.panes.addable())
+        made = self.panes.add_node("force")
+        self.assertIsNotNone(made)
+        key = f"phys/{made.Name}"
+        self.assertIn(key, self.keys())
+        self.assertEqual(self.panes.current_key(), key)  # the new node is selected, ready for faces
+        self.assertEqual(self.panes.marks()[key], "bad")  # no faces yet: the pre-check's error
+        self.assertTrue(self.panes.pick("Beam", "Face2"))
+        self.assertEqual(self.panes.field_text("References"), ["Beam \u00b7 Face2"])
+        self.panes.select_key("study")
+        events.message("warning", "Force: look here", node_key=key)
+        _settle(0.3)
+        item = pane.messages.item(pane.messages.count() - 1)
+        pane.messages.itemClicked.emit(item)
+        self.assertEqual(self.panes.current_key(), key)
+        self.assertTrue(self.panes.rename_node(key, "Tip load 2"))
+        self.assertIn("Tip load 2", [r[1] for r in self.panes.rows()])
+        self.assertTrue(self.panes.delete_node(key))
+        self.assertNotIn(key, self.keys())
+        doc.undo()
+        _settle(0.3)
+        self.panes.flush_now()
+        self.assertIn(key, self.keys())
+
+    def test_refreshes_are_debounced_and_cheap(self):
+        doc, objs, _theory = sim.cantilever()
+        self.show(objs["analysis"])
+        before = self.panes._p["refresh_count"]
+        for _i in range(20):
+            self.panes.schedule()
+        _settle(0.5)
+        self.assertEqual(self.panes._p["refresh_count"], before + 1)
+        # an object change in the document refreshes by itself
+        objs["analysis"].Document.getObject("TipLoad").Force = "1200 N"
+        _settle(0.5)
+        self.assertEqual(self.panes.marks().get("step/main"), "todo")  # no results yet
+
+    def test_the_axis_triad_is_on_in_the_workspace(self):
+        import FreeCADGui as Gui
+
+        doc = App.newDocument("Triad")
+        doc.addObject("Part::Box", "Box")
+        doc.recompute()
+        _settle(0.8)
+        self.assertTrue(Gui.ActiveDocument.ActiveView.hasAxisCross())
 
 
 if __name__ == "__main__":

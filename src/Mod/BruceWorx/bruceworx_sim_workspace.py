@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """The Simulation workspace's window shell (SIM-07 phase P1; plan chapter 69).
 
-While the Simulation workspace is active the window shows, left to right, a Model Builder dock, a Settings dock
-and the 3D view, with a bottom dock (Messages, Progress, Log, Table) under the 3D view. Below 1500 px the Model
-Builder stacks above Settings in one column. FreeCAD's overlay panels (the model tree on the left, the right panel
-and its floating task view) are put away; a button in the Model Builder header brings the model tree back. The
-panes get one stylesheet from the mockup's tokens, and the 3D view a light-blue gradient and the axis triad.
-Leaving the workspace removes the docks and restores the overlays, the background and the triad.
+While the Simulation workspace is active the left sidebar (FreeCAD's overlay panel with the model tree, "Browser") has a
+second tab, "Simulation": the Model Builder on top and the Settings pane below it, with a splitter (as Ansys' Outline and
+Details). The tabs are FreeCAD's own overlay tabs (vertical, on the panel's left edge); the fork hides that tab bar in
+every other workspace, so it is switched on here and back off on leaving, and the Simulation tab is hidden again (the dock
+stays registered in the panel: an overlay panel cannot give a dock back). A bottom dock (Messages, Progress, Log, Table)
+sits under the 3D view. The right panel and its floating task view are put away. The panes get one stylesheet from the
+mockup's tokens, and the 3D view a light-blue gradient and the axis triad. Leaving the workspace restores everything.
 
-The next phase fills the two hosts: ``model_builder_host()`` and ``settings_host()`` return an empty widget with a
-vertical layout (a placeholder label sits in it until then; remove it with ``clear_host(host)``).
-``messages_pane()`` is the bottom pane: ``add_message(level, text, node_key=None)``, ``stage_rows()``,
-``log_text()``. The pane listens to ``bruceworx_sim_events``.
+``model_builder_host()`` and ``settings_host()`` return the two panes' content widgets (vertical layouts; a placeholder
+label sits in them until ``clear_host(host)``); ``messages_pane()`` is the bottom pane: ``add_message(level, text,
+node_key=None)``, ``stage_rows()``, ``log_text()``. The pane listens to ``bruceworx_sim_events``.
 
 Also here: the active study's type (``active_kind``, polled while the workspace is up and handed to the workspace
 bar, which shows the tabs and groups of that type), and a few small commands (the placeholders of the Definitions,
@@ -25,8 +25,11 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORKBENCH = "FemWorkbench"
-NARROW = 1500  # px: below this window width the Model Builder stacks above Settings
-MODEL_BUILDER, SETTINGS, BOTTOM = "BWSimModelBuilder", "BWSimSettings", "BWSimBottom"
+SIDEBAR, BOTTOM = "BWSimSidebar", "BWSimBottom"
+LEFT = "OverlayLeft"
+SIDEBAR_TITLE = "Simulation"
+SIDEBAR_WIDTH = 400  # px: the left panel while the Simulation tab is up
+SPLIT = (430, 520)  # px: Model Builder over Settings
 VIEW_PATH = "User parameter:BaseApp/Preferences/View"
 VIEW_TOP, VIEW_BOTTOM = "#c6d4e6", "#eef2f7"  # the mockup's viewport gradient
 ACCENT = "#1f6fd1"
@@ -42,16 +45,13 @@ TOKENS = {
 # ----- pure helpers ----------------------------------------------------------------------------------------
 
 
-def layout_mode(width, narrow=NARROW):
-    """"columns" (tree and settings side by side) or "stacked" (one column) for a window of ``width`` px."""
-    return "stacked" if width < narrow else "columns"
-
-
 def stylesheet(t=None):
     """The one stylesheet of the Simulation panes (applied to the three docks only)."""
     t = dict(TOKENS, **(t or {}))
     return f"""
-QDockWidget#{MODEL_BUILDER}, QDockWidget#{SETTINGS}, QDockWidget#{BOTTOM} {{ background: {t['panel']}; }}
+QDockWidget#{BOTTOM} {{ background: {t['panel']}; }}
+QSplitter#BWSimSidebarSplit {{ background: {t['panel']}; }}
+QSplitter#BWSimSidebarSplit::handle {{ background: {t['line']}; height: 1px; }}
 QWidget#BWSimPane {{ background: {t['panel']}; font-size: 12px; color: {t['text']}; }}
 QWidget#BWSimHost {{ background: {t['panel2']}; }}
 QWidget#BWSimHeader {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #fbfcfd, stop:1 #eef0f3);
@@ -126,8 +126,7 @@ def study_label():
 
 # ----- the widgets -------------------------------------------------------------------------------------------
 
-_s = {"built": False, "active": False, "docks": {}, "panes": {}, "saved": {}, "timer": None, "filter": None,
-      "mode": None, "kind": "?", "bridge": None, "listener": None, "views": {}}
+_s = {"built": False, "active": False, "docks": {}, "panes": {}, "saved": {}, "timer": None, "kind": "?", "bridge": None, "listener": None, "views": {}}
 
 
 def _level_icon(level):
@@ -218,7 +217,10 @@ def _classes():
             col.addWidget(self.host, 1)
 
         def set_study(self, label):
-            self.name_label.setText(label or "No study yet")
+            try:
+                self.name_label.setText(label or "No study yet")
+            except RuntimeError:  # the placeholders were removed (clear_host) by the Model Builder
+                pass
 
     class Section(QtWidgets.QWidget):
         """A collapsible form section with a gradient header, for the Settings pane."""
@@ -408,22 +410,27 @@ def _build():
         return False
     c = _classes()
     mw = _main_window()
-    mb = c["Pane"]("Model Builder", "Model Builder (next phase)")
-    st = c["Pane"]("Settings", "Settings (next phase)")
+    mb = c["Pane"]("Model Builder", "Model Builder")
+    st = c["Pane"]("Settings", "Settings")
     bottom = c["Bottom"]()
-    tree_button = mb.header.add_button("Model tree", "Show or put away FreeCAD's model tree (parts and features)", checkable=True)
-    tree_button.toggled.connect(lambda on: set_model_tree(on))
-    _s["tree_button"] = tree_button
     sheet = stylesheet()
-    for key, title, widget in ((MODEL_BUILDER, "Model Builder", mb), (SETTINGS, "Settings", st), (BOTTOM, "Messages", bottom)):
-        dock = QtWidgets.QDockWidget(title, mw)
-        dock.setObjectName(key)
-        dock.setFeatures(QtWidgets.QDockWidget.NoDockWidgetFeatures)
-        dock.setTitleBarWidget(QtWidgets.QWidget())  # the panes draw their own header
-        dock.setWidget(widget)
-        dock.setStyleSheet(sheet)
-        dock.setAllowedAreas(QtCore.Qt.AllDockWidgetAreas)
-        _s["docks"][key] = dock
+    split = QtWidgets.QSplitter(QtCore.Qt.Vertical)  # Model Builder over Settings, as Ansys' Outline and Details
+    split.setObjectName("BWSimSidebarSplit")
+    split.setChildrenCollapsible(False)
+    split.setWindowTitle(SIDEBAR_TITLE)  # the overlay names the tab after it
+    split.addWidget(mb)
+    split.addWidget(st)
+    split.setSizes(list(SPLIT))
+    split.setStyleSheet(sheet)
+    _s["split"] = split
+    dock = QtWidgets.QDockWidget("Messages", mw)
+    dock.setObjectName(BOTTOM)
+    dock.setFeatures(QtWidgets.QDockWidget.NoDockWidgetFeatures)
+    dock.setTitleBarWidget(QtWidgets.QWidget())  # the pane draws its own header
+    dock.setWidget(bottom)
+    dock.setStyleSheet(sheet)
+    dock.setAllowedAreas(QtCore.Qt.AllDockWidgetAreas)
+    _s["docks"][BOTTOM] = dock
     _s["panes"] = {"mb": mb, "st": st, "bottom": bottom}
 
     class Bridge(QtCore.QObject):
@@ -481,7 +488,7 @@ def docks():
 
 # ----- the model tree and the overlay panels ------------------------------------------------------------------
 
-OVERLAYS = ("OverlayLeft", "OverlayRight")
+OVERLAYS = ("OverlayRight",)
 
 
 def _overlay_widget(name):
@@ -523,29 +530,165 @@ def _restore_overlays():
             pass
 
 
-def set_model_tree(on):
-    """Shows (on) or puts away FreeCAD's model tree."""
+def _left():
+    return _overlay_widget(LEFT)
+
+
+def _sidebar_index():
+    """The overlay tab of the Simulation sidebar (the dock's tab is the one after the model tree's), or -1."""
+    left = _left()
+    dock = _s.get("sidebar")
+    if left is None or dock is None:
+        return -1
+    for i in range(left.count()):
+        if left.tabText(i) == SIDEBAR_TITLE:
+            return i
+    return -1
+
+
+def _refresh_left():
+    """Makes the overlay manager apply the tab bar setting now (setting the auto hide mode it already has)."""
     import FreeCADGui
 
     try:
-        FreeCADGui.setOverlayAutoHide("OverlayLeft", not on)
+        was = FreeCADGui.setOverlayAutoHide(LEFT, True)
+        FreeCADGui.setOverlayAutoHide(LEFT, bool(was))
     except Exception:
         pass
-    button = _s.get("tree_button")
-    if button is not None and button.isChecked() != bool(on):
-        button.blockSignals(True)
-        button.setChecked(bool(on))
-        button.blockSignals(False)
 
 
-def model_tree_shown():
-    """True when FreeCAD's model tree is shown (not auto hidden)."""
+def _show_sidebar():
+    """The left panel gets its Simulation tab (made on first use) with the tab bar on, and selects it."""
+    import FreeCAD
     import FreeCADGui
+    from PySide import QtCore
 
-    was = FreeCADGui.setOverlayAutoHide("OverlayLeft", True)
-    if not was:
-        FreeCADGui.setOverlayAutoHide("OverlayLeft", False)
-    return not was
+    left = _left()
+    if left is None:
+        return False
+    if _s.get("sidebar") is None:
+        dock = FreeCADGui.addDockWindow(SIDEBAR, _s["split"], int(QtCore.Qt.LeftDockWidgetArea.value), LEFT)
+        _s["sidebar"] = dock
+        index = left.count() - 1
+        left.setTabText(index, SIDEBAR_TITLE)
+    dock = _s["sidebar"]
+    group = FreeCAD.ParamGet(VIEW_PATH)
+    contents = {name: value for _kind, name, value in (group.GetContents() or [])}
+    _s["saved"]["tabbar"] = contents.get("DockOverlayHideTabBar")
+    _s["saved"]["tab"] = left.currentIndex()
+    dock.show()
+    if not _s.get("quit_hook"):
+        _s["quit_hook"] = True  # quitting inside the workspace must not leave the tab bar on in every other workspace
+        from PySide import QtWidgets
+
+        QtWidgets.QApplication.instance().aboutToQuit.connect(_restore_tab_bar)
+    group.SetBool("DockOverlayHideTabBar", False)  # the fork hides the overlay's tab bar; the sidebar needs it
+    _refresh_left()
+    index = _sidebar_index()
+    if index >= 0:
+        left.tabBar().setTabVisible(index, True)
+        left.tabBar().tabBarClicked.emit(index)
+        left.setCurrentIndex(index)
+        _s["saved"]["width"] = left.width()
+        if left.width() < SIDEBAR_WIDTH:
+            _widen_left(SIDEBAR_WIDTH)
+    return index >= 0
+
+
+def _hide_sidebar():
+    """Back to the model tree alone: the Simulation tab is hidden, the tab bar goes off again."""
+    import FreeCAD
+
+    left = _left()
+    dock = _s.get("sidebar")
+    if left is None or dock is None:
+        return
+    index = _sidebar_index()
+    if index >= 0 and left.currentIndex() == index:
+        target = _s["saved"].get("tab", 0)
+        target = 0 if target in (None, index) or target >= left.count() else target
+        left.tabBar().tabBarClicked.emit(target)
+        left.setCurrentIndex(target)
+    if _s["saved"].get("width") and left.width() != _s["saved"]["width"]:
+        _widen_left(_s["saved"]["width"])
+    group = FreeCAD.ParamGet(VIEW_PATH)
+    was = _s["saved"].get("tabbar")
+    if was is None:
+        group.RemBool("DockOverlayHideTabBar")
+    else:
+        group.SetBool("DockOverlayHideTabBar", bool(was))
+    if index >= 0:
+        left.tabBar().setTabVisible(index, False)
+    dock.hide()
+    _refresh_left()
+    if _hides_tab_bar():
+        left.tabBar().hide()  # the overlay applies the setting only when it re-lays out
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(150, _late_hide)  # and it re-lays out once more after the panel was resized
+
+
+def _restore_tab_bar():
+    """The fork's tab bar setting as it was before the Simulation tab turned it on (also at quit)."""
+    import FreeCAD
+
+    if not _s["active"] and "tabbar" not in _s["saved"]:
+        return
+    group = FreeCAD.ParamGet(VIEW_PATH)
+    was = _s["saved"].get("tabbar")
+    if was is None:
+        group.RemBool("DockOverlayHideTabBar")
+    else:
+        group.SetBool("DockOverlayHideTabBar", bool(was))
+
+
+def _late_hide():
+    left = _left()
+    if left is not None and not _s["active"] and _hides_tab_bar():
+        left.tabBar().hide()
+
+
+def _hides_tab_bar():
+    """The fork's own setting (the tab bar is off unless the preference says otherwise)."""
+    was = _s["saved"].get("tabbar")
+    return True if was is None else bool(was)
+
+
+def _widen_left(width):
+    """Drags the left panel's size grip to ``width`` px: the grip's dragMove signal is invokable, the panel's own method is not."""
+    from PySide import QtCore, QtWidgets
+
+    left = _left()
+    if left is None:
+        return False
+    for grip in left.findChildren(QtWidgets.QWidget):
+        if grip.metaObject().className() == "Gui::OverlaySizeGrip":
+            edge = left.mapToGlobal(QtCore.QPoint(width, left.height() // 2))
+            return bool(QtCore.QMetaObject.invokeMethod(grip, "dragMove", QtCore.Q_ARG(QtCore.QPoint, edge)))
+    return False
+
+
+def sidebar_dock():
+    """The overlay dock holding the Model Builder and Settings (None until the workspace was first shown)."""
+    return _s.get("sidebar")
+
+
+def sidebar_shown():
+    left = _left()
+    index = _sidebar_index()
+    return left is not None and index >= 0 and left.currentIndex() == index and left.tabBar().isTabVisible(index)
+
+
+def select_model_tab(on=True):
+    """Switches the left panel between the model tree (on) and the Simulation tab (off)."""
+    left = _left()
+    index = _sidebar_index()
+    if left is None or index < 0:
+        return False
+    target = 0 if on else index
+    left.tabBar().tabBarClicked.emit(target)
+    left.setCurrentIndex(target)
+    return True
 
 
 # ----- the 3D view -----------------------------------------------------------------------------------------
@@ -642,26 +785,26 @@ def enter():
     d = _s["docks"]
     _s["saved"]["corners"] = {c: mw.corner(c) for c in (QtCore.Qt.BottomLeftCorner, QtCore.Qt.BottomRightCorner)}
     mw.setCorner(QtCore.Qt.BottomLeftCorner, QtCore.Qt.LeftDockWidgetArea)  # the bottom pane sits under the 3D view only
-    mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea, d[MODEL_BUILDER])
-    mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea, d[SETTINGS])
     mw.addDockWidget(QtCore.Qt.BottomDockWidgetArea, d[BOTTOM])
-    for dock in d.values():
-        dock.show()
-    _s["mode"] = None
+    d[BOTTOM].show()
     _s["active"] = True
     _put_away_overlays()
     _apply_view()
+    _show_sidebar()
     relayout()
     _s["panes"]["bottom"].add_message("info", "Simulation workspace ready")
-    if _s["filter"] is None:
-        _s["filter"] = _make_filter(mw)
-    mw.installEventFilter(_s["filter"])
     if _s["timer"] is None:
         timer = QtCore.QTimer(mw)
         timer.setInterval(600)
         timer.timeout.connect(poll)
         _s["timer"] = timer
     _s["timer"].start()
+    try:
+        import bruceworx_sim_panes as panes
+
+        panes.attach()
+    except Exception as exc:
+        _warn_console(f"Model Builder: {exc}")
     poll()
     QtCore.QTimer.singleShot(0, relayout)
     return True
@@ -675,10 +818,15 @@ def leave():
 
     mw = _main_window()
     _s["active"] = False
+    try:
+        import bruceworx_sim_panes as panes
+
+        panes.detach()
+    except Exception:
+        pass
     if _s["timer"] is not None:
         _s["timer"].stop()
-    if _s["filter"] is not None:
-        mw.removeEventFilter(_s["filter"])
+    _hide_sidebar()
     for dock in _s["docks"].values():
         dock.hide()
         mw.removeDockWidget(dock)
@@ -686,50 +834,22 @@ def leave():
         mw.setCorner(corner, area)
     _restore_overlays()
     _restore_view()
-    button = _s.get("tree_button")
-    if button is not None:
-        button.blockSignals(True)
-        button.setChecked(False)
-        button.blockSignals(False)
     _s["kind"] = "?"
     return True
 
 
-def _make_filter(mw):
-    from PySide import QtCore
-
-    class Filter(QtCore.QObject):
-        def eventFilter(self, obj, event):
-            if event.type() == QtCore.QEvent.Resize and obj is mw and _s["active"]:
-                relayout()
-            return False
-
-    return Filter(mw)
-
-
 def relayout():
-    """Columns or one stacked column by the window width; the sizes of the mockup."""
+    """The bottom pane's height (the sidebar is one overlay tab: nothing to lay out)."""
     if not _s["active"]:
         return
+    mw = _main_window()
     from PySide import QtCore
 
-    mw = _main_window()
-    d = _s["docks"]
-    mode = layout_mode(mw.width())
-    if mode != _s["mode"]:
-        orient = QtCore.Qt.Vertical if mode == "stacked" else QtCore.Qt.Horizontal
-        mw.splitDockWidget(d[MODEL_BUILDER], d[SETTINGS], orient)
-        _s["mode"] = mode
-    if mode == "columns":
-        mw.resizeDocks([d[MODEL_BUILDER], d[SETTINGS]], [290, 330], QtCore.Qt.Horizontal)
-    else:
-        mw.resizeDocks([d[MODEL_BUILDER]], [320], QtCore.Qt.Horizontal)
-        mw.resizeDocks([d[MODEL_BUILDER], d[SETTINGS]], [400, 500], QtCore.Qt.Vertical)
-    mw.resizeDocks([d[BOTTOM]], [190], QtCore.Qt.Vertical)
-
-
-def current_mode():
-    return _s["mode"]
+    mw.resizeDocks([_s["docks"][BOTTOM]], [190], QtCore.Qt.Vertical)
+    split = _s.get("split")
+    if split is not None and split.height() > 0:
+        total = split.height()
+        split.setSizes([int(total * SPLIT[0] / sum(SPLIT)), int(total * SPLIT[1] / sum(SPLIT))])
 
 
 def poll():
@@ -748,10 +868,25 @@ def poll():
                 bar.set_study_kind(kind)
         except Exception:
             pass
+    try:
+        import bruceworx_sim_panes as panes
+
+        panes.sync()
+    except Exception as exc:
+        _warn_console(f"Model Builder: {exc}")
     for pane in (_s["panes"]["mb"], _s["panes"]["st"]):
         pane.set_study(label)
     try:
         _triad(True)
+    except Exception:
+        pass
+
+
+def _warn_console(text):
+    try:
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(f"[sim] {text}\n")
     except Exception:
         pass
 

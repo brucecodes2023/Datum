@@ -180,6 +180,7 @@ SET(BruceWorx_SRCS
     bruceworx_sim_gui.py
     bruceworx_sim_events.py
     bruceworx_sim_workspace.py
+    bruceworx_sim_panes.py
     TestBruceWorxSimWorkspace.py
     TestBruceWorxSimulation.py
     bruceworx_sim_model.py
@@ -290,6 +291,47 @@ INSTALL(
     DIRECTORY Resources/Materials/VectorLabs
     DESTINATION Mod/BruceWorx/Resources/Materials
     FILES_MATCHING PATTERN "*.FCMat"
+)
+
+# [BW] SIM-07 Model Builder icons: one SVG per sprite symbol of the mockups (node icons and state marks).
+SET(BruceWorx_SimIcons
+    Resources/icons/sim/i-defs.svg
+    Resources/icons/sim/i-disk.svg
+    Resources/icons/sim/i-fixed.svg
+    Resources/icons/sim/i-flow.svg
+    Resources/icons/sim/i-force.svg
+    Resources/icons/sim/i-geo.svg
+    Resources/icons/sim/i-grav.svg
+    Resources/icons/sim/i-mat.svg
+    Resources/icons/sim/i-mesh.svg
+    Resources/icons/sim/i-param.svg
+    Resources/icons/sim/i-phys.svg
+    Resources/icons/sim/i-plot.svg
+    Resources/icons/sim/i-press.svg
+    Resources/icons/sim/i-probe.svg
+    Resources/icons/sim/i-report.svg
+    Resources/icons/sim/i-results.svg
+    Resources/icons/sim/i-sel.svg
+    Resources/icons/sim/i-solver.svg
+    Resources/icons/sim/i-step.svg
+    Resources/icons/sim/i-study.svg
+    Resources/icons/sim/s-bad.svg
+    Resources/icons/sim/s-ok.svg
+    Resources/icons/sim/s-run.svg
+    Resources/icons/sim/s-stale.svg
+    Resources/icons/sim/s-todo.svg
+    Resources/icons/sim/s-warn.svg
+)
+ADD_CUSTOM_TARGET(BruceWorxSimIcons ALL
+    SOURCES ${BruceWorx_SimIcons}
+)
+fc_target_copy_resource(BruceWorxSimIcons
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/Mod/BruceWorx
+    ${BruceWorx_SimIcons})
+INSTALL(
+    FILES ${BruceWorx_SimIcons}
+    DESTINATION Mod/BruceWorx/Resources/icons/sim
 )
 
 # [BW] SIM-05 validation cases: published reference values with citations (numbers only), for bruceworx_validation.py.
