@@ -2398,6 +2398,7 @@ def _make_classes():
                 self.say("Solving with CalculiX…")
                 _events().stage_started("Solve")
                 code = self.fea.ccx_run()
+                self._ccx_text = (getattr(self.fea, "ccx_stdout", "") or "") + "\n" + (getattr(self.fea, "ccx_stderr", "") or "")
                 for line in (getattr(self.fea, "ccx_stdout", "") or "").splitlines():
                     _events().log(line)  # the solver's own output, as the QProcess path sends it
                 return self._finished(code, QtCore.QProcess.NormalExit, blocking=True)
@@ -2409,6 +2410,7 @@ def _make_classes():
             env = QtCore.QProcessEnvironment.systemEnvironment()
             env.insert("OMP_NUM_THREADS", str(prefs.GetInt("AnalysisNumCPUs", QtCore.QThread.idealThreadCount())))
             env.insert("PASTIX_MIXED_PRECISION", "1" if getattr(self.fea.solver, "PastixMixedPrecision", False) else "0")
+            self._ccx_text = ""
             self.process = QtCore.QProcess()
             self.process.setProcessEnvironment(env)
             self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
@@ -2429,6 +2431,7 @@ def _make_classes():
                 text = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
             except Exception:
                 return
+            self._ccx_text = (getattr(self, "_ccx_text", "") + text)[-400000:]  # kept for the *ERROR lines if ccx fails
             for line in text.splitlines():
                 _events().log(line)
 
@@ -2444,8 +2447,9 @@ def _make_classes():
             ok = exit_status == QtCore.QProcess.NormalExit and not code
             _events().stage_finished("Solve", time.time() - self.started, ok)
             if not ok:
-                _events().message("error", f"CalculiX finished with exit code {code}")
-                self._fail(f"CalculiX finished with exit code {code}")
+                text = sim.ccx_failure_text(code, getattr(self, "_ccx_text", ""), "", self.fea.inp_file_name)
+                _events().message("error", text)
+                self._fail(text)
                 return False
             try:
                 result = sim.finish_solve(self.fea, self.say)

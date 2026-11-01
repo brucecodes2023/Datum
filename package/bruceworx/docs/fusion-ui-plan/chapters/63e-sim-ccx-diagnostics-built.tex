@@ -1,0 +1,56 @@
+%======================================================================
+\subsection{BW-SIM-04 --- Built, 1 Nov: ccx error text, folded Tet10 elements, elements outside every solid}\label{sec:sim-ccx-diag-built}
+%======================================================================
+
+Three reports from the VL-P01 turbojet project, each a way a study died with no usable message.
+
+\paragraph{1. Empty error text.} CalculiX prints its \code{*ERROR} lines to \emph{stdout}, wrapped over two lines and once per
+integration point; stderr stays empty, so \code{CalculiX finished with exit code 201:} ended in nothing. The new
+\code{bruceworx\_sim.ccx\_error\_lines} reads the run's output (and, when stdout has none, the \file{.dat}, \file{.sta} and
+\file{.cvg} files beside the input), joins each wrapped message, drops repeats, merges the
+\code{nonpositive jacobian determinant in element N} lines into one line with the element numbers (eight shown, then the total)
+and keeps at most four lines of 200 characters. \code{ccx\_failure\_text} builds the message; the blocking \code{sim.solve}, the
+blocking and the QProcess path of the Study panel (the panel now keeps the process output) raise or show it, and the Log pane gets
+it as an error message. With no \code{*ERROR} line the text says so and points to the \file{.dat} and \file{.sta} files.
+
+\paragraph{2. Folded Tet10 elements.} Netgen's curved second-order mid-edge nodes fold inside small fillets (R1.5 at
+MaxSize 1.2 on the impeller). \code{tet10\_jacobian\_ratios} computes, vectorised in chunks of 60\,000 elements, the
+Jacobian determinant of every Tet10 at 15 points (4 corners, 6 mid-edges, the 4 Gauss points of ccx's C3D10, the centroid) and
+divides the smallest by the determinant of the straight-sided tetrahedron: 1 for a straight element, at most 0 where ccx stops.
+The quotient does not depend on the node order's sign (FemMesh and the CalculiX input differ in it). Elements at or under 0.1
+get their six mid-edge nodes moved to the edge midpoints (\code{straighten\_tet10}); a mid node is one node of all elements
+sharing the edge, so neighbours stay consistent, and the check repeats (up to four passes) because a neighbour can get worse.
+\begin{itemize}
+  \item After meshing, \code{\_mesh\_study} checks the FemMesh (\code{repair\_fem\_tet10}) and rebuilds it with the moved
+        nodes only when some are bad; the count goes to \code{stats['notes']}, the progress text and the Log.
+  \item After the input is written, \code{prepare\_solve} checks the deck itself (\code{repair\_inp\_tet10}, C3D10 elements, any
+        node/element order), so a mesh not made by the study (loaded, imported) is covered; folded nodes are rewritten in the file.
+  \item If straightening leaves a non-positive Jacobian (flat elements), the study stops with an error naming the elements.
+\end{itemize}
+\textbf{Repro on the user's deck} (\file{cad/sim/work/Mesh.inp}, 268\,153 Tet10, 439\,000 lines): ccx stopped at 14 elements
+(176165, 186887, 219565, 228381, 267476, 281895, 287497, 288966, 298208, 356588, \ldots). The check finds \textbf{570 with a
+non-positive Jacobian and 1040 at or under 0.1} (worst $-1.75$), among them every element ccx named; the 5\,875 mid-edge nodes
+of those 1040 are straightened; afterwards 0 are at or under 0.1 (worst 0.10) and ccx runs the same deck past the Jacobian
+stage into the solver iterations (it was stopped there; the iterative-Cholesky run takes long). The check takes 5.3\,s for 268\,000
+elements on this machine, including reading the file.
+
+\paragraph{3. No material assigned.} FEM gives an element to a material solid only if \emph{all} its nodes belong to that
+solid, and \code{FemMesh.getNodesBySolid} takes a node as belonging when its distance to the solid is below the solid's
+tolerance (about $10^{-7}$). Curved second-order mid-edge nodes at the M8 thread (rev J of the shaft) lie off the surface by
+more, so the five elements (67731, 78117, 79943, 97143, 97144 in \file{cad/modal/Mesh.inp}, all sharing two nodes near
+$(1.0\ldots1.5,\,-4.2,\,15.9\ldots16.0)$) were in no solid's set and got no material. That the earlier run solved is the old
+shaft front having no thread there. The fix is in the FEM core, small and better for everyone:
+\code{meshtools.assign\_unreferenced\_femelements}, called at the end of \code{get\_femelement\_sets} when no object takes the
+rest: every volume element no reference solid holds goes to the object whose solid is nearest to its centroid (0 when inside).
+It warns in the report view and keeps the result in \code{meshtools.LAST\_UNREFERENCED}; \code{prepare\_solve} reports the count in
+the Log. A script that uses \code{FemToolsCcx} directly (like \file{modal\_rotor.py}) gets the fix too.
+
+\paragraph{Tests.} \code{TestBruceWorxSimCore.TestCcxDiagnostics}: the error-line merge and trim, the \file{.dat} fallback, the
+no-error text, a straight Tet10 (ratio 1), one with a mid node pushed through (ratio $\le 0$, straightened to the midpoint),
+a shared mid node moved once for both elements, a flat element reported as remaining, a written deck repaired, and a real
+mesh bent and repaired. \code{TestBruceWorxSimRotor.TestMaterialSetsOutsideSolids}: two boxes as a CompSolid, one mid node of
+the outer face pushed 0.5\,mm out, every element ends in exactly one material set (11 went to the nearest solid).
+
+\paragraph{Open.} The threshold 0.1 straightens mildly curved elements as well as folded ones (1040 of 268\,000 here); the surface
+loses at most the mid-node bulge of a few elements. A proper cure is a finer mesh at the fillet (size field) or Gmsh with
+\code{Mesh.SecondOrderLinear}, which has no binary yet. The nonlinear buckling run still shows only the tail of its output.

@@ -497,6 +497,14 @@ def get_femelement_sets(femmesh, femelement_table, fem_objects, femnodes_ele_tab
             obj = fem_object["Object"]
             if obj.Name == has_remaining_femelements:
                 fem_object["FEMElements"] = sorted(remaining_femelements)
+    # volume elements no reference solid holds (nodes off the solid by more than its tolerance)
+    if not has_remaining_femelements:
+        try:
+            count_femelements += assign_unreferenced_femelements(
+                femmesh, femelement_table, fem_objects
+            )
+        except Exception as exc:
+            FreeCAD.Console.PrintWarning(f"Elements outside the solids could not be assigned: {exc}\n")
     # check if all worked out well
     if femelements_count_ok(len(femelement_table), count_femelements):
         return True
@@ -505,6 +513,67 @@ def get_femelement_sets(femmesh, femelement_table, fem_objects, femnodes_ele_tab
             "Error in get_femelement_sets -- > femelements_count_ok() failed!\n"
         )
         return False
+
+
+# ************************************************************************************************
+# Elements that lie in no solid of the reference shapes. Nodes belong to a solid by their distance to
+# it (getNodesBySolid, the solid's tolerance): a mid-edge node of a second order element on a thread
+# or a small fillet can be farther off, and an element needs ALL its nodes in the set. Such elements
+# got no material ("no material was assigned to element N" from ccx). Vector Labs reads LAST_UNREFERENCED.
+LAST_UNREFERENCED = {}
+
+
+def assign_unreferenced_femelements(femmesh, femelement_table, fem_objects):
+    """give every element no fem_object references to the fem_object whose solids are nearest to its
+    centroid (inside = 0); returns the number of elements assigned. Only for volume element tables."""
+    global LAST_UNREFERENCED
+    referenced = set()
+    for fem_object in fem_objects:
+        referenced.update(fem_object.get("FEMElements", ()))
+    missing = sorted(set(femelement_table) - referenced)
+    if not missing:
+        return 0
+    import Part
+
+    solids = []  # (fem_object, [solid shapes])
+    for fem_object in fem_objects:
+        shapes = []
+        for ref in fem_object["Object"].References:
+            for refelement in ref[1]:
+                r = sub_shape_at_global_placement(ref[0], refelement)
+                shapes += r.Solids if r.ShapeType in ("Solid", "Compound") else []
+        if shapes:
+            solids.append((fem_object, shapes))
+    if not solids:
+        return 0
+    nodes = femmesh.Nodes
+    per_object = {}
+    for eid in missing:
+        corners = femelement_table[eid][:4]
+        pts = [nodes[n] for n in corners]
+        c = FreeCAD.Vector(
+            sum(p.x for p in pts) / len(pts),
+            sum(p.y for p in pts) / len(pts),
+            sum(p.z for p in pts) / len(pts),
+        )
+        vertex = Part.Vertex(c)
+        best = min(
+            ((min(vertex.distToShape(sh)[0] for sh in shapes), i) for i, (_o, shapes) in enumerate(solids))
+        )
+        per_object.setdefault(best[1], []).append(eid)
+    detail = []
+    for i, ids in per_object.items():
+        fem_object = solids[i][0]
+        fem_object["FEMElements"] = sorted(list(fem_object.get("FEMElements", [])) + ids)
+        detail.append("{}: {}".format(fem_object["Object"].Label, ", ".join(str(e) for e in ids[:5])))
+    count = len(missing)
+    LAST_UNREFERENCED = {"count": count, "elements": missing, "detail": "; ".join(detail)}
+    FreeCAD.Console.PrintWarning(
+        "{} elements lay outside every solid of the references and were given to the nearest one: {}\n".format(
+            count, LAST_UNREFERENCED["detail"]
+        )
+    )
+    return count
 
 
 # ************************************************************************************************

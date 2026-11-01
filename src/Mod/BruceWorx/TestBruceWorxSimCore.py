@@ -1163,5 +1163,144 @@ class TestThermalBenchmarks(unittest.TestCase):
             self.assertTrue(out["pdf"] and os.path.isfile(out["pdf"]), out["message"])
 
 
+class TestCcxDiagnostics(unittest.TestCase):
+    """SIM-04 (ccx diagnostics): the *ERROR lines of a failed run, and the folded Tet10 check."""
+
+    STDOUT = (
+        " Static analysis was selected\n\n *ERROR in e_c3d: nonpositive jacobian\n        determinant in element      176165\n\n"
+        " *ERROR in e_c3d: nonpositive jacobian\n        determinant in element      176165\n\n"
+        " *ERROR in e_c3d: nonpositive jacobian\n        determinant in element      281895\n\n"
+        " *ERROR in calinput: no material was assigned to element 97144\n"
+    )
+
+    def test_error_lines_are_merged_and_trimmed(self):
+        lines = sim.ccx_error_lines(self.STDOUT)
+        self.assertEqual(len(lines), 2, lines)
+        self.assertIn("176165, 281895", lines[0])
+        self.assertIn("no material was assigned to element 97144", lines[1])
+        text = sim.ccx_failure_text(201, self.STDOUT, "")
+        self.assertTrue(text.startswith("CalculiX finished with exit code 201: *ERROR nonpositive jacobian"), text)
+        self.assertLess(len(text), 600)
+
+    def test_error_lines_fall_back_to_the_dat_file_and_say_when_none(self):
+        folder = tempfile.mkdtemp(prefix="bw_ccxerr_")
+        try:
+            inp = os.path.join(folder, "Mesh.inp")
+            with open(os.path.join(folder, "Mesh.dat"), "w") as handle:
+                handle.write("some\n *ERROR in line 5: unknown keyword\n")
+            self.assertIn("unknown keyword", sim.ccx_failure_text(1, "no errors here", "", inp))
+            self.assertIn("no *ERROR line", sim.ccx_failure_text(1, "nothing", "", os.path.join(folder, "other.inp")))
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+
+    @staticmethod
+    def _tet10(points):
+        """Rows for one or more Tet10: points[0..3] corners; mid nodes appended at the edge midpoints."""
+        import numpy as np
+
+        xyz = [np.array(p, dtype=float) for p in points]
+        conn = list(range(4))
+        for i, j in sim.TET10_EDGES:
+            xyz.append(0.5 * (xyz[i] + xyz[j]))
+            conn.append(len(xyz) - 1)
+        return np.array(xyz), np.array([conn])
+
+    def test_straight_tet10_has_ratio_one_and_a_pushed_mid_node_folds(self):
+        import numpy as np
+
+        xyz, conn = self._tet10([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)])
+        ratio, det0 = sim.tet10_jacobian_ratios(xyz, conn)
+        self.assertAlmostEqual(float(ratio[0]), 1.0, places=9)
+        self.assertAlmostEqual(float(det0[0]), 1.0, places=9)
+        xyz[4] = (0.95, 0.0, 0.0)  # mid node of edge 1-2 pushed past the end node: the edge folds back on itself
+        ratio, _ = sim.tet10_jacobian_ratios(xyz, conn)
+        self.assertLessEqual(float(ratio[0]), 0.0, ratio)
+        info = sim.straighten_tet10(xyz, conn, 0.1)
+        self.assertEqual(info["before"], 1)
+        self.assertEqual(info["negative"], 1)
+        self.assertEqual(list(info["moved"]), [4, 5, 6, 7, 8, 9])
+        self.assertEqual(len(info["remaining"]), 0)
+        self.assertAlmostEqual(info["min_after"], 1.0, places=9)
+        self.assertTrue(np.allclose(xyz[4], (0.5, 0, 0)))
+
+    def test_shared_mid_node_stays_consistent_and_inverted_elements_are_reported(self):
+        import numpy as np
+
+        # two tetrahedra sharing the face 0-1-2 and its three mid-edge nodes
+        base, conn_a = self._tet10([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)])
+        xyz = list(base)
+        conn_b = [0, 1, 2]
+        xyz.append(np.array([0.0, 0.0, -1.0]))
+        conn_b.append(len(xyz) - 1)
+        shared = {(0, 1): conn_a[0][4], (1, 2): conn_a[0][5], (2, 0): conn_a[0][6]}
+        row = list(conn_b)
+        for (i, j) in sim.TET10_EDGES:
+            if (i, j) in shared:
+                row.append(shared[(i, j)])
+            else:
+                a, b = (conn_b[i], conn_b[j])
+                xyz.append(0.5 * (xyz[a] + xyz[b]))
+                row.append(len(xyz) - 1)
+        xyz = np.array(xyz)
+        conn = np.array([list(conn_a[0]), row])
+        # the second element is flat (its apex in the plane of the face): no straightening can help it
+        xyz[10] = (0.0, 0.0, 0.0)  # the apex row
+        ratio, det0 = sim.tet10_jacobian_ratios(xyz, conn)
+        self.assertGreater(det0[0], 0)
+        self.assertEqual(det0[1], 0)
+        xyz[shared[(0, 1)]] = (0.95, 0.0, 0.0)  # folded for the first one, shared with the second
+        info = sim.straighten_tet10(xyz, conn, 0.1)
+        self.assertTrue(np.allclose(xyz[shared[(0, 1)]], (0.5, 0, 0)))  # one position for both
+        self.assertEqual(list(info["remaining"]), [1])  # the flat one cannot be straightened
+        self.assertIn("Still not positive in 1 elements (12)", sim.jacobian_message(info, np.array([11, 12])))
+
+    def test_repair_of_a_written_deck(self):
+        folder = tempfile.mkdtemp(prefix="bw_jac_")
+        try:
+            xyz, conn = self._tet10([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)])
+            xyz[4] = (0.95, 0.0, 0.0)
+            lines = ["*Node, NSET=Nall"] + [f"{i + 1}, {x!r}, {y!r}, {z!r}" for i, (x, y, z) in enumerate(xyz)]
+            lines += ["", "*Element, TYPE=C3D10, ELSET=Evolumes", "7, " + ", ".join(str(int(c) + 1) for c in conn[0]), "*ELSET, ELSET=Eall", "Evolumes"]
+            path = os.path.join(folder, "Mesh.inp")
+            with open(path, "w") as handle:
+                handle.write("\n".join(lines) + "\n")
+            note = sim.repair_inp_tet10(path)
+            self.assertIn("1 second-order elements", note)
+            self.assertEqual(sim.repair_inp_tet10(path), "")  # now fine
+            with open(path) as handle:
+                self.assertIn("5, 0.5, 0.0, 0.0", handle.read())
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+
+    def test_mesh_study_checks_the_jacobians(self):
+        import Part
+
+        doc = App.newDocument("BW_Jac")
+        try:
+            feature = doc.addObject("Part::Feature", "Box")
+            feature.Shape = Part.makeBox(10, 10, 10)
+            doc.recompute()
+            objs = sim.new_study(doc, sim.StudyPlan(model=feature))
+            stats = sim.mesh_study(objs["analysis"])
+            self.assertEqual(stats["order"], "second")
+            self.assertFalse(any("folded" in n for n in stats["notes"]), stats["notes"])  # a box has none
+            fem, note, info = sim.repair_fem_tet10(objs["mesh"].FemMesh)
+            self.assertIsNone(fem)
+            self.assertEqual(info["before"], 0)
+            # push one mid node through its corner and the check straightens it in a rebuilt mesh
+            ids, xyz, conn, eids = sim.tet10_arrays(objs["mesh"].FemMesh)
+            nid = int(ids[conn[0][4]])
+            a, b = conn[0][0], conn[0][1]
+            v = 2 * xyz[b] - xyz[a]  # one edge length past the end node: the edge runs backwards there
+            bent = sim.rebuild_mesh(objs["mesh"].FemMesh, drop_unused=False, moved={nid: tuple(v)})
+            fixed, note, info = sim.repair_fem_tet10(bent)
+            self.assertIsNotNone(fixed)
+            self.assertGreaterEqual(info["before"], 1)
+            self.assertIn("straightened", note)
+            self.assertEqual(sim.repair_fem_tet10(fixed)[0], None)
+        finally:
+            App.closeDocument(doc.Name)
+
+
 if __name__ == "__main__":
     unittest.main()

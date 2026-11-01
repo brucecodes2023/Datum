@@ -1064,13 +1064,16 @@ def face_connected_volumes(fem):
     return set(biggest), len(ids) - len(biggest), len(groups) - 1
 
 
-def rebuild_mesh(fem, drop_unused=True, upgrade=False, volumes=None):
+def rebuild_mesh(fem, drop_unused=True, upgrade=False, volumes=None, moved=None):
     """A new FemMesh with the same elements; ``drop_unused`` leaves out the nodes no element uses (a failed second-order
     step of Netgen leaves ~100k of them: a support picked by nearest node can land on one and the wheel is then free),
     ``upgrade`` turns linear tetrahedra into Tet10 with straight mid-edge nodes (FEM / Abaqus C3D10 order: edges 1-2, 2-3,
     3-1, 1-4, 2-4, 3-4).  Node and element ids are kept; the new mid-edge nodes number on from the largest id.
-    ``volumes``: the volume element ids to keep (the others, and the faces and edges that need their nodes, are left out)."""
+    ``volumes``: the volume element ids to keep (the others, and the faces and edges that need their nodes, are left out).
+    ``moved``: {node id: (x, y, z)} new positions (the straightened mid-edge nodes of folded Tet10, SIM-04)."""
     import Fem
+
+    moved = moved or {}
 
     keep = None
     if volumes is not None:
@@ -1083,7 +1086,8 @@ def rebuild_mesh(fem, drop_unused=True, upgrade=False, volumes=None):
     nodes = fem.Nodes
     for nid, v in nodes.items():
         if keep is None or nid in keep:
-            new.addNode(v.x, v.y, v.z, nid)
+            x, y, z = moved.get(nid, (v.x, v.y, v.z))
+            new.addNode(x, y, z, nid)
     mids = {}
     top = [max(nodes) if nodes else 0]
 
@@ -1115,6 +1119,245 @@ def rebuild_mesh(fem, drop_unused=True, upgrade=False, volumes=None):
             continue
         new.addEdge(quad(ids, ((0, 1),)) if upgrade and len(ids) == 2 else ids, eid)
     return new
+
+
+# ----- why ccx failed (SIM-04) ---------------------------------------------------------------------------------
+
+
+def ccx_error_lines(text, inp_path=None, limit=4):
+    """The ``*ERROR`` messages of a ccx run, trimmed: CalculiX prints them to stdout (stderr stays empty), wrapped over two lines
+    and repeated per integration point. Each distinct message once; "nonpositive jacobian determinant in element N" lines are
+    merged into one with the element numbers. When stdout has none, the run's .dat and .sta files are searched. At most
+    ``limit`` lines of at most 200 characters."""
+    import re
+
+    def scan(blob):
+        found, jac = [], []
+        for chunk in (blob or "").split("*ERROR")[1:]:
+            chunk = re.split(r"\n\s*\n|\n\s*\*", chunk, maxsplit=1)[0]
+            msg = " ".join(chunk.split())
+            m = re.search(r"nonpositive jacobian\s+determinant in element\s+(\d+)", msg)
+            if m:
+                if int(m.group(1)) not in jac:
+                    jac.append(int(m.group(1)))
+            elif msg and ("*ERROR " + msg) not in found:
+                found.append("*ERROR " + msg)
+        if jac:
+            shown = ", ".join(str(e) for e in jac[:8]) + (f", … ({len(jac)} in all)" if len(jac) > 8 else "")
+            found.insert(0, f"*ERROR nonpositive jacobian determinant in elements {shown}: folded second-order elements")
+        return found
+
+    lines = scan(text)
+    if not lines and inp_path:
+        base = os.path.splitext(inp_path)[0]
+        for ext in (".dat", ".sta", ".cvg"):
+            try:
+                with open(base + ext, errors="replace") as f:
+                    lines = scan(f.read()[-200000:])
+            except OSError:
+                continue
+            if lines:
+                break
+    return [line[:200] for line in lines[:limit]]
+
+
+def ccx_failure_text(code, stdout="", stderr="", inp_path=None):
+    """'CalculiX finished with exit code N: <its *ERROR lines>' (the lines come from stdout, the .dat and the .sta)."""
+    lines = ccx_error_lines((stdout or "") + "\n" + (stderr or ""), inp_path)
+    text = f"CalculiX finished with exit code {code}"
+    if lines:
+        return text + ": " + "; ".join(lines)
+    tail = (stderr or "").strip()[-300:]
+    return text + (f": {tail}" if tail else " (no *ERROR line in its output; see the .dat and .sta files of the run)")
+
+
+# ----- Tet10 Jacobians: folded elements from curved mid-edge nodes (SIM-04) -------------------------------------
+
+
+def _jacobian_samples():
+    """dN/d(xi, eta, zeta) of the 10 Tet10 shape functions at 15 points: the 4 corners, the 6 mid-edges, the 4 Gauss points of
+    ccx's C3D10 and the centroid. Shape (15, 10, 3); node order 1-4 corners, then edges 1-2, 2-3, 3-1, 1-4, 2-4, 3-4."""
+    import numpy as np
+
+    a, b = 0.5854101966249685, 0.1381966011250105
+    pts = [np.eye(4)[i] for i in range(4)]
+    pts += [0.5 * (np.eye(4)[i] + np.eye(4)[j]) for i, j in TET10_EDGES]
+    pts += [np.array([a if k == i else b for k in range(4)]) for i in range(4)]
+    pts.append(np.full(4, 0.25))
+    dl = np.array([[-1, -1, -1], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)  # d(L1..L4)/d(xi, eta, zeta)
+    out = np.zeros((len(pts), 10, 3))
+    for p, lam in enumerate(pts):
+        for i in range(4):
+            out[p, i] = (4 * lam[i] - 1) * dl[i]
+        for k, (i, j) in enumerate(TET10_EDGES):
+            out[p, 4 + k] = 4 * (lam[i] * dl[j] + lam[j] * dl[i])
+    return out
+
+
+def tet10_jacobian_ratios(xyz, conn, chunk=60000):
+    """(ratio, det0): per Tet10 the smallest Jacobian determinant over 15 sample points divided by the determinant of its
+    straight-sided tetrahedron (det0 = +-6 V, the sign of the node order: FemMesh and the CalculiX input differ in it, and
+    only the quotient matters). ``xyz`` (N, 3) node coordinates, ``conn`` (E, 10) rows into xyz. A straight element has ratio
+    1; ccx stops at <= 0. Elements with flat corners (det0 = 0) get ratio -1."""
+    import numpy as np
+
+    dn = _jacobian_samples()
+    ratio = np.empty(len(conn))
+    det0 = np.empty(len(conn))
+    for start in range(0, len(conn), chunk):
+        x = xyz[conn[start:start + chunk]]  # (e, 10, 3)
+        d0 = np.linalg.det(np.stack([x[:, 1] - x[:, 0], x[:, 2] - x[:, 0], x[:, 3] - x[:, 0]], axis=2))
+        jac = np.einsum("pnk,enj->epjk", dn, x)
+        low = (np.linalg.det(jac) * np.sign(d0)[:, None]).min(axis=1)  # the sign of the node order drops out
+        good = np.abs(d0) > 1e-300
+        r = np.full(len(d0), -1.0)
+        r[good] = low[good] / np.abs(d0[good])
+        ratio[start:start + chunk] = r
+        det0[start:start + chunk] = d0
+    return ratio, det0
+
+
+def straighten_tet10(xyz, conn, threshold=0.1, passes=4):
+    """Moves the mid-edge nodes of every Tet10 whose Jacobian ratio is <= ``threshold`` to the midpoints of its edges, in place
+    in ``xyz`` (a mid node is one node of all elements sharing the edge, so they stay consistent). A neighbour can get worse
+    by it, so it repeats up to ``passes`` times. Returns {"before": elements at or under the threshold, "negative": of those
+    with a Jacobian <= 0, "moved": sorted rows of the nodes moved, "remaining": rows of the elements still bad (also flat
+    ones, which cannot be straightened), "min_before", "min_after"}."""
+    import numpy as np
+
+    ratio, det0 = tet10_jacobian_ratios(xyz, conn)
+    info = {"before": int(np.count_nonzero(ratio <= threshold)), "negative": int(np.count_nonzero(ratio <= 0)),
+            "min_before": float(ratio.min()) if len(ratio) else 1.0}
+    moved = set()
+    for _ in range(passes):
+        bad = np.flatnonzero((ratio <= threshold) & (det0 != 0))
+        if not len(bad):
+            break
+        for k, (i, j) in enumerate(TET10_EDGES):
+            rows = conn[bad, 4 + k]
+            xyz[rows] = 0.5 * (xyz[conn[bad, i]] + xyz[conn[bad, j]])
+            moved.update(rows.tolist())
+        ratio, det0 = tet10_jacobian_ratios(xyz, conn)
+    info["moved"] = np.array(sorted(moved), dtype=int)
+    info["remaining"] = np.flatnonzero(ratio <= 0)
+    info["min_after"] = float(ratio.min()) if len(ratio) else 1.0
+    return info
+
+
+def tet10_arrays(fem):
+    """(ids, xyz, conn, element_ids) of a FemMesh: node ids sorted, their coordinates, the Tet10 connectivity as rows into
+    ids/xyz, and the element ids. Only quadratic tetrahedra; None when the volumes are of another kind."""
+    import numpy as np
+
+    nodes = fem.Nodes
+    ids = np.fromiter(nodes.keys(), dtype=np.int64, count=len(nodes))
+    order = np.argsort(ids)
+    ids = ids[order]
+    xyz = np.array([(v.x, v.y, v.z) for v in nodes.values()], dtype=float).reshape(-1, 3)[order]
+    vols = fem.Volumes
+    if not vols:
+        return None
+    rows = []
+    for vid in vols:
+        n = fem.getElementNodes(vid)
+        if len(n) != 10:
+            return None
+        rows.append(n)
+    conn = np.searchsorted(ids, np.array(rows, dtype=np.int64))
+    return ids, xyz, conn, np.array(vols, dtype=np.int64)
+
+
+def jacobian_message(info, element_ids=None, ids=None, limit=6):
+    """The pre-check / note text of a straighten_tet10 result."""
+    bad = info["before"]
+    text = (f"{bad} second-order elements were folded or nearly (Jacobian ratio at most {JACOBIAN_RATIO:g}; {info['negative']} "
+            f"not positive, worst {info['min_before']:.3g}): curved mid-edge nodes in small fillets; "
+            f"straightened {len(info['moved'])} mid-edge nodes")
+    if len(info["remaining"]):
+        shown = [int(element_ids[r]) if element_ids is not None else int(r) for r in info["remaining"][:limit]]
+        text += (f". Still not positive in {len(info['remaining'])} elements ({', '.join(map(str, shown))}"
+                 f"{', …' if len(info['remaining']) > limit else ''}): refine the mesh or heal the shape there")
+    return text
+
+
+JACOBIAN_RATIO = 0.1  # straighten Tet10 whose smallest Jacobian is under this share of the straight element's
+
+
+def repair_fem_tet10(fem, progress=None):
+    """Checks every Tet10 of a FemMesh; when some are folded, returns (new FemMesh with straight mid-edge nodes there,
+    note text, info). Returns (None, "", info-or-None) when nothing is bad or the mesh is not all Tet10. Raises StudyError
+    when straightening leaves a non-positive Jacobian."""
+    data = tet10_arrays(fem)
+    if data is None:
+        return None, "", None
+    ids, xyz, conn, eids = data
+    info = straighten_tet10(xyz, conn, JACOBIAN_RATIO)
+    if not info["before"]:
+        return None, "", info
+    note = jacobian_message(info, eids, ids)
+    if len(info["remaining"]):
+        raise StudyError(note)
+    moved = {int(ids[r]): tuple(xyz[r]) for r in info["moved"]}
+    return rebuild_mesh(fem, drop_unused=False, moved=moved), note, info
+
+
+_NODE_LINE = None
+
+
+def repair_inp_tet10(path, threshold=None):
+    """The same check on a written CalculiX input (C3D10 elements, any *NODE / *ELEMENT order): straightens the folded ones in
+    the file. Returns a note text, '' when nothing was bad. Raises StudyError when straightening is not enough."""
+    import numpy as np
+
+    threshold = JACOBIAN_RATIO if threshold is None else threshold
+    with open(path) as f:
+        lines = f.read().split("\n")
+    node_rows, node_ids, node_xyz, elems = [], [], [], []
+    mode = None
+    pending = None
+    for n, line in enumerate(lines):
+        if line.startswith("*"):
+            head = line.split(",")[0].strip().lower()
+            mode = "node" if head == "*node" else ("elem" if head == "*element" and "c3d10" in line.lower() else None)
+            pending = None
+            continue
+        if not mode or not line.strip():
+            continue
+        try:
+            parts = line.split(",")
+            if mode == "node":
+                node_rows.append(n)
+                node_ids.append(int(parts[0]))
+                node_xyz.append((float(parts[1]), float(parts[2]), float(parts[3])))
+            else:
+                pending = (pending or []) + [int(p) for p in parts if p.strip()]
+                if len(pending) >= 11:
+                    elems.append(pending[:11])
+                    pending = None
+        except ValueError:
+            continue
+    if not elems:
+        return ""
+    ids = np.array(node_ids, dtype=np.int64)
+    order = np.argsort(ids)
+    xyz = np.array(node_xyz, dtype=float)[order]
+    sids = ids[order]
+    arr = np.array(elems, dtype=np.int64)
+    conn = np.searchsorted(sids, arr[:, 1:])
+    info = straighten_tet10(xyz, conn, threshold)
+    if not info["before"]:
+        return ""
+    note = jacobian_message(info, arr[:, 0], sids)
+    if len(info["remaining"]):
+        raise StudyError(note)
+    row_of = {int(i): k for k, i in enumerate(node_ids)}
+    for r in info["moved"]:
+        nid = int(sids[r])
+        x, y, z = xyz[r]
+        lines[node_rows[row_of[nid]]] = f"{nid}, {x!r}, {y!r}, {z!r}"
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    return note
 
 
 def record_stage(analysis, stage):
@@ -1392,6 +1635,12 @@ def _mesh_study(analysis, progress=None):
             if progress:
                 progress(text)
         mesh.FemMesh = rebuild_mesh(fem, drop_unused=True, upgrade=upgrade, volumes=keep if loose else None)
+    fixed, jac_note, _info = repair_fem_tet10(mesh.FemMesh, progress)  # folded Tet10 from curved mid-edge nodes (SIM-04)
+    if fixed is not None:
+        mesh.FemMesh = fixed
+        notes.append(jac_note)
+        if progress:
+            progress(jac_note)
     stats = mesh_stats(mesh)
     stats["seconds"] = round(time.time() - t0, 1)
     stats["notes"] = notes
@@ -1583,6 +1832,28 @@ def _purge_results(analysis):
         pass
 
 
+def _check_deck(fea, progress=None):
+    """Pre-checks of the written CalculiX input (SIM-04): folded Tet10 are straightened in the file, and the elements the FEM
+    writer left out of every material set (see ``meshtools.LAST_UNREFERENCED``) are reported. Returns the notes."""
+    notes = []
+    note = repair_inp_tet10(fea.inp_file_name)
+    if note:
+        notes.append(note)
+    try:
+        from femmesh import meshtools
+
+        left = dict(getattr(meshtools, "LAST_UNREFERENCED", {}) or {})
+    except Exception:
+        left = {}
+    if left.get("count"):
+        notes.append(f"{left['count']} elements lay outside every solid of the material objects (a node farther than the solid's "
+                     f"tolerance, at a thread or fillet): each went to the nearest solid ({left.get('detail', '')})")
+    for text in notes:
+        if progress:
+            progress(text)
+    return notes
+
+
 def prepare_solve(analysis, working_dir=None, progress=None):
     """Meshes when needed, checks, writes the CalculiX input; returns the FemToolsCcx to run."""
     from femtools import ccxtools
@@ -1621,9 +1892,17 @@ def prepare_solve(analysis, working_dir=None, progress=None):
     import bruceworx_sim_events as events
 
     with events.stage("Write input"):
+        try:
+            from femmesh import meshtools
+
+            meshtools.LAST_UNREFERENCED = {}
+        except Exception:
+            pass
         fea.write_inp_file()
     if not fea.inp_file_name:
         raise StudyError("the CalculiX input file was not written")
+    for note in _check_deck(fea, progress):
+        events.message("warning", note)
     if eigen is not None:
         try:
             eigen.patch_input(analysis, fea.inp_file_name)  # prestressed modal: the perturbation step
@@ -1746,7 +2025,9 @@ def solve(analysis, working_dir=None, progress=None):
     code = fea.ccx_run()
     events.stage_finished("Solve", time.time() - t0, not code)
     if code:
-        raise StudyError(f"CalculiX finished with exit code {code}: {(fea.ccx_stderr or '')[-400:]}")
+        text = ccx_failure_text(code, getattr(fea, "ccx_stdout", ""), getattr(fea, "ccx_stderr", ""), fea.inp_file_name)
+        events.message("error", text)
+        raise StudyError(text)
     if progress:
         progress(f"CalculiX finished in {time.time() - t0:.1f} s")
     result = finish_solve(fea, progress)

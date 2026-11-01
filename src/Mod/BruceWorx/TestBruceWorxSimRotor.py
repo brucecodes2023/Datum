@@ -1273,5 +1273,54 @@ class TestMeshWorker(unittest.TestCase):
         self.assertFalse(sim._use_worker(mesh, an))
 
 
+class TestMaterialSetsOutsideSolids(unittest.TestCase):
+    """SIM-04: an element with a node off every solid (a curved mid-edge node at a thread) still gets a material."""
+
+    def test_stray_element_goes_to_the_nearest_solid(self):
+        import ObjectsFem
+        import Part
+        from femmesh import meshtools
+
+        doc = App.newDocument("BW_MatSets")
+        try:
+            feature = doc.addObject("Part::Feature", "Two")
+            from BOPTools import SplitAPI
+
+            feature.Shape = SplitAPI.booleanFragments(
+                [Part.makeBox(10, 10, 10), Part.makeBox(10, 10, 10, App.Vector(10, 0, 0))], "CompSolid", 1e-4
+            )
+            left = [i + 1 for i, sol in enumerate(feature.Shape.Solids) if sol.CenterOfMass.x < 10][0]
+            order = [left, 3 - left]  # Solid names: the left box first
+            doc.recompute()
+            study = sim.new_study(doc, sim.StudyPlan(model=feature))
+            sim.mesh_study(study["analysis"])
+            mesh = study["mesh"]
+            fem = mesh.FemMesh
+            self.assertGreater(fem.VolumeCount, 20)
+            # a mid-edge node on the outer face x = 0 pushed 0.5 mm away from the solid: its elements lie in no solid
+            stray = [nid for nid, v in fem.Nodes.items() if abs(v.x) < 1e-9 and 0 < v.y < 10 and 0 < v.z < 10]
+            nid = stray[0]
+            v = fem.Nodes[nid]
+            moved = sim.rebuild_mesh(fem, drop_unused=False, moved={nid: (v.x - 0.5, v.y, v.z)})
+            objs = []
+            for k in order:
+                mat = ObjectsFem.makeMaterialSolid(doc, f"Mat{k}")
+                mat.References = [(feature, f"Solid{k}")]
+                objs.append({"Object": mat})
+            table = meshtools.get_femelement_table(moved)
+            nodes_table = meshtools.get_femnodes_ele_table(moved.Nodes, table)
+            meshtools.LAST_UNREFERENCED = {}
+            self.assertTrue(meshtools.get_femelement_sets(moved, table, objs, nodes_table))
+            assigned = set(objs[0]["FEMElements"]) | set(objs[1]["FEMElements"])
+            self.assertEqual(assigned, set(table))
+            self.assertEqual(len(objs[0]["FEMElements"]) + len(objs[1]["FEMElements"]), len(table))  # none twice
+            left = meshtools.LAST_UNREFERENCED
+            self.assertGreaterEqual(left["count"], 1)
+            for eid in left["elements"]:  # the stray ones are in the left box
+                self.assertIn(eid, objs[0]["FEMElements"])
+        finally:
+            App.closeDocument(doc.Name)
+
+
 if __name__ == "__main__":
     unittest.main()
