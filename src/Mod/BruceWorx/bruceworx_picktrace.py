@@ -21,7 +21,14 @@
   PartDesign body (BaseFeature) is left out: the order already shows it.
   Containers (bodies, parts, groups, origins) get no lines.
 
-All three default on.
+* Assembly pick (AssemblyPick, Bruce 2 Nov: "when I click the part, it should go to the topline of that
+  file and not the body within"): a pick in the 3D view of an assembly selects the component directly under
+  the open assembly (the vault file), as Fusion and SolidWorks do. Picking inside the selected component
+  again goes one level deeper each time (sub-assembly, part, body), then to the face; a pick elsewhere starts
+  at the top again. Option-click picks the face at once. Tree clicks are left alone, and so is every pick
+  while a task panel is open (joints and measuring need faces).
+
+All four default on.
 """
 
 from __future__ import annotations
@@ -30,7 +37,10 @@ PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 TRACE_PREF = "PickTrace"
 CHIP_PREF = "BrowserErrorChips"
 LINES_PREF = "BrowserDependencyLines"
-SWITCHES = (TRACE_PREF, CHIP_PREF, LINES_PREF)
+ASM_PICK_PREF = "AssemblyPick"
+SWITCHES = (TRACE_PREF, CHIP_PREF, LINES_PREF, ASM_PICK_PREF)
+ASSEMBLY_TYPES = ("Assembly::AssemblyObject",)
+CLEAR_GAP = 0.25  # s: a clear this long before a pick was the user's (empty space), not part of the click
 OVERLAY_NAME = "BruceWorxTreeOverlay"
 
 ERROR_CHIP = "ERROR"
@@ -90,6 +100,26 @@ def element_kind(subname):
     """"Face3" for "Body.Pad.Face3" or "Body.;#5:1;:H1,F.Face3"; "" when not a face, edge or vertex."""
     last = (subname or "").rsplit(".", 1)[-1]
     return last if last.rstrip("0123456789") in ELEMENT_KINDS and last[-1:].isdigit() else ""
+
+
+def component_pick(sub, last=None):
+    """The subname a 3D pick ``sub`` (under an assembly: "Link.Link001.Body.Face3") becomes: the component
+    directly under the assembly ("Link."), or one level below ``last`` (the component this rule selected
+    before) when the pick is inside it. None: leave the pick as it is (a tree click ends with "." and names no
+    element; a pick inside the deepest object keeps its face)."""
+    if not sub or sub.endswith("."):
+        return None
+    path = sub.split(".")[:-1]
+    if not path:
+        return None
+    level = 1
+    if last:
+        held = last.rstrip(".").split(".")
+        if path[:len(held)] == held:
+            if len(path) == len(held):
+                return None  # inside the deepest object already: the face
+            level = len(held) + 1
+    return ".".join(path[:level]) + "."
 
 
 def is_error(state, valid=True):
@@ -646,7 +676,79 @@ class _SelectionObserver:
         if _timer is not None:
             _timer.start()
 
-    addSelection = removeSelection = setSelection = clearSelection = _later
+    removeSelection = setSelection = _later
+
+    def clearSelection(self, *args):
+        _assembly_pick.cleared()
+        self._later(*args)
+
+    def addSelection(self, doc, obj, sub, pnt):
+        _assembly_pick.picked(doc, obj, sub)
+        self._later()
+
+
+class _AssemblyPick:
+    """Assembly pick (see the module docstring): rewrites a 3D pick to the component, after the click."""
+
+    def __init__(self):
+        self.busy = False
+        self.last = None  # (doc, obj, subname) this rule selected last
+        self.cleared_at = 0.0
+
+    def cleared(self):
+        import time
+
+        if not self.busy:
+            self.cleared_at = time.monotonic()
+
+    def picked(self, doc, obj, sub):
+        """An observer pick (FreeCAD reports the resolved object and element, e.g. Box/Face1). The full
+        path from the assembly is read back from the selection on the next tick."""
+        if self.busy or not _on(ASM_PICK_PREF) or not sub or sub.endswith("."):
+            return  # a tree click names no element
+        from PySide import QtCore, QtWidgets
+
+        if QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.AltModifier:
+            return  # Option-click: the face itself
+        import time
+
+        cleared_before = self.cleared_at and time.monotonic() - self.cleared_at > CLEAR_GAP
+        QtCore.QTimer.singleShot(0, lambda: self._resolve(doc, sub, cleared_before))
+
+    def _resolve(self, doc, element, cleared_before):
+        import FreeCADGui
+
+        try:
+            if FreeCADGui.Control.activeDialog():
+                return  # a task panel (joint, measure) wants faces
+            picks = [(s.Object, name) for s in FreeCADGui.Selection.getSelectionEx(doc, 0)
+                     if s.Object is not None and s.Object.TypeId in ASSEMBLY_TYPES
+                     for name in s.SubElementNames if name.endswith(element)]
+        except Exception:
+            return
+        if not picks:
+            return
+        root, sub = picks[-1]
+        last = self.last if self.last and self.last[:2] == (doc, root.Name) and not cleared_before else None
+        new = component_pick(sub, last[2] if last else None)
+        if new is not None:
+            self._apply(doc, root.Name, sub, new)
+
+    def _apply(self, doc, obj, old, new):
+        import FreeCADGui
+
+        self.busy = True
+        try:
+            FreeCADGui.Selection.removeSelection(doc, obj, old)
+            FreeCADGui.Selection.addSelection(doc, obj, new)
+            self.last = (doc, obj, new)
+        except Exception:
+            pass
+        finally:
+            self.busy = False
+
+
+_assembly_pick = _AssemblyPick()
 
 
 class _PrefObserver:

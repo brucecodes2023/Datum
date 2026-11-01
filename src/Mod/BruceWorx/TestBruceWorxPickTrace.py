@@ -27,6 +27,28 @@ class TestMaker(unittest.TestCase):
         self.assertEqual(pt.pattern_candidates(chain, "Fillet"), [])
 
 
+class TestAssemblyPick(unittest.TestCase):
+    """Bruce 2 Nov: a pick in an assembly selects the component under it, then one level deeper per pick."""
+
+    def test_first_pick_selects_the_component_under_the_assembly(self):
+        self.assertEqual(pt.component_pick("FrontDoor.Panel.Body.Face3"), "FrontDoor.")
+        self.assertEqual(pt.component_pick("Bolt.Edge2"), "Bolt.")
+
+    def test_picking_inside_it_again_goes_one_level_deeper(self):
+        self.assertEqual(pt.component_pick("FrontDoor.Panel.Body.Face3", "FrontDoor."), "FrontDoor.Panel.")
+        self.assertEqual(pt.component_pick("FrontDoor.Panel.Body.Face3", "FrontDoor.Panel."), "FrontDoor.Panel.Body.")
+        self.assertIsNone(pt.component_pick("FrontDoor.Panel.Body.Face3", "FrontDoor.Panel.Body."))  # the face
+
+    def test_a_pick_elsewhere_starts_at_the_top(self):
+        self.assertEqual(pt.component_pick("Gantry.XAxis.Rail.Face1", "FrontDoor.Panel."), "Gantry.")
+
+    def test_tree_clicks_and_root_elements_are_left_alone(self):
+        self.assertIsNone(pt.component_pick("FrontDoor.Panel."))  # a tree row: no element
+        self.assertIsNone(pt.component_pick("Face3"))  # an element of the assembly itself
+        self.assertIsNone(pt.component_pick(""))
+        self.assertIsNone(pt.component_pick("Bolt.Edge2", "Bolt."))  # a part: its face next
+
+
 class TestWords(unittest.TestCase):
     def test_element_kind(self):
         self.assertEqual(pt.element_kind("Body.Pad.Face3"), "Face3")
