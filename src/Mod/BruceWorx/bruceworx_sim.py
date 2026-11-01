@@ -1356,6 +1356,14 @@ def _mesh_study(analysis, progress=None):
     if progress:
         progress("Meshing…")
     t0 = time.time()
+    import bruceworx_sim_defs as defs
+
+    try:
+        size_file = defs.prepare_mesh(analysis, mesh)  # named selections, parameters, local sizes (SIM-07 P2)
+    except defs.DefsError as exc:
+        raise StudyError(str(exc)) from exc
+    if size_file and progress:
+        progress("Local mesh sizes: " + os.path.basename(size_file))
     fem, fallback = _mesh_with_fallbacks(mesh, progress, analysis)
     if fallback:  # made on a copy of the shape: the study's mesh object takes the result
         mesh.FemMesh = fem
@@ -1372,14 +1380,6 @@ def _mesh_study(analysis, progress=None):
     upgrade = bool(getattr(mesh, "SecondOrder", False)) and first
     orphans = fem.NodeCount - len(used_node_ids(fem))
     keep, loose, clusters = face_connected_volumes(fem)
-    import bruceworx_sim_defs as defs
-
-    try:
-        size_file = defs.prepare_mesh(analysis, mesh)  # named selections, parameters, local sizes (SIM-07 P2)
-    except defs.DefsError as exc:
-        raise StudyError(str(exc)) from exc
-    if size_file and progress:
-        progress("Local mesh sizes: " + os.path.basename(size_file))
     if upgrade or orphans or loose:
         if upgrade:
             notes.append("Second order was asked but Netgen returned linear tetrahedra: upgraded them to Tet10 with straight mid-edge nodes")
@@ -1446,6 +1446,11 @@ def precheck(analysis, results=True):
     """
     issues = []
     kind = study_kind(analysis)
+    if kind not in AIRFLOW_KINDS:
+        import bruceworx_sim_defs as defs
+
+        defs.sync(analysis)  # named selections into the objects that use them (SIM-07 P2)
+        defs.apply(analysis)  # parameter expressions into the fields
     if kind in AIRFLOW_KINDS:
         import bruceworx_cfd as cfd
 
@@ -1462,11 +1467,6 @@ def precheck(analysis, results=True):
     if thermal_kind:
         import bruceworx_sim_thermal as thermal
     m = members(analysis)
-    if kind not in AIRFLOW_KINDS:
-        import bruceworx_sim_defs as defs
-
-        defs.sync(analysis)  # named selections into the objects that use them (SIM-07 P2)
-        defs.apply(analysis)  # parameter expressions into the fields
     model = getattr(analysis, "Model", None) if "Model" in analysis.PropertiesList else None
     if m["mesh"] is None:
         issues.append(("error", "No mesh object: New Study makes one"))
@@ -1589,7 +1589,7 @@ def prepare_solve(analysis, working_dir=None, progress=None):
     import bruceworx_sim_events
 
     progress = bruceworx_sim_events.tee(progress)
-    issues = precheck(analysis, results=False)  # an old result must not block the next solve
+    issues = precheck(analysis, results=False)  # (it syncs the named selections and parameters first)  # an old result must not block the next solve
     if not ready(issues):
         raise StudyError("; ".join(text for kind, text in issues if kind == "error"))
     m = members(analysis)
@@ -1631,6 +1631,9 @@ def prepare_solve(analysis, working_dir=None, progress=None):
             raise StudyError(str(exc)) from exc
     if thermal is not None:
         thermal.patch_input(analysis, fea.inp_file_name)  # heat flow printed at the fixed temperatures, output rate
+        import bruceworx_sim_steps as steps
+
+        steps.two_step_input(analysis, fea.inp_file_name)  # thermal stress: *HEAT TRANSFER, then *STATIC (SIM-07 P2)
     return fea
 
 
@@ -1647,9 +1650,6 @@ class _no_post_pipeline:
         import feminout.importCcxFrdResults as frd
 
         self.module, self.saved = frd, frd.setupPipeline
-        import bruceworx_sim_steps as steps
-
-        steps.two_step_input(analysis, fea.inp_file_name)  # thermal stress: *HEAT TRANSFER, then *STATIC (SIM-07 P2)
         frd.setupPipeline = lambda *args, **kwargs: None
         return self
 
