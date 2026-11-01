@@ -1736,6 +1736,13 @@ class _DocumentObserver:
         s = _state["session"]
         if s is not None and inside(filename, s.root):
             changed()
+            pn = s.item_pn_for(filename)
+            item = s.vault.items.get(pn) if pn else None
+            if item is not None and item.item_type in ("part", "assembly", "cots"):
+                from PySide import QtCore
+
+                # After the save has returned: the iso picture and the preview mesh into the saved file (PDM-13).
+                QtCore.QTimer.singleShot(0, lambda name=doc.Name, path=filename: _stamp_saved(name, path))
 
     def slotOpenTransaction(self, doc, name):
         """The first edit of a read-only vault file offers a check-out (once per document)."""
@@ -1786,6 +1793,21 @@ class _DocumentObserver:
 
     def slotRelabelDocument(self, _doc):
         _update_tabs_later()
+
+
+def _stamp_saved(name, path):
+    import FreeCAD
+
+    doc = FreeCAD.listDocuments().get(name)
+    if doc is None or not doc.FileName or os.path.realpath(doc.FileName) != os.path.realpath(path):
+        return
+    try:
+        import bruceworx_preview
+
+        if bruceworx_preview.stamp_saved(doc, path):
+            changed()
+    except Exception as exc:  # noqa: BLE001 -- the save itself is done; only its picture is missing
+        _console(f"BruceWorx vault: no picture for {os.path.basename(path)} ({exc})", "warn")
 
 
 def _clear_modified(name):

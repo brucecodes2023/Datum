@@ -6,8 +6,11 @@ tooltip wants one picture per file: the model in the isometric view, fitted and 
 draws a document's visible 3D content that way off screen (the views on screen do not move), from the
 open document or one opened hidden for the purpose.
 
-* At check-in (the user's choice: only check-ins, not every save) the picture replaces the work file's
-  thumbnail just before the file is stored, so the version carries it (``stamp_work_file``).
+* At every save of a vault work file (PDM-13, 1 Nov: the user's choice, files in a vault work folder only)
+  the picture replaces the saved file's thumbnail, with the preview mesh beside it
+  (``stamp_saved``; the mesh: bruceworx_previewmesh.py). Nothing on screen moves.
+* At check-in the same happens to the work file just before it is stored, so the version carries both
+  (``stamp_work_file``): a file saved before PDM-13, or saved from a script, gets them there.
 * Files checked in before that keep their old thumbnails in the vault; "Refresh Pictures" in the Files
   tab's menu renders each one once into a cache on this Mac (``cache_path``), never into the vault.
 
@@ -247,6 +250,38 @@ def picture_of(path, size=SIZE):
     return png_bytes(image) if image is not None else b""
 
 
+def entries_for(doc) -> dict:
+    """{zip entry: bytes}: the iso picture and the preview mesh of the open ``doc``, those it has."""
+    import bruceworx_previewmesh
+
+    entries = {}
+    image = render(doc)
+    if image is not None:
+        entries[THUMBNAIL] = png_bytes(image)
+    try:
+        mesh = bruceworx_previewmesh.mesh_of(doc)
+    except Exception as exc:  # noqa: BLE001 -- a shape the mesher refuses: the picture still goes in
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(f"BruceWorx: no preview mesh for {doc.Label} ({exc})\n")
+        mesh = b""
+    if mesh:
+        entries[bruceworx_previewmesh.ENTRY] = mesh
+    return entries
+
+
+def stamp_saved(doc, path) -> bool:
+    """Just after ``doc`` was saved to ``path`` (a vault work file): put its iso picture and preview mesh
+    into the saved file. True when the file was rewritten."""
+    import bruceworx_previewmesh
+
+    entries = entries_for(doc)
+    if not entries or not os.path.exists(path):
+        return False
+    bruceworx_previewmesh.rewrite(path, entries)
+    return True
+
+
 def stamp_work_file(s, pn) -> bool:
     """At check-in: give the work copy of ``pn`` the iso picture as its thumbnail, when it is a part
     or assembly about to become a new version (an unchanged file is left alone: a picture is no
@@ -260,10 +295,13 @@ def stamp_work_file(s, pn) -> bool:
     latest = s.vault.latest_version(pn)
     if latest is not None and s.work.local_hash(path) == latest.sha256:
         return False
-    png = picture_of(path)
-    if not png:
+    import bruceworx_previewmesh
+
+    with opened(path) as doc:
+        entries = entries_for(doc)
+    if THUMBNAIL not in entries:
         return False
-    set_thumbnail(path, png)
+    bruceworx_previewmesh.rewrite(path, entries)
     return True
 
 
@@ -288,15 +326,20 @@ def cached(sha) -> str:
 
 
 def needs_picture(s, pn) -> bool:
-    """Whether Refresh Pictures has work for ``pn``: a part or assembly whose latest version has
-    neither a picture made here nor a cached one."""
+    """Whether Refresh Pictures has work for ``pn``: a part or assembly whose latest version lacks a
+    picture made here (in the file or cached) or a preview mesh (in the file or cached, PDM-13)."""
+    import bruceworx_previewmesh
+
     item = s.vault.items.get(pn)
     latest = s.vault.latest_version(pn)
-    if item is None or item.item_type not in KINDS or latest is None or cached(latest.sha256):
+    if item is None or item.item_type not in KINDS or latest is None:
         return False
     if not latest.filename.lower().endswith(".fcstd"):  # a KiCad project (ECD-05): KiCad's render is its picture
         return False
-    return not is_iso(thumbnail_of(os.path.join(s.vault.root, latest.object_name)))
+    stored = os.path.join(s.vault.root, latest.object_name)
+    picture = bool(cached(latest.sha256)) or is_iso(thumbnail_of(stored))
+    mesh = bool(bruceworx_previewmesh.cached(latest.sha256)) or bool(bruceworx_previewmesh.read(stored))
+    return not (picture and mesh)
 
 
 def source_for(s, pn):
@@ -316,8 +359,15 @@ def source_for(s, pn):
 
 def refresh_one(s, pn) -> bool:
     """Render ``pn``'s latest version into the cache. True when a picture was written."""
+    import bruceworx_previewmesh
+
     latest = s.vault.latest_version(pn)
-    png = picture_of(source_for(s, pn))
+    with opened(source_for(s, pn)) as doc:
+        entries = entries_for(doc)
+    mesh = entries.get(bruceworx_previewmesh.ENTRY)
+    if mesh:  # the preview mesh (PDM-13), cached beside the pictures
+        bruceworx_previewmesh.store_cached(latest.sha256, mesh)
+    png = entries.get(THUMBNAIL)
     if not png:
         return False
     os.makedirs(cache_dir(), exist_ok=True)

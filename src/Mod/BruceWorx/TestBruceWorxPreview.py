@@ -108,9 +108,16 @@ class TestStampAtCheckIn(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix="bw-stamp-")
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.rendered = []
-        self._picture = pv.picture_of
-        pv.picture_of = lambda path, size=pv.SIZE: self.rendered.append(path) or b"iso"
-        self.addCleanup(setattr, pv, "picture_of", self._picture)
+        import contextlib
+
+        import bruceworx_previewmesh as pm
+
+        self.entry = pm.ENTRY
+        for name, fake in (("opened", lambda path: contextlib.nullcontext(path)),
+                           ("entries_for", lambda doc: self.rendered.append(doc) or {pv.THUMBNAIL: b"iso",
+                                                                                     pm.ENTRY: b"mesh"})):
+            self.addCleanup(setattr, pv, name, getattr(pv, name))
+            setattr(pv, name, fake)
 
     def session(self, kind, changed=True):
         path = os.path.join(self.tmp, "P.FCStd")
@@ -125,6 +132,16 @@ class TestStampAtCheckIn(unittest.TestCase):
         s, path = self.session("part")
         self.assertTrue(pv.stamp_work_file(s, "P"))
         self.assertEqual(pv.thumbnail_of(path), b"iso")
+        import bruceworx_previewmesh as pm
+
+        self.assertEqual(pm.read(path), b"mesh")  # the preview mesh rides along (PDM-13)
+
+    def test_a_save_puts_picture_and_mesh_in_the_file(self):
+        _s, path = self.session("part")
+        self.assertTrue(pv.stamp_saved("doc", path))
+        import bruceworx_previewmesh as pm
+
+        self.assertEqual((pv.thumbnail_of(path), pm.read(path), self.rendered), (b"iso", b"mesh", ["doc"]))
 
     def test_an_unchanged_file_is_not_touched(self):
         s, path = self.session("assembly", changed=False)
