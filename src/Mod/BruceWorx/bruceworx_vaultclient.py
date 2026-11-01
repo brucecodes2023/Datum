@@ -444,6 +444,7 @@ def size_text(size):
 # Every column the Files table can show, in the order Columns… offers them: (key, header, width, align).
 # All of them come from the vault's own records (items, versions, locks), never from the files, so a
 # vault of hundreds of items still lists at once. Part number and Description are always shown.
+DESCRIPTION_MIN = 220  # px: the Description column never shrinks below this (the table scrolls instead)
 FILE_COLUMNS = (
     ("part_number", "Part number", 300, "left"),
     ("description", "Description", 0, "left"),  # 0: stretches to fill the row
@@ -3628,7 +3629,36 @@ def _make_classes():
                 self._applying = False
                 self._filling = False
             self._shown = (keys, sim)
+            self.fit_description()
             self.update_sort_indicator()
+
+        def fit_description(self):
+            """Description fills the row, but never below DESCRIPTION_MIN px: with many columns it keeps
+            its width and the table scrolls sideways instead (Bruce's first look: "Voro..." with two more)."""
+            if getattr(self, "_shown", None) is None or self._shown[1]:
+                return
+            keys = self._shown[0]
+            if "description" not in keys:
+                return
+            header = self.list.header()
+            column = keys.index("description")
+            if not getattr(self, "_fit_filter", None):
+                class _Fit(QtCore.QObject):
+                    def eventFilter(inner, _obj, event):
+                        if event.type() == QtCore.QEvent.Resize:
+                            QtCore.QTimer.singleShot(0, self.fit_description)
+                        return False
+
+                self._fit_filter = _Fit(self.list)
+                self.list.viewport().installEventFilter(self._fit_filter)
+            others = sum(self.list.columnWidth(c) for c in range(len(keys)) if c != column)
+            room = self.list.viewport().width() - others
+            if room < DESCRIPTION_MIN:
+                if header.sectionResizeMode(column) != QtWidgets.QHeaderView.Interactive:
+                    header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+                self.list.setColumnWidth(column, DESCRIPTION_MIN)
+            elif header.sectionResizeMode(column) != QtWidgets.QHeaderView.Stretch:
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
 
         def set_columns(self, keys):
             """Show these columns, in this order, at once; remembered in the preferences."""
