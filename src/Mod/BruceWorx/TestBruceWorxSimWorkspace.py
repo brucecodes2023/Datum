@@ -238,7 +238,10 @@ class TestShellInWindow(unittest.TestCase):
         tabs = self.left_tabs()
         self.assertEqual(len(tabs), 2)  # the model tree's tab and the Simulation tab
         self.assertEqual(tabs[-1], ("Simulation", True))
-        self.assertTrue(sw._left().tabBar().isVisible())
+        self.assertFalse(sw._left().tabBar().isVisible())  # the native vertical bar stays off: the horizontal strip is up
+        self.assertEqual(sw.strip_tabs(), [("Browser", False), ("Simulation", True)])
+        self.assertLess(sw.strip().geometry().bottom(), sw._s["split"].mapTo(sw._left(), sw._s["split"].rect().topLeft()).y() + 2)
+        self.assertGreater(sw._left().width(), 380)
         self.assertTrue(sw.sidebar_shown())  # entering selects the Simulation tab
         self.assertIsNotNone(sw.model_builder_host())
         self.assertIsNotNone(sw.settings_host())
@@ -250,19 +253,24 @@ class TestShellInWindow(unittest.TestCase):
         pane = sw.messages_pane()
         self.assertEqual([pane.tabText(i) for i in range(pane.count())], ["Messages", "Progress", "Log", "Table"])
         # the model tree is the other tab: one click brings it back, and the Simulation tab comes back with one
-        self.assertTrue(sw.select_model_tab(True))
-        _settle(0.3)
+        browser = [b for b in sw.strip().buttons if b.text() == "Browser"][0]
+        browser.click()  # a click on the strip's Browser tab brings the model tree back
+        _settle(0.4)
         self.assertFalse(sw.sidebar_shown())
-        self.assertTrue(sw.select_model_tab(False))
-        _settle(0.3)
+        self.assertEqual(sw.strip_tabs(), [("Browser", True), ("Simulation", False)])
+        [b for b in sw.strip().buttons if b.text() == "Simulation"][0].click()
+        _settle(0.4)
         self.assertTrue(sw.sidebar_shown())
+        self.assertEqual(sw.strip_tabs(), [("Browser", False), ("Simulation", True)])
         ws.activate_workspace("Design")
         _settle(0.8)
         self.assertFalse(sw.active())
         self.assertFalse(sw.docks()["BWSimBottom"].isVisible())
         self.assertEqual(self.left_tabs()[-1], ("Simulation", False))
-        self.assertFalse(sw._left().tabBar().isVisible())  # the fork's own setting is back
+        self.assertFalse(sw._left().tabBar().isVisible())
+        self.assertEqual(sw.strip_tabs(), [])  # outside the workspace: no strip, only the Browser
         self.assertEqual(sw._left().currentIndex(), 0)
+        self.assertEqual(App.ParamGet(sw.VIEW_PATH).GetBool("DockOverlayHideTabBar", True), True)  # the fork's setting is untouched
 
     def test_the_model_tree_is_not_put_away(self):
         import FreeCADGui as Gui

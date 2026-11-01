@@ -9,8 +9,8 @@ The two panes of the Simulation workspace are filled (all Python: \file{brucewor
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{fig/simui_p1_setup.png}
-\caption{Setting up the cantilever (off-screen render of the real window): the left sidebar has two tabs, Browser (the
-model tree) and Simulation; in the Simulation tab the Model Builder (state marks at the right of each row) is over the
+\caption{Setting up the cantilever (off-screen render of the real window): the left sidebar has a horizontal tab strip, Browser (the
+model tree) | Simulation; in the Simulation tab the Model Builder (state marks at the right of each row) is over the
 Settings of the selected node (\emph{TipLoad}: its faces, the force, its direction). The step ribbon shows no Study or
 Results tab group beyond Run and Report.}
 \label{fig:sim07-gui-setup}
@@ -28,7 +28,7 @@ Results is selected, which shows von Mises in the 3D view; its Settings hold the
 \begin{itemize}[nosep]
   \item \textbf{The sidebar.} It is FreeCAD's own left overlay panel with a second tab, \emph{Simulation}; entering the
         workspace selects it, and the model tree is one click away on the \emph{Browser} tab. The panel is widened to
-        400\,px for the tab and put back on leaving. Inside the tab a splitter divides the Model Builder from Settings
+        400\,px for the tab and put back on leaving (see Horizontal tabs below). Inside the tab a splitter divides the Model Builder from Settings
         (Ansys' Outline and Details). The Messages, Progress, Log and Table dock stays under the graphics; the right panel
         stays put away. The earlier \emph{Model tree} header button, the auto hide of the tree and the 1500\,px switch
         are gone.
@@ -65,11 +65,12 @@ Results is selected, which shows von Mises in the 3D view; its Settings hold the
 
 \paragraph{Decided while building.}
 \begin{itemize}[nosep]
-  \item \textbf{True tabs are possible, but vertical.} The left overlay panel already is a tab widget; a dock added to it
-        (\code{FreeCADGui.addDockWindow(..., "OverlayLeft")}, the UIX-12 binding) becomes a tab. The fork hides the panel's
-        tab bar (\code{DockOverlayHideTabBar}) and the right panel draws its own strip, so the left tabs are FreeCAD's native
-        ones: vertical text on the panel's left edge. The shell switches the setting on while the workspace is up and back
-        on leaving (also at quit).
+  \item \textbf{Horizontal tabs (your choice, 1 Nov).} A strip across the top of the left panel, \emph{Browser $|$ Simulation},
+        with the look of the right panel's (same \code{bwRightTabs} / \code{bwRightTab} styles and the same \code{bwTabStrip}
+        panel switch, which takes the native tab bar out and shows one dock at a time); only the small strip class is
+        new, since the right panel's own is bound to its docks and badges. Entering Simulation selects the Simulation
+        tab. Outside the workspace there is no strip and only the Browser shows (hidden tab, switch off, the docks' own title
+        rows back). The fork's \code{DockOverlayHideTabBar} setting is never touched, so nothing can be left set in a profile.
   \item \textbf{The Simulation tab stays registered.} An overlay panel cannot give a dock back, so leaving hides the tab (and
         the tab bar) and selects the Browser; the dock itself stays in the panel.
   \item \textbf{Widening the panel} uses the size grip's \code{dragMove} signal (invokable from Python; the panel's own slot is
@@ -95,8 +96,6 @@ and \file{TestBruceWorx} pass.
 
 \paragraph{Open questions for you.}
 \begin{enumerate}[nosep]
-  \item \textbf{Vertical tabs.} Are FreeCAD's vertical tabs (Browser, Simulation) acceptable, or should the left panel get a
-        horizontal strip like the right panel's? That is a custom strip for the left overlay (about the size of the right panel's).
   \item \textbf{Highlight in renders.} The selection highlight and the triad do not appear in off-screen renders; they were
         checked through the selection state only. Please look at them in the real window.
   \item \textbf{Airflow Compute} still opens the airflow panel; its own node settings and pre-check cache are in the panes.

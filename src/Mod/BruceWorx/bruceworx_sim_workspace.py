@@ -3,11 +3,12 @@
 
 While the Simulation workspace is active the left sidebar (FreeCAD's overlay panel with the model tree, "Browser") has a
 second tab, "Simulation": the Model Builder on top and the Settings pane below it, with a splitter (as Ansys' Outline and
-Details). The tabs are FreeCAD's own overlay tabs (vertical, on the panel's left edge); the fork hides that tab bar in
-every other workspace, so it is switched on here and back off on leaving, and the Simulation tab is hidden again (the dock
-stays registered in the panel: an overlay panel cannot give a dock back). A bottom dock (Messages, Progress, Log, Table)
-sits under the 3D view. The right panel and its floating task view are put away. The panes get one stylesheet from the
-mockup's tokens, and the 3D view a light-blue gradient and the axis triad. Leaving the workspace restores everything.
+Details). A horizontal tab strip across the top of the panel (the right panel's look, "Browser | Simulation") switches
+between them; the fork's native vertical tab bar stays off (DockOverlayHideTabBar is never touched). Outside the workspace
+there is no strip and only the Browser shows (the Simulation dock stays registered in the panel, hidden: an overlay panel
+cannot give a dock back). A bottom dock (Messages, Progress, Log, Table) sits under the 3D view. The right panel and its
+floating task view are put away. The panes get one stylesheet from the mockup's tokens, and the 3D view a light-blue
+gradient and the axis triad. Leaving the workspace restores everything.
 
 ``model_builder_host()`` and ``settings_host()`` return the two panes' content widgets (vertical layouts; a placeholder
 label sits in them until ``clear_host(host)``); ``messages_pane()`` is the bottom pane: ``add_message(level, text,
@@ -546,8 +547,185 @@ def _sidebar_index():
     return -1
 
 
+def _tab_strip_class():
+    """The left panel's horizontal tab strip: the right panel's look (``bwRightTabs`` / ``bwRightTab`` in BruceWorx.qss) and the
+    same C++ switch (the panel property ``bwTabStrip``: native tab bar out, one dock at a time), for two tabs."""
+    if _s.get("strip_class"):
+        return _s["strip_class"]
+    from PySide import QtCore, QtWidgets
+
+    class Strip(QtWidgets.QWidget):
+        def __init__(self, tabs):
+            super().__init__(tabs)
+            self.setObjectName("bwRightTabs")
+            self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+            self.setAttribute(QtCore.Qt.WA_ContentsMarginsRespectsSafeArea, False)
+            self.tabs = tabs
+            self.on = False
+            self.titles = {}  # dock -> its own title bar widget, put back on leaving
+            self.row = QtWidgets.QHBoxLayout(self)
+            self.row.setContentsMargins(8, 0, 6, 0)
+            self.row.setSpacing(2)
+            font = self.font()
+            font.setPixelSize(12)
+            self.setFont(font)
+            self.buttons = []
+            self.timer = QtCore.QTimer(self)
+            self.timer.setSingleShot(True)
+            self.timer.setInterval(0)
+            self.timer.timeout.connect(self.sync)
+            tabs.currentChanged.connect(lambda _i: self.timer.start())
+            tabs.installEventFilter(self)
+            self.hide()
+
+        def eventFilter(self, obj, event):
+            if self.on and event.type() == QtCore.QEvent.Show and obj.metaObject().className() == "Gui::OverlayTitleBar":
+                QtCore.QTimer.singleShot(0, obj.hide)  # the strip replaces the panel's title row
+            elif self.on and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Move, QtCore.QEvent.Show,
+                                              QtCore.QEvent.LayoutRequest):
+                self.timer.start()
+            return False
+
+        def splitter(self):
+            return next((c for c in self.tabs.children() if isinstance(c, QtWidgets.QSplitter)), None)
+
+        def activate(self):
+            self.on = True
+            self.tabs.setProperty("bwTabStrip", True)  # [BW] OverlayWidgets.cpp: native tab bar out, folded docks keep no header
+            for splitter in self.tabs.findChildren(QtWidgets.QSplitter):
+                splitter.refresh()
+            self.sync()
+
+        def deactivate(self):
+            self.on = False
+            self.tabs.setProperty("bwTabStrip", False)
+            self.hide()
+            splitter = self.splitter()
+            if splitter is not None:
+                for i in range(splitter.count()):
+                    page = splitter.widget(i)
+                    if page is not None:
+                        page.setMaximumHeight(16777215)
+                    if isinstance(page, QtWidgets.QDockWidget) and page in self.titles:
+                        page.setTitleBarWidget(self.titles.pop(page))
+                splitter.refresh()
+            for child in self.tabs.children():
+                if isinstance(child, QtWidgets.QWidget) and child.metaObject().className() == "Gui::OverlayTitleBar":
+                    child.show()
+
+        def sync(self):
+            if not self.on or not _alive_widget(self.tabs):
+                return
+            splitter = self.splitter()
+            if splitter is None or not self.tabs.isVisible():
+                self.hide()
+                return
+            for child in self.tabs.children():
+                if isinstance(child, QtWidgets.QWidget) and child.metaObject().className() == "Gui::OverlayTitleBar":
+                    if not child.property("bwWatched"):
+                        child.setProperty("bwWatched", True)
+                        child.installEventFilter(self)
+                    if child.isVisible():
+                        child.hide()
+            for i in range(splitter.count()):  # the strip names the docks: they show no title row of their own
+                dock = splitter.widget(i)
+                if isinstance(dock, QtWidgets.QDockWidget):
+                    bar = dock.titleBarWidget()
+                    if bar is None or bar.objectName() != "bwNoTitle":
+                        empty = QtWidgets.QWidget(dock)
+                        empty.setObjectName("bwNoTitle")
+                        empty.setFixedHeight(0)
+                        self.titles.setdefault(dock, bar)
+                        dock.setTitleBarWidget(empty)
+            top = max(splitter.geometry().top(), 30)
+            if self.geometry() != QtCore.QRect(0, 0, self.tabs.width(), top):
+                self.setGeometry(0, 0, self.tabs.width(), top)
+            if not self.isVisible():
+                self.show()
+            self.raise_()
+            current = self.tabs.currentIndex()
+            items = [(i, "Simulation" if i == _sidebar_index() else "Browser", i == current)
+                     for i in range(self.tabs.count()) if self.tabs.tabBar().isTabVisible(i)]
+            if [(i, t, c) for i, t, c in items] != [(b.index, b.text(), bool(b.property("current"))) for b in self.buttons]:
+                self.rebuild(items)
+            # collapsed pages stay inside the panel (the right panel's rule): all but the current one at zero height
+            width = splitter.width()
+            for i in range(splitter.count()):
+                page = splitter.widget(i)
+                if page is None:
+                    continue
+                page.setMinimumSize(0, 0)
+                if i == current:
+                    page.setMaximumHeight(16777215)
+                    continue
+                page.setMaximumHeight(0)
+                geom = page.geometry()
+                if geom.x() < 0 or geom.y() < 0 or geom.height() > 0:
+                    page.setGeometry(0, 0, width, 0)
+
+        def rebuild(self, items):
+            for b in self.buttons:
+                self.row.removeWidget(b)
+                b.hide()
+                b.deleteLater()
+            while self.row.count():
+                self.row.takeAt(0)
+            self.buttons = []
+            for index, text, current in items:
+                b = QtWidgets.QToolButton(self)
+                b.setObjectName("bwRightTab")
+                b.setText(text)
+                b.setAutoRaise(True)
+                b.setCursor(QtCore.Qt.PointingHandCursor)
+                b.setFixedHeight(26)
+                b.setFixedWidth(self.fontMetrics().horizontalAdvance(text) + 16)
+                b.setProperty("kind", "tab")
+                b.setProperty("current", current)
+                b.index = index
+                b.clicked.connect(lambda _c=False, i=index: _show_index(i))
+                self.row.addWidget(b)
+                self.buttons.append(b)
+            self.row.addStretch(1)
+
+    _s["strip_class"] = Strip
+    return Strip
+
+
+def _alive_widget(widget):
+    try:
+        import shiboken6
+
+        return widget is not None and shiboken6.isValid(widget)
+    except Exception:
+        return widget is not None
+
+
+def _show_index(index):
+    """Brings the left panel's tab ``index`` forward, as a click on FreeCAD's own tab bar does."""
+    left = _left()
+    if left is None or not 0 <= index < left.count():
+        return False
+    if left.currentIndex() != index:
+        left.setCurrentIndex(index)
+        left.tabBar().tabBarClicked.emit(index)  # OverlayTabWidget::onCurrentChanged sizes the splitter
+    return True
+
+
+def strip():
+    """The left panel's tab strip widget (None until the workspace was first shown)."""
+    return _s.get("strip")
+
+
+def strip_tabs():
+    """[(text, current)] of the strip's buttons while it shows (empty when it is away)."""
+    st = _s.get("strip")
+    if st is None or st.isHidden():
+        return []
+    return [(b.text(), bool(b.property("current"))) for b in st.buttons]
+
+
 def _refresh_left():
-    """Makes the overlay manager apply the tab bar setting now (setting the auto hide mode it already has)."""
+    """Makes the overlay manager lay the left panel out again (setting the auto hide mode it already has)."""
     import FreeCADGui
 
     try:
@@ -558,8 +736,7 @@ def _refresh_left():
 
 
 def _show_sidebar():
-    """The left panel gets its Simulation tab (made on first use) with the tab bar on, and selects it."""
-    import FreeCAD
+    """The left panel gets its Simulation tab (made on first use) and the horizontal strip, and selects the tab."""
     import FreeCADGui
     from PySide import QtCore
 
@@ -569,89 +746,42 @@ def _show_sidebar():
     if _s.get("sidebar") is None:
         dock = FreeCADGui.addDockWindow(SIDEBAR, _s["split"], int(QtCore.Qt.LeftDockWidgetArea.value), LEFT)
         _s["sidebar"] = dock
-        index = left.count() - 1
-        left.setTabText(index, SIDEBAR_TITLE)
+        left.setTabText(left.count() - 1, SIDEBAR_TITLE)
     dock = _s["sidebar"]
-    group = FreeCAD.ParamGet(VIEW_PATH)
-    contents = {name: value for _kind, name, value in (group.GetContents() or [])}
-    _s["saved"]["tabbar"] = contents.get("DockOverlayHideTabBar")
     _s["saved"]["tab"] = left.currentIndex()
     dock.show()
-    if not _s.get("quit_hook"):
-        _s["quit_hook"] = True  # quitting inside the workspace must not leave the tab bar on in every other workspace
-        from PySide import QtWidgets
-
-        QtWidgets.QApplication.instance().aboutToQuit.connect(_restore_tab_bar)
-    group.SetBool("DockOverlayHideTabBar", False)  # the fork hides the overlay's tab bar; the sidebar needs it
-    _refresh_left()
     index = _sidebar_index()
-    if index >= 0:
-        left.tabBar().setTabVisible(index, True)
-        left.tabBar().tabBarClicked.emit(index)
-        left.setCurrentIndex(index)
-        _s["saved"]["width"] = left.width()
-        if left.width() < SIDEBAR_WIDTH:
-            _widen_left(SIDEBAR_WIDTH)
-    return index >= 0
+    if index < 0:
+        return False
+    left.tabBar().setTabVisible(index, True)
+    if _s.get("strip") is None:
+        _s["strip"] = _tab_strip_class()(left)
+    _s["saved"]["width"] = left.width()
+    _s["strip"].activate()
+    _refresh_left()  # the panel reserved room for the native tab bar before the strip took over
+    _show_index(index)
+    if left.width() < SIDEBAR_WIDTH:
+        _widen_left(SIDEBAR_WIDTH)
+    _s["strip"].sync()
+    return True
 
 
 def _hide_sidebar():
-    """Back to the model tree alone: the Simulation tab is hidden, the tab bar goes off again."""
-    import FreeCAD
-
+    """Back to the model tree alone: the strip goes away, the Simulation tab is hidden, the panel has its old width."""
     left = _left()
     dock = _s.get("sidebar")
     if left is None or dock is None:
         return
     index = _sidebar_index()
-    if index >= 0 and left.currentIndex() == index:
-        target = _s["saved"].get("tab", 0)
-        target = 0 if target in (None, index) or target >= left.count() else target
-        left.tabBar().tabBarClicked.emit(target)
-        left.setCurrentIndex(target)
+    _show_index(0)
+    if _s.get("strip") is not None:
+        _s["strip"].deactivate()
     if _s["saved"].get("width") and left.width() != _s["saved"]["width"]:
         _widen_left(_s["saved"]["width"])
-    group = FreeCAD.ParamGet(VIEW_PATH)
-    was = _s["saved"].get("tabbar")
-    if was is None:
-        group.RemBool("DockOverlayHideTabBar")
-    else:
-        group.SetBool("DockOverlayHideTabBar", bool(was))
     if index >= 0:
         left.tabBar().setTabVisible(index, False)
     dock.hide()
     _refresh_left()
-    if _hides_tab_bar():
-        left.tabBar().hide()  # the overlay applies the setting only when it re-lays out
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(150, _late_hide)  # and it re-lays out once more after the panel was resized
-
-
-def _restore_tab_bar():
-    """The fork's tab bar setting as it was before the Simulation tab turned it on (also at quit)."""
-    import FreeCAD
-
-    if not _s["active"] and "tabbar" not in _s["saved"]:
-        return
-    group = FreeCAD.ParamGet(VIEW_PATH)
-    was = _s["saved"].get("tabbar")
-    if was is None:
-        group.RemBool("DockOverlayHideTabBar")
-    else:
-        group.SetBool("DockOverlayHideTabBar", bool(was))
-
-
-def _late_hide():
-    left = _left()
-    if left is not None and not _s["active"] and _hides_tab_bar():
-        left.tabBar().hide()
-
-
-def _hides_tab_bar():
-    """The fork's own setting (the tab bar is off unless the preference says otherwise)."""
-    was = _s["saved"].get("tabbar")
-    return True if was is None else bool(was)
 
 
 def _widen_left(width):
@@ -685,10 +815,7 @@ def select_model_tab(on=True):
     index = _sidebar_index()
     if left is None or index < 0:
         return False
-    target = 0 if on else index
-    left.tabBar().tabBarClicked.emit(target)
-    left.setCurrentIndex(target)
-    return True
+    return _show_index(0 if on else index)
 
 
 # ----- the 3D view -----------------------------------------------------------------------------------------
