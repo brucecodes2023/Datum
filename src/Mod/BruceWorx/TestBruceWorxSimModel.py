@@ -147,7 +147,7 @@ class TestSettings(unittest.TestCase):
     def test_force_fields_and_units(self):
         n = node(self.analysis, "phys/Force")
         names = [f.name for s in model.settings(n) for f in s.fields]
-        self.assertEqual(names, ["References", "Force", "Direction", "Reversed"])
+        self.assertEqual(names, ["NamedSelection", "References", "Force", "Direction", "Reversed"])
         self.assertAlmostEqual(model.get_value(n, "Force"), 500.0)
         model.set_value(n, "Force", "2 kN")
         self.assertAlmostEqual(model.get_value(n, "Force"), 2000.0)
@@ -482,3 +482,371 @@ class TestRealSolve(unittest.TestCase):
         model.set_value(node(analysis, "phys/Force"), "Force", "100 N")
         marks = model.state(analysis, precheck=False)
         self.assertEqual((marks["mesh/main"], marks["step/main"], marks["results/stress"]), ("ok", "stale", "stale"))
+
+
+# ----- SIM-07 P2: parameters, named selections, local mesh sizes --------------------------------------------------
+
+import bruceworx_sim_defs as defs  # noqa: E402
+
+
+class TestParameters(unittest.TestCase):
+    def setUp(self):
+        self.doc, self.analysis, self.cut, self.shape = plate_study(meshed=True)
+        self.doc.UndoMode = 1
+        fake_result(self.analysis)
+        model.record(self.analysis, "solution")
+        self.force = node(self.analysis, "phys/Force")
+
+    def tearDown(self):
+        close_all()
+
+    def marks(self):
+        return model.state(self.analysis, precheck=False)
+
+    def test_table_units_and_expressions(self):
+        defs.add_parameter(self.analysis, "t", "3 mm", "mm", "wall thickness")
+        defs.add_parameter(self.analysis, "F_load", "2000 N", "N")
+        p = defs.add_parameter(self.analysis, "w", "2*t+1 mm", "mm", "derived")
+        self.assertAlmostEqual(p.value, 7.0)
+        self.assertEqual(p.expression, "2*t+1 mm")
+        self.assertEqual([x.name for x in defs.parameters(self.analysis)], ["t", "F_load", "w"])
+        defs.add_parameter(self.analysis, "n_legs", "4", "")
+        defs.add_parameter(self.analysis, "T_hot", "80", "degC")
+        self.assertEqual(defs.parameters(self.analysis)[-1].value, 80.0)
+        defs.edit_parameter(self.analysis, "t", "4 mm")
+        self.assertAlmostEqual(next(x for x in defs.parameters(self.analysis) if x.name == "w").value, 9.0)  # re-evaluated
+
+    def test_fields_take_expressions_and_follow_parameters(self):
+        defs.add_parameter(self.analysis, "F_load", "2000 N", "N")
+        defs.add_parameter(self.analysis, "n_legs", "4", "")
+        model.set_value(self.force, "Force", "F_load/n_legs")
+        self.assertAlmostEqual(model.get_value(self.force, "Force"), 500.0)
+        self.assertEqual(model.get_expression(self.force, "Force"), "F_load/n_legs")
+        self.assertAlmostEqual(self.doc.getObject("Force").Force.getValueAs("N"), 500.0)  # the object holds the value
+        defs.edit_parameter(self.analysis, "F_load", "4000 N")
+        self.assertAlmostEqual(model.get_value(self.force, "Force"), 1000.0)
+        # a plain value takes the field off the parameter again
+        model.set_value(self.force, "Force", "300 N")
+        self.assertEqual(model.get_expression(self.force, "Force"), "")
+        defs.edit_parameter(self.analysis, "F_load", "1000 N")
+        self.assertAlmostEqual(model.get_value(self.force, "Force"), 300.0)
+
+    def test_stale_marks_follow_the_fields_that_use_a_parameter(self):
+        defs.add_parameter(self.analysis, "F_load", "2000 N", "N")
+        defs.add_parameter(self.analysis, "h", "6 mm", "mm")
+        model.set_value(self.force, "Force", "F_load/4")
+        model.record(self.analysis, "solution")
+        self.assertEqual(self.marks()["step/main"], "ok")
+        defs.edit_parameter(self.analysis, "F_load", "3000 N")
+        marks = self.marks()
+        self.assertEqual((marks["mesh/main"], marks["step/main"], marks["phys/Force"]), ("ok", "stale", "ok"))
+        # a mesh size parameter marks the mesh (and so the solution), and never re-meshes
+        model.set_value(node(self.analysis, "mesh/main"), "MaxSize", "h")
+        model.record(self.analysis, "mesh")
+        model.record(self.analysis, "solution")
+        nodes = sim.members(self.analysis)["mesh"].FemMesh.NodeCount
+        defs.edit_parameter(self.analysis, "h", "5 mm")
+        marks = self.marks()
+        self.assertEqual((marks["mesh/main"], marks["step/main"]), ("stale", "stale"))
+        self.assertEqual(sim.members(self.analysis)["mesh"].FemMesh.NodeCount, nodes)
+        self.assertAlmostEqual(model.get_value(node(self.analysis, "mesh/main"), "MaxSize"), 5.0)
+
+    def test_errors_are_clear_and_change_nothing(self):
+        defs.add_parameter(self.analysis, "t", "3 mm", "mm")
+        defs.add_parameter(self.analysis, "w", "2*t", "mm")
+        with self.assertRaises(ValueError) as ctx:
+            model.set_value(self.force, "Force", "nothing*2")
+        self.assertIn("unknown name 'nothing'", str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            model.set_value(self.force, "Force", "t")  # a length for a force
+        self.assertIn("N", str(ctx.exception))
+        self.assertAlmostEqual(model.get_value(self.force, "Force"), 500.0)
+        with self.assertRaises(defs.DefsError) as ctx:
+            defs.edit_parameter(self.analysis, "t", "w")  # t = w = 2*t: a cycle
+        self.assertIn("cycle", str(ctx.exception))
+        self.assertAlmostEqual(next(x for x in defs.parameters(self.analysis) if x.name == "t").value, 3.0)
+        with self.assertRaises(defs.DefsError):
+            defs.add_parameter(self.analysis, "2x", "1", "")  # not a name
+        with self.assertRaises(defs.DefsError):
+            defs.add_parameter(self.analysis, "x", "1 N", "mm")  # wrong unit for its column
+        with self.assertRaises(defs.DefsError):
+            defs.add_parameter(self.analysis, "t", "1 mm", "mm")  # exists
+        with self.assertRaises(defs.DefsError):
+            defs.add_parameter(self.analysis, "y", "bogus+1", "")
+        self.assertEqual([x.name for x in defs.parameters(self.analysis)], ["t", "w"])
+
+    def test_used_parameter_cannot_be_removed_and_undo_works(self):
+        defs.add_parameter(self.analysis, "F_load", "2000 N", "N")
+        model.set_value(self.force, "Force", "F_load/4")
+        with self.assertRaises(defs.DefsError) as ctx:
+            defs.remove_parameter(self.analysis, "F_load")
+        self.assertIn("Force", str(ctx.exception))
+        model.set_value(self.force, "Force", "100 N")
+        defs.edit_parameter(self.analysis, "F_load", "3000 N")
+        self.doc.undo()
+        self.assertAlmostEqual(next(x for x in defs.parameters(self.analysis)).value, 2000.0)
+        defs.remove_parameter(self.analysis, "F_load")
+        self.assertEqual(defs.parameters(self.analysis), [])
+
+    def test_survives_save_and_load(self):
+        defs.add_parameter(self.analysis, "F_load", "2000 N", "N")
+        model.set_value(self.force, "Force", "F_load/4")
+        path = os.path.join(tempfile.mkdtemp(), "p.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        doc = App.openDocument(path)
+        analysis = sim.studies(doc)[0]
+        self.assertEqual([p.name for p in defs.parameters(analysis)], ["F_load"])
+        n = model.find_node(analysis, "phys/Force")
+        self.assertEqual(model.get_expression(n, "Force"), "F_load/4")
+        defs.edit_parameter(analysis, "F_load", "8000 N")
+        self.assertAlmostEqual(model.get_value(n, "Force"), 2000.0)
+
+
+class TestNamedSelections(unittest.TestCase):
+    def setUp(self):
+        self.doc, self.analysis, self.cut, self.shape = plate_study(meshed=True)
+        fake_result(self.analysis)
+        model.record(self.analysis, "solution")
+        self.right = face_at(self.shape, 0, True)
+        self.left = face_at(self.shape, 0, False)
+
+    def tearDown(self):
+        close_all()
+
+    def second_load(self):
+        pull = ObjectsFem.makeConstraintForce(self.doc, "Pull")
+        pull.Force = "50 N"
+        pull.Direction = (self.cut, [face_at(self.shape, 2, True)])
+        self.analysis.addObject(pull)
+        self.doc.recompute()
+        return pull
+
+    def test_shared_by_two_loads(self):
+        sel = defs.make_selection(self.analysis, "Right end", [(self.cut, [self.right])])
+        pull = self.second_load()
+        n1, n2 = node(self.analysis, "phys/Force"), node(self.analysis, f"phys/{pull.Name}")
+        model.set_value(n1, "NamedSelection", "Right end")
+        model.set_value(n2, "NamedSelection", "Right end")
+        self.assertEqual(model.get_value(n2, "NamedSelection"), "Right end")
+        self.assertEqual(model.get_value(n2, "References"), [(self.cut.Name, self.right)])
+        sn = node(self.analysis, f"defs/sel/{sel.Name}")
+        self.assertIsNotNone(sn)
+        self.assertEqual(model.get_value(sn, "users"), "Force, Pull")
+        # edit the selection once: both loads follow, and the solution is stale
+        bottom = face_at(self.shape, 1, False)
+        model.set_value(sn, "References", [(self.cut.Name, [self.right, bottom])])
+        for obj in (self.doc.getObject("Force"), pull):
+            self.assertEqual(sorted(s for _o, subs in obj.References for s in subs), sorted([self.right, bottom]))
+        marks = model.state(self.analysis, precheck=False)
+        self.assertEqual((marks["mesh/main"], marks["step/main"]), ("ok", "stale"))
+        # a linked load's own list is read only
+        with self.assertRaises(ValueError):
+            model.set_value(n1, "References", [(self.cut.Name, [self.left])])
+        model.set_value(n1, "NamedSelection", "(own list)")
+        model.set_value(n1, "References", [(self.cut.Name, [self.left])])
+        self.assertEqual(model.get_value(n2, "References")[0][1], self.right)
+
+    def test_survives_a_recompute_of_the_part(self):
+        sel = defs.make_selection(self.analysis, "Right end", [(self.cut, [self.right])])
+        model.set_value(node(self.analysis, "phys/Force"), "NamedSelection", "Right end")
+        self.doc.getObject("Plate").Length = 120
+        self.doc.recompute()
+        defs.sync(self.analysis)
+        refs = [(o.Name, list(s)) for o, s in sel.References]
+        self.assertEqual(refs, [(self.cut.Name, [self.right])])
+        face = self.cut.Shape.getElement(self.right)
+        self.assertAlmostEqual(face.CenterOfMass.x, 120.0, places=3)  # still the far end, which moved
+        self.assertEqual([(o.Name, list(s)) for o, s in self.doc.getObject("Force").References], refs)
+
+    def test_remove_keeps_the_faces(self):
+        sel = defs.make_selection(self.analysis, "Right end", [(self.cut, [self.right])])
+        model.set_value(node(self.analysis, "phys/Force"), "NamedSelection", "Right end")
+        defs.remove_selection(self.analysis, sel)
+        self.assertIsNone(defs.linked(self.doc.getObject("Force")))
+        self.assertEqual(model.get_value(node(self.analysis, "phys/Force"), "References"), [(self.cut.Name, self.right)])
+        self.assertEqual(defs.selections(self.analysis), [])
+
+
+class TestLocalSize(unittest.TestCase):
+    def setUp(self):
+        self.doc, self.analysis, self.cut, self.shape = plate_study(meshed=True)
+        fake_result(self.analysis)
+        model.record(self.analysis, "solution")
+        self.hole = next(f"Face{i}" for i, f in enumerate(self.shape.Faces, 1) if f.Surface.__class__.__name__ == "Cylinder")
+
+    def tearDown(self):
+        close_all()
+
+    def test_local_size_refines_and_marks_the_mesh(self):
+        mesh = sim.members(self.analysis)["mesh"]
+        base = mesh.FemMesh.NodeCount
+
+        def near_hole():  # nodes within 8 mm of the hole's axis
+            return sum(1 for v in mesh.FemMesh.Nodes.values() if (v.x - 50) ** 2 + (v.y - 25) ** 2 < 64)
+
+        base_near = near_hole()
+        marks = model.state(self.analysis, precheck=False)
+        self.assertEqual(marks["mesh/main"], "ok")
+        ls = defs.make_local_size(self.analysis, "1 mm", [(self.cut, [self.hole])], label="Hole")
+        n = node(self.analysis, f"mesh/local/{ls.Name}")
+        self.assertEqual(n.kind, "localsize")
+        marks = model.state(self.analysis, precheck=False)
+        self.assertEqual((marks["mesh/main"], marks["step/main"]), ("stale", "stale"))
+        self.assertEqual(marks[n.key], "ok")
+        sim.mesh_study(self.analysis)
+        self.assertGreater(mesh.FemMesh.NodeCount, 1.25 * base)
+        self.assertGreater(near_hole(), 2 * base_near)  # the refinement is at the hole
+        App.Console.PrintMessage(f"\n[local size] nodes {base} -> {mesh.FemMesh.NodeCount}; near the hole {base_near} -> {near_hole()}\n")
+        self.assertTrue(os.path.isfile(mesh.MeshSizeFile))
+        model.record(self.analysis, "solution")
+        self.assertEqual(model.state(self.analysis, precheck=False)["mesh/main"], "ok")
+        model.set_value(n, "Size", "1.5 mm")  # a new size marks the mesh
+        self.assertEqual(model.state(self.analysis, precheck=False)["mesh/main"], "stale")
+        model.set_value(n, "Size", "1 mm")
+        self.assertEqual(model.state(self.analysis, precheck=False)["mesh/main"], "ok")
+
+    def test_a_loads_named_selection_marks_the_mesh_when_a_local_size_uses_it(self):
+        right = face_at(self.shape, 0, True)
+        sel = defs.make_selection(self.analysis, "Right end", [(self.cut, [right])])
+        model.set_value(node(self.analysis, "phys/Force"), "NamedSelection", "Right end")
+        ls = defs.make_local_size(self.analysis, "2 mm", selection=sel)
+        sim.mesh_study(self.analysis)
+        model.record(self.analysis, "solution")
+        self.assertEqual(model.state(self.analysis, precheck=False)["mesh/main"], "ok")
+        model.set_value(node(self.analysis, f"defs/sel/{sel.Name}"), "References",
+                        [(self.cut.Name, [right, face_at(self.shape, 1, False)])])
+        marks = model.state(self.analysis, precheck=False)
+        self.assertEqual((marks["mesh/main"], marks["step/main"]), ("stale", "stale"))
+
+    def test_no_local_size_leaves_the_mesh_plain(self):
+        sim.mesh_study(self.analysis)
+        self.assertEqual(sim.members(self.analysis)["mesh"].MeshSizeFile, "")
+
+
+# ----- SIM-07 P2: study steps -------------------------------------------------------------------------------------
+
+import bruceworx_sim_eigen as eigen  # noqa: E402
+import bruceworx_sim_steps as steps  # noqa: E402
+import bruceworx_sim_thermal as thermal  # noqa: E402
+
+
+class TestSteps(unittest.TestCase):
+    def tearDown(self):
+        close_all()
+
+    def test_steps_are_derived_from_the_study_type(self):
+        doc = App.newDocument("Kinds")
+        box = doc.addObject("Part::Box", "B")
+        doc.recompute()
+        got = {}
+        for kind in ("static", "modal", "buckling", "thermal", "thermal_stress"):
+            study = sim.new_study(doc, sim.StudyPlan(name=kind, study_type=kind, model=box, material=dict(STEEL)))["analysis"]
+            got[kind] = steps.types(study)
+        self.assertEqual(got, {"static": ["stationary"], "modal": ["modal"], "buckling": ["buckling"], "thermal": ["heat"],
+                               "thermal_stress": ["heat", "stationary"]})
+
+    def test_tree_shows_the_steps_and_settings_split_by_step(self):
+        doc = App.newDocument("TS")
+        box = doc.addObject("Part::Box", "B")
+        doc.recompute()
+        study = sim.new_study(doc, sim.StudyPlan(name="ts", study_type="thermal_stress", model=box, material=dict(STEEL)))["analysis"]
+        tree = model.model_tree(study)
+        main = tree.find("step/main")
+        self.assertEqual(main.label, "Heat transfer + Stationary")
+        self.assertEqual([c.key for c in main.children], ["step/s1", "step/s2"])
+        heat, stress = main.children
+        self.assertIn("InitialTemperature", [f.name for sec in model.settings(heat) for f in sec.fields])
+        self.assertIn("ReferenceTemperature", [f.name for sec in model.settings(stress) for f in sec.fields])
+        self.assertIn("results/temperature", [n.key for n in tree.walk()])
+        self.assertEqual(model.state(study, precheck=False)["step/s2"], model.state(study, precheck=False)["step/main"])
+
+    def test_adding_and_removing_steps_converts_the_study(self):
+        doc, analysis, cut, shape = plate_study(meshed=False)
+        self.assertEqual(steps.additions(analysis), [("modal", "Eigenfrequency")])
+        steps.add_step(analysis, "modal")
+        self.assertEqual(sim.study_kind(analysis), "modal")
+        self.assertTrue(analysis.Prestressed)
+        self.assertEqual([s.label for s in steps.steps(analysis)], ["Preload (stationary)", "Eigenfrequency"])
+        self.assertEqual(model.step_label(analysis), "Stationary + Eigenfrequency")
+        self.assertEqual(len(sim.members(analysis)["loads"]), 1)  # the loads, supports and mesh are kept
+        self.assertEqual(steps.additions(analysis), [])
+        with self.assertRaises(steps.StepError) as ctx:
+            steps.add_step(analysis, "heat")
+        self.assertIn("not supported together", str(ctx.exception))
+        steps.remove_step(analysis, "s2")
+        self.assertEqual((sim.study_kind(analysis), steps.types(analysis)), ("static", ["stationary"]))
+        self.assertEqual(sim.members(analysis)["solver"].AnalysisType, "static")
+        with self.assertRaises(steps.StepError):
+            steps.remove_step(analysis, "s1")  # the only step
+        with self.assertRaises(steps.StepError):
+            steps.set_steps(analysis, ["modal", "stationary"])  # the preload comes first
+        steps.set_steps(analysis, ["heat", "stationary"])
+        self.assertEqual(sim.study_kind(analysis), "thermal_stress")
+        self.assertIsNotNone(thermal.initial_temperature_object(analysis))
+        steps.set_steps(analysis, ["stationary"])
+        self.assertIsNone(thermal.initial_temperature_object(analysis))
+        doc.undo() if False else None
+
+    def test_one_undo_step(self):
+        doc, analysis, cut, shape = plate_study(meshed=False)
+        doc.UndoMode = 1
+        steps.add_step(analysis, "modal")
+        doc.undo()
+        self.assertEqual((sim.study_kind(analysis), steps.types(analysis)), ("static", ["stationary"]))
+
+
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestStepSolves(unittest.TestCase):
+    def setUp(self):
+        close_all()
+        self.addCleanup(close_all)
+        self.tmp = tempfile.mkdtemp(prefix="bw-steps-")
+
+    def test_preload_then_modal_matches_the_tensioned_beam(self):
+        doc, objs, theory = eigen.tensioned_beam(options={"Prestressed": False, "ModeCount": 4})
+        analysis = objs["analysis"]
+        self.assertEqual(steps.types(analysis), ["modal"])
+        sim.solve(analysis, working_dir=self.tmp)
+        plain = eigen.modal_rows(analysis)[0]["frequency"]
+        self.assertLess(abs(plain - theory["f1_free"]) / theory["f1_free"], 0.03, (plain, theory))
+        steps.set_steps(analysis, ["stationary", "modal"])  # Add step: preload, then eigenfrequency
+        sim.solve(analysis, working_dir=self.tmp)
+        rows = eigen.modal_rows(analysis)
+        f1 = rows[0]["frequency"]
+        self.assertLess(abs(f1 - theory["f1"]) / theory["f1"], 0.03, (f1, theory))
+        self.assertGreater(f1, 1.5 * plain)  # the 10 kN of tension stiffens the beam
+        self.assertIsNotNone(eigen.prestress_result(analysis))
+        with open(os.path.join(self.tmp, "Mesh.inp"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertEqual(text.count("*STEP"), 2)
+        self.assertIn("*STEP, PERTURBATION\n*FREQUENCY\n4\n", text)
+        App.Console.PrintMessage(f"\n[steps preload+modal] f1 {f1:.2f} Hz vs closed form {theory['f1']:.2f} (unloaded {plain:.2f})\n")
+
+    def solve_held_bar(self, legacy):
+        close_all()
+        _doc, objs, theory = thermal.heated_steel_bar(length=300.0, held=True, max_size=4.0)
+        analysis = objs["analysis"]
+        steps.LEGACY_SINGLE_STEP = legacy
+        try:
+            folder = os.path.join(self.tmp, "legacy" if legacy else "steps")
+            result = sim.solve(analysis, working_dir=folder)
+        finally:
+            steps.LEGACY_SINGLE_STEP = False
+        mesh = result.Mesh.FemMesh
+        mid = [s for n, s in zip(result.NodeNumbers, result.NodeStressXX) if abs(mesh.getNodeById(n).x - 150.0) < 3.0]
+        with open(os.path.join(folder, "Mesh.inp"), encoding="utf-8") as handle:
+            text = handle.read()
+        return {"mid": sum(mid) / len(mid), "vm": max(result.vonMises), "u": max(result.DisplacementLengths),
+                "t": max(result.Temperature), "steps": text.count("\n*STEP"), "theory": theory,
+                "sf": result.MinSafetyFactor}
+
+    def test_heat_then_stationary_equals_the_old_thermal_stress_study(self):
+        old = self.solve_held_bar(True)
+        new = self.solve_held_bar(False)
+        self.assertEqual((old["steps"], new["steps"]), (1, 2))
+        for key in ("mid", "vm", "u", "t", "sf"):
+            self.assertAlmostEqual(new[key], old[key], delta=1e-3 * max(1.0, abs(old[key])), msg=key)
+        self.assertLess(abs(new["mid"] - new["theory"]["stress"]) / abs(new["theory"]["stress"]), 0.02, new)
+        App.Console.PrintMessage(f"\n[steps heat+stationary] mid {new['mid']:.3f} MPa (old one-block {old['mid']:.3f}, "
+                                 f"theory {new['theory']['stress']:.2f}); max vM {new['vm']:.3f} vs {old['vm']:.3f}\n")

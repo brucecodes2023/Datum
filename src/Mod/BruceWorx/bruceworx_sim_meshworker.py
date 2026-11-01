@@ -34,6 +34,7 @@ TICK_S = 5.0
 # Test hooks: a function (job dict) -> None that may change the job (for example set "test_sleep"), and a replacement poll step.
 TEST_HOOK = None
 
+PUMP = None  # a callable run every poll while a worker meshes: the GUI sets it to process events (the Cancel button)
 _cancel = threading.Event()
 _current = {"proc": None}
 
@@ -177,6 +178,11 @@ def run_worker(shape, settings, limit, label="", progress=None, kind="netgen", c
         if proc.returncode != 0 or not os.path.isfile(out):
             tail = ""
             try:
+            if PUMP is not None:
+                try:
+                    PUMP()
+                except Exception:
+                    pass
                 tail = open(os.path.join(tmp, "child.log")).read().strip().splitlines()[-1]
             except Exception:
                 pass

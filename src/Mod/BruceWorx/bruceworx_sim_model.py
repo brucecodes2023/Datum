@@ -169,12 +169,23 @@ def constraint_kind(obj):
     return "constraint"
 
 
-ICONS = {"fixed": "i-fixed", "displacement": "i-fixed", "hold": "i-fixed", "force": "i-force", "pressure": "i-press",
+ICONS = {"namedsel": "i-sel", "localsize": "i-mesh", "fixed": "i-fixed", "displacement": "i-fixed", "hold": "i-fixed", "force": "i-force", "pressure": "i-press",
          "gravity": "i-grav"}  # every other constraint uses i-phys
 
 STEP_LABELS = {"static": "Stationary", "modal": "Eigenfrequency", "buckling": "Linear buckling",
                "thermal": "Heat transfer", "thermal_stress": "Thermal stress", "external_flow": "Steady CFD",
                "prop_wash": "Steady CFD (actuator disks)"}
+
+
+def step_label(analysis):
+    """The Study node's text: the step's name, or the steps joined with '+'."""
+    import bruceworx_sim_steps as steps_mod
+
+    kind = kind_of(analysis)
+    listed = steps_mod.steps(analysis)
+    if len(listed) > 1:
+        return " + ".join(steps_mod.TYPES[st.type] for st in listed)
+    return STEP_LABELS.get(kind, kind)
 
 
 def motors(analysis):
@@ -215,9 +226,13 @@ def model_tree(analysis):
     root = node("study", "study", _label(analysis), analysis, "i-study")
     root.children = sections = []
 
+    import bruceworx_sim_defs as defs
+    import bruceworx_sim_steps as steps_mod
+
     sections.append(node("defs", "section", "Global Definitions", icon="i-defs", children=[
-        node("defs/params", "params", "Parameters", icon="i-param", placeholder=True),
-        node("defs/sels", "selections", "Selections", icon="i-sel", placeholder=True)]))
+        node("defs/params", "params", "Parameters", defs.holder(analysis), icon="i-param"),
+        node("defs/sels", "selections", "Selections", icon="i-sel", children=[
+            node(f"defs/sel/{o.Name}", "namedsel", o.Label, o, "i-sel") for o in defs.selections(analysis)])]))
 
     model = _model(analysis)
     geo = []
@@ -249,10 +264,16 @@ def model_tree(analysis):
         mesh_nodes = [node("mesh/main", "mesh", "Mesh (snappyHexMesh)", icon="i-mesh")]
     else:
         mesh_nodes = [node("mesh/main", "mesh", mesh.Label, mesh, "i-mesh")] if mesh is not None else []
+    if not air:
+        mesh_nodes += [node(f"mesh/local/{o.Name}", "localsize", o.Label, o, "i-mesh") for o in defs.local_sizes(analysis)]
     sections.append(node("mesh", "section", "Mesh", icon="i-mesh", children=mesh_nodes))
 
     solver = members["solver"]
-    step = [node("step/main", "step", STEP_LABELS.get(kind, kind), icon="i-step")]
+    step = [node("step/main", "step", step_label(analysis), icon="i-step")]
+    listed = steps_mod.steps(analysis)
+    if len(listed) > 1:  # a study with several steps (preload + modal, heat + stress): one node per step
+        step[0].children = [node(f"step/{st.key}", "stepitem", st.label, icon="i-step", step_type=st.type)
+                            for st in listed]
     if air:
         step.append(node("step/solver", "solver", "OpenFOAM", icon="i-solver"))
     elif solver is not None:
@@ -281,10 +302,11 @@ def _plots(analysis):
     elif kind == "thermal":
         out.append(("temperature", "Temperature", "plot", "i-plot"))
     else:
+        tag = " (stationary)" if kind == "thermal_stress" else ""  # a step's results are named after the step
         if kind == "thermal_stress":
-            out.append(("temperature", "Temperature", "plot", "i-plot"))
-        out += [("stress", "Stress", "plot", "i-plot"), ("displacement", "Displacement", "plot", "i-plot"),
-                ("safety", "Safety factor", "plot", "i-plot")]
+            out.append(("temperature", "Temperature (heat transfer)", "plot", "i-plot"))
+        out += [("stress", "Stress" + tag, "plot", "i-plot"), ("displacement", "Displacement" + tag, "plot", "i-plot"),
+                ("safety", "Safety factor" + tag, "plot", "i-plot")]
         if any(sim.is_spin_load(o) for o in getattr(analysis, "Group", []) or []):
             out.append(("hoop", "Hoop and radial stress", "plot", "i-plot"))
     if kind not in sim.AIRFLOW_KINDS and kind not in ("modal", "buckling"):
@@ -301,7 +323,7 @@ def find_node(analysis, key):
 
 _SKIP = {"Label", "Label2", "Visibility", "Proxy", "Placement", "Scale", "Points", "Normals", "NormalDirection",
          "DirectionVector", "ExpressionEngine", "Shape", "FemMesh", "Tool", "WorkingDirectory", "WorkingDir",
-         "Results", "Uid", "Group", "UUID", "Tangents"}
+         "Results", "Uid", "Group", "UUID", "Tangents", "BW_Expr", "BW_Role", "BW_ParamMeta", "BW_ParamOrder"}
 # study properties that only change how results are shown, or that the solver writes back
 _DISPLAY = {"MeshNodeLimit", "StressMeasure", "SFThresholds", "SFColors", "MaterialUUID", "Model", "CaseFolder",
             "CfdSummary", "ThermalSummary", "TempMargin", "TempColors", "HDTLimit", "ProbePoint", "ProbeSet",
@@ -389,6 +411,12 @@ def _model_shape(analysis):
 def fingerprints(analysis):
     """{node key: fingerprint} for the nodes that have one (geometry, materials, Physics nodes, mesh, study,
     solver, and the compute stages "mesh/main", "step/main", "results")."""
+    import bruceworx_sim_defs as defs
+
+    try:
+        defs.sync(analysis)  # a named selection's faces are the faces of the objects that use it
+    except Exception:
+        pass
     m = sim.members(analysis)
     out = {}
     out["geo/part"] = _hash("geo", geometry_settings(_model_shape(analysis)))
@@ -408,7 +436,9 @@ def fingerprints(analysis):
         mesh_fp = _hash("mesh", out["geo/part"], study)  # OpenFOAM meshes inside the run
     else:
         mesh = m["mesh"]
-        mesh_fp = _hash("mesh", out["geo/part"], _obj_settings(mesh, {"MeshParams"}) if mesh is not None else "")
+        local = defs.local_size_signature(analysis)
+        parts = ("mesh", out["geo/part"], _obj_settings(mesh, {"MeshParams"}, {"MeshSizeFile"}) if mesh is not None else "")
+        mesh_fp = _hash(*(parts + ((local,) if local else ())))
     out["mesh/main"] = mesh_fp
     out["step/main"] = _hash("solution", study, solver, mesh_fp, sorted(mat_fps), sorted(phys_fps), out["geo/part"])
     out["results"] = _hash("results", out["step/main"])
@@ -510,11 +540,13 @@ def state(analysis, findings=None, precheck=True):
 
     for n in tree.walk():
         if n.kind in ("params", "selections", "section", "study"):
-            continue  # placeholders carry no mark; sections are rolled up below
+            continue  # these carry no mark of their own; sections are rolled up below
         if n.key == "mesh/main":
             out[n.key] = combine(mesh_state, n.key)
         elif n.key == "step/main":
             out[n.key] = combine(solution, n.key)
+        elif n.kind == "stepitem":
+            out[n.key] = combine(solution, "step/main")
         elif n.kind in ("result", "plot", "table", "probe", "report"):
             out[n.key] = solution if have_results else "todo"
         else:
@@ -531,8 +563,6 @@ def state(analysis, findings=None, precheck=True):
         return mark
 
     for sec in tree.children:
-        if sec.key == "defs":
-            continue
         roll(sec)
         for key, own in (("mat", "material"), ("geo", "model")):
             if sec.key == key and not sec.children:
@@ -551,6 +581,8 @@ def _missing(analysis, n, obj):
     if n.kind == "geometry":
         shape = _model_shape(analysis)
         return shape is None or not shape.Solids
+    if n.kind in ("namedsel", "localsize"):
+        return obj is not None and len(obj.References) == 0
     if obj is not None and obj.isDerivedFrom("Fem::Constraint") and "References" in obj.PropertiesList:
         if n.kind in ("gravity", "spin", "initialtemp"):
             return False
@@ -613,8 +645,19 @@ def node_messages(analysis, tree=None):
 REFS = ("References", "Faces, edges or vertices the setting applies to")
 
 
-def _refs_fields():
-    return [_f("References", "Selection", "selection", help="Faces, edges or vertices the setting applies to")]
+NO_SELECTION = "(own list)"
+
+
+def _refs_fields(analysis=None):
+    out = []
+    if analysis is not None:
+        import bruceworx_sim_defs as defs
+
+        names = [NO_SELECTION] + [o.Label for o in defs.selections(analysis)]
+        out.append(_f("NamedSelection", "Named selection", "enum", choices=names, access="namedsel",
+                      help="Use a named selection from Global Definitions instead of this setting's own faces"))
+    out.append(_f("References", "Selection", "selection", help="Faces, edges or vertices the setting applies to"))
+    return out
 
 
 def _readonly(name, label, unit="", help=""):
@@ -653,6 +696,14 @@ def settings(node):
                                    help="allowable stress = knockdown x yield strength (1 = none)"),
                 A("StressMeasure", "Stress measure", "enum", choices=sim.measure_keys(),
                   help="The equivalent stress the safety factor divides"))
+    elif k == "namedsel":
+        add("Named selection", _f("Label", "Name", "text", access="label"),
+            _f("References", "Faces, edges or bodies", "selection", help="Click faces in the 3D view to add or remove them"),
+            _readonly("users", "Used by"))
+    elif k == "localsize":
+        add("Selection", *_refs_fields(analysis))
+        add("Local size", _f("Size", "Element size", "float", "mm", min=0.001,
+                             help="The Netgen element size on the selection (the global maximum size grows away from it)"))
     elif k == "geometry":
         add("Geometry", _readonly("part", "Part"), _readonly("solids", "Solids"), _readonly("volume", "Volume", "mm^3"),
             _readonly("area", "Surface area", "mm^2"), _readonly("size", "Bounding box", "mm"))
@@ -664,7 +715,7 @@ def settings(node):
         add("Properties", _readonly("E", "Young's modulus", "MPa"), _readonly("nu", "Poisson's ratio"),
             _readonly("density", "Density", "kg/m^3"), _readonly("yield", "Yield strength", "MPa"))
     elif k in ("fixed", "displacement", "hold"):
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         if k != "fixed":
             fields = []
             for ax in "xyz":
@@ -672,12 +723,12 @@ def settings(node):
                            _f(f"{ax}Displacement", f"{ax.upper()} displacement", "float", "mm")]
             add("Displacement", *fields)
     elif k == "force":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         add("Force", _f("Force", "Force", "float", "N", min=0.0),
             _f("Direction", "Direction", "selection", help="A straight edge or a flat face: the force acts along it"),
             _f("Reversed", "Reversed", "bool"))
     elif k == "pressure":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         add("Pressure", _f("Pressure", "Pressure", "float", "MPa"), _f("Reversed", "Reversed", "bool"))
     elif k == "gravity":
         add("Gravity", _f("GravityAcceleration", "Acceleration", "float", "m/s^2"),
@@ -686,22 +737,22 @@ def settings(node):
         add("Spin", _f("rpm", "Speed", "float", "rpm", access="spin_rpm", min=0.0),
             _f("RotationAxis", "Axis", "selection", help="A circular edge, cylindrical face or straight edge"))
     elif k == "temperature":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         add("Temperature", _f("Temperature", "Temperature", "float", "degC"))
     elif k == "heatflux":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         add("Heat flux", _f("DFlux", "Heat flux", "float", "W/m^2", help="Positive into the part"))
     elif k == "convection":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         add("Convection", _f("FilmCoef", "Film coefficient h", "float", "W/m^2/K", min=0.0),
             _f("AmbientTemp", "Ambient temperature", "float", "degC"))
     elif k == "heatsource":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
         add("Heat source", _f("TotalPower", "Total power", "float", "W"))
     elif k == "initialtemp":
         add("Initial temperature", _f("initialTemperature", "Temperature", "float", "degC"))
     elif k == "constraint":
-        add("Selection", *_refs_fields())
+        add("Selection", *_refs_fields(analysis))
     elif k == "mesh":
         if air:
             add("Mesh", A("MeshPreset", "Mesh", "enum", choices=_presets(), help="Cell budget and refinement of the OpenFOAM mesh"))
@@ -710,9 +761,16 @@ def settings(node):
                 _f("Fineness", "Fineness", "enum", choices=sim.FINENESS),
                 _f("SecondOrder", "Second order (Tet10)", "bool"),
                 A("MeshNodeLimit", "Node limit", "int", help="Hard limit on the estimated nodes; 0 = the preference"))
+            add("Time limit", _readonly("timelimit", "Time limit",
+                                        help="How long one Netgen try may take before it is stopped; automatic from the node estimate"),
+                A("MeshTimeLimit", "Own limit (0 = automatic)", "float", "s", min=0.0,
+                  help="Seconds one Netgen try may take in its worker process; 0 = automatic"))
             add("Status", _readonly("nodes", "Nodes"), _readonly("elements", "Elements"))
     elif k == "step":
-        add("Study step", _readonly("step", "Type"), *_step_fields(analysis))
+        multi = len(node.children) > 0
+        add("Study step", _readonly("step", "Type"), *([] if multi else _step_fields(analysis)))
+    elif k == "stepitem":
+        add(node.label, _readonly("step", "Type"), *_step_fields(analysis, node.extra.get("step_type")))
     elif k == "solver":
         if air:
             add("OpenFOAM", _readonly("openfoam", "Installation"))
@@ -770,9 +828,18 @@ def _presets():
     return tuple(cfd.PRESETS)
 
 
-def _step_fields(analysis):
-    """The solution step's settings of a study type, as the study's own properties."""
+def _step_fields(analysis, only=None):
+    """The solution step's settings of a study type, as the study's own properties. ``only``: the step type of a
+    several-step study ("stationary", "modal", "heat"): just that step's settings."""
     kind = kind_of(analysis)
+    if only is not None:
+        fields = _step_fields(analysis)
+        mine = {"modal": {"ModeCount", "FrequencyMin", "FrequencyMax", "ExcitationCheck", "ExcitationSource", "MotorRpmMin",
+                          "MotorRpmMax", "BladeCount", "BandMin", "BandMax"},
+                "heat": {"InitialTemperature", "Transient", "EndTime", "TimeStep"},
+                "stationary": {"ReferenceTemperature"} if kind == "thermal_stress" else set(),
+                "buckling": {f.name for f in fields}}.get(only, set())
+        return [f for f in fields if f.name in mine]
     A = lambda *a, **kw: _f(*a, on="analysis", **kw)  # noqa: E731
     if kind == "modal":
         return [A("ModeCount", "Number of modes", "int", min=1), A("FrequencyMin", "Lowest frequency", "float", "Hz", min=0.0),
@@ -840,6 +907,24 @@ def _quantity_value(prop_value, unit):
     return float(prop_value)
 
 
+def get_expression(node, field):
+    """The expression a float or int field was set with ("F_load/4"), or '' when it holds a plain value."""
+    import bruceworx_sim_defs as defs
+
+    f = _field(node, field)
+    target = _analysis(node) if f.on == "analysis" else _obj(node)
+    return defs.field_expression(target, f.prop) if target is not None and not f.access else ""
+
+
+def expression_error(node, field):
+    """Why the field's expression cannot be evaluated now (a parameter was removed or changed unit), or ''."""
+    import bruceworx_sim_defs as defs
+
+    f = _field(node, field)
+    target = _analysis(node) if f.on == "analysis" else _obj(node)
+    return defs.field_error(target, f.prop) if target is not None and not f.access else ""
+
+
 def get_value(node, field):
     """A field's current value: numbers in the field's unit, enum/text strings, bools, (x, y, z) tuples, and for a
     selection a list of (object name, sub-element name)."""
@@ -901,12 +986,28 @@ def _info(node, name):
                       "yield": sim._quantity_mpa(data.get("YieldStrength"))}
         value = (values or {}).get(name)
         return value if value is not None else ""
+    if name == "timelimit":
+        import bruceworx_sim_meshworker as mw
+
+        own = _get(analysis, "MeshTimeLimit", 0.0) or 0.0
+        if own > 0:
+            return f"{own / 60:.1f} min (set)" if own >= 60 else f"{own:.0f} s (set)"
+        try:
+            shape = _model_shape(analysis)
+            est = sim._estimate_for(obj, shape) if obj is not None and shape is not None else 0
+        except Exception:
+            est = 0
+        return f"automatic ({mw.time_limit(analysis, est) / 60:.0f} min)"
     if name == "nodes":
         return sim.mesh_stats(obj)["nodes"] if obj is not None else 0
     if name == "elements":
         return sim.mesh_stats(obj)["elements"] if obj is not None else 0
     if name == "step":
-        return STEP_LABELS.get(kind, kind)
+        if node.kind == "stepitem":
+            import bruceworx_sim_steps as steps_mod
+
+            return steps_mod.TYPES.get(node.extra.get("step_type"), "")
+        return step_label(analysis)
     if name == "ccx":
         return sim.find_ccx() or "not found"
     if name == "openfoam":
@@ -918,6 +1019,11 @@ def _info(node, name):
         return "No-slip walls on every part of the model"
     if name == "motor":
         return obj.Label if obj is not None else ""
+    if name == "users":
+        import bruceworx_sim_defs as defs
+
+        users = defs.selection_users(analysis, obj) if obj is not None else []
+        return ", ".join(u.Label for u in users) if users else "nothing yet"
     return ""
 
 
@@ -931,6 +1037,11 @@ def _access_get(node, f, analysis, target):
         import bruceworx_sim_post as post
 
         return post.spin_rpm(target)
+    if kind == "namedsel":
+        import bruceworx_sim_defs as defs
+
+        sel = defs.linked(target)
+        return sel.Label if sel is not None else NO_SELECTION
     if kind == "card":
         uuid = _get(analysis, "MaterialUUID", "")
         cards = _card_choices()
@@ -1070,19 +1181,41 @@ def set_value(node, field, value):
     analysis = _analysis(node)
     doc = analysis.Document
     target = analysis if f.on == "analysis" else _obj(node)
+    import bruceworx_sim_defs as defs
+
+    if f.prop == "References" and f.kind == "selection" and target is not None and defs.linked(target) is not None:
+        raise ValueError(f"{target.Label} uses the named selection '{defs.linked(target).Label}': change the faces there, "
+                         f"or set Named selection to {NO_SELECTION}")
+    expr = None
     _DOC_FOR_LOOKUP.append(doc)
     try:
-        new = _parse(f, value, target, analysis)
+        if f.kind in ("float", "int") and isinstance(value, str) and defs.has_identifier(analysis, value):
+            if f.access:
+                raise ValueError(f"{f.label} takes a number, not an expression")
+            number = defs.evaluate(analysis, value, f.unit, f.label)
+            new = parse_number(f, number)
+            expr = value.strip()
+        else:
+            new = _parse(f, value, target, analysis)
     finally:
         _DOC_FOR_LOOKUP.pop()
     doc.openTransaction(f"Set {f.label}")
     try:
         _write(node, f, target, analysis, new)
-        if target is not None and target.TypeId.startswith("Fem::Constraint"):
-            try:
-                doc.recompute([target])  # a constraint redraws its symbols; the mesh is never recomputed here
-            except Exception:
-                pass
+        if f.kind in ("float", "int") and not f.access:
+            if expr:
+                defs.bind(target, f.prop, expr, f.unit, f.kind, f.label)
+            else:
+                defs.unbind(target, f.prop)
+        written = []
+        if node.kind == "namedsel" and f.prop == "References":
+            written = defs.sync(analysis)  # the faces of every object that uses this selection follow
+        for obj in [target] + written:
+            if obj is not None and obj.TypeId.startswith("Fem::Constraint"):
+                try:
+                    doc.recompute([obj])  # a constraint redraws its symbols; the mesh is never recomputed here
+                except Exception:
+                    pass
     except Exception:
         doc.abortTransaction()
         raise
@@ -1126,6 +1259,16 @@ def _write(node, f, target, analysis, new):
             import bruceworx_sim_post as post
 
             post.set_spin_speed(target, new)
+        elif kind == "namedsel":
+            import bruceworx_sim_defs as defs
+
+            sel = None if new == NO_SELECTION else defs.selection_named(analysis, new)
+            if new != NO_SELECTION and sel is None:
+                raise ValueError(f"no named selection {new!r}")
+            defs.link(target, sel)
+            if sel is not None:
+                node_doc = analysis.Document
+                node_doc.recompute([target]) if target.TypeId.startswith("Fem::Constraint") else None
         elif kind == "card":
             values = dict(_card_choices()).get(new)
             if values is None:

@@ -610,7 +610,8 @@
               ],
               "commands": [
                 "BruceWorx_StudyMesh",
-                "BruceWorx_StudyRefine"
+                "BruceWorx_StudyRefine",
+                "BruceWorx_SimLocalSize"
               ],
               "more": [
                 "FEM_MeshNetgenFromShape",
@@ -640,6 +641,15 @@
                 "FEM_SolverCalculiXCcxTools",
                 "FEM_SolverControl",
                 "FEM_SolverRun"
+              ]
+            },
+            {
+              "caption": "Steps",
+              "studies": [
+                "solid"
+              ],
+              "commands": [
+                "BruceWorx_SimAddStep"
               ]
             }
           ]

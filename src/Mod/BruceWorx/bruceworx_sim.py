@@ -1136,7 +1136,7 @@ def _mesh_in_place(mesh):
 
 
 NETGEN_COPY_PROPS = ("MaxSize", "MinSize", "Fineness", "GrowthRate", "NbSegsPerEdge", "NbSegsPerRadius", "Optimize",
-                     "AllowQuad", "SecondOrder", "UserSizeMap", "SurfaceElementSize")
+                     "AllowQuad", "SecondOrder", "UserSizeMap", "SurfaceElementSize", "MeshSizeFile")
 
 
 def repaired_copy(shape):
@@ -1356,6 +1356,14 @@ def _mesh_study(analysis, progress=None):
     upgrade = bool(getattr(mesh, "SecondOrder", False)) and first
     orphans = fem.NodeCount - len(used_node_ids(fem))
     keep, loose, clusters = face_connected_volumes(fem)
+    import bruceworx_sim_defs as defs
+
+    try:
+        size_file = defs.prepare_mesh(analysis, mesh)  # named selections, parameters, local sizes (SIM-07 P2)
+    except defs.DefsError as exc:
+        raise StudyError(str(exc)) from exc
+    if size_file and progress:
+        progress("Local mesh sizes: " + os.path.basename(size_file))
     if upgrade or orphans or loose:
         if upgrade:
             notes.append("Second order was asked but Netgen returned linear tetrahedra: upgraded them to Tet10 with straight mid-edge nodes")
@@ -1438,6 +1446,11 @@ def precheck(analysis, results=True):
     if thermal_kind:
         import bruceworx_sim_thermal as thermal
     m = members(analysis)
+    if kind not in AIRFLOW_KINDS:
+        import bruceworx_sim_defs as defs
+
+        defs.sync(analysis)  # named selections into the objects that use them (SIM-07 P2)
+        defs.apply(analysis)  # parameter expressions into the fields
     model = getattr(analysis, "Model", None) if "Model" in analysis.PropertiesList else None
     if m["mesh"] is None:
         issues.append(("error", "No mesh object: New Study makes one"))
@@ -1618,6 +1631,9 @@ class _no_post_pipeline:
         import feminout.importCcxFrdResults as frd
 
         self.module, self.saved = frd, frd.setupPipeline
+        import bruceworx_sim_steps as steps
+
+        steps.two_step_input(analysis, fea.inp_file_name)  # thermal stress: *HEAT TRANSFER, then *STATIC (SIM-07 P2)
         frd.setupPipeline = lambda *args, **kwargs: None
         return self
 
@@ -1686,7 +1702,12 @@ def _finish_solve(fea, progress=None):
         import bruceworx_sim_thermal as thermal
 
         try:
-            return thermal.finish(analysis, fea)
+            done = thermal.finish(analysis, fea)
+            if study_kind(analysis) == "thermal_stress":
+                import bruceworx_sim_steps as steps
+
+                steps.label_step_results(analysis)
+            return done
         except thermal.ThermalError as exc:
             raise StudyError(str(exc)) from exc
     result = results[-1]

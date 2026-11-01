@@ -196,6 +196,8 @@ SET(BruceWorx_SRCS
     bruceworx_sim_model.py
     TestBruceWorxSimModel.py
     bruceworx_cfd_paraview.py
+    bruceworx_sim_defs.py
+    bruceworx_sim_steps.py
     bruceworx_validation.py
     bruceworx_validation_cases.py
     TestBruceWorxCfdParaView.py

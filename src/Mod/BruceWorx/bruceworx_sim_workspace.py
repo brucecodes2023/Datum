@@ -257,9 +257,9 @@ def _classes():
             self.setDocumentMode(True)
             self.messages = QtWidgets.QListWidget()
             self.messages.setObjectName("BWSimMessages")
-            self.progress = QtWidgets.QTableWidget(0, 3)
+            self.progress = QtWidgets.QTableWidget(0, 4)
             self.progress.setObjectName("BWSimProgress")
-            self.progress.setHorizontalHeaderLabels(["Stage", "Progress", "Time"])
+            self.progress.setHorizontalHeaderLabels(["Stage", "Progress", "Time", ""])
             self.progress.verticalHeader().hide()
             self.progress.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
             self.progress.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
@@ -269,6 +269,7 @@ def _classes():
             hh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
             hh.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
             hh.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+            hh.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
             self.log = QtWidgets.QPlainTextEdit()
             self.log.setObjectName("BWSimLog")
             self.log.setReadOnly(True)
@@ -321,7 +322,14 @@ def _classes():
             item = QtWidgets.QTableWidgetItem("running")
             item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             self.progress.setItem(row, 2, item)
-            self.rows[name] = {"row": row, "bar": bar, "time": item, "t0": p["time"], "done": False}
+            stop = QtWidgets.QToolButton()  # a running row has a stop button (Mesh and Solve end their worker / ccx)
+            stop.setObjectName("BWSimStop")
+            stop.setText("\u25a0")
+            stop.setToolTip("Stop")
+            stop.setAutoRaise(True)
+            stop.clicked.connect(lambda _c=False: _cancel_run())
+            self.progress.setCellWidget(row, 3, stop)
+            self.rows[name] = {"row": row, "bar": bar, "time": item, "t0": p["time"], "done": False, "stop": stop}
 
         def _row(self, name):
             if name not in self.rows:
@@ -336,6 +344,8 @@ def _classes():
         def _on_stage_finished(self, p):
             r = self._row(p["name"])
             r["done"] = True
+            self.progress.removeCellWidget(r["row"], 3)
+            r["stop"] = None
             r["bar"].setRange(0, 1000)
             r["bar"].setValue(1000)
             r["bar"].setProperty("state", "ok" if p["ok"] else "bad")
@@ -456,6 +466,12 @@ def model_builder_host():
 def settings_host():
     """The Settings pane's content widget (vertical layout); None headless."""
     return _s["panes"]["st"].host if _build() else None
+
+
+def _cancel_run():
+    import bruceworx_sim_panes as panes
+
+    panes.cancel_compute()
 
 
 def messages_pane():
@@ -1088,11 +1104,63 @@ def _always():
     return True
 
 
+def _solid_study():
+    study = active_study()
+    return study is not None and not _airflow_study()
+
+
+def _parameters():
+    import bruceworx_sim_panes as panes
+
+    return panes.select_key("defs/params")
+
+
+def _selection():
+    import bruceworx_sim_panes as panes
+
+    return panes.add_named_selection()
+
+
+def _local_size():
+    import bruceworx_sim_panes as panes
+
+    return panes.add_local_size()
+
+
+def _add_step():
+    """A menu of the steps that can follow the last one."""
+    import bruceworx_sim_panes as panes
+    import bruceworx_sim_steps as steps
+    from PySide import QtGui, QtWidgets
+
+    study = active_study()
+    if study is None:
+        return None
+    options = steps.additions(study)
+    if not options:
+        import bruceworx_sim_events as events
+
+        events.message("info", "No step can follow the last one of this study (supported: preload then eigenfrequency, "
+                               "heat transfer then stationary stress)")
+        return None
+    menu = QtWidgets.QMenu()
+    for stype, text in options:
+        menu.addAction(text, lambda t=stype: panes.add_step(t))
+    menu.exec(QtGui.QCursor.pos())
+    return None
+
+
 COMMANDS = (
-    ("BruceWorx_SimParameters", "Parameters", "BruceWorx_NewStudy.svg", "Named values with units for any field (phase P2)", _always,
-     _later("Parameters", "P2")),
-    ("BruceWorx_SimSelections", "Selections", "BruceWorx_NewStudy.svg", "Named face and body selections reused by loads (phase P2)",
-     _always, _later("Named selections", "P2")),
+    ("BruceWorx_SimParameters", "Parameters", "BruceWorx_NewStudy.svg",
+     "The study's parameters: named values with units and expressions for any number field", _always, lambda: _parameters()),
+    ("BruceWorx_SimSelections", "Selections", "BruceWorx_NewStudy.svg",
+     "Make a named selection from the faces, edges or bodies selected in the 3D view; loads and mesh sizes can share it",
+     _always, lambda: _selection()),
+    ("BruceWorx_SimLocalSize", "Local size", "BruceWorx_NewStudy.svg",
+     "A finer mesh on the selected faces, edges or bodies (or a named selection)", _solid_study, lambda: _local_size()),
+    ("BruceWorx_SimAddStep", "Add step", "BruceWorx_NewStudy.svg",
+     "Add a step after the last one: preload then eigenfrequency, heat transfer then stationary stress",
+     _solid_study, lambda: _add_step()),
     ("BruceWorx_SimGeometry", "Geometry", "BruceWorx_NewStudy.svg", "The study's geometry nodes: repair, defeature (phase P2)",
      _always, _later("Geometry nodes", "P2")),
     ("BruceWorx_SimProject", "Project", "BruceWorx_NewStudy.svg", "The project schematic of systems and transfers (phase P4)",

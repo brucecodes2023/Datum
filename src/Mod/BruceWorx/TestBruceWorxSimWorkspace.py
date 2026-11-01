@@ -149,6 +149,17 @@ class TestRibbonByStudy(unittest.TestCase):
         self.assertIn("BruceWorx_ModeShapes", self.commands("Results", "modal"))
         self.assertNotIn("FEM_ConstraintPressure", self.commands("Physics", "modal"))
 
+    def test_definitions_mesh_and_step_commands(self):
+        for kind in ("static", "modal", "thermal_stress"):
+            self.assertEqual(self.commands("Definitions", kind), ["BruceWorx_SimParameters", "BruceWorx_SimSelections"])
+            self.assertIn("BruceWorx_SimLocalSize", self.commands("Mesh", kind))
+            self.assertEqual(self.commands("Study", kind)[-1], "BruceWorx_SimAddStep")
+        self.assertNotIn("BruceWorx_SimLocalSize", self.commands("Mesh", "prop_wash"))
+        self.assertNotIn("BruceWorx_SimAddStep", self.commands("Study", "prop_wash"))
+        names = {c[0] for c in sw.COMMANDS}
+        for cmd in ("BruceWorx_SimParameters", "BruceWorx_SimSelections", "BruceWorx_SimLocalSize", "BruceWorx_SimAddStep"):
+            self.assertIn(cmd, names)
+
     def test_no_study_shows_home_only_with_new_study(self):
         names = ws.study_tab_names(self.sim, None)
         self.assertIn("Home", names)
@@ -601,6 +612,113 @@ class TestPanesInWindow(unittest.TestCase):
         _settle(0.3)
         self.panes.flush_now()
         self.assertIn(key, self.keys())
+
+    def test_parameters_table_and_field_expressions(self):
+        import bruceworx_sim_model as model
+
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        self.assertTrue(self.panes.select_key("defs/params"))
+        self.assertEqual(self.panes.param_rows(), [])
+        self.assertTrue(self.panes.param_add("F_load", "400 N", "N", "total tip load"))
+        self.assertFalse(self.panes.param_add("F_load", "1 N", "N"))
+        self.assertIn("exists", self.panes.param_error())
+        self.assertFalse(self.panes.param_add("w", "bogus*2", ""))
+        self.assertIn("unknown name 'bogus'", self.panes.param_error())
+        self.assertEqual(self.panes.param_rows()[0][:4], ["F_load", "400 N", "N", "400 N"])
+        self.assertTrue(self.panes.select_key("phys/TipLoad"))
+        self.assertTrue(self.panes.edit("Force", "F_load/4"))
+        self.assertEqual(self.panes.field_text("Force"), "F_load/4")
+        self.assertEqual(model.get_value(model.find_node(study, "phys/TipLoad"), "Force"), 100.0)
+        self.assertFalse(self.panes.edit("Force", "bogus/4"))
+        self.assertIn("unknown name 'bogus'", self.panes.field_error("Force"))
+        self.assertFalse(self.panes.edit("Force", "F_load*1 mm"))
+        self.assertIn("N", self.panes.field_error("Force"))
+        self.assertEqual(model.get_value(model.find_node(study, "phys/TipLoad"), "Force"), 100.0)  # nothing was written
+        self.assertEqual(model.get_expression(model.find_node(study, "phys/TipLoad"), "Force"), "F_load/4")
+        self.assertTrue(self.panes.select_key("defs/params"))
+        active = App.ActiveDocument
+        if active is None:  # the FEM result import reads FreeCAD.ActiveDocument
+            App.setActiveDocument(doc.Name)
+        self.assertTrue(self.panes.compute("mesh/main"))
+        self.assertTrue(self.panes.compute("step/main", blocking=True), f"active was {active}")
+        self.panes.flush_now()
+        self.assertEqual(self.panes.marks()["step/main"], "ok")
+        self.assertTrue(self.panes.param_edit(0, 1, "800 N"))  # the table: expression column
+        self.panes.flush_now()
+        self.assertEqual(model.get_value(model.find_node(study, "phys/TipLoad"), "Force"), 200.0)
+        self.assertEqual(self.panes.marks()["step/main"], "stale")
+        self.assertEqual(self.panes.marks()["mesh/main"], "ok")
+        self.assertFalse(self.panes.param_remove("F_load"))  # the load uses it
+        self.assertIn("TipLoad", self.panes.param_error())
+
+    def test_named_selection_local_size_and_step_nodes(self):
+        import bruceworx_sim_model as model
+
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        sel = self.panes.add_named_selection(refs=[("Beam", ["Face2"])], label="Tip")
+        key = f"defs/sel/{sel.Name}"
+        self.assertEqual(self.panes.current_key(), key)
+        self.assertIn(key, self.keys())
+        self.assertEqual(self.panes.field_text("References"), ["Beam \u00b7 Face2"])
+        self.assertTrue(self.panes.select_key("phys/TipLoad"))
+        self.assertTrue(self.panes.edit("NamedSelection", "Tip"))
+        self.assertEqual(model.get_value(model.find_node(study, "phys/TipLoad"), "References"), [("Beam", "Face2")])
+        self.assertTrue(self.panes.select_key(key))
+        self.assertTrue(self.panes.pick("Beam", "Face4"))  # a click adds to the named selection; the load follows
+        self.assertEqual(sorted(model.get_value(model.find_node(study, "phys/TipLoad"), "References")),
+                         [("Beam", "Face2"), ("Beam", "Face4")])
+        ls = self.panes.add_local_size("2 mm", refs=[("Beam", ["Face2"])], label="Tip mesh")
+        self.assertIn(f"mesh/local/{ls.Name}", self.keys())
+        self.assertEqual(self.panes.field_text("Size"), "2 mm")
+        self.assertTrue(self.panes.delete_node(f"mesh/local/{ls.Name}"))
+        self.assertNotIn(f"mesh/local/{ls.Name}", self.keys())
+        self.assertTrue(self.panes.delete_node(key))
+        self.assertNotIn(key, self.keys())
+        self.assertEqual(model.get_value(model.find_node(study, "phys/TipLoad"), "NamedSelection"), "(own list)")
+        # steps: Add step turns the stationary study into preload + eigenfrequency
+        self.assertTrue(self.panes.add_step("modal"))
+        self.assertIn("step/s1", self.keys())
+        self.assertIn("step/s2", self.keys())
+        self.assertFalse(self.panes.add_step("heat"))
+        self.assertTrue(self.panes.select_key("step/s2"))
+        self.assertIn("ModeCount", self.panes.field_names())
+
+    def test_cancel_button_stop_buttons_and_time_limit(self):
+        import bruceworx_sim_model as model
+
+        doc, objs, _theory = sim.cantilever()
+        study = objs["analysis"]
+        self.show(study)
+        self.assertTrue(self.panes.select_key("mesh/main"))
+        self.assertIn("Compute", self.panes._p["buttons"])
+        self.assertTrue(self.panes.field_text("timelimit").startswith("automatic ("), self.panes.field_text("timelimit"))
+        self.assertTrue(self.panes.edit("MeshTimeLimit", "300"))
+        self.assertEqual(self.panes.field_text("timelimit"), "5.0 min (set)")
+        self.assertTrue(self.panes.edit("MeshTimeLimit", "0"))
+        self.assertTrue(self.panes.field_text("timelimit").startswith("automatic ("))
+        self.panes._set_running("mesh", True)  # the Mesh node's button reads Cancel while it meshes
+        self.assertIn("Cancel", self.panes._p["buttons"])
+        self.assertEqual(self.panes._p["buttons"]["Cancel"].text(), "Cancel")
+        self.assertTrue(self.panes.busy())
+        pane = sw.messages_pane()
+        events.run_started("t")
+        events.stage_started("Mesh")
+        _settle(0.2)
+        self.assertIsNotNone(pane.progress.cellWidget(0, 3))  # a running row has a stop button
+        self.assertTrue(self.panes.cancel_compute())  # asks the mesh worker to stop
+        events.stage_finished("Mesh", 1.0, False)
+        _settle(0.2)
+        self.assertIsNone(pane.progress.cellWidget(0, 3))
+        import bruceworx_sim_meshworker as mw
+
+        mw._cancel.clear()
+        self.panes._set_running("mesh", False)
+        self.assertIn("Compute", self.panes._p["buttons"])
+        self.assertFalse(self.panes.busy())
 
     def test_refreshes_are_debounced_and_cheap(self):
         doc, objs, _theory = sim.cantilever()

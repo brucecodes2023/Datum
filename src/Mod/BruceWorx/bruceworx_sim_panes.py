@@ -455,6 +455,13 @@ def _set_running(stage, on):
             model.set_running(study, stage, on)
         except Exception:
             pass
+    try:
+        import bruceworx_sim_meshworker as mw
+
+        mw.PUMP = _pump_events if on else None  # a blocking mesh keeps the window (and its Cancel button) alive
+    except Exception:
+        pass
+    _refresh_buttons()
 
 
 def _start_observers():
@@ -562,6 +569,9 @@ def select_key(key, from_tree=False, force=False):
         return True
     _p["key"] = key
     _p["pick"] = None
+    if key == "mesh/main" and not model.is_airflow(study) and "MeshTimeLimit" not in study.PropertiesList:
+        sim.ensure_study_properties(study)  # an older study gets its time-limit setting when its Mesh node is opened
+        node = model.find_node(study, key) or node
     build_form(node)
     if _refs_field(node) is not None or _p["fields"].get("Direction") or _p["fields"].get("RotationAxis"):
         _show_part(study)  # faces can only be clicked on the part, not on its mesh
@@ -788,7 +798,8 @@ def _show_empty():
 
 
 def _kind_text(node):
-    return {"study": "Study", "section": "Section", "params": "Definitions", "selections": "Definitions", "geometry": "Geometry",
+    return {"study": "Study", "section": "Section", "params": "Definitions", "selections": "Definitions", "namedsel": "Named selection",
+            "localsize": "Mesh size", "stepitem": "Study step", "geometry": "Geometry",
             "material": "Material", "air": "Material", "mesh": "Mesh", "step": "Study step", "solver": "Solver",
             "result": "Results", "plot": "Results", "table": "Results", "probe": "Results", "report": "Results"
             }.get(node.kind, "Physics")
@@ -1061,8 +1072,17 @@ def _show_field(name):
         return
     if f.kind in ("float", "int"):
         text = format_value(value, f.unit)
-        w.setText(text)
-        w.setProperty("shown", text)
+        expr, problem = "", ""
+        try:
+            expr, problem = model.get_expression(node, f), model.expression_error(node, f)
+        except Exception:
+            pass
+        shown = expr or text
+        w.setText(shown)
+        w.setProperty("shown", shown)
+        w.setToolTip(f"= {text}" if expr else f.help)
+        if problem:
+            show_error(name, problem, w)
     elif f.kind == "text":
         w.setText(str(value))
         w.setProperty("shown", str(value))
@@ -1141,7 +1161,10 @@ def field_names():
 
 
 def _extra_sections(node):
-    """The colour range of a stress, displacement or hoop plot (pinned per study and field, as the study panel does)."""
+    """The parameter table of the Parameters node; the colour range of a stress, displacement or hoop plot (pinned per
+    study and field, as the study panel does)."""
+    if node.kind == "params":
+        return [("Parameters", _params_body())]
     key = node.key.split("/")[-1]
     if node.kind != "plot" or key not in RANGE_KEYS:
         return []
@@ -1217,6 +1240,225 @@ def _extra_sections(node):
     hi.editingFinished.connect(apply)
     _p["range"]["apply"] = apply
     return [("Colour range", body)]
+
+
+PARAM_COLUMNS = ("Name", "Expression", "Unit", "Value", "Description")
+
+
+def _params_body():
+    """The study's parameter table (name, expression, unit, evaluated value, description) with Add and Remove."""
+    from PySide import QtCore, QtWidgets
+    import bruceworx_sim_defs as defs
+
+    study = analysis()
+    body = QtWidgets.QWidget()
+    lay = QtWidgets.QVBoxLayout(body)
+    lay.setContentsMargins(10, 6, 10, 8)
+    lay.setSpacing(4)
+    table = QtWidgets.QTableWidget(0, len(PARAM_COLUMNS))
+    table.setObjectName("BWSimParams")
+    table.setHorizontalHeaderLabels(PARAM_COLUMNS)
+    table.verticalHeader().setVisible(False)
+    table.horizontalHeader().setStretchLastSection(True)
+    table.setMinimumHeight(170)
+    lay.addWidget(table)
+    err = QtWidgets.QLabel("")
+    err.setObjectName("BWSimError")
+    err.setWordWrap(True)
+    err.hide()
+    lay.addWidget(err)
+    hint = QtWidgets.QLabel("An expression may use other parameters and units: 2*t + 1 mm, F_load/4. "
+                            "Any number field in the Settings takes a parameter name or an expression too.")
+    hint.setObjectName("BWSimHint")
+    hint.setWordWrap(True)
+    lay.addWidget(hint)
+    row = QtWidgets.QHBoxLayout()
+    add = QtWidgets.QPushButton("Add parameter")
+    rm = QtWidgets.QPushButton("Remove")
+    row.addWidget(add)
+    row.addWidget(rm)
+    row.addStretch(1)
+    lay.addLayout(row)
+    _p["params"] = {"table": table, "error": err, "loading": False}
+
+    def load():
+        _p["params"]["loading"] = True
+        table.setRowCount(0)
+        for prm in defs.parameters(study):
+            r = table.rowCount()
+            table.insertRow(r)
+            for c, text in enumerate((prm.name, prm.expression, prm.unit, prm.text, prm.description)):
+                item = QtWidgets.QTableWidgetItem(text)
+                if c in (0, 3):
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+                table.setItem(r, c, item)
+        _p["params"]["loading"] = False
+
+    def changed(item):
+        if _p["params"]["loading"]:
+            return
+        param_edit(item.row(), item.column(), item.text())
+
+    def add_clicked(_c=False):
+        text, ok = QtWidgets.QInputDialog.getText(table, "New parameter", "Name")
+        if ok and text.strip():
+            param_add(text.strip(), "0", "")
+
+    def remove_clicked(_c=False):
+        r = table.currentRow()
+        if r >= 0:
+            param_remove(table.item(r, 0).text())
+
+    _p["params"]["load"] = load
+    table.itemChanged.connect(changed)
+    add.clicked.connect(add_clicked)
+    rm.clicked.connect(remove_clicked)
+    load()
+    return body
+
+
+def _param_error(text):
+    box = _p.get("params")
+    _p["last_error"] = text
+    if box and _alive(box.get("error")):
+        box["error"].setText(text)
+        box["error"].setVisible(bool(text))
+
+
+def _param_done():
+    box = _p.get("params")
+    if box and _alive(box.get("table")):
+        box["load"]()
+    schedule(full=False)
+    reload_values()
+
+
+def param_add(name, expression, unit="", description=""):
+    """Adds a parameter as the table's Add does; the error (unit, name, cycle) is shown under the table. True when added."""
+    import bruceworx_sim_defs as defs
+
+    study = analysis()
+    if study is None:
+        return False
+    try:
+        defs.add_parameter(study, name, expression, unit, description)
+    except defs.DefsError as exc:
+        _param_error(str(exc))
+        return False
+    _param_error("")
+    _param_done()
+    return True
+
+
+def param_edit(row, column, text):
+    """Edits a cell of the parameter table (column 1 expression, 2 unit, 4 description) as typing in it does."""
+    import bruceworx_sim_defs as defs
+
+    study = analysis()
+    box = _p.get("params")
+    if study is None or not box:
+        return False
+    names = defs.parameter_names(study)
+    if row >= len(names):
+        return False
+    kwargs = {1: "expression", 2: "unit", 4: "description"}.get(column)
+    if kwargs is None:
+        return False
+    try:
+        defs.edit_parameter(study, names[row], **{kwargs: text.strip() if kwargs != "description" else text})
+    except defs.DefsError as exc:
+        _param_error(str(exc))
+        _param_done()  # the table shows the stored values again
+        _param_error(str(exc))
+        return False
+    _param_error("")
+    _param_done()
+    return True
+
+
+def param_remove(name):
+    import bruceworx_sim_defs as defs
+
+    study = analysis()
+    if study is None:
+        return False
+    try:
+        defs.remove_parameter(study, name)
+    except defs.DefsError as exc:
+        _param_error(str(exc))
+        return False
+    _param_error("")
+    _param_done()
+    return True
+
+
+def param_rows():
+    """The parameter table as shown: [[name, expression, unit, value, description]] (tests)."""
+    box = _p.get("params")
+    if not box or not _alive(box.get("table")):
+        return []
+    t = box["table"]
+    return [[t.item(r, c).text() for c in range(t.columnCount())] for r in range(t.rowCount())]
+
+
+def param_error():
+    box = _p.get("params")
+    return box["error"].text() if box and _alive(box.get("error")) else ""
+
+
+def add_named_selection(refs=None, label=None):
+    """A new named selection, made from ``refs`` or from what is selected in the 3D view now; selects its node."""
+    import bruceworx_sim_defs as defs
+
+    study = analysis()
+    if study is None:
+        return None
+    if refs is None:
+        try:
+            refs = [(o, [s for s in subs]) for o, subs in _view_selection(study)]
+        except Exception:
+            refs = []
+    n = len(defs.selections(study)) + 1
+    try:
+        obj = defs.make_selection(study, label or f"Selection {n}", refs)
+    except defs.DefsError as exc:
+        _say("error", f"Named selection: {exc}")
+        return None
+    refresh(full=True, select=f"defs/sel/{obj.Name}")
+    return obj
+
+
+def _view_selection(study):
+    """[(object, [subs])] of the faces, edges and bodies selected in the 3D view (parts of the study's model only)."""
+    import FreeCADGui as Gui
+
+    out = []
+    for sel in Gui.Selection.getSelectionEx(study.Document.Name):
+        subs = [s for s in sel.SubElementNames if s.startswith(("Face", "Edge", "Vertex", "Solid"))]
+        if subs and _eligible(sel.Object):
+            out.append((sel.Object, subs))
+    return out
+
+
+def add_local_size(size="2 mm", refs=None, label=None):
+    """A new local mesh size node (on ``refs`` or on the faces selected in the 3D view); selects it."""
+    import bruceworx_sim_defs as defs
+
+    study = analysis()
+    if study is None or model.is_airflow(study):
+        return None
+    if refs is None:
+        try:
+            refs = _view_selection(study)
+        except Exception:
+            refs = []
+    try:
+        obj = defs.make_local_size(study, size, refs, label=label or "Local size")
+    except defs.DefsError as exc:
+        _say("error", f"Local size: {exc}")
+        return None
+    refresh(full=True, select=f"mesh/local/{obj.Name}")
+    return obj
 
 
 def set_range(lo, hi, fixed=True):
@@ -1305,14 +1547,78 @@ def _airflow_show(study, plot):
 def _node_buttons(node):
     """[(text, tip, handler, primary)] of the Settings top bar."""
     key = node.key
+    text = "Cancel" if busy() else "Compute"
     if key == "mesh/main":
-        return [("Compute", "Mesh the study (Build Mesh)", lambda: compute("mesh/main"), True)]
-    if key in SOLVE_KEYS or node.kind in ("step", "solver"):
-        return [("Compute", "Pre-check, then mesh if needed, solve and read the results", lambda: compute("step/main"), True),
+        return [(text, "Mesh the study (Build Mesh); Cancel stops the mesher", lambda: compute_or_cancel("mesh/main"), True)]
+    if key in SOLVE_KEYS or node.kind in ("step", "solver", "stepitem"):
+        return [(text, "Pre-check, then mesh if needed, solve and read the results; Cancel stops the mesher or CalculiX",
+                 lambda: compute_or_cancel("step/main"), True),
                 ("Pre-check", "List what the study still needs before it can solve", precheck, False)]
     if node.kind in ("plot", "result", "table", "probe", "report"):
         return [("Plot", "Show this result in the 3D view", lambda k=key: show_node(k), True)]
     return []
+
+
+def busy():
+    """True while this study meshes or solves."""
+    study = analysis()
+    if study is None:
+        return False
+    try:
+        return bool(model._running(study))
+    except Exception:
+        return False
+
+
+def _refresh_buttons():
+    """The Compute button of the Settings top bar reads Cancel while a mesh or solve runs."""
+    text = "Cancel" if busy() else "Compute"
+    old = "Compute" if text == "Cancel" else "Cancel"
+    b = (_p.get("buttons") or {}).pop(old, None)
+    if b is not None and _alive(b):
+        b.setText(text)
+        _p["buttons"][text] = b
+
+
+def compute_or_cancel(key):
+    if busy():
+        return cancel_compute()
+    return compute(key)
+
+
+def cancel_compute():
+    """Stops the running mesh (the worker process is killed) or solve (the CalculiX process is killed). True when something
+    was stopped."""
+    stopped = False
+    study = analysis()
+    running = set(model._running(study)) if study is not None else set()
+    if "mesh" in running or "solution" in running:
+        import bruceworx_sim_meshworker as mw
+
+        mw.cancel()
+        stopped = True
+    r = _p.get("runner")
+    if r is not None and not r.released and r.process is not None:
+        try:
+            from PySide import QtCore
+
+            if _alive(r.process) and r.process.state() != QtCore.QProcess.NotRunning:
+                r.process.kill()
+                stopped = True
+        except Exception:
+            pass
+    if stopped:
+        events.message("warning", "Cancelled")
+    return stopped
+
+
+def _pump_events():
+    try:
+        from PySide import QtWidgets
+
+        QtWidgets.QApplication.processEvents()
+    except Exception:
+        pass
 
 
 def precheck():
@@ -1500,6 +1806,17 @@ def delete_node(key):
     if node is None or not node.obj or node.kind in ("study", "geometry", "mesh", "solver", "section"):
         return False
     doc = study.Document
+    if node.kind == "namedsel":
+        import bruceworx_sim_defs as defs
+
+        try:
+            defs.remove_selection(study, doc.getObject(node.obj))
+        except defs.DefsError as exc:
+            _say("error", f"Delete {node.label}: {exc}")
+            return False
+        _p["key"] = None
+        refresh(full=True, select="defs/sels")
+        return True
     doc.openTransaction(f"Delete {node.label}")
     try:
         doc.removeObject(node.obj)
@@ -1509,7 +1826,7 @@ def delete_node(key):
         return False
     doc.commitTransaction()
     _p["key"] = None
-    refresh(full=True, select="phys" if key.startswith("phys/") else "study")
+    refresh(full=True, select="phys" if key.startswith("phys/") else "mesh" if key.startswith("mesh/") else "study")
     return True
 
 
@@ -1544,6 +1861,20 @@ def _context_menu(pos):
         sub = menu.addMenu("Add")
         for kind, text in addable(study):
             sub.addAction(text, lambda k=kind: add_node(k))
+    if key == "defs/sels" or node.kind == "namedsel":
+        menu.addAction("New selection from the 3D view", add_named_selection)
+    if key == "defs/params":
+        menu.addAction("Add parameter…", lambda: _param_dialog())
+    if (key == "mesh" or key.startswith("mesh/")) and not model.is_airflow(study):
+        menu.addAction("Add local size", add_local_size)
+    if key == "step" or key.startswith("step/"):
+        import bruceworx_sim_steps as steps
+
+        sub = menu.addMenu("Add step")
+        for stype, text in steps.additions(study):
+            sub.addAction(text, lambda t=stype: add_step(t))
+        if node.kind == "stepitem":
+            menu.addAction("Remove step", lambda k=key: remove_step(k))
     if key == "mesh/main" or key == "mesh":
         menu.addAction("Compute", lambda: compute("mesh/main"))
     if key in SOLVE_KEYS or node.kind in ("step", "solver"):
@@ -1557,6 +1888,46 @@ def _context_menu(pos):
         menu.addAction("Delete", lambda: delete_node(key))
     if not menu.isEmpty():
         menu.exec(tree.viewport().mapToGlobal(pos))
+
+
+def _param_dialog():
+    from PySide import QtWidgets
+
+    text, ok = QtWidgets.QInputDialog.getText(_p["tree"], "New parameter", "Name")
+    if ok and text.strip():
+        select_key("defs/params")
+        param_add(text.strip(), "0", "")
+
+
+def add_step(stype):
+    """Adds a study step of ``stype`` (stationary, modal, buckling, heat) after the existing ones; True when accepted."""
+    import bruceworx_sim_steps as steps
+
+    study = analysis()
+    if study is None:
+        return False
+    try:
+        steps.add_step(study, stype)
+    except steps.StepError as exc:
+        _say("error", f"Add step: {exc}", "step")
+        return False
+    refresh(full=True, select="step/main")
+    return True
+
+
+def remove_step(key):
+    import bruceworx_sim_steps as steps
+
+    study = analysis()
+    if study is None:
+        return False
+    try:
+        steps.remove_step(study, key.split("/")[-1])
+    except steps.StepError as exc:
+        _say("error", f"Remove step: {exc}", "step")
+        return False
+    refresh(full=True, select="step/main")
+    return True
 
 
 def _rename_dialog(key, label):
