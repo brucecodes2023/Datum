@@ -293,11 +293,207 @@ def precheck_spin(analysis, m=None):
     for mat in m["materials"]:
         if not sim._density_kg_m3((mat.Material or {}).get("Density")):
             issues.append(("error", f"{mat.Label}: no density: a spin load needs the mass"))
+    for sup in m["supports"]:
+        issues += _bore_fixing_issues(sup, spins)
     if any(sub.startswith("Vertex") for s in m["supports"] for _o, subs in (getattr(s, "References", None) or [])
            for sub in subs):
         issues.append(("warning", "Point supports pin the growth of the rotor there: read the stress away from them "
-                                  "(symmetry planes or a bore face avoid it)"))
+                                  "(a minimal 3-2-1 set, or symmetry planes on a sector, keeps it small)"))
     return issues
+
+
+BORE_FIXED_TEXT = ("{label}: a support that holds the radial direction on a cylindrical face around the spin axis stops the "
+                   "bore growing under the spin and kills the bore hoop stress (the rotor is held like a press fit). Hold the "
+                   "wheel axially only: an axial-only Displacement on a flat face plus a minimal 3-2-1 point set (the "
+                   "'Hold for spin' helper, post.hold_for_spin), or symmetry planes on a sector")
+
+
+def fixes_radial(sup, axis):
+    """True when a support constraint holds two independent directions across ``axis`` (a Fixed one holds all)."""
+    import numpy as np
+
+    if sup.TypeId == "Fem::ConstraintFixed":
+        return True
+    if sup.TypeId != "Fem::ConstraintDisplacement":
+        return False
+    a = np.array(_unit(axis[1]))
+    rows = []
+    for i, name in enumerate("xyz"):
+        if not getattr(sup, f"{name}Free", True):
+            e = np.zeros(3)
+            e[i] = 1.0
+            rows.append(e - a * float(e @ a))
+    return bool(rows) and np.linalg.matrix_rank(np.array(rows), tol=1e-6) >= 2
+
+
+def _bore_fixing_issues(sup, spins):
+    """An error for a support that holds the radial direction on a cylindrical face coaxial with a spin axis."""
+    out = []
+    for spin in spins:
+        try:
+            axis = spin_axis(spin)
+        except Exception:
+            axis = None
+        if axis is None or not fixes_radial(sup, axis):
+            continue
+        for obj, subs in getattr(sup, "References", None) or []:
+            for sub in subs:
+                if not sub.startswith("Face"):
+                    continue
+                try:
+                    face_axis = axis_from_ref(obj, sub)
+                    shape = sim.shape_of(obj)
+                    if shape.getElement(sub).Surface.TypeId != "Part::GeomCylinder":
+                        continue
+                except Exception:
+                    continue
+                parallel = abs(sum(x * y for x, y in zip(_unit(face_axis[1]), _unit(axis[1])))) > 1 - 1e-6
+                size = shape.BoundBox.DiagonalLength or 1.0
+                if parallel and point_axis_distance(face_axis[0], axis) < 1e-3 * size:
+                    out.append(("error", BORE_FIXED_TEXT.format(label=sup.Label)))
+                    return out
+    return out
+
+
+# ----- holding a spinning rotor ------------------------------------------------------------------------------------
+
+
+def _model_shape(analysis):
+    model = getattr(analysis, "Model", None) if "Model" in analysis.PropertiesList else None
+    if model is None:
+        mesh = sim.members(analysis)["mesh"]
+        model = getattr(mesh, "Shape", None) if mesh is not None else None
+    return model, (sim.shape_of(model) if model is not None else None)
+
+
+def hold_for_spin(analysis, face=None, axis=None):
+    """Holds a spinning rotor the way that leaves it free to grow: an axial-only Displacement on one flat face, plus a
+    minimal 3-2-1 point set across the axis (point A holds the two directions across it, point B the one direction across
+    the axis that stops the turn about A).  A Fixed bore would stop the bore growing and kill the bore hoop stress.
+
+    ``face``: 'Face3' of the model, or (object, 'Face3'); None takes the largest flat face square to the axis.
+    ``axis``: as ``add_spin``; None takes the study's (its first spin load's, else the model's own).  It must lie along the
+    global X, Y or Z (a Displacement constraint holds global directions).  Returns the three constraints
+    [axial, point A, point B]; the points are vertices of the model, so they are mesh nodes."""
+    import ObjectsFem
+
+    import numpy as np
+
+    if not sim.is_study(analysis) or sim.study_kind(analysis) != "static":
+        raise PostError("hold_for_spin belongs to a static study")
+    resolved = resolve_axis(axis, analysis) if axis is not None else default_axis(analysis)
+    point, a, _u, _v = axis_frame(resolved)
+    k = int(np.argmax(np.abs(a)))
+    if abs(a[k]) < 1 - 1e-6:
+        raise PostError("the spin axis is not along X, Y or Z: a Displacement constraint holds global directions, so "
+                        "tilt the part or hold it with symmetry planes")
+    model, shape = _model_shape(analysis)
+    if shape is None:
+        raise PostError("the study has no model to hold")
+    if isinstance(face, (tuple, list)) and len(face) == 2 and hasattr(face[0], "TypeId"):
+        model, face = face
+        shape = sim.shape_of(model)
+    if face is None:
+        best, best_area = None, 0.0
+        for i, f in enumerate(shape.Faces, 1):
+            try:
+                if f.Surface.TypeId == "Part::GeomPlane" and abs(abs(f.normalAt(0, 0).dot(__import__("FreeCAD").Vector(*a))) - 1) < 1e-6 \
+                        and f.Area > best_area:
+                    best, best_area = f"Face{i}", f.Area
+            except Exception:
+                continue
+        if best is None:
+            raise PostError("no flat face square to the spin axis to hold axially: pick one with face=")
+        face = best
+    elif shape.getElement(face).Surface.TypeId != "Part::GeomPlane":
+        raise PostError(f"{face}: hold the wheel on a flat face (axial only); a cylindrical face stops the bore growing")
+    in_plane = [i for i in range(3) if i != k]
+    verts = [(f"Vertex{i}", np.array([v.Point.x, v.Point.y, v.Point.z])) for i, v in enumerate(shape.Vertexes, 1)]
+    if len(verts) < 2:
+        raise PostError("the model has too few vertices for a 3-2-1 set; use symmetry planes on a sector")
+
+    def radius(p):
+        rel = p - point
+        return float(np.linalg.norm(rel - (rel @ a) * a))
+
+    a_name, a_pos = min(verts, key=lambda it: radius(it[1]))
+    best = None
+    for name, pos in verts:
+        lever = np.cross(a, pos - a_pos)
+        for i in in_plane:
+            if best is None or abs(lever[i]) > best[0]:
+                best = (abs(lever[i]), name, i)
+    if best is None or best[0] < 1e-6 * (shape.BoundBox.DiagonalLength or 1.0):
+        raise PostError("no second vertex off the first to stop the turn; use symmetry planes on a sector")
+    _lever, b_name, b_dir = best
+    doc = analysis.Document
+
+    def displacement(name, subs, fixed):
+        c = ObjectsFem.makeConstraintDisplacement(doc, name)
+        c.References = [(model, s) for s in subs]
+        for i, ax in enumerate("xyz"):
+            free = i not in fixed
+            setattr(c, f"{ax}Free", free)
+            if not free:
+                setattr(c, f"{ax}Displacement", 0)
+        analysis.addObject(c)
+        return c
+
+    made = [displacement("Hold axial", [face], [k]),
+            displacement("Hold point A", [a_name], in_plane),
+            displacement("Hold point B", [b_name], [b_dir])]
+    doc.recompute()
+    return made
+
+
+# ----- the bore of a rotor ------------------------------------------------------------------------------------------
+
+
+def bore_stress(result, analysis=None, axis=None, band=0.05):
+    """The stress on the bore of a spinning rotor: {} when the part has no bore (a solid disc).
+
+    The mean hoop over the bore nodes is right for a thin disc only; a long hub has a hoop that changes along the bore and
+    a von Mises that the axial stress raises (a 14 mm hub: mean 340, mid-plane 404, von Mises 512 MPa), so this gives
+    hoop mean, max and at the mid-plane (nodes within ``band`` x the bore length of the middle), the von Mises maximum on the
+    bore, and the lowest safety factor there.  The safety factor is the study's own: it divides the allowable stress by the
+    EQUIVALENT stress (``measure``, von Mises by default), never by the hoop stress.
+
+    Keys: radius, length, z_mid (mm along the axis), nodes, hoop_mean, hoop_max, hoop_mid, axial_mid, vonMises_max,
+    vonMises_mid, min_sf, measure (the equivalent stress the safety factor divides), safety_basis (text)."""
+    import numpy as np
+
+    analysis = analysis or sim.study_of(result)
+    resolved = resolve_axis(axis, analysis) if axis is not None else default_axis(analysis)
+    values = cylindrical_stress(result, resolved, analysis)
+    ids, xyz = node_positions(result)
+    point, a, _u, _v = axis_frame(resolved)
+    rel = xyz - point
+    along = rel @ a
+    r = np.array(values["r"])
+    rmax = float(r.max())
+    rmin = float(r.min())
+    if rmax <= 0 or rmin < 1e-4 * rmax:
+        return {}
+    on = np.where(r <= rmin + 1e-3 * (rmax - rmin) + 1e-9)[0]
+    z = along[on]
+    length = float(z.max() - z.min())
+    z_mid = 0.5 * float(z.max() + z.min())
+    gap = np.abs(z - z_mid)
+    mid = on[gap <= max(band * length, float(gap.min()) + 1e-9)]
+    hoop = np.array(values["hoop"])
+    axial = np.array(values["axial"])
+    vm = np.array(list(result.vonMises))
+    sf = list(getattr(result, "SafetyFactor", []) or [])
+    measure = str(getattr(result, "StressMeasure", "") or "vonMises")
+    return {
+        "radius": rmin, "length": length, "z_mid": z_mid, "nodes": int(len(on)), "mid_nodes": int(len(mid)),
+        "hoop_mean": float(hoop[on].mean()), "hoop_max": float(hoop[on].max()), "hoop_mid": float(hoop[mid].mean()),
+        "axial_mid": float(axial[mid].mean()),
+        "vonMises_max": float(vm[on].max()), "vonMises_mid": float(vm[mid].mean()),
+        "min_sf": min(sf[i] for i in on) if len(sf) == len(r) else None,
+        "measure": measure,
+        "safety_basis": f"the safety factor divides by the {measure} equivalent stress, not the hoop stress",
+    }
 
 
 # ----- the closed form of a rotating disc -----------------------------------------------------------------------

@@ -1566,6 +1566,15 @@ def result_extrema(result):
             out["min_sf_away"], out["min_sf_away_node"] = sf[j], nodes[j]
     out["measure"] = str(getattr(result, "StressMeasure", "") or "vonMises")
     out["max_eq"] = float(getattr(result, "MaxEquivalentStress", 0.0) or out["max_vm"])
+    out["bore"] = {}
+    try:  # SIM-04: a spinning rotor with a bore reports it (mean, max and mid-plane hoop, von Mises max)
+        import bruceworx_sim_post as post
+
+        an = study_of(result)
+        if an is not None and post.spin_loads(an):
+            out["bore"] = post.bore_stress(result, an)
+    except Exception:
+        pass
     return out
 
 
@@ -1936,7 +1945,19 @@ def report_source(data, figures=()):
         if res.get("min_sf_away") is not None:
             lines.append(rf"Min safety factor away from the supports & \textbf{{{e(_fmt(res['min_sf_away'], 3, cap=True))}}} "
                          rf"(node {res['min_sf_away_node']}; {res['support_nodes']} nodes on supports left out)\\")
+        bore = res.get("bore") or {}
+        if bore:
+            lines.append(rf"Bore (radius {_tex_value(bore['radius'], 4, 'mm')}, {_tex_value(bore['length'], 3, 'mm')} long) hoop: "
+                         rf"mean / max / mid-plane & {_tex_value(bore['hoop_mean'], 4, '')} / {_tex_value(bore['hoop_max'], 4, '')} / "
+                         rf"{_tex_value(bore['hoop_mid'], 4, 'MPa')}\\")
+            lines.append(rf"Bore von Mises, max / mid-plane & {_tex_value(bore['vonMises_max'], 4, '')} / "
+                         rf"{_tex_value(bore['vonMises_mid'], 4, 'MPa')}\\")
+            lines.append(rf"Safety factor basis & {e(measure_label(measure))} equivalent stress, never the hoop stress\\")
         lines.append(r"\end{tabular}")
+        if bore and bore["length"] > 0.5 * bore["radius"]:
+            lines.append(r"\par{\small On a long bore the mean hoop stress understates the bore: the axial stress adds to "
+                         r"the von Mises stress and the hoop stress varies along the bore. Read the mid-plane and von Mises "
+                         r"values.}")
         if res.get("min_sf_away") is not None:
             lines.append(r"\par{\small A fully fixed face cannot contract sideways, so its edges carry a stress "
                          r"singularity that grows as the mesh is refined; the second minimum leaves the nodes on the "

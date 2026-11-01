@@ -1305,6 +1305,10 @@ def _make_classes():
                     row.addWidget(button("+ Spin", self.add_spin,
                                          "A spinning load: centrifugal force at an rpm about the axis of the selected circular edge "
                                          "or cylindrical face (else the model's bore or rim)"))
+                    row.addWidget(button("+ Hold for spin", self.hold_for_spin,
+                                         "Holds a spinning wheel so it can still grow: axial-only on the selected flat face "
+                                         "(else the biggest one square to the axis) plus a minimal 3-2-1 point set. A Fixed "
+                                         "bore would stop the bore growing and kill its hoop stress"))
                 w.layout().addLayout(row)
             if self.kind in thermal.KINDS:
                 row_t = QtWidgets.QHBoxLayout()
@@ -2039,6 +2043,9 @@ def _make_classes():
             """+ Spin: asks for the speed; the axis is the selected circular edge or cylindrical face, else the model's."""
             return add_spin_object(self.analysis, panel=self)
 
+        def hold_for_spin(self):
+            return hold_for_spin_object(self.analysis, panel=self)
+
         def export_vtu(self, path=None):
             return export_result(self.analysis, path)
 
@@ -2259,10 +2266,17 @@ def _make_classes():
                 away = (f"<br>Away from the supports <b style='color:{color}'>{ext['min_sf_away']:.3g}</b> at node "
                         f"{ext['min_sf_away_node']} <span style='color:#777'>({ext['support_nodes']} nodes on supports left "
                         "out: a fixed face's edges are a stress singularity that grows with mesh refinement)</span>")
+            bore = ext.get("bore") or {}
+            bore_text = ""
+            if bore:
+                bore_text = (f"<br>Bore hoop mean <b>{bore['hoop_mean']:.4g}</b> / max <b>{bore['hoop_max']:.4g}</b> / "
+                             f"mid-plane <b>{bore['hoop_mid']:.4g}</b> MPa, von Mises max <b>{bore['vonMises_max']:.4g}</b> MPa"
+                             f"<br><span style='color:#777'>The safety factor uses the {ext['measure']} equivalent stress, "
+                             "never the hoop stress.</span>")
             self.summary.setText(
                 f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b> (node {ext['max_vm_node']})<br>"
                 f"Max displacement <b>{ext['max_disp']:.4g} mm</b> (node {ext['max_disp_node']})<br>"
-                f"Min safety factor {sf_text}{away}")
+                f"Min safety factor {sf_text}{away}{bore_text}")
             kind = shown_field(self.analysis)
             self.legend.setText(legend_html(kind, result, self.analysis) if kind else "")
 
@@ -3070,6 +3084,30 @@ def add_spin_object(analysis=None, rpm=None, axis=None, panel=None):
         panel.refresh()
         panel._show_axis()
     return spin
+
+
+def hold_for_spin_object(analysis=None, face=None, panel=None):
+    """+ Hold for spin: ``bruceworx_sim_post.hold_for_spin`` on the selected flat face (else the biggest one square to the axis)."""
+    analysis = analysis or current_study()
+    if analysis is None or sim.study_kind(analysis) != "static":
+        _warn("Open a Static stress study first")
+        return None
+    if face is None:
+        refs = [r for r in selected_refs() if r[1].startswith("Face")]
+        face = refs[0] if refs else None
+    doc = analysis.Document
+    doc.openTransaction("Hold for spin")
+    try:
+        made = post.hold_for_spin(analysis, face=face)
+    except post.PostError as exc:
+        doc.abortTransaction()
+        _warn(f"Hold for spin: {exc}")
+        return None
+    doc.commitTransaction()
+    status("Added an axial hold and a 3-2-1 point set")
+    if panel is not None and _alive(panel.members_list):
+        panel.refresh()
+    return made
 
 
 def export_result(analysis, path=None):

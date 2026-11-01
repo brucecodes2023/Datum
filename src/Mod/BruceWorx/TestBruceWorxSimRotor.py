@@ -107,11 +107,19 @@ class TestSpinSetup(unittest.TestCase):
         return doc, body, solid, objs["analysis"]
 
     def hold_bore(self, doc, body, solid, an):
+        """Holds the wheel the way a spinning one should be held (axial face + 3-2-1 points; the name is historic)."""
+        return post.hold_for_spin(an)
+
+    def fix_bore(self, doc, body, solid, an, kind="fixed"):
         import ObjectsFem
 
-        hold = ObjectsFem.makeConstraintFixed(doc, "Bore")
-        hold.References = [(body, vc.faces_where(solid, vc.cylinder_of(8.0))[0])]
-        an.addObject(hold)
+        face = vc.faces_where(solid, vc.cylinder_of(8.0))[0]
+        if kind == "fixed":
+            hold = ObjectsFem.makeConstraintFixed(doc, "Bore")
+            hold.References = [(body, face)]
+            an.addObject(hold)
+            return hold
+        return vc.add_displacement(doc, an, body, [face], kind, "BoreDisp")
 
     def test_axis_from_a_cylinder_face_and_a_circle_edge(self):
         _doc, body, solid, _an = self.study(offset=10.0)
@@ -150,6 +158,44 @@ class TestSpinSetup(unittest.TestCase):
         point, direction = post.spin_axis(spin)
         self.assertAlmostEqual(point[0], 10.0)
         self.assertAlmostEqual(abs(direction[2]), 1.0)
+
+    def test_a_fixed_bore_under_a_spin_is_an_error_with_the_reason(self):
+        doc, body, solid, an = self.study()
+        post.add_spin(an, 30000, axis="z")
+        self.fix_bore(doc, body, solid, an)
+        errors = [t for k, t in sim.precheck(an) if k == "error"]
+        self.assertTrue(any("stops the bore growing" in t and "3-2-1" in t for t in errors), errors)
+
+    def test_a_radially_fixing_displacement_on_the_bore_is_an_error_too(self):
+        doc, body, solid, an = self.study()
+        post.add_spin(an, 30000, axis="z")
+        self.fix_bore(doc, body, solid, an, "xy")
+        self.assertTrue(any("stops the bore growing" in t for k, t in sim.precheck(an) if k == "error"))
+
+    def test_an_axial_only_bore_face_or_a_fixed_bore_without_a_spin_is_fine(self):
+        doc, body, solid, an = self.study()
+        self.fix_bore(doc, body, solid, an)  # no spin load: a bore fix is an ordinary support
+        self.assertFalse([t for k, t in sim.precheck(an) if "stops the bore" in t])
+        doc2, body2, solid2, an2 = self.study()
+        post.add_spin(an2, 30000, axis="z")
+        self.fix_bore(doc2, body2, solid2, an2, "z")  # axial only on the bore face
+        self.assertFalse([t for k, t in sim.precheck(an2) if "stops the bore" in t])
+
+    def test_hold_for_spin_makes_an_axial_face_and_a_3_2_1_set(self):
+        doc, body, solid, an = self.study()
+        post.add_spin(an, 30000, axis="z")
+        axial, a_, b_ = post.hold_for_spin(an)
+        self.assertEqual((axial.xFree, axial.yFree, axial.zFree), (True, True, False))
+        self.assertEqual((a_.xFree, a_.yFree, a_.zFree), (False, False, True))
+        self.assertEqual(sum(not getattr(b_, f"{c}Free") for c in "xyz"), 1)
+        self.assertTrue(b_.xFree is not False or b_.yFree is not False)
+        self.assertTrue(axial.References[0][1][0].startswith("Face"))
+        self.assertTrue(a_.References[0][1][0].startswith("Vertex"))
+        issues = sim.precheck(an)
+        self.assertTrue(sim.ready(issues), issues)
+        self.assertFalse([t for k, t in issues if "rigid-body" in t or "free" in t or "stops the bore" in t], issues)
+        with self.assertRaises(post.PostError):  # a cylindrical face is refused
+            post.hold_for_spin(an, face=vc.faces_where(solid, vc.cylinder_of(8.0))[0])
 
     def test_precheck_a_balanced_spin_held_by_a_face_passes(self):
         doc, body, solid, an = self.study()
@@ -229,6 +275,20 @@ class TestRotorSolve(unittest.TestCase):
     def tearDownClass(cls):
         close_all()
         shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_bore_stress_reports_mean_max_mid_plane_and_von_mises(self):
+        got = post.bore_stress(self.result, self.analysis)
+        self.assertAlmostEqual(got["radius"], 10.0, delta=1e-3)
+        self.assertGreater(got["nodes"], 4)
+        self.assertLessEqual(got["hoop_mean"], got["hoop_max"] + 1e-9)
+        ref = self.refs["shoop_a"]
+        self.assertAlmostEqual(got["hoop_mean"] / ref, 1.0, delta=0.01)
+        self.assertAlmostEqual(got["hoop_mid"] / ref, 1.0, delta=0.02)  # a thin disc: the same all along the bore
+        self.assertGreaterEqual(got["vonMises_max"], got["hoop_max"] * 0.99)
+        self.assertEqual(got["measure"], "vonMises")  # the safety factor divides von Mises, never the hoop stress
+        self.assertIn("not the hoop", got["safety_basis"])
+        ext = sim.result_extrema(self.result)
+        self.assertEqual(ext["bore"]["hoop_mean"], got["hoop_mean"])
 
     def test_the_input_has_the_centrifugal_load_at_omega_squared(self):
         text = open(os.path.join(self.tmp, "disc", "Mesh.inp"), encoding="utf-8", errors="replace").read()
@@ -313,6 +373,34 @@ class TestRotorSolve(unittest.TestCase):
             self.assertEqual(handle.read(8), b"\x89PNG\r\n\x1a\n")
         with self.assertRaises(post.PostError):
             post.contour_png(self.analysis, "hoop", view="nonsense", path=os.path.join(self.tmp, "x.png"), result=self.result)
+
+
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestHoldForSpin(unittest.TestCase):
+    """A full thin wheel (no symmetry planes) held by the helper: the bore grows freely, hoop = Timoshenko."""
+
+    def test_a_full_wheel_held_axially_keeps_its_bore_hoop_stress(self):
+        import Part
+
+        close_all()
+        tmp = tempfile.mkdtemp(prefix="vl-hold-")
+        try:
+            doc = App.newDocument("Full")
+            solid = Part.makeCylinder(50.0, 4.0).cut(Part.makeCylinder(10.0, 4.0))
+            body = vc.shape_object(doc, "Wheel", solid)
+            objs = sim.new_study(doc, sim.StudyPlan(name="Full", model=body, material=vc.material(210000.0, 0.3, 7850.0, name="Steel"),
+                                                    max_size=6.0))
+            an = objs["analysis"]
+            post.add_spin(an, 30000, axis="z")
+            post.hold_for_spin(an)
+            result = sim.solve(an, working_dir=tmp)
+            ref = vc.disc_references(10.0, 50.0, 30000.0, 7850.0, 0.3)["shoop_a"]
+            got = post.bore_stress(result, an)
+            self.assertAlmostEqual(got["hoop_mean"] / ref, 1.0, delta=0.08)
+            self.assertAlmostEqual(got["length"], 4.0, delta=1e-6)
+        finally:
+            close_all()
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class FakeMeshObject:
