@@ -66,7 +66,7 @@ _ACTOR_SAFE = re.compile(r"[^A-Za-z0-9._@-]+")
 # Names after the first optional one (PDM-05: checklist, note, reason, attachments)
 # are written only when used, so journals from before them read exactly as they did.
 LIFECYCLE_OPS = {
-    "create_item": ("part_number", "item_type", "description", "drawing_of"),
+    "create_item": ("part_number", "item_type", "description", "drawing_of", "simulation_of"),
     "submit": ("part_number",),
     "reject": ("part_number", "reason", "checklist", "attachments"),
     "approve": ("part_number", "note", "checklist", "attachments"),
@@ -612,9 +612,11 @@ class FolderVault:
     def bom(self):
         return self.model.bom
 
-    def create_item(self, part_number, item_type="part", description="", drawing_of=None):
-        return self._record("create_item", dict(part_number=part_number, item_type=item_type,
-                                                description=description, drawing_of=drawing_of))
+    def create_item(self, part_number, item_type="part", description="", drawing_of=None, simulation_of=None):
+        # simulation_of (PDM-14) is written only for a simulation, so journals from before it read as they did.
+        return self._record("create_item", _optional(dict(part_number=part_number, item_type=item_type,
+                                                          description=description, drawing_of=drawing_of),
+                                                     simulation_of=simulation_of))
 
     def set_item_type(self, part_number, item_type):
         return self._record("set_item_type", dict(part_number=part_number, item_type=item_type))
@@ -735,6 +737,9 @@ class FolderVault:
         gaps = [_gap(m) for m in (missing or ())]
         return self._record("set_bom", _optional(dict(parent=parent, lines=resolved, revision=revision),
                                                  sha256=sha256, missing=gaps))
+
+    def simulations_of(self, part_number):
+        return self.model.simulations_of(part_number)
 
     def drawings_of(self, part_number):
         return self.model.drawings_of(part_number)
@@ -876,8 +881,7 @@ class FolderVault:
         target = os.path.join(self.root, object_name(digest, filename))
         if not os.path.exists(target):
             os.makedirs(os.path.dirname(target), exist_ok=True)
-            with open(path, "rb") as handle:
-                _write_once(target, handle.read())
+            _copy_once(path, target)
         return {"sha256": digest, "size": os.path.getsize(path), "filename": filename}
 
     def attach(self, attachments) -> list:
@@ -1046,6 +1050,21 @@ class FolderVault:
             "missing_objects": self.missing_objects(),
             "problems": list(self.problems),
         }
+
+
+def _copy_once(source: str, path: str) -> None:
+    """:func:`_write_once` for a file: streamed in 1 MB blocks, never read whole into memory (PDM-14:
+    a simulation is 150 MB)."""
+    tmp = f"{path}.{uuid.uuid4().hex[:8]}.tmp"
+    try:
+        with open(source, "rb") as src, open(tmp, "wb") as handle:
+            shutil.copyfileobj(src, handle, 1 << 20)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def _write_once(path: str, data: bytes) -> None:

@@ -52,7 +52,7 @@ def suggest(vault, part_number: str, document_type: str = "", program: str = "")
     if not programs:
         raise ValueError("the vault's numbering has no program")
     program = numbering.normalize_program(program) if program else vault_setup.program_of(part_number, vault.root)
-    kind = item.item_type if item.item_type in ("assembly", "drawing") else "part"
+    kind = item.item_type if item.item_type in ("assembly", "drawing", "simulation") else "part"
     code = (numbering.normalize_document_type(document_type) if document_type
             else vault_setup.document_type_for_item(kind, vault_setup._vault_document_types(source, data), data))
     key = pdm.strip_revision(source.preview(program, code))
@@ -216,7 +216,7 @@ def _renumber_file(vault, old, new, staging, writer, fingerprint_of):
     if version is None:
         return None
     original = vault.fetch(old, os.path.join(staging, "original"), version)
-    staged = os.path.join(staging, "new", new + SUFFIX)
+    staged = os.path.join(staging, "new", new + (os.path.splitext(version.filename)[1] or SUFFIX))  # .vlsim stays .vlsim
     os.makedirs(os.path.dirname(staged), exist_ok=True)
     shutil.copyfile(original, staged)
     writer(staged, new, vault.items[old].latest.code)

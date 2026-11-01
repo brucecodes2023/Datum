@@ -48,6 +48,7 @@ SET(BruceWorxHooks_SRCS
     bruceworx/vault_dashboard.py
     bruceworx/vault_trees.py
     bruceworx/vault_storage.py
+    bruceworx/vault_simulations.py
     bruceworx/product_tree.py
     bruceworx/project_setup.py
     bruceworx/hardware.py
@@ -114,6 +115,7 @@ INSTALL(
         bruceworx/vault_dashboard.py
         bruceworx/vault_trees.py
         bruceworx/vault_storage.py
+        bruceworx/vault_simulations.py
         bruceworx/product_tree.py
         bruceworx/project_setup.py
         bruceworx/hardware.py

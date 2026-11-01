@@ -63,6 +63,12 @@ STATE_DIR = ".bw"
 STATE_FILE = "state.json"
 REV_DIR = ".rev"
 SUFFIX = ".FCStd"
+SIM_SUFFIX = ".vlsim"  # PDM-14: a simulation item's file is a FreeCAD document zip saved under this extension
+
+
+def suffix_for(item_type: str | None) -> str:
+    """The extension of an item's work file: ``.vlsim`` for a simulation, else ``.FCStd``."""
+    return SIM_SUFFIX if item_type == "simulation" else SUFFIX
 
 NOT_IN_VAULT = "not_in_vault"
 CHECKED_OUT_OTHER = "checked_out_other"
@@ -376,7 +382,8 @@ class Workspace:
     def path(self, pn: str) -> str:
         if self.is_folder(pn):
             return os.path.join(self.root, pn)
-        return os.path.join(self.root, pn + SUFFIX)
+        item = self.vault.model.items.get(pn)
+        return os.path.join(self.root, pn + suffix_for(item.item_type if item is not None else None))
 
     def _folder_tree(self, path: str) -> str:
         """The tree digest of a KiCad work folder, cached by its files' sizes and times."""
@@ -555,7 +562,8 @@ class Workspace:
         self._writable()
         done = []
         for old, new in sorted(self.vault.model.aliases.items()):
-            path = os.path.join(self.root, old + SUFFIX)
+            path = next((p for p in (os.path.join(self.root, old + e) for e in (SUFFIX, SIM_SUFFIX))
+                         if os.path.isfile(p)), os.path.join(self.root, old + SUFFIX))
             if old in self.vault.model.items or not os.path.isfile(path) or os.access(path, os.W_OK):
                 continue
             os.remove(path)
@@ -746,7 +754,8 @@ class Workspace:
                 os.remove(fetched)
             return dest
         fetched = self.vault.fetch(pn, folder, version)
-        dest = os.path.join(folder, f"{pn}-{version.revision}-{sha256[:8]}{SUFFIX}")
+        dest = os.path.join(folder, f"{pn}-{version.revision}-{sha256[:8]}"
+                                    f"{os.path.splitext(version.filename)[1] or SUFFIX}")
         if os.path.exists(dest):
             _set_writable(dest, True)
         os.replace(fetched, dest)

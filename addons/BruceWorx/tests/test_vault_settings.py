@@ -51,7 +51,7 @@ class CsvTests(unittest.TestCase):
         self.assertEqual(issues, [])
         self.assertEqual(settings, vs.example_settings())
         self.assertEqual([p.code for p in settings.programs], ["BW"])
-        self.assertEqual(settings.document_types, {"01": "Part", "02": "Assembly", "03": "Drawing"})
+        self.assertEqual(settings.document_types, {"01": "Part", "02": "Assembly", "03": "Drawing", "04": "Simulation"})
         self.assertEqual(settings.properties[0]["name"], "MaterialSpec")
         self.assertEqual(vs.csv_template(settings), text)
         full = full_settings()

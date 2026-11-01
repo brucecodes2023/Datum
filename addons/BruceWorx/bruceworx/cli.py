@@ -122,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
                        "kicad-import: cots (default) or part")
     vault.add_argument("--description", default="")
     vault.add_argument("--drawing-of", default="", help="create: the part a drawing documents")
+    vault.add_argument("--simulation-of", default="", help="create: the part a simulation analyses")
     vault.add_argument("--file", default="", help="checkin: the saved .FCStd; sync: the .FCStd to update; "
                        "kicad-open: project (default), schematic or board")
     vault.add_argument("--workspace", default="", help="checkout/fetch: copy the file here")
@@ -434,7 +435,8 @@ def _vault_command(args) -> int:
             raise ValueError(f"vault {args.action} needs --pn")
         payload["part_number"] = args.pn
     if args.action == "create":
-        vault.create_item(args.pn, args.type or "part", args.description, args.drawing_of or None)
+        vault.create_item(args.pn, args.type or "part", args.description, args.drawing_of or None,
+                          simulation_of=args.simulation_of or None)
     elif args.action == "checkout":
         payload["path"] = vault.checkout(args.pn, workspace=args.workspace or None)
     elif args.action == "checkin":

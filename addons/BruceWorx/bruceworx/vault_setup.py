@@ -65,7 +65,7 @@ from bruceworx import numbering, pdm
 
 # Default document types offered by the wizard (editable there). Decided for the
 # user: the shipped config/document_types.json is a placeholder table.
-DEFAULT_DOCUMENT_TYPES = {"01": "Part", "02": "Assembly", "03": "Drawing"}
+DEFAULT_DOCUMENT_TYPES = {"01": "Part", "02": "Assembly", "03": "Drawing", "04": "Simulation"}
 DEFAULT_PROGRAM = "BW"
 DEFAULT_FIRST_PARENT = 1001
 # The revision an older numbering file (P/N-REV form) gives a program Vault Settings adds.
@@ -76,7 +76,7 @@ ASSEMBLIES_AS_PARTS = "assemblies_as_parts"  # numbering.json key (PDM-12): asse
 DOCUMENT_TYPES_FILE = "document_types.json"
 PROPERTIES_FILE = "part_properties.json"
 STAGING_DIR = ".import"
-KINDS = ("part", "assembly", "drawing")
+KINDS = ("part", "assembly", "drawing")  # import candidates; a simulation is brought in by naming its part (PDM-14)
 
 ICLOUD_DRIVE = os.path.join("Library", "Mobile Documents", "com~apple~CloudDocs")
 REF_SUFFIX = ".bwvault"  # pdm_folder.REF_SUFFIX

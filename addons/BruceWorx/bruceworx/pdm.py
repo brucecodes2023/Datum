@@ -71,7 +71,7 @@ OBSOLETE = "Obsolete"
 STATES = (WIP, IN_REVIEW, RELEASED, OBSOLETE)
 INITIAL_STATE = WIP  # a new item's first revision
 
-ITEM_TYPES = ("part", "assembly", "drawing", "cots")
+ITEM_TYPES = ("part", "assembly", "drawing", "cots", "simulation")
 UNITS = ("mm", "in")  # PDM-09: the two unit profiles a project or vault is drawn in
 PROJECT_STATES = ("Open", "Closed")
 
@@ -268,6 +268,8 @@ class Item:
     item_type: str = "part"
     description: str = ""
     drawing_of: str | None = None  # for drawings: the part they document
+    # PDM-14: for simulations, the part or assembly they analyse (written and checked like drawing_of).
+    simulation_of: str | None = None
     revisions: list = field(default_factory=list)
     obsolete: bool = False
     # MOD-03: a configuration item names the file's item and its row; its revisions are the file's.
@@ -433,14 +435,20 @@ class Vault:
 
     # ----- items ------------------------------------------------------
 
-    def create_item(self, part_number, item_type="part", description="", drawing_of=None):
+    def create_item(self, part_number, item_type="part", description="", drawing_of=None, simulation_of=None):
         if part_number in self.items:
             raise LifecycleError(f"{part_number} already exists")
         if item_type not in ITEM_TYPES:
             raise ValueError(f"unknown item type {item_type!r}")
         if item_type == "drawing" and drawing_of not in self.items:
             raise LifecycleError("a drawing must name the part it documents")
+        if item_type == "simulation" and (simulation_of not in self.items
+                                          or self.items[simulation_of].item_type not in ("part", "assembly", "cots")):
+            raise LifecycleError("a simulation must name the part or assembly it analyses")
+        if simulation_of and item_type != "simulation":
+            raise LifecycleError("only a simulation names a part it analyses")
         item = Item(part_number, item_type, description, drawing_of)
+        item.simulation_of = simulation_of or None
         item.revisions.append(Revision(first_prerelease(), INITIAL_STATE, history=["created"]))
         self.items[part_number] = item
         return item
@@ -481,7 +489,7 @@ class Vault:
         """Give ``old`` the part number ``new`` (PDM-12), in any lifecycle state (released and
         obsolete included) but not while it is In Review. The item keeps its revisions, history,
         BOMs and state; every reference moves with it: BOM lines in every revision (as parent and as
-        child), ``drawing_of`` and ``configuration_of``, ECR/ECO item lists and project tops. The old
+        child), ``drawing_of``, ``simulation_of`` and ``configuration_of``, ECR/ECO item lists and project tops. The old
         number becomes an alias (:meth:`resolve`); chained renumbers resolve to the last number.
         ``new`` must be unused: neither an item nor a former number. A reason is required and is
         recorded on the item's latest revision. Locks and files belong to the store, not here."""
@@ -511,6 +519,8 @@ class Vault:
         for other in self.items.values():
             if other.drawing_of == old:
                 other.drawing_of = new
+            if other.simulation_of == old:
+                other.simulation_of = new
             if other.configuration_of == old:
                 other.configuration_of = new
             for rev in other.revisions:  # a configuration item's views carry BOM lines of their own
@@ -544,6 +554,10 @@ class Vault:
 
     def drawings_of(self, part_number):
         return [i for i in self.items.values() if i.drawing_of == part_number]
+
+    def simulations_of(self, part_number):
+        """The simulation items that analyse ``part_number`` (PDM-14)."""
+        return [i for i in self.items.values() if i.simulation_of == part_number]
 
     # ----- configurations (MOD-03) ------------------------------------
 
