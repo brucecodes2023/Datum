@@ -557,12 +557,17 @@ class TestVaultCategories(unittest.TestCase):
             return [panel.model.index(r, 0).data(GROUP) for r in range(panel.model.rowCount())]
 
         self.assertEqual(tops(), ["Connectors  \u00b7  2", "Uncategorized  \u00b7  1"])
-        self.assertEqual(panel.model.rowCount(panel.model.index(0, 0)), 2)
+        connectors = panel.model.index(0, 0)
+        self.assertEqual(panel.model.rowCount(connectors), 1)  # PDM-13: inside a category, the type groups
+        parts = panel.model.index(0, 0, connectors)
+        self.assertEqual(parts.data(GROUP), "Parts  \u00b7  2")
+        self.assertEqual(panel.model.rowCount(parts), 2)
         panel.set_category_hidden("Connectors", True)
         self.assertEqual(tops(), ["Uncategorized  \u00b7  1"])
         self.assertIn("2 in hidden categories", panel.count.text())
         panel.search.setText("Housing")  # a search looks through hidden categories
-        self.assertEqual(tops(), ["Connectors  \u00b7  2  \u00b7  hidden"])
+        # PDM-13: the list holds the matches only, so the group counts the one match, not the category.
+        self.assertEqual(tops(), ["Connectors  \u00b7  1  \u00b7  hidden"])
         panel.search.setText("")
         self.assertEqual(vc.category_prefs(s.root)[0], {"Connectors"})
         again = vc._classes()["VaultPanel"]()  # a new panel (a new session) starts with the choice kept

@@ -218,3 +218,57 @@ def program_roots(s, code: str) -> list:
             continue
         out.append(pn)
     return out
+
+
+# ----- the flat file list (PDM-13, 1 Nov 2026) -----------------------------------------------------
+# Every file is one row; what an assembly uses and where a file is used are shown for the selected
+# row, as SOLIDWORKS PDM and Autodesk Vault do (the user's choice: "everything should have a top line").
+
+TYPE_ORDER = ("assembly", "part", "cots", "drawing")
+TYPE_GROUPS = {"assembly": "Assemblies", "part": "Parts", "cots": "Parts", "drawing": "Drawings"}
+
+
+def used_in(s) -> dict:
+    """{P/N: [(assembly, qty), ...]}: the assemblies whose lines name each item, sorted."""
+    out = {}
+    for parent, lines in s["bom"].items():
+        for child, qty in lines:
+            out.setdefault(child, []).append((parent, qty))
+    for lst in out.values():
+        lst.sort()
+    return out
+
+
+def drawing_owner(s, drawing):
+    """The item a drawing is of, or None."""
+    return _owner(s, drawing)
+
+
+def contents(s, pn) -> set:
+    """``pn`` and everything its lines reach at any depth, with every one's drawings (cycles stop)."""
+    seen, todo = set(), [pn]
+    while todo:
+        p = todo.pop()
+        if p in seen or p not in s["items"]:
+            continue
+        seen.add(p)
+        seen.update(d for d in s["drawings"].get(p, ()) if d in s["items"])
+        todo.extend(child for child, _q in s["bom"].get(p, ()))
+    return seen
+
+
+def bought(info) -> bool:
+    """A bought-in item (COTS): its own type, or an envelope named COTS in its description."""
+    return info.get("type") == "cots" or "COTS" in (info.get("description") or "")
+
+
+def missing_drawing(s, pn) -> bool:
+    """A part or assembly that should have a drawing and has none: not bought in, not obsolete."""
+    info = s["items"].get(pn) or {}
+    if info.get("type") not in ("part", "assembly") or info.get("obsolete") or bought(info):
+        return False
+    return not s["drawings"].get(pn)
+
+
+def type_rank(kind) -> int:
+    return TYPE_ORDER.index(kind) if kind in TYPE_ORDER else len(TYPE_ORDER)

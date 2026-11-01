@@ -29,7 +29,8 @@ ISO = (0.424708, 0.17592, 0.339851, 0.820473)  # Gui::Camera::isometric(), as St
 SIZE = 512  # sharp on a Retina screen; drawn at twice that and scaled down (smooth edges)
 BACKGROUND = (1.0, 1.0, 1.0)
 MARK = ("BruceWorx", "iso")
-KINDS = ("part", "assembly", "cots")  # a drawing's thumbnail is its sheet: left as FreeCAD saved it
+KINDS = ("part", "assembly", "cots", "drawing")  # a drawing's picture is its first sheet (PDM-13)
+MESH_KINDS = ("part", "assembly", "cots")
 # Not the model: left out of the picture (only there: the document and its views are untouched).
 HELPER_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point", "App::LocalCoordinateSystem",
                 "Assembly::JointGroup", "Assembly::ViewGroup", "Assembly::BomGroup")
@@ -251,9 +252,14 @@ def picture_of(path, size=SIZE):
 
 
 def entries_for(doc) -> dict:
-    """{zip entry: bytes}: the iso picture and the preview mesh of the open ``doc``, those it has."""
+    """{zip entry: bytes}: the iso picture and the preview mesh of the open ``doc``, those it has; for a
+    drawing, the picture of its first sheet."""
+    import bruceworx_package
     import bruceworx_previewmesh
 
+    if bruceworx_package.pages_of(doc):
+        sheet = bruceworx_package.sheet_png(doc)
+        return {THUMBNAIL: sheet} if sheet else {}
     entries = {}
     image = render(doc)
     if image is not None:
@@ -338,6 +344,8 @@ def needs_picture(s, pn) -> bool:
         return False
     stored = os.path.join(s.vault.root, latest.object_name)
     picture = bool(cached(latest.sha256)) or is_iso(thumbnail_of(stored))
+    if item.item_type not in MESH_KINDS:  # a drawing: its sheet picture only
+        return not picture
     mesh = bool(bruceworx_previewmesh.cached(latest.sha256)) or bool(bruceworx_previewmesh.read(stored))
     return not (picture and mesh)
 
@@ -352,7 +360,7 @@ def source_for(s, pn):
     work = s.work.path(pn)
     if os.path.exists(work):
         item = s.vault.items.get(pn)
-        if s.work.local_hash(work) == latest.sha256 or (item is not None and item.item_type == "assembly"):
+        if s.work.local_hash(work) == latest.sha256 or (item is not None and item.item_type in ("assembly", "drawing")):
             return work
     return os.path.join(s.vault.root, latest.object_name)
 

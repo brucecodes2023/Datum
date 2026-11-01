@@ -343,6 +343,27 @@ def group_by_category(nodes, rows, hidden=(), show_hidden=False):
     return out, hidden_items
 
 
+TYPE_GROUPS = (("assembly", "Assemblies", ("assembly",)), ("part", "Parts", ("part", "cots")),
+               ("drawing", "Drawings", ("drawing",)))
+
+
+def group_by_type(nodes, rows, prefix=""):
+    """Item nodes cut into Assemblies, Parts and Drawings groups, in that order (PDM-13: the flat file
+    list, one row per file). Nodes of any other kind (ECR/ECO rows) stay after the groups. ``prefix``
+    keeps the groups' keys apart inside a category group."""
+    def kind(node):
+        return (rows.get(node["pn"]) or {}).get("item_type") or ""
+
+    out, placed = [], set()
+    for key, label, kinds in TYPE_GROUPS:
+        members = [n for n in nodes if n["pn"] is not None and kind(n) in kinds]
+        placed.update(id(n) for n in members)
+        if members:
+            out.append({"pn": None, "group": f"{label}  \u00b7  {len(members)}", "key": f"{prefix}type:{key}",
+                        "kind": key, "qty": None, "children": members})
+    return out + [n for n in nodes if id(n) not in placed]
+
+
 def matches(row, kind="all", query=""):
     """Whether a Vault panel row (dict) passes the filter chip and the search text."""
     if (row.get("item_type") == "change") != (kind == "changes"):
@@ -465,6 +486,18 @@ _SVG = {
               'stroke="{c}" stroke-width="2" stroke-linecap="round"/>',
     "sort": '<path d="M8 4v15M4.5 15.5L8 19l3.5-3.5M16 20V5M12.5 8.5L16 5l3.5 3.5" fill="none" stroke="{c}" '
             'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    # The file types (PDM-13): a part is one block, an assembly a stack of blocks, a drawing a sheet.
+    "part": '<path d="M12 2.7l8.4 4.8v9L12 21.3l-8.4-4.8v-9z" fill="{c}" fill-opacity=".16" stroke="{c}" '
+            'stroke-width="1.8" stroke-linejoin="round"/><path d="M3.9 7.7L12 12.3l8.1-4.6M12 12.3V21" fill="none" '
+            'stroke="{c}" stroke-width="1.8" stroke-linejoin="round"/>',
+    "assembly": '<path d="M7.5 2.4l5.1 2.9v5.7L7.5 13.9 2.4 11V5.3z" fill="{c}" fill-opacity=".16" stroke="{c}" '
+                'stroke-width="1.6" stroke-linejoin="round"/><path d="M16.5 2.4l5.1 2.9v5.7l-5.1 2.9-5.1-2.9" '
+                'fill="none" stroke="{c}" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.2l5.1 2.9v5.7'
+                'L12 21.6l-5.1-2.9v-5.7z" fill="{c}" fill-opacity=".34" stroke="{c}" stroke-width="1.6" '
+                'stroke-linejoin="round"/>',
+    "drawing": '<path d="M4.5 2.7h10.5l4.5 4.5v14.1h-15z" fill="{c}" fill-opacity=".12" stroke="{c}" '
+               'stroke-width="1.7" stroke-linejoin="round"/><path d="M15 2.7v4.5h4.5M7.8 16.5h8.4M12.9 13.5v6.3'
+               'M7.8 9.5h4.8" fill="none" stroke="{c}" stroke-width="1.6"/>',
 }
 
 # Fixed colours for command icons (menus can't follow the theme per icon).
@@ -1738,7 +1771,7 @@ class _DocumentObserver:
             changed()
             pn = s.item_pn_for(filename)
             item = s.vault.items.get(pn) if pn else None
-            if item is not None and item.item_type in ("part", "assembly", "cots"):
+            if item is not None and item.item_type in ("part", "assembly", "cots", "drawing"):
                 from PySide import QtCore
 
                 # After the save has returned: the iso picture and the preview mesh into the saved file (PDM-13).
@@ -2229,15 +2262,17 @@ def _make_classes():
             self.viewport().update()
             super().leaveEvent(event)
 
-    ROW_HEIGHT = 30
+    ROW_HEIGHT = 36  # room for the thumbnail (PDM-13)
     FOOTER = "Double-click opens · select a file to see where it is used · editing offers Check Out"
-    COLUMNS = ("Part number", "Description", "Qty", "State", "Status")
+    COLUMNS = ("Part number", "Description", "Used in", "Drawing", "State", "Status")
+    THUMB = QtCore.QSize(34, 26)
     PN_ROLE = QtCore.Qt.UserRole
     QTY_ROLE = QtCore.Qt.UserRole + 1
     CONTEXT_ROLE = QtCore.Qt.UserRole + 2  # shown only as the parent of a match: dimmed
     GROUP_ROLE = QtCore.Qt.UserRole + 3
     KEY_ROLE = QtCore.Qt.UserRole + 5  # a category group header: "cat:<name>"
     PATH_ROLE = QtCore.Qt.UserRole + 4  # P/Ns from the top, to keep a folded branch folded
+    KIND_ROLE = QtCore.Qt.UserRole + 6  # a type group header (PDM-13): "assembly", "part", "drawing"
     TIP_WIDTH = 220  # the largest a thumbnail is drawn in the file name's tooltip
 
     def soft(colour, alpha=40):
@@ -2275,7 +2310,13 @@ def _make_classes():
                 if column == 0:
                     painter.setFont(self.panel.title_font)
                     painter.setPen(view.colour("secondary"))
-                    painter.drawText(rect.adjusted(4, 0, 0, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, group)
+                    left = 4
+                    kind = first.data(KIND_ROLE)
+                    if kind:  # a type group (PDM-13): its icon before the name
+                        painter.drawPixmap(QtCore.QPointF(rect.left() + 4, rect.center().y() - 7),
+                                           icon_pixmap(kind, self.panel.type_colour(kind), 14, view.devicePixelRatioF()))
+                        left = 24
+                    painter.drawText(rect.adjusted(left, 0, 0, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, group)
                 painter.restore()
                 return
             row = self.panel.row_for(first)
@@ -2288,6 +2329,24 @@ def _make_classes():
             r = rect.adjusted(4 if column == 0 else 8, 0, -6, 0)
             middle = QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft
             if column == 0:
+                kind = row.get("item_type") or ""
+                if kind != "change":  # the file's type and picture (PDM-13)
+                    icon_kind = {"assembly": "assembly", "drawing": "drawing"}.get(kind, "part")
+                    painter.drawPixmap(QtCore.QPointF(r.left(), rect.center().y() - 8),
+                                       icon_pixmap(icon_kind, self.panel.type_colour(kind), 16, view.devicePixelRatioF()))
+                    box = QtCore.QRectF(r.left() + 22, rect.center().y() - THUMB.height() / 2, THUMB.width(),
+                                        THUMB.height())
+                    pix = self.panel.thumb_pixmap(row)
+                    painter.setPen(QtGui.QPen(view.colour("border"), 1))
+                    painter.setBrush(view.colour("card"))
+                    painter.drawRoundedRect(box, 4, 4)
+                    if pix is not None:
+                        size = pix.deviceIndependentSize()
+                        scale = min((box.width() - 2) / max(size.width(), 1), (box.height() - 2) / max(size.height(), 1))
+                        w, h = size.width() * scale, size.height() * scale
+                        painter.drawPixmap(QtCore.QRectF(box.center().x() - w / 2, box.center().y() - h / 2, w, h),
+                                           pix, QtCore.QRectF(pix.rect()))
+                    r = r.adjusted(22 + THUMB.width() + 8, 0, 0, 0)
                 painter.setFont(self.panel.title_font)
                 fm = QtGui.QFontMetrics(self.panel.title_font)
                 pn = row["part_number"]
@@ -2302,14 +2361,25 @@ def _make_classes():
                 fm = QtGui.QFontMetrics(self.panel.body_font)
                 painter.setPen(text_colour)
                 painter.drawText(r, middle, fm.elidedText(row.get("description") or "", QtCore.Qt.ElideRight, r.width()))
-            elif column == 2:
-                qty = first.data(QTY_ROLE)
-                if qty:
+            elif column == 2:  # Used in: how many assemblies use the file (PDM-13)
+                text = self.panel.used_in_text(row["part_number"])
+                if text:
                     painter.setFont(self.panel.body_font)
-                    painter.setPen(text_colour)
-                    painter.drawText(r, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, f"{qty:g}"
-                                     if isinstance(qty, float) else str(qty))
-            elif column == 3:
+                    painter.setPen(secondary)
+                    painter.drawText(r, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, text)
+            elif column == 3:  # Drawing: Yes, None (a gap), COTS
+                text, role = self.panel.drawing_cell(row)
+                if text:
+                    painter.setFont(self.panel.small_font)
+                    x = r.left()
+                    if role in ("ok", "warn"):
+                        painter.setPen(QtCore.Qt.NoPen)
+                        painter.setBrush(secondary if dim else view.colour(role))
+                        painter.drawRoundedRect(QtCore.QRectF(x, rect.center().y() - 4, 8, 8), 2, 2)
+                        x += 13
+                    painter.setPen(secondary)
+                    painter.drawText(QtCore.QRect(x, rect.top(), r.right() - x, rect.height()), middle, text)
+            elif column == 4:
                 chip_text, chip_role = row.get("chip") or STATE_CHIPS.get(row.get("state"), (
                     (row.get("state") or "").upper(), "secondary"))
                 if chip_text:
@@ -2322,7 +2392,7 @@ def _make_classes():
                     painter.setFont(self.panel.chip_font)
                     painter.setPen(secondary if dim else view.colour(chip_role))
                     painter.drawText(chip, QtCore.Qt.AlignCenter, chip_text)
-            elif column == 4:
+            elif column == 5:
                 dpr = view.devicePixelRatioF()
                 x = r.left()
                 for kind, role in status_icons(row["code"]):
@@ -2364,6 +2434,8 @@ def _make_classes():
                 status = STATUS_LABELS.get(row["code"], "")
                 if index.column() == 0:  # the file name: its picture, as Explorer and Finder do
                     QtWidgets.QToolTip.showText(event.globalPos(), self.panel.tooltip_html(row), view)
+                elif index.column() == 2:  # Used in: the assemblies, by name
+                    QtWidgets.QToolTip.showText(event.globalPos(), self.panel.where_used_text(row), view)
                 else:
                     QtWidgets.QToolTip.showText(event.globalPos(), f"{row['display']} — {status}", view)
                 return True
@@ -2425,8 +2497,13 @@ def _make_classes():
                 line = max(line, hint.height())
             return y + line - rect.y()
 
+    import bruceworx_vaultbrowser
+
+    browser = bruceworx_vaultbrowser.make_classes({"icon_pixmap": icon_pixmap, "soft": soft, "ChipFlow": ChipFlow})
+
     class VaultPanel(QtWidgets.QWidget):
-        """The Vault card: header, search, filter chips, the list, a footer."""
+        """The Files tab (PDM-13): navigation at the left; in the middle the header, search, filter chips,
+        one row per file and a footer; the selected file's preview at the right."""
 
         def __init__(self, parent=None):
             super().__init__(parent)
@@ -2444,7 +2521,13 @@ def _make_classes():
             self._filling = False
             self.pictures = None  # Refresh Pictures: the P/Ns still to render, while it runs
             self.kind = "all"
-            self.sort_by_time = False  # a tree reads as a BOM: by part number; the sort button swaps
+            self.scope = bruceworx_vaultbrowser.ALL  # the navigation's choice (PDM-13)
+            self.programs = {}
+            self.used = {}
+            self.thumbs = {}
+            self._mesh_sig = None
+            self._contents_cache = {}
+            self.sort_by_time = False  # by part number; the sort button swaps
             base = QtGui.QFont(self.font())
             self.title_font = QtGui.QFont(base)
             self.title_font.setPixelSize(13)
@@ -2458,7 +2541,22 @@ def _make_classes():
             self.chip_font.setWeight(QtGui.QFont.Bold)
             self.chip_font.setLetterSpacing(QtGui.QFont.PercentageSpacing, 104)
 
-            lay = QtWidgets.QVBoxLayout(self)
+            outer = QtWidgets.QHBoxLayout(self)
+            outer.setContentsMargins(0, 0, 0, 0)
+            outer.setSpacing(0)
+            self.splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+            self.splitter.setObjectName("bwVaultSplitter")
+            self.splitter.setChildrenCollapsible(False)
+            self.splitter.setHandleWidth(1)
+            outer.addWidget(self.splitter)
+            self.nav = browser["NavPane"]()
+            self.nav.setMinimumWidth(150)
+            self.nav.scopeChosen.connect(self.set_scope)
+            self.splitter.addWidget(self.nav)
+            center = QtWidgets.QWidget()
+            center.setObjectName("bwVaultCenter")
+            self.splitter.addWidget(center)
+            lay = QtWidgets.QVBoxLayout(center)
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(0)
             top = QtWidgets.QWidget()
@@ -2509,6 +2607,9 @@ def _make_classes():
             self._place_sig = None
             self.place_box.hide()
             tl.addWidget(self.place_box)
+            self.crumbs = QtWidgets.QLabel("")
+            self.crumbs.setObjectName("bwVaultCrumbs")
+            tl.addWidget(self.crumbs)
             self.search = QtWidgets.QLineEdit()
             self.search.setObjectName("bwVaultSearch")
             self.search.setPlaceholderText("Search part number or description")
@@ -2567,7 +2668,7 @@ def _make_classes():
             self.list.setAllColumnsShowFocus(True)
             self.list.setExpandsOnDoubleClick(False)  # double-click opens the file
             self.list.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
-            self.list.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+            self.list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)  # Build Package (PDM-13)
             self.list.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
             self.list.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
             self.list.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -2577,7 +2678,7 @@ def _make_classes():
             header = self.list.header()
             header.setStretchLastSection(False)
             header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
-            for column, width in ((0, 260), (2, 40), (3, 84), (4, 200)):
+            for column, width in ((0, 300), (2, 60), (3, 78), (4, 84), (5, 170)):
                 header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
                 self.list.setColumnWidth(column, width)
             self.delegate = Delegate(self)
@@ -2600,6 +2701,13 @@ def _make_classes():
             self.footer.setObjectName("bwVaultFooter")
             self.footer.setContentsMargins(12, 6, 12, 8)
             lay.addWidget(self.footer)
+            self.preview = browser["PreviewPane"](self)
+            self.preview.setMinimumWidth(300)
+            self.splitter.addWidget(self.preview)
+            self.splitter.setStretchFactor(0, 0)
+            self.splitter.setStretchFactor(1, 1)
+            self.splitter.setStretchFactor(2, 0)
+            self.splitter.setSizes([210, 600, 440])
             self.clock = QtCore.QTimer(self)
             self.clock.setInterval(60000)
             self.clock.timeout.connect(self.update_header)
@@ -2612,6 +2720,52 @@ def _make_classes():
         def row_for(self, index):
             pn = index.siblingAtColumn(0).data(PN_ROLE) if index.isValid() else None
             return self.rows.get(pn)
+
+        # --- PDM-13: the browser's helpers
+        def session(self):
+            return _state["session"]
+
+        def type_colour(self, kind):
+            """Part blue, assembly amber, drawing grey."""
+            return self.list.colour({"assembly": "warn", "drawing": "secondary"}.get(kind, "accent"))
+
+        def used_in_text(self, pn):
+            return bruceworx_vaultbrowser.used_in_text(self.used.get(pn, ()))
+
+        def drawing_cell(self, row):
+            return bruceworx_vaultbrowser.drawing_cell(self.structure, row["part_number"], row)
+
+        def _contents(self, pn):
+            from bruceworx import vault_trees
+
+            if pn not in self._contents_cache:
+                self._contents_cache[pn] = vault_trees.contents(self.structure, pn)
+            return self._contents_cache[pn]
+
+        def thumb_pixmap(self, row):
+            """The row's picture, scaled for the list (cached per version)."""
+            sha = row.get("sha") or ""
+            if not sha:
+                return None
+            if sha not in self.thumbs:
+                path = self.thumb_file(row)
+                pix = QtGui.QPixmap(path) if path else QtGui.QPixmap()
+                if not pix.isNull():
+                    dpr = self.devicePixelRatioF()
+                    pix = pix.scaled(int(THUMB.width() * dpr * 2), int(THUMB.height() * dpr * 2),
+                                     QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                    pix.setDevicePixelRatio(dpr * 2)
+                self.thumbs[sha] = None if pix.isNull() else pix
+            return self.thumbs[sha]
+
+        def set_scope(self, key):
+            """The navigation picked a project, an assembly, a view or a category."""
+            self.scope = key or bruceworx_vaultbrowser.ALL
+            self._fill_nav()
+            self.fill()
+
+        def _fill_nav(self):
+            self.nav.fill(bruceworx_vaultbrowser.nav_entries(self.structure, self.rows, self.programs), self.scope)
 
         def refresh(self):
             if not _alive(self):
@@ -2648,6 +2802,18 @@ def _make_classes():
                 except ImportError:
                     pass
             self.nodes = self.file_tree(s)
+            from bruceworx import vault_trees
+
+            self.used = vault_trees.used_in(self.structure)
+            self.programs = vault_trees.program_names(s.root) if s is not None else {}
+            self._contents_cache = {}
+            sig = tuple(sorted((pn, r.get("sha")) for pn, r in self.rows.items()))
+            if sig != self._mesh_sig:  # new versions: their meshes and pictures are read again
+                self._mesh_sig = sig
+                self.preview.forget()
+                self.thumbs = {}
+            self.preview.pn = None  # show the selected file afresh after the fill
+            self._fill_nav()
             self.update_header()
             self.fill()
 
@@ -2706,25 +2872,15 @@ def _make_classes():
                 return
             query = self.search.text()
             changes = self.kind == "changes"
-            hits = {pn for pn, r in self.rows.items() if matches(r, self.kind, query)}
+            scope = bruceworx_vaultbrowser.ALL if changes else self.scope
+            hits = {pn for pn, r in self.rows.items() if matches(r, self.kind, query)
+                    and bruceworx_vaultbrowser.in_scope(scope, pn, r, self.structure, self._contents)}
             filtering = bool(query.strip()) or self.kind != "all"
             if changes:  # ECRs and ECOs are not files: a plain list
                 nodes = [{"pn": pn, "qty": None, "children": []} for pn in self.rows
                          if self.rows[pn].get("item_type") == "change"]
-            else:
-                nodes = list(self.nodes)
-                listed = set()
-
-                def collect(ns):
-                    for n in ns:
-                        listed.add(n["pn"])
-                        collect(n["children"])
-
-                collect(nodes)
-                extra = [{"pn": pn, "qty": None, "children": []} for pn in sorted(self.rows)
-                         if pn not in listed and self.rows[pn].get("item_type") != "change"]
-                if extra:  # in the workspace but not (yet) in the vault's replay
-                    nodes.append({"pn": None, "group": "Other files", "qty": None, "children": extra})
+            else:  # one row per file (PDM-13): what an assembly uses is in the preview pane
+                nodes = [{"pn": pn, "qty": None, "children": []} for pn in sorted(hits)]
             self._sync_category_prefs()
             self._hidden_items = 0
             if not changes:
@@ -2741,6 +2897,14 @@ def _make_classes():
 
                     seen(nodes)
                     hits = hits & listed_now
+                if any(n["pn"] is None for n in nodes):  # category groups, each cut by type
+                    nodes = [dict(n, children=group_by_type(n["children"], self.rows, f"{n.get('key')}/"))
+                             if n["pn"] is None else n for n in nodes]
+                else:
+                    nodes = group_by_type(nodes, self.rows)
+            s_now = _state["session"]
+            self.crumbs.setText("  \u203a  ".join([s_now.name if s_now is not None else "Vault"] +
+                                                bruceworx_vaultbrowser.scope_title(scope, self.rows, self.programs)))
             counts = category_counts(self.rows)
             self.categories.setVisible(not changes and any(counts))
             self.categories.setText(f"Categories ({len(self.hidden_categories & set(counts))} hidden)"
@@ -2755,6 +2919,8 @@ def _make_classes():
                     self.model.appendRow(self.make_items(node, "", expand))
                 for item, path in expand:
                     self.list.setExpanded(item.index(), filtering or path not in self.collapsed)
+                    # A group's name runs across the row (PDM-13: the list's columns are narrow).
+                    self.list.setFirstColumnSpanned(item.row(), item.index().parent(), True)
                 if current:
                     self.find(current, reveal=False)
             finally:
@@ -2812,6 +2978,7 @@ def _make_classes():
             first.setData(node.get("group") or "", GROUP_ROLE)
             first.setData(node.get("key"), KEY_ROLE)
             first.setData(path, PATH_ROLE)
+            first.setData(node.get("kind"), KIND_ROLE)
             items = [first] + [QtGui.QStandardItem() for _c in COLUMNS[1:]]
             for item in items:
                 item.setEditable(False)
@@ -2887,14 +3054,16 @@ def _make_classes():
                 for r in range(self.model.rowCount(parent)):
                     index = self.model.index(r, 0, parent)
                     row = self.rows.get(index.data(PN_ROLE)) or {}
-                    text = index.data(GROUP_ROLE) or row.get("part_number", "") + (
-                        "-" + row["revision"] if row.get("revision") else "")
-                    widest = max(widest, (depth + 1) * self.list.indentation() + fm.horizontalAdvance(text) + 16)
+                    if not index.data(GROUP_ROLE):  # group headers span the row (PDM-13); not measured
+                        text = row.get("part_number", "") + ("-" + row["revision"] if row.get("revision") else "")
+                        picture = 22 + THUMB.width() + 8 if row.get("item_type") != "change" else 0
+                        widest = max(widest, (depth + 1) * self.list.indentation() + picture +
+                                     fm.horizontalAdvance(text) + 16)
                     if self.list.isExpanded(index):
                         walk(index, depth + 1)
 
             walk(QtCore.QModelIndex(), 0)
-            self.list.setColumnWidth(0, max(200, min(460, widest)))
+            self.list.setColumnWidth(0, max(200, min(420, widest)))
 
         def find(self, pn, reveal=True):
             """Select the first row of ``pn`` in the tree (``reveal``: opening its branch); False when it
@@ -2934,6 +3103,9 @@ def _make_classes():
             self.list.same, self.list.uses = same, uses
             self.footer.setText(self.where_used_text(row))
             self.list.viewport().update()
+            pn = row["part_number"] if row is not None else None
+            if pn != self.preview.pn:
+                self.preview.show_item(pn)
 
         def where_used_text(self, row):
             if row is None or row.get("item_type") == "change":
@@ -3042,9 +3214,31 @@ def _make_classes():
                 return
             if row is None:
                 return
-            self.list.setCurrentIndex(index)
-            menu = build_item_menu(self, row["part_number"], in_panel=True)
+            picked = self.selected_pns()
+            if row["part_number"] not in picked:
+                self.list.setCurrentIndex(index)
+                picked = [row["part_number"]]
+            if len(picked) > 1:  # several rows: what they share is a package of their drawings (PDM-13)
+                menu = QtWidgets.QMenu(self)
+            else:
+                menu = build_item_menu(self, row["part_number"], in_panel=True)
+                menu.addSeparator()
+            act = menu.addAction(f"Build Package… ({len(picked)} selected)" if len(picked) > 1 else "Build Package…")
+            act.triggered.connect(lambda _c=False, pns=picked: self.build_package(pns))
             menu.exec(self.list.viewport().mapToGlobal(pos))
+
+        def selected_pns(self):
+            out = []
+            for index in self.list.selectionModel().selectedRows(0):
+                pn = index.data(PN_ROLE)
+                if pn and (self.rows.get(pn) or {}).get("item_type") != "change" and pn not in out:
+                    out.append(pn)
+            return out
+
+        def build_package(self, pns):
+            import bruceworx_package
+
+            bruceworx_package.export_dialog(self, pns)
 
         def _fill_places(self):
             self.places_menu.clear()
@@ -3133,8 +3327,13 @@ def _make_classes():
                     pns = job[key]
                     if pns:
                         text += f" · {len(pns)} {words} ({', '.join(pns[:3])}{'…' if len(pns) > 3 else ''})"
-                self.footer.setText(text)
                 self.thumb_files.clear()
+                self.thumbs = {}  # the list's pictures and the 3D previews are read again (PDM-13)
+                self.preview.forget()
+                self.preview.pn = None
+                self.show_where_used(self.list.currentIndex())
+                self.list.viewport().update()
+                self.footer.setText(text)
                 return
             pn = job["todo"].pop(0)
             self.footer.setText(f"Refreshing pictures · {job['total'] - len(job['todo'])} of {job['total']} · {pn}")

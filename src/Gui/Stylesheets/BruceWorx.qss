@@ -2122,6 +2122,74 @@ QTreeWidget#bwVaultFiles {
   border: none;
 }
 
+/* The Files tab as a file browser (PDM-13, bruceworx_vaultbrowser.py): projects, views and categories at
+   the left; the selected file's 3D preview, drawings, uses, where used and history at the right. */
+QSplitter#bwVaultSplitter::handle {
+  background-color: @GeneralBorderColor;
+}
+
+QWidget#bwVaultCenter,
+QWidget#bwVaultPreview {
+  background: transparent;
+}
+
+QTreeWidget#bwVaultNav {
+  background: transparent;
+  border: none;
+  padding-top: 4px;
+  font-size: 13px;
+}
+
+QTreeWidget#bwVaultNav::item {
+  padding: 3px 2px;
+  border: none;
+}
+
+QTreeWidget#bwVaultNav::item:hover {
+  background-color: @HoverColor;
+}
+
+QTreeWidget#bwVaultNav::item:selected {
+  background-color: @AccentSoftColor;
+  color: @TextForegroundColor;
+}
+
+QLabel#bwVaultCrumbs,
+QLabel#bwVaultPreviewSub,
+QLabel#bwVaultPreviewHint {
+  color: @TextSecondaryColor;
+}
+
+QLabel#bwVaultPreviewHint {
+  font-size: 11px;
+}
+
+QLabel#bwVaultPreviewState {
+  color: @WarnColor;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+QTabBar#bwVaultPreviewTabs::tab {
+  padding: 4px 7px;
+  font-size: 12px;
+}
+
+QListWidget#bwVaultPreviewList {
+  background: transparent;
+  border: none;
+}
+
+QListWidget#bwVaultPreviewList::item {
+  padding: 5px 2px;
+  border-bottom: 1px solid @GeneralBorderColor;
+  color: @TextForegroundColor;
+}
+
+QListWidget#bwVaultPreviewList::item:hover {
+  background-color: @HoverColor;
+}
+
 /* Properties tab of the right panel (bruceworx_inspector.py, UIX-12): folding sections with compact fields,
    as in a Fusion command dialog. */
 QWidget#BruceWorxInspector QWidget#bwInspectorFoot {

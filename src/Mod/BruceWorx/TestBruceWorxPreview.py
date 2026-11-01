@@ -148,8 +148,13 @@ class TestStampAtCheckIn(unittest.TestCase):
         self.assertFalse(pv.stamp_work_file(s, "P"))
         self.assertEqual((pv.thumbnail_of(path), self.rendered), (b"old", []))
 
-    def test_a_drawing_keeps_its_sheet(self):
-        s, path = self.session("drawing")
+    def test_a_drawing_gets_its_sheet_picture(self):
+        s, path = self.session("drawing")  # PDM-13: the picture is its first sheet (entries_for)
+        self.assertTrue(pv.stamp_work_file(s, "P"))
+        self.assertEqual(len(self.rendered), 1)
+
+    def test_a_document_of_another_kind_is_left_alone(self):
+        s, path = self.session("change")
         self.assertFalse(pv.stamp_work_file(s, "P"))
         self.assertEqual(self.rendered, [])
 

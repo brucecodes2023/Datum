@@ -218,7 +218,10 @@ def _instance_target(obj):
     doc = getattr(target, "Document", None)
     if target is None or doc is None or doc is obj.Document or not doc.FileName:
         return None
-    return os.path.basename(doc.FileName), target.Name, target.Shape
+    shape = getattr(target, "Shape", None)
+    if shape is None or shape.isNull():  # the linked file did not load: nothing to place
+        return False
+    return os.path.basename(doc.FileName), target.Name, shape
 
 
 def tessellate(doc):
@@ -233,7 +236,12 @@ def tessellate(doc):
             continue
         if obj.isDerivedFrom("Assembly::AssemblyObject") or obj.TypeId == "App::DocumentObjectGroup":
             continue
-        target = _instance_target(obj)
+        try:
+            target = _instance_target(obj)
+        except Exception:  # noqa: BLE001 -- a broken link: left out of the preview
+            continue
+        if target is False:
+            continue
         if target is not None:
             name, object_name, shape = target
             # The link's shape is the target's shape moved by T: T = link placement * target placement^-1.
@@ -245,8 +253,8 @@ def tessellate(doc):
         if any(p.TypeId != "App::Part" and not p.isDerivedFrom("Assembly::AssemblyObject")
                and p.isDerivedFrom("Part::Feature") and _shown(p) for p in obj.InList):
             continue  # shown through a visible parent (a body's features, a boolean's tools)
-        shape = obj.Shape
-        if shape.isNull() or not shape.Faces:
+        shape = getattr(obj, "Shape", None)
+        if shape is None or shape.isNull() or not shape.Faces:
             continue
         shape = shape.copy()
         shape.Placement = obj.getGlobalPlacement() if obj.TypeId != "App::Link" else obj.Shape.Placement

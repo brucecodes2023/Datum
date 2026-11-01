@@ -148,5 +148,35 @@ class TestFileLinks(unittest.TestCase):
         self.assertEqual(vt.file_links(path), {"LE-01-01008-001": 2, "LE-01-01012-001": 3})
 
 
+class TestFlatList(unittest.TestCase):
+    """The flat file list's helpers (PDM-13)."""
+
+    def setUp(self):
+        _vault, self.s = gearbox(bom={"LE-02-01002-001": [("LE-01-01003-001", 1), ("LE-01-01009-001", 1),
+                                                         ("LE-01-01008-001", 3)]})
+
+    def test_used_in(self):
+        used = vt.used_in(self.s)
+        self.assertEqual(used["LE-01-01008-001"], [("LE-02-01002-001", 3)])
+        self.assertNotIn("LE-02-01002-001", used)
+
+    def test_contents_reach_parts_and_drawings(self):
+        self.assertEqual(vt.contents(self.s, "LE-02-01002-001"),
+                         {"LE-02-01002-001", "LE-01-01003-001", "LE-01-01009-001", "LE-01-01008-001", "LE-03-01003-001"})
+        self.assertEqual(vt.contents(self.s, "nope"), set())
+
+    def test_missing_drawing_counts_assemblies_not_drawings_or_cots(self):
+        self.assertTrue(vt.missing_drawing(self.s, "LE-02-01002-001"))  # an assembly without one counts (1 Nov)
+        self.assertFalse(vt.missing_drawing(self.s, "LE-01-01003-001"))
+        self.assertTrue(vt.missing_drawing(self.s, "LE-01-01009-001"))
+        self.assertFalse(vt.missing_drawing(self.s, "LE-03-01003-001"))
+        self.s["items"]["LE-01-01009-001"]["description"] = "Sun gear (COTS)"
+        self.assertFalse(vt.missing_drawing(self.s, "LE-01-01009-001"))
+
+    def test_drawing_owner_and_type_order(self):
+        self.assertEqual(vt.drawing_owner(self.s, "LE-03-01003-001"), "LE-01-01003-001")
+        self.assertEqual(sorted(["drawing", "part", "assembly"], key=vt.type_rank), ["assembly", "part", "drawing"])
+
+
 if __name__ == "__main__":
     unittest.main()

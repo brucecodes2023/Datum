@@ -187,12 +187,15 @@ returns:
 The check-in's own stamping (\code{stamp\_work\_file}) stays, for files saved before this existed. \emph{Refresh
 Pictures} also makes the meshes, so the turbojet's 46 files get both without a new version.
 
-\paragraph{E. The preview viewer.} A \code{pivy.quarter} widget (\code{QuarterWidget}, already in the app bundle)
-inside the pane. It has the same Coin renderer and lighting as the 3D view, and draws one \code{SoIndexedFaceSet} per
-part, with the part's colour. An assembly's instances share their part's node through \code{SoTransform}, so a bolt
-used forty times is stored and uploaded once. Edges are an \code{SoIndexedLineSet} of the feature edges above
-32\textdegree. The section is an \code{SoClipPlane}. The widget is made once and reused for every selection. A file
-without a preview mesh shows its ISO picture, with a link to \emph{Refresh Pictures}.
+\paragraph{E. The preview viewer.} A widget inside the pane that draws the file's preview mesh with Coin, through
+the same off-screen renderer as the ISO pictures (\code{SoQtOffscreenRenderer}), and shows each frame as an image.
+pivy's \code{QuarterWidget} was the first choice; in this build it cannot import its GL widget, and with that
+patched in it crashes on GL errors (spike, 1 Nov). A frame of the engine (162\,000 triangles) at
+800\,$\times$\,600 takes 50\,ms, so dragging redraws at about 20 frames a second at screen resolution and
+sharpens when the mouse stops. Lighting follows the camera, as in the ISO pictures. Each part is one
+\code{SoIndexedFaceSet} with its colour; an assembly's instances share their part's node through
+\code{SoMatrixTransform}. The section is an \code{SoClipPlane} through the centre that keeps the far half, so the
+cut face looks at you. A file without a preview mesh shows a note and a \emph{Make Previews} button.
 
 %----------------------------------------------------------------------
 \subsubsection*{4. Theory}
@@ -238,7 +241,7 @@ writes only the mesh; the picture follows at the next GUI save or \emph{Refresh 
   \item \textbf{Preview mesh} (new \file{bruceworx\_previewmesh.py}, FreeCAD-free reader and writer; a GUI-free
         tessellator): the format, written by \emph{Refresh Pictures}, and by the save hook. Tests: round trip; the
         instance placements against \code{Shape.BoundBox}; a damaged entry falls back to the ISO picture.
-  \item \textbf{3D viewer} (\code{QuarterWidget}): orbit, fit, section, edges; one widget reused. Tests: off-screen
+  \item \textbf{3D viewer} (off-screen frames, E): orbit, zoom, pan, fit, section; one widget reused. Tests: off-screen
         render of the engine, rotor and test stand compared with the ISO picture's silhouette.
   \item \textbf{Save hook}: ISO picture and mesh after every save, for vault work files only. Tests: the picture
         and the mesh are in the saved file; no view moved; a save outside the vault (if chosen); a 2\,MB assembly
