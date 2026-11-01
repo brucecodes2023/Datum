@@ -427,6 +427,73 @@ class TestRotorSolve(unittest.TestCase):
 
 
 @unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
+class TestOffsetBoreAndPartFactor(unittest.TestCase):
+    """The real impeller: bore r = 5 spanning z -3 to 23.5, spin axis built by the helper (SpinAxis line starts far below).
+    bore_stress used a radius band (found the 36 mid-edge nodes at r = 4.913) and z from the axis line's start (z_mid 68)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import Part
+
+        close_all()
+        cls.tmp = tempfile.mkdtemp(prefix="vl-off-")
+        doc = App.newDocument("Offset")
+        cx, cy = 7.0, 3.0  # off the origin too
+        solid = Part.makeCylinder(20.0, 26.5, App.Vector(cx, cy, -3.0)).cut(Part.makeCylinder(5.0, 26.5, App.Vector(cx, cy, -3.0)))
+        body = vc.shape_object(doc, "Wheel", solid)
+        mat = vc.material(71700.0, 0.33, 2810.0, name="7075")
+        cls.an = sim.new_study(doc, sim.StudyPlan(name="Off", model=body, material=mat, max_size=3.0))["analysis"]
+        post.add_spin(cls.an, 60000, axis=((cx, cy, 0.0), (0.0, 0.0, 1.0)))
+        post.hold_for_spin(cls.an)
+        cls.result = sim.solve(cls.an, working_dir=cls.tmp)
+
+    @classmethod
+    def tearDownClass(cls):
+        close_all()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_the_bore_is_found_on_its_face_in_global_z(self):
+        got = post.bore_stress(self.result, self.an)
+        self.assertAlmostEqual(got["radius"], 5.0, places=6)  # the face's radius, not 4.913 of a mid-edge node
+        self.assertAlmostEqual(got["z_min"], -3.0, places=4)
+        self.assertAlmostEqual(got["z_max"], 23.5, places=4)
+        self.assertAlmostEqual(got["z_mid"], 10.25, places=4)  # inside the part, not measured from the axis line's start
+        self.assertAlmostEqual(got["length"], 26.5, places=4)
+        self.assertGreater(got["nodes"], 60)  # every node of the face, mid-edge ones included
+        self.assertGreater(got["mid_nodes"], 2)
+        self.assertGreater(got["hoop_mean"], 0.0)
+        self.assertLessEqual(got["hoop_mean"], got["hoop_max"])
+        self.assertNotIn("min_sf", got)  # the bore's factor is bore_min_sf, never presented as the part's
+
+    def test_a_solid_shaft_has_no_bore(self):
+        import Part
+
+        doc = App.newDocument("Shaft")
+        body = vc.shape_object(doc, "Shaft", Part.makeCylinder(10.0, 20.0))
+        an = sim.new_study(doc, sim.StudyPlan(name="Sh", model=body, material=vc.material(), max_size=6.0))["analysis"]
+        self.assertEqual(post.bore_faces(an, ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0))), [])  # a convex journal is not a bore
+
+    def test_the_part_factor_is_the_minimum_over_all_nodes(self):
+        ext = sim.result_extrema(self.result)
+        factors = list(self.result.SafetyFactor)
+        self.assertEqual(ext["min_sf"], min(factors))
+        bore = ext["bore"]
+        self.assertLessEqual(ext["min_sf"], bore["bore_min_sf"] + 1e-12)
+        self.assertIsNotNone(bore["bore_min_sf"])
+
+    def test_point_supports_leave_out_the_nodes_round_them_and_say_so(self):
+        ext = sim.result_extrema(self.result)
+        self.assertAlmostEqual(ext["support_radius"], 2.0 * 3.0)  # 2 x MaxSize
+        self.assertGreater(ext["support_nodes"], 3)  # more than the three pinned nodes
+        self.assertGreaterEqual(ext["min_sf_away"], ext["min_sf"])
+        out = sim.write_report(self.an, folder=self.tmp, compile=False)
+        text = open(out["tex"], encoding="utf-8").read()
+        self.assertIn("Min safety factor, whole part", text)
+        self.assertIn("Bore only: lowest safety factor", text)
+        self.assertIn("within 6 mm of a point support", text)
+
+
+@unittest.skipUnless(sim.find_ccx(), "CalculiX (ccx) is not installed")
 class TestHoldForSpin(unittest.TestCase):
     """A full thin wheel (no symmetry planes) held by the helper: the bore grows freely, hoop = Timoshenko."""
 

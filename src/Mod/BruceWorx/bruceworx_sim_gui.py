@@ -2265,18 +2265,22 @@ def _make_classes():
                 color = "#b00020" if ext["min_sf_away"] < 1 else "#1f7a46"
                 away = (f"<br>Away from the supports <b style='color:{color}'>{ext['min_sf_away']:.3g}</b> at node "
                         f"{ext['min_sf_away_node']} <span style='color:#777'>({ext['support_nodes']} nodes on supports left "
-                        "out: a fixed face's edges are a stress singularity that grows with mesh refinement)</span>")
+                        + (f"out, every node within {ext['support_radius']:.3g} mm of a point support included: " if ext.get("support_radius")
+                           else "out: ")
+                        + "a fixed face's edges and a point pin are stress singularities that grow with mesh refinement)</span>")
             bore = ext.get("bore") or {}
             bore_text = ""
             if bore:
-                bore_text = (f"<br>Bore hoop mean <b>{bore['hoop_mean']:.4g}</b> / max <b>{bore['hoop_max']:.4g}</b> / "
+                bore_text = (f"<br>Bore only: hoop mean <b>{bore['hoop_mean']:.4g}</b> / max <b>{bore['hoop_max']:.4g}</b> / "
                              f"mid-plane <b>{bore['hoop_mid']:.4g}</b> MPa, von Mises max <b>{bore['vonMises_max']:.4g}</b> MPa"
+                             + (f", lowest safety factor on the bore <b>{bore['bore_min_sf']:.3g}</b> (not the part's)"
+                                if bore.get("bore_min_sf") is not None else "")
                              f"<br><span style='color:#777'>The safety factor uses the {ext['measure']} equivalent stress, "
                              "never the hoop stress.</span>")
             self.summary.setText(
                 f"Max von Mises <b>{ext['max_vm']:.4g} MPa</b> (node {ext['max_vm_node']})<br>"
                 f"Max displacement <b>{ext['max_disp']:.4g} mm</b> (node {ext['max_disp_node']})<br>"
-                f"Min safety factor {sf_text}{away}{bore_text}")
+                f"Min safety factor, whole part: {sf_text}{away}{bore_text}")
             kind = shown_field(self.analysis)
             self.legend.setText(legend_html(kind, result, self.analysis) if kind else "")
 

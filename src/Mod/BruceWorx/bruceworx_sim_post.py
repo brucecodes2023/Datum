@@ -502,32 +502,105 @@ def hold_for_spin(analysis, face=None, axis=None):
 # ----- the bore of a rotor ------------------------------------------------------------------------------------------
 
 
+def bore_faces(analysis, axis, tol=None):
+    """The model's bore: the concave cylindrical faces coaxial with ``axis`` (the smallest radius), as
+    [(object, 'FaceN', radius)].  A convex cylinder (a shaft journal, the rim) is not a bore.  Coaxial means parallel and
+    within ``tol`` (default 0.1 % of the part's size, at least 1e-4 mm) of the axis line."""
+    import FreeCAD
+
+    import numpy as np
+
+    model, shape = _model_shape(analysis)
+    if shape is None:
+        return []
+    point, a, _u, _v = axis_frame(axis)
+    tol = tol or max(1e-3 * (shape.BoundBox.DiagonalLength or 1.0), 1e-4)
+    found = []
+    for i, f in enumerate(shape.Faces, 1):
+        try:
+            surface = f.Surface
+            if surface.TypeId != "Part::GeomCylinder":
+                continue
+            d = np.array([surface.Axis.x, surface.Axis.y, surface.Axis.z])
+            d /= np.linalg.norm(d)
+            c = np.array([surface.Center.x, surface.Center.y, surface.Center.z])
+            if abs(abs(float(d @ a)) - 1.0) > 1e-6:
+                continue
+            off = c - point
+            if float(np.linalg.norm(off - (off @ a) * a)) > tol:
+                continue
+            u0, u1, v0, v1 = f.ParameterRange
+            uv = (0.5 * (u0 + u1), 0.5 * (v0 + v1))
+            p = f.valueAt(*uv)
+            n = f.normalAt(*uv)
+            rel = np.array([p.x, p.y, p.z]) - point
+            rhat = rel - (rel @ a) * a
+            if float(np.array([n.x, n.y, n.z]) @ rhat) < 0:  # the outward normal points at the axis: a bore
+                found.append((model, f"Face{i}", float(surface.Radius)))
+        except Exception:
+            continue
+    if not found:
+        return []
+    rmin = min(r for _o, _s, r in found)
+    return [it for it in found if abs(it[2] - rmin) < 1e-6 * max(rmin, 1.0)]
+
+
+def _result_indices_of_face_nodes(analysis, result, faces):
+    """Indices (into the result's NodeNumbers) of the nodes the study mesh has on the given faces, matched by position (the
+    result mesh may renumber), and the face-node count of the study mesh."""
+    import numpy as np
+
+    mesh = sim.members(analysis)["mesh"]
+    fem = mesh.FemMesh
+    model, shape = _model_shape(analysis)
+    ids = set()
+    for obj, sub, _r in faces:
+        ids.update(fem.getNodesByFace(sim.shape_of(obj).getElement(sub)))
+    nodes = fem.Nodes
+    where = {}
+    _ids, xyz = node_positions(result)
+    for idx, q in enumerate(xyz):
+        where[(round(q[0], 5), round(q[1], 5), round(q[2], 5))] = idx
+    out = []
+    for n in ids:
+        v = nodes[n]
+        idx = where.get((round(v.x, 5), round(v.y, 5), round(v.z, 5)))
+        if idx is not None:
+            out.append(idx)
+    return np.array(sorted(set(out)), dtype=int), len(ids)
+
+
 def bore_stress(result, analysis=None, axis=None, band=0.05):
-    """The stress on the bore of a spinning rotor: {} when the part has no bore (a solid disc).
+    """The stress on the bore of a spinning rotor: {} when the part has no bore (a solid disc, or no concave cylindrical face
+    coaxial with the spin axis).
 
-    The mean hoop over the bore nodes is right for a thin disc only; a long hub has a hoop that changes along the bore and
-    a von Mises that the axial stress raises (a 14 mm hub: mean 340, mid-plane 404, von Mises 512 MPa), so this gives
-    hoop mean, max and at the mid-plane (nodes within ``band`` x the bore length of the middle), the von Mises maximum on the
-    bore, and the lowest safety factor there.  The safety factor is the study's own: it divides the allowable stress by the
-    EQUIVALENT stress (``measure``, von Mises by default), never by the hoop stress.
+    The bore is the nodes the mesh has ON the bore's cylindrical face(s) (FEM's getNodesByFace, mid-edge nodes included),
+    not a radius band: straight mid-edge nodes of Tet10 sit a little inside the true radius.  Lengths along the axis are
+    global coordinates (the position times the axis direction), not distances from the axis point.
 
-    Keys: radius, length, z_mid (mm along the axis), nodes, hoop_mean, hoop_max, hoop_mid, axial_mid, vonMises_max,
-    vonMises_mid, min_sf, measure (the equivalent stress the safety factor divides), safety_basis (text)."""
+    The mean hoop over the bore nodes is right for a thin disc only; a long hub has a hoop that changes along the bore and a
+    von Mises that the axial stress raises (a 14 mm hub: mean 340, mid-plane 404, von Mises 512 MPa), so this gives hoop mean,
+    max and at the mid-plane (nodes within ``band`` x the bore length of the middle), the von Mises maximum on the bore, and
+    the lowest safety factor ON THE BORE (``bore_min_sf``: not the part's, which is ``result_extrema()['min_sf']``).  The
+    safety factor is the study's own: it divides the allowable stress by the EQUIVALENT stress (``measure``, von Mises by
+    default), never by the hoop stress.
+
+    Keys: radius (mm, the face's), length, z_min, z_max, z_mid (mm, global along the axis), nodes, mid_nodes, hoop_mean,
+    hoop_max, hoop_mid, axial_mid, vonMises_max, vonMises_mid, bore_min_sf, measure, safety_basis."""
     import numpy as np
 
     analysis = analysis or sim.study_of(result)
     resolved = resolve_axis(axis, analysis) if axis is not None else default_axis(analysis)
     values = cylindrical_stress(result, resolved, analysis)
-    ids, xyz = node_positions(result)
-    point, a, _u, _v = axis_frame(resolved)
-    rel = xyz - point
-    along = rel @ a
-    r = np.array(values["r"])
-    rmax = float(r.max())
-    rmin = float(r.min())
-    if rmax <= 0 or rmin < 1e-4 * rmax:
+    faces = bore_faces(analysis, resolved)
+    if not faces:
         return {}
-    on = np.where(r <= rmin + 1e-3 * (rmax - rmin) + 1e-9)[0]
+    on, _count = _result_indices_of_face_nodes(analysis, result, faces)
+    if not len(on):
+        return {}
+    _ids, xyz = node_positions(result)
+    _p, a, _u, _v = axis_frame(resolved)
+    along = xyz @ a
     z = along[on]
     length = float(z.max() - z.min())
     z_mid = 0.5 * float(z.max() + z.min())
@@ -539,11 +612,12 @@ def bore_stress(result, analysis=None, axis=None, band=0.05):
     sf = list(getattr(result, "SafetyFactor", []) or [])
     measure = str(getattr(result, "StressMeasure", "") or "vonMises")
     return {
-        "radius": rmin, "length": length, "z_mid": z_mid, "nodes": int(len(on)), "mid_nodes": int(len(mid)),
+        "radius": faces[0][2], "length": length, "z_min": float(z.min()), "z_max": float(z.max()), "z_mid": z_mid,
+        "nodes": int(len(on)), "mid_nodes": int(len(mid)),
         "hoop_mean": float(hoop[on].mean()), "hoop_max": float(hoop[on].max()), "hoop_mid": float(hoop[mid].mean()),
         "axial_mid": float(axial[mid].mean()),
         "vonMises_max": float(vm[on].max()), "vonMises_mid": float(vm[mid].mean()),
-        "min_sf": min(sf[i] for i in on) if len(sf) == len(r) else None,
+        "bore_min_sf": min(sf[i] for i in on) if len(sf) == len(vm) else None,
         "measure": measure,
         "safety_basis": f"the safety factor divides by the {measure} equivalent stress, not the hoop stress",
     }

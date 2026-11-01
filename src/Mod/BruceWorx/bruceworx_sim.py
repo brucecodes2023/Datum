@@ -1529,6 +1529,34 @@ def support_nodes(analysis, result=None):
     return sorted(where[k] for k in (key(mesh.getNodeById(i)) for i in ids) if k in where)
 
 
+POINT_SUPPORT_RADII = 2.0  # x the mesh's MaxSize: the nodes this close to a point support are left out of the "away" minimum
+
+
+def point_support_nodes(analysis, result):
+    """(node numbers, radius mm): the nodes of the result within ``POINT_SUPPORT_RADII`` x MaxSize of a support that is a
+    vertex (a point pin has a stress spike round it); ([], 0.0) when the supports are faces or edges."""
+    m = members(analysis)
+    mesh = m["mesh"]
+    size = float(getattr(mesh, "MaxSize", 0) or 0) if mesh is not None else 0.0
+    points = []
+    for sup in m["supports"]:
+        for obj, subs in getattr(sup, "References", None) or []:
+            for sub in subs:
+                if sub.startswith("Vertex"):
+                    try:
+                        points.append(shape_of(obj).getElement(sub).Point)
+                    except Exception:
+                        continue
+    if not points or not size:
+        return [], 0.0
+    radius = POINT_SUPPORT_RADII * size
+    out = set()
+    for number, v in result.Mesh.FemMesh.Nodes.items():
+        if any((v.x - p.x) ** 2 + (v.y - p.y) ** 2 + (v.z - p.z) ** 2 <= radius * radius for p in points):
+            out.add(number)
+    return sorted(out), radius
+
+
 def element_min_factors(result):
     """{element id: the lowest safety factor of its nodes} of a result's mesh (volumes, else faces): the
     crisp safety-factor view colours each element by it (30 Oct follow-up 1)."""
@@ -1586,6 +1614,12 @@ def add_safety_factor(result, analysis=None):
         result.addProperty("App::PropertyFloat", "MinSafetyFactorAwayFromSupports", "Result",
                            "[BW] The lowest safety factor of the nodes not on a support")
     on_support = set(support_nodes(analysis, result)) if analysis is not None else set()
+    near, radius = point_support_nodes(analysis, result) if analysis is not None else ([], 0.0)
+    on_support |= set(near)
+    if "SupportExcludeRadius" not in result.PropertiesList:
+        result.addProperty("App::PropertyFloat", "SupportExcludeRadius", "Result",
+                           "[BW] Nodes within this distance (mm) of a point support are left out of the away-from-supports minimum")
+    result.SupportExcludeRadius = radius
     result.SupportNodes = sorted(on_support)
     away = [sf for n, sf in zip(result.NodeNumbers, factors) if n not in on_support]
     result.MinSafetyFactorAwayFromSupports = min(away) if away else result.MinSafetyFactor
@@ -1620,6 +1654,7 @@ def result_extrema(result):
         if away and on_support:
             j = min(away, key=sf.__getitem__)
             out["min_sf_away"], out["min_sf_away_node"] = sf[j], nodes[j]
+    out["support_radius"] = float(getattr(result, "SupportExcludeRadius", 0.0) or 0.0)
     out["measure"] = str(getattr(result, "StressMeasure", "") or "vonMises")
     out["max_eq"] = float(getattr(result, "MaxEquivalentStress", 0.0) or out["max_vm"])
     out["bore"] = {}
@@ -1997,17 +2032,23 @@ def report_source(data, figures=()):
         verdict = ""
         if sf is not None:
             verdict = r" \textcolor{bandA}{\textbf{below 1: the part fails}}" if sf < 1 else " (above 1)"
-        lines.append(rf"Min safety factor & \textbf{{{e(_fmt(sf, 3, cap=True))}}} (node {res['min_sf_node']}){verdict}\\")
+        lines.append(rf"Min safety factor, whole part & \textbf{{{e(_fmt(sf, 3, cap=True))}}} (node {res['min_sf_node']}){verdict}\\")
         if res.get("min_sf_away") is not None:
+            near = (f", incl. every node within {_fmt(res['support_radius'], 3)} mm of a point support"
+                    if res.get("support_radius") else "")
             lines.append(rf"Min safety factor away from the supports & \textbf{{{e(_fmt(res['min_sf_away'], 3, cap=True))}}} "
-                         rf"(node {res['min_sf_away_node']}; {res['support_nodes']} nodes on supports left out)\\")
+                         rf"(node {res['min_sf_away_node']}; {res['support_nodes']} nodes on supports left out{e(near)})\\")
         bore = res.get("bore") or {}
         if bore:
-            lines.append(rf"Bore (radius {_tex_value(bore['radius'], 4, 'mm')}, {_tex_value(bore['length'], 3, 'mm')} long) hoop: "
+            lines.append(rf"Bore (radius {_tex_value(bore['radius'], 4, 'mm')}, {_tex_value(bore['length'], 3, 'mm')} long, "
+                         rf"z {_fmt(bore['z_min'], 4)} to {_fmt(bore['z_max'], 4)} mm) hoop: "
                          rf"mean / max / mid-plane & {_tex_value(bore['hoop_mean'], 4, '')} / {_tex_value(bore['hoop_max'], 4, '')} / "
                          rf"{_tex_value(bore['hoop_mid'], 4, 'MPa')}\\")
             lines.append(rf"Bore von Mises, max / mid-plane & {_tex_value(bore['vonMises_max'], 4, '')} / "
                          rf"{_tex_value(bore['vonMises_mid'], 4, 'MPa')}\\")
+            if bore.get("bore_min_sf") is not None:
+                lines.append(rf"Bore only: lowest safety factor & {e(_fmt(bore['bore_min_sf'], 3, cap=True))} "
+                             r"(the bore's nodes, \emph{not} the part's: see Min safety factor above)\\")
             lines.append(rf"Safety factor basis & {e(measure_label(measure))} equivalent stress, never the hoop stress\\")
         lines.append(r"\end{tabular}")
         if bore and bore["length"] > 0.5 * bore["radius"]:

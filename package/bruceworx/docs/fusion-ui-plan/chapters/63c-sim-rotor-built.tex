@@ -191,3 +191,21 @@ surface-only, unused-node and Tet10 upgrade cases, the singular guard and the pi
         count and the number of clusters are in \code{stats["notes"]} and the progress text. Tested with a tet hanging by one
         node and one hanging by an edge.
 \end{enumerate}
+
+\paragraph{Third round (the real bladed impeller).}
+\begin{enumerate}[nosep]
+  \item \textbf{\code{bore\_stress} found the wrong bore} (radius 4.913, $z_{\mathrm{mid}}$ 67.97, 36 nodes on a bore of
+        $r=5$ from $z=-3$ to $23.5$). Two causes. The bore was ``the nodes within 0.1\,\% of the smallest radius'': those are
+        the straight mid-edge nodes of the quadratic tetrahedra, which sit a little \emph{inside} the true radius
+        ($5\cdot(1-\cos(\theta/2))\approx0.09$\,mm), so only 36 nodes qualified. And $z$ was measured from the axis point, which
+        is the start of the hidden \code{SpinAxis} line ($z=-38.2$ on this part), not from the global origin. Now the bore is the
+        set of nodes the mesh has \emph{on} the concave cylindrical face(s) coaxial with the spin axis (smallest radius; a
+        convex journal is not a bore; \code{bore\_faces}), mid-edge nodes included, and $z$ is the position along the axis
+        direction in global coordinates. Test: a bore $r=5$, $z\in[-3,23.5]$ on an axis off the origin.
+  \item \textbf{The bore's safety factor was not the part's.} \code{bore\_stress} returned the lowest factor of the bore
+        nodes under the key \code{min\_sf} (3.00 on the impeller; the wheel's real minimum is on the back plate). It is now
+        \code{bore\_min\_sf}, printed as ``Bore only'' in the panel and the report; the part's factor everywhere
+        (\code{result\_extrema}, panel, report) is the minimum over all nodes, labelled ``Min safety factor, whole part''. The
+        ``away from the supports'' minimum now also leaves out every node within $2\times$ the element size of a point support
+        (a pin has a stress spike round it), and the panel and report say so with the radius.
+\end{enumerate}
