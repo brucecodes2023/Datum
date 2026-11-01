@@ -1,0 +1,58 @@
+%======================================================================
+\subsection{BW-SIM-04 --- Built, 1 Nov: Netgen in a worker process with a time limit}\label{sec:sim-mesh-worker-built}
+%======================================================================
+
+Netgen runs inside one C++ call and cannot be interrupted. On the T\_HUB\,=\,1.9 bladed impeller of the VL-P01 turbojet
+(read from STEP, second order, MaxSize 2.0, MinSize 0.1, Moderate) it never returned: 1\,h 45\,min in ``Meshing\ldots''
+until the process was killed. The volume mesh now runs in a child process that the study can stop.
+
+\paragraph{How it works.} The module is \file{bruceworx\_sim\_meshworker.py}. The shape is written as a BREP and the
+settings (the Netgen properties of the study's mesh object, including \code{MeshSizeFile} of the local sizes) as JSON into a
+temporary directory; a child \code{FreeCADCmd} of the same application (start-up 0.3\,s) meshes them and writes
+\file{mesh.unv}, which keeps second order (Tet10 reads back as 10 nodes). The parent polls the child every 50\,ms and kills
+its whole process group on timeout or cancel. Netgen holds the interpreter lock, so the child cannot notice a dead
+parent itself: a small shell watchdog kills the group when the parent has gone (the app was quit during a mesh). The
+temporary directory is removed in every case.
+
+\paragraph{Time limit.} One try may take \code{MeshTimeLimit} seconds (a study property, 0 = automatic); automatic is
+$\max(120\,\mathrm{s},\ 0.0007\,\mathrm{s}\times\hat N)$ capped at 3600\,s, $\hat N$ the node estimate of the pre-check. The
+rule is 20 times what Netgen needs on the T\_HUB\,=\,1.6 impeller (17\,s for 514\,000 nodes). The tries of one meshing share
+a total of four limits; a try gets what is left of it.
+
+\paragraph{When the worker is used.} When the study sets a \code{MeshTimeLimit}, or the estimate is 20\,000 nodes or more.
+Smaller models mesh in this process as before (the worker costs about a second), so a plate with a hole or a cantilever are
+unchanged; the fallbacks of commit \code{6d41badd} (repaired copy, first order) remain the path there.
+
+\paragraph{The tries (worker path).}
+\begin{enumerate}
+  \item Netgen at the asked order. The shape reaches the worker as a BREP, which is the ``repaired copy'' of the in-process
+        fallback (a BREP round trip), so the separate repaired-copy try would repeat try 1 and is not run.
+  \item When second order was asked: first order in a worker; the existing step upgrades the linear tetrahedra to Tet10.
+  \item Gmsh, when a \code{gmsh} binary is found (FEM preference, next to the application, \code{PATH}). \textbf{Neither
+        the build nor the packaged \file{Vector Labs.app} has one}, so today this try does not exist; the code is written
+        (\code{gmsh -3 -order N -clmax MaxSize}, .unv back) but untested.
+\end{enumerate}
+Each try reports in the report view, the run log and the Progress tab (\code{bruceworx\_sim\_events} message at its end,
+a progress text every 5\,s with the elapsed time), and \code{stats['notes']} names the failed tries and the one that worked.
+If every try fails the error lists each with its time.
+
+\paragraph{Cancel.} \code{bruceworx\_sim\_meshworker.cancel()} kills the running worker from any thread; the study ends with
+``Meshing cancelled'' and no further try. The button in the Mesh node and the study panel is \textbf{not wired}: the panes
+file belonged to another session at the time. It is one call.
+
+\paragraph{Acceptance: the T\_HUB\,=\,1.9 impeller.} Read from the STEP (5.5\,MB, one solid), limit 300\,s per try:
+try 1 (second order) no mesh after 300\,s, worker killed (300.1\,s); try 2 (first order) no mesh after 300\,s, killed (300.0\,s);
+no Gmsh; the error lists both; 600\,s in all, then the program is free again (before: 1\,h 45\,min and a kill by hand).
+Nothing is left behind. The same at MaxSize 3.0 (a coarser mesh) also gave 300.1\,s and 300.1\,s without a mesh, so
+this solid is not a matter of element count: Netgen stalls in its surface or volume step on this geometry. Whether a
+longer limit would finish was not tried (the first run was 1\,h 45\,min without an answer).
+
+\paragraph{Tests} (\code{TestBruceWorxSimRotor.TestMeshWorker}, headless, 7): the worker mesh equals the in-process mesh on a
+60\,$\times$\,10\,$\times$\,10 cantilever (nodes, volumes, volume, 4 and 10 nodes per tetrahedron); a worker that sleeps past
+its limit is killed and the first-order try then meshes (upgraded to Tet10); every try timing out raises an error naming both;
+cancel kills the worker; the shell watchdog kills a child whose parent has gone; the time-limit rule; a small model stays
+in-process. Every test checks that no \code{bw-meshjob-*} directory and no worker process remains. Measured on the cantilever:
+worker mesh 0.3\,s of start-up plus the mesh. \textbf{Open questions.} (1) The hang is Netgen's on this solid at these
+settings; the real fix is geometry (T\_HUB, root fillets) or a coarser size, not a faster mesher: is a Gmsh binary worth
+adding to the bundle? (2) Local-size model tests (\code{TestBruceWorxSimModel}, 4 failures) belong to the SIM-07 P2 work in the tree and were failing without this change. (3) The Cancel button position (Mesh node, study panel, or the run ribbon)? (4) Should the automatic
+limit be shown in the Mesh node so it can be set there?

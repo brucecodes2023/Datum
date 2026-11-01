@@ -1069,5 +1069,127 @@ class TestBurstSpeed(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class TestMeshWorker(unittest.TestCase):
+    """SIM-04: Netgen in a worker process with a time limit (bruceworx_sim_meshworker); the hang is a worker that sleeps."""
+
+    def setUp(self):
+        import bruceworx_sim_meshworker as mw
+
+        self.mw = mw
+        self.before = self.leftovers()
+
+    def tearDown(self):
+        self.mw.TEST_HOOK = None
+        close_all()
+
+    @staticmethod
+    def leftovers():
+        import glob
+        import subprocess
+
+        dirs = set(glob.glob(os.path.join(tempfile.gettempdir(), "bw-meshjob-*")))
+        procs = subprocess.run(["pgrep", "-f", "bw-meshjob-"], capture_output=True, text=True).stdout.split()
+        return dirs, set(procs)
+
+    def study(self, second_order, limit=0.0):
+        import Part
+
+        close_all()
+        doc = App.newDocument("MW")
+        body = vc.shape_object(doc, "B", Part.makeBox(60, 10, 10))  # the cantilever
+        objs = sim.new_study(doc, sim.StudyPlan(name="W", model=body, material=vc.material(), max_size=3.0,
+                                                second_order=second_order))
+        an = objs["analysis"]
+        an.MeshTimeLimit = limit
+        return an, sim.members(an)["mesh"]
+
+    def assertClean(self):
+        dirs, procs = self.leftovers()
+        self.assertEqual(dirs - self.before[0], set(), "temporary job directories were left")
+        self.assertEqual(procs - self.before[1], set(), "worker processes were left")
+
+    def test_the_worker_mesh_equals_the_in_process_mesh(self):
+        for second in (False, True):
+            an, mesh = self.study(second)
+            local = sim._mesh_in_place(mesh)
+            shape = sim.shape_of(mesh.Shape)
+            settings = self.mw.netgen_settings(mesh, sim.NETGEN_COPY_PROPS, second)
+            fem, info = self.mw.run_worker(shape, settings, 120.0, "T")
+            self.assertEqual(info["status"], "ok", info)
+            self.assertEqual((fem.NodeCount, fem.VolumeCount), (local.NodeCount, local.VolumeCount))
+            nodes = len(fem.getElementNodes(next(iter(fem.Volumes))))
+            self.assertEqual(nodes, 10 if second else 4)
+            self.assertAlmostEqual(fem.Volume, local.Volume, places=3)
+        self.assertClean()
+
+    def test_a_worker_that_times_out_is_killed_and_the_next_try_runs(self):
+        an, mesh = self.study(True, limit=4.0)
+        self.mw.TEST_HOOK = lambda job: job.update(test_sleep=120) if job["settings"].get("SecondOrder") else None
+        said = []
+        self.assertTrue(sim._use_worker(mesh, an))
+        stats = sim.mesh_study(an, said.append)
+        self.assertGreater(stats["elements"], 100)
+        self.assertEqual(stats["order"], "second")  # first order worker mesh, upgraded to Tet10
+        self.assertTrue(any("no mesh after 4 s, worker killed" in t for t in stats["notes"]), stats["notes"])
+        self.assertTrue(any("upgraded" in t for t in stats["notes"]), stats["notes"])
+        self.assertTrue(any("Try 1" in t and "killed" in t for t in said), said)
+        self.assertClean()
+
+    def test_every_try_timing_out_is_an_error_listing_each(self):
+        an, mesh = self.study(True, limit=3.0)
+        self.mw.TEST_HOOK = lambda job: job.update(test_sleep=120)
+        t0 = __import__("time").time()
+        with self.assertRaises(sim.StudyError) as ctx:
+            sim.mesh_study(an)
+        text = str(ctx.exception)
+        self.assertIn("Try 1", text)
+        self.assertIn("Try 2", text)
+        self.assertLess(__import__("time").time() - t0, 30)
+        self.assertClean()
+
+    def test_cancel_kills_the_worker(self):
+        import threading
+
+        an, mesh = self.study(False, limit=60.0)
+        self.mw.TEST_HOOK = lambda job: job.update(test_sleep=120)
+        threading.Timer(2.0, self.mw.cancel).start()
+        with self.assertRaises(sim.StudyError) as ctx:
+            sim.mesh_study(an)
+        self.assertIn("cancelled", str(ctx.exception))
+        self.assertClean()
+
+    def test_the_time_limit_rule(self):
+        mw = self.mw
+        self.assertEqual(mw.time_limit(None, 1000), 120.0)
+        self.assertAlmostEqual(mw.time_limit(None, 514000), 359.8, places=1)
+        self.assertEqual(mw.time_limit(None, 10 ** 9), 3600.0)
+        an, mesh = self.study(False, limit=42.0)
+        self.assertEqual(mw.time_limit(an, 10 ** 6), 42.0)
+
+    def test_the_watchdog_kills_a_worker_whose_parent_is_gone(self):
+        import subprocess
+        import time
+
+        parent = subprocess.Popen(["sleep", "1"])
+        child = subprocess.Popen(["sleep", "300"], start_new_session=True)
+        dog = subprocess.Popen(["/bin/sh", "-c", self.mw._WATCHDOG, "sh", str(parent.pid), str(child.pid)], start_new_session=True)
+        try:
+            parent.wait()
+            for _ in range(80):
+                if child.poll() is not None:
+                    break
+                time.sleep(0.1)
+            self.assertIsNotNone(child.poll(), "the worker outlived its parent")
+        finally:
+            for p in (child, dog):
+                if p.poll() is None:
+                    p.kill()
+                p.wait()
+
+    def test_a_small_model_meshes_in_this_process(self):
+        an, mesh = self.study(False)
+        self.assertFalse(sim._use_worker(mesh, an))
+
+
 if __name__ == "__main__":
     unittest.main()

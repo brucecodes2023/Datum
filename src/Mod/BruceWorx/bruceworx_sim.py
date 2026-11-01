@@ -796,6 +796,10 @@ def ensure_study_properties(analysis):
     if "MeshNodeLimit" not in props:
         analysis.addProperty("App::PropertyInteger", "MeshNodeLimit", "Study",
                              "[BW] Hard limit on the estimated mesh nodes for this study; 0 = the preference (1 000 000)")
+    if "MeshTimeLimit" not in props:
+        analysis.addProperty("App::PropertyFloat", "MeshTimeLimit", "Study",
+                             "[BW] Seconds one Netgen try may take in its worker process; 0 = automatic "
+                             "(max(120, 0.0007 x estimated nodes))")
     if "SFThresholds" not in props:
         thresholds, colors = default_bands()
         analysis.addProperty("App::PropertyFloatList", "SFThresholds", "Study",
@@ -1190,7 +1194,74 @@ def _mesh_on_copy(mesh, shape, second_order):
         FreeCAD.closeDocument(scratch.Name)
 
 
-def _mesh_with_fallbacks(mesh, progress=None):
+def _shape_volume_area(shape):
+    return sum(s.Volume for s in shape.Solids), sum(s.Area for s in shape.Solids)
+
+
+def _use_worker(mesh, analysis):
+    """True when Netgen runs in a worker process: the study sets a MeshTimeLimit, or the estimate is over
+    ``WORKER_MIN_NODES``; a small model meshes in this process (a worker costs about a second)."""
+    import bruceworx_sim_meshworker as mw
+
+    try:
+        if analysis is not None and "MeshTimeLimit" in analysis.PropertiesList and float(analysis.MeshTimeLimit) > 0:
+            return True
+        shape = shape_of(getattr(mesh, "Shape", None))
+        if shape is None or not shape.Solids:
+            return False
+        return _estimate_for(mesh, shape) >= mw.WORKER_MIN_NODES
+    except Exception:
+        return False
+
+
+def _estimate_for(mesh, shape):
+    volume, area = _shape_volume_area(shape)
+    return estimate_mesh_nodes(volume, area, float(mesh.MaxSize), bool(mesh.SecondOrder), str(mesh.Fineness))
+
+
+def _mesh_in_workers(mesh, analysis, say, progress=None):
+    """Netgen in worker processes with time limits (bruceworx_sim_meshworker).  Tries, each with its own limit and all inside
+    a total: (1) the shape (as a BREP, which is also the "repaired copy" that the in-process fallback makes) at the asked
+    order; (2) first order, when second order was asked (the caller upgrades to Tet10); (3) Gmsh, when a gmsh binary is
+    found.  Returns (FemMesh, notes of the failed tries); raises StudyError listing every try when all fail."""
+    import bruceworx_sim_meshworker as mw
+
+    shape = shape_of(getattr(mesh, "Shape", None))
+    second = bool(getattr(mesh, "SecondOrder", False))
+    limit = mw.time_limit(analysis, _estimate_for(mesh, shape))
+    total_end = time.time() + mw.TOTAL_FACTOR * limit
+    base = mw.netgen_settings(mesh, NETGEN_COPY_PROPS, second)
+    tries = [("Netgen" + (", second order" if second else ""), "netgen", second)]
+    if second:
+        tries.append(("Netgen, first order (Tet10 after)", "netgen", False))
+    if mw.gmsh_binary():
+        tries.append(("Gmsh" + (", second order" if second else ""), "gmsh", second))
+    done = []
+    say("info", f"Meshing in a worker process, up to {limit:.0f} s per try")
+    for n, (label, kind, order2) in enumerate(tries, 1):
+        remaining = total_end - time.time()
+        if remaining < 5:
+            done.append(f"try {n} ({label}): skipped, the total time is used up")
+            break
+        label = f"Try {n}: {label}"
+        settings = dict(base, SecondOrder=bool(order2))
+        try:
+            fem, info = mw.run_worker(shape, settings, min(limit, remaining), label, progress, kind)
+        except mw.MeshCancelled:
+            say("warning", "Meshing cancelled")
+            raise StudyError("Meshing cancelled: " + ("; ".join(done) if done else "no mesh was made"))
+        if info["status"] == "ok":
+            say("ok" if not done else "warning", info["text"])
+            mesh.FemMesh = fem
+            return mesh.FemMesh, ([f"{'; '.join(done)}; meshed by {label} ({info['seconds']} s)"] if done else [])
+        done.append(f"{info['text']} ({info['seconds']} s)")
+        say("warning", info["text"] + (f" ({info['seconds']} s)" if info["status"] != "timeout" else "")
+            + ("; trying the next" if n < len(tries) else ""))
+    raise StudyError("Netgen made no volume mesh. " + " | ".join(done) + ". Try a larger MaxSize, heal or simplify the shape, "
+                     "raise the study's MeshTimeLimit, or mesh the part in pieces")
+
+
+def _mesh_with_fallbacks(mesh, progress=None, analysis=None):
     """Netgen on the study's shape; when it returns no volume elements (surface only, or nothing), retries, at most twice:
     (1) a repaired copy of the shape at the asked order; (2) when second order was asked, the repaired copy at first
     order (the caller upgrades the linear tetrahedra to Tet10).  Returns (FemMesh, [what was tried and used]); the
@@ -1208,6 +1279,8 @@ def _mesh_with_fallbacks(mesh, progress=None):
         if progress:
             progress(text)
 
+    if _use_worker(mesh, analysis):
+        return _mesh_in_workers(mesh, analysis, say, progress)
     fem = _mesh_in_place(mesh)
     if _has_volumes(fem):
         return fem, []
@@ -1267,7 +1340,7 @@ def _mesh_study(analysis, progress=None):
     if progress:
         progress("Meshing…")
     t0 = time.time()
-    fem, fallback = _mesh_with_fallbacks(mesh, progress)
+    fem, fallback = _mesh_with_fallbacks(mesh, progress, analysis)
     if fallback:  # made on a copy of the shape: the study's mesh object takes the result
         mesh.FemMesh = fem
         fem = mesh.FemMesh

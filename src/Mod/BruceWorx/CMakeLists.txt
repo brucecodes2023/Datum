@@ -179,6 +179,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxCfdWash.py
     bruceworx_sim_gui.py
     bruceworx_sim_events.py
+    bruceworx_sim_meshworker.py
     bruceworx_sim_workspace.py
     bruceworx_sim_panes.py
     TestBruceWorxSimWorkspace.py
