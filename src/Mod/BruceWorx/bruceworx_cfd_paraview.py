@@ -34,6 +34,8 @@ IMAGES = (("iso", "Isometric view: pressure on the part and streamlines coloured
           ("side", "Side view: pressure on the part and streamlines coloured by speed"),
           ("cut", "Mid cut plane coloured by the speed $|U|$, with the pressure on the part"))
 RENDER_TIMEOUT = 300.0  # seconds; pvbatch needs about 10 s to start and 20 s for a 500k-cell case
+WASH_KINDS = (("axis", "View along the thrust axis from the wake side: the speed on a plane half a propeller diameter below the disks"),
+              ("wake", "The wake as a surface of constant speed at half the induced velocity ($%s$\\,m/s)"))
 SEEDS = 200  # default number of streamlines
 SIZE = (1400, 900)
 
@@ -50,10 +52,94 @@ def image_path(folder, kind):
     return os.path.join(pv_dir(folder), f"pv_{kind}.png")
 
 
+def perpendicular(v):
+    """A unit vector at right angles to v."""
+    n = sum(c * c for c in v) ** 0.5 or 1.0
+    v = [c / n for c in v]
+    a = (1.0, 0.0, 0.0) if abs(v[0]) < 0.9 else (0.0, 1.0, 0.0)
+    w = [v[1] * a[2] - v[2] * a[1], v[2] * a[0] - v[0] * a[2], v[0] * a[1] - v[1] * a[0]]
+    m = sum(c * c for c in w) ** 0.5
+    return [c / m for c in w]
+
+
+def disk_pairs(info):
+    """[(disk, opposite disk or None)] for the vertical cuts of a prop wash: every disk is paired with the one nearest to its
+    mirror image about the centroid of all disks; a pair appears once.  A single disk, or one with no partner, stands alone."""
+    disks = list(info.get("disks") or [])
+    if not disks:
+        return []
+    cen = [sum(d["center"][k] for d in disks) / len(disks) for k in range(3)]
+    used, pairs = set(), []
+    for i, d in enumerate(disks):
+        if i in used:
+            continue
+        used.add(i)
+        mirror = [2 * cen[k] - d["center"][k] for k in range(3)]
+        best, dist = None, None
+        for j, e in enumerate(disks):
+            if j in used:
+                continue
+            dd = sum((e["center"][k] - mirror[k]) ** 2 for k in range(3)) ** 0.5
+            if dist is None or dd < dist:
+                best, dist = j, dd
+        if best is not None and dist <= 0.5 * d["diameter"]:
+            used.add(best)
+            pairs.append((d, disks[best]))
+        else:
+            pairs.append((d, None))
+    return pairs
+
+
+def wash_plan(info):
+    """The prop-wash picture set: the thrust axis, the wake plane, the vertical cuts and the speed of the wake surface; {} for
+    an external-flow case.  Lengths in metres, case frame."""
+    disks = info.get("disks") or []
+    if not disks:
+        return {}
+    axis = [sum(d["axis"][k] for d in disks) for k in range(3)]
+    n = sum(a * a for a in axis) ** 0.5 or 1.0
+    axis = [a / n for a in axis]
+    cen = [sum(d["center"][k] for d in disks) / len(disks) for k in range(3)]
+    dia = sum(d["diameter"] for d in disks) / len(disks)
+    plane = [cen[k] - 0.5 * dia * axis[k] for k in range(3)]  # half a diameter downstream of the disks
+    cuts = []
+    for i, (a, b) in enumerate(disk_pairs(info)):
+        line = [(b["center"][k] if b else cen[k]) - a["center"][k] for k in range(3)]
+        along = sum(line[k] * axis[k] for k in range(3))
+        line = [line[k] - along * axis[k] for k in range(3)]
+        if sum(c * c for c in line) ** 0.5 < 1e-9:
+            line = perpendicular(axis)
+        m = sum(c * c for c in line) ** 0.5
+        line = [c / m for c in line]
+        normal = [axis[1] * line[2] - axis[2] * line[1], axis[2] * line[0] - axis[0] * line[2], axis[0] * line[1] - axis[1] * line[0]]
+        names = (a.get("label") or a["name"]) + ((" and " + (b.get("label") or b["name"])) if b else "")
+        cuts.append({"kind": f"cut{i + 1}", "origin": list(a["center"]), "normal": normal,
+                     "caption": f"Vertical cut through {names}: speed $|U|$ in the plane of the thrust axis"})
+    vi = sum(d.get("v_induced", 0.0) for d in disks) / len(disks)
+    return {"axis": axis, "plane_origin": plane, "up": perpendicular(axis), "cuts": cuts, "iso_speed": 0.5 * vi, "vi": vi}
+
+
+def picture_kinds(folder_or_info=None):
+    """[(kind, caption)] of the pictures a case gets: the three generic ones, and for a prop wash the thrust-axis view, a cut
+    through each pair of opposite disks and the wake surface."""
+    info = folder_or_info
+    try:
+        if isinstance(info, str):
+            info = _json(info)
+        plan = wash_plan(info) if info else {}
+    except Exception:
+        plan = {}
+    if not plan:
+        return list(IMAGES)
+    out = list(IMAGES) + [WASH_KINDS[0]] + [(c["kind"], c["caption"]) for c in plan["cuts"]]
+    out.append((WASH_KINDS[1][0], WASH_KINDS[1][1] % f"{plan['iso_speed']:.3g}"))
+    return out
+
+
 def images(folder):
     """{kind: png} of the background renders that exist (non-empty) for a case."""
     out = {}
-    for kind, _caption in IMAGES:
+    for kind, _caption in picture_kinds(folder):
         p = image_path(folder, kind)
         if os.path.isfile(p) and os.path.getsize(p) > 0:
             out[kind] = p
@@ -316,6 +402,41 @@ speed_lut.RescaleTransferFunction(0.0, vmax)  # again: adding the tubes must not
 if surface is not None:
     pressure_lut.RescaleTransferFunction(-m, m)
 
+# --- the prop-wash set: a plane across the wake, a cut through each pair of opposite disks, the wake surface -----------
+wash_displays = {}
+WASH = CFG.get("wash")
+if WASH:
+    plane = Slice(registrationName="Wake plane", Input=internal)
+    plane.SliceType = "Plane"
+    plane.SliceType.Origin = WASH["plane_origin"]
+    plane.SliceType.Normal = WASH["axis"]
+    wash_displays["axis"] = Show(plane, view)
+    for c in WASH["cuts"]:
+        cp = Slice(registrationName="Cut " + c["kind"], Input=internal)
+        cp.SliceType = "Plane"
+        cp.SliceType.Origin = c["origin"]
+        cp.SliceType.Normal = c["normal"]
+        wash_displays[c["kind"]] = Show(cp, view)
+    for d in wash_displays.values():
+        d.Representation = "Surface"
+        ColorBy(d, ("POINTS", "U", "Magnitude"))
+        d.SetScalarBarVisibility(view, False)
+        d.Visibility = 0
+    speed = Calculator(registrationName="Speed", Input=internal)
+    speed.Function = "mag(U)"
+    speed.ResultArrayName = "speed"
+    wake = Contour(registrationName="Wake surface", Input=speed)
+    wake.ContourBy = ["POINTS", "speed"]
+    wake.Isosurfaces = [WASH["iso_speed"]]
+    wake_display = Show(wake, view)
+    wake_display.Representation = "Surface"
+    wake_display.ColorArrayName = ["POINTS", ""]
+    wake_display.AmbientColor = wake_display.DiffuseColor = [0.2, 0.5, 0.85]
+    wake_display.Opacity = 0.55
+    wake_display.Visibility = 0
+    wash_displays["wake"] = wake_display
+    speed_lut.RescaleTransferFunction(0.0, vmax)
+
 # --- cameras --------------------------------------------------------------------------------------------------------
 lo_roi, hi_roi = CFG["roi"]
 
@@ -333,6 +454,9 @@ def camera(direction, up=(0.0, 0.0, 1.0)):
 
 
 def show_only(cut_on, lines_on, opacity):
+    for d in wash_displays.values():
+        d.Visibility = 0
+        d.SetScalarBarVisibility(view, False)
     cut_display.Visibility = 1 if cut_on else 0
     cut_display.Opacity = opacity
     for d in lines:
@@ -356,6 +480,22 @@ if MODE == "batch":
         elif kind == "side":
             show_only(False, True, 1.0)
             camera((0.0, -1.0, 0.0))
+        elif WASH and kind == "axis":  # from the wake side, looking up the thrust axis, through the translucent plane
+            show_only(False, False, 1.0)
+            wash_displays["axis"].Visibility = 1
+            wash_displays["axis"].Opacity = 0.85
+            legend(wash_displays["axis"], speed_lut, "Speed magnitude [m/s]", "Upper Right Corner")
+            camera([-a for a in WASH["axis"]], WASH["up"])
+        elif WASH and kind == "wake":
+            show_only(False, False, 1.0)
+            wash_displays["wake"].Visibility = 1
+            camera(ISO)
+        elif WASH and kind in wash_displays:
+            c = [c for c in WASH["cuts"] if c["kind"] == kind][0]
+            show_only(False, False, 1.0)
+            wash_displays[kind].Visibility = 1
+            legend(wash_displays[kind], speed_lut, "Speed magnitude [m/s]", "Upper Right Corner")
+            camera(c["normal"], WASH["axis"])
         else:
             show_only(True, False, 1.0)
             camera(ISO)
@@ -395,7 +535,8 @@ def script_config(folder, mode="gui", prefer="vtk", info=None):
         "speed_floor": 0.0, "seeds": seed_plan(info, 80), "roi": [list(roi[0]), list(roi[1])],
         "max_length": 1.5 * max(b - a for a, b in zip(dom_lo, dom_hi)), "tube_radius": 0.0012 * span,
         "iso_dir": [-0.75, -1.0, 0.7], "size": list(SIZE), "light": True,
-        "pictures": [[k, image_path(folder, k)] for k, _c in IMAGES],
+        "pictures": [[k, image_path(folder, k)] for k, _c in picture_kinds(info)],
+        "wash": wash_plan(info) or None,
     }, length
 
 
@@ -480,10 +621,8 @@ class RenderJob:
             if not (info.get("geometry") and has_results(folder)):
                 raise cfd.CfdError("the case has no results yet")
             script = write_script(folder, "batch", prefer, info)
-            for kind, _c in IMAGES:  # an old picture must not stand in for this run
-                p = image_path(folder, kind)
-                if os.path.exists(p):
-                    os.remove(p)
+            for p in glob.glob(os.path.join(pv_dir(folder), "pv_*.png")):  # an old picture must not stand in for this run
+                os.remove(p)
             self.log = open(os.path.join(pv_dir(folder), RENDER_LOG), "w")
             self.proc = subprocess.Popen([pvb, "--force-offscreen-rendering", script], stdout=self.log,
                                          stderr=subprocess.STDOUT, cwd=pv_dir(folder), start_new_session=True)
@@ -545,7 +684,11 @@ def report_figures(folder, dest_dir):
     out = []
     os.makedirs(dest_dir, exist_ok=True)
     present = images(folder) if folder else {}
-    for kind, caption in IMAGES:
+    kinds = picture_kinds(folder) if folder else list(IMAGES)
+    for stale in glob.glob(os.path.join(dest_dir, "fig_pv_*.png")):  # a picture this case does not make any more
+        if os.path.basename(stale)[len("fig_pv_"):-4] not in dict(kinds):
+            os.remove(stale)
+    for kind, caption in kinds:
         target = os.path.join(dest_dir, f"fig_pv_{kind}.png")
         if kind in present:
             shutil.copyfile(present[kind], target)
@@ -592,12 +735,13 @@ def streamline_path(vtu):
     return os.path.join(os.path.dirname(scaled_copy_path(vtu)), "streamlines.vtp")
 
 
-def compute_streamlines(folder, count=SEEDS, vtu=None, info=None, timings=None):
+def compute_streamlines(folder, count=SEEDS, vtu=None, info=None, timings=None, progress=None):
     """Streamlines of the latest foamToVTK volume with vtkStreamTracer, in mm (the model's units).
 
     Reads the mm copy of the volume (made when missing or older than the original), seeds as seed_plan says, integrates
     both ways, and writes ``streamlines.vtp`` beside the copy with the point arrays U and ``speed`` (m/s).  Returns the
-    .vtp path; ``timings`` (a dict) gets the seconds of each step."""
+    .vtp path; ``timings`` (a dict) gets the seconds of each step; ``progress(fraction)`` is called while tracing (the tracer
+    holds the GIL, so a Python thread would freeze the window: ``StreamJob`` runs this in a separate process)."""
     import numpy as np
     from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
     from vtkmodules.vtkCommonCore import vtkPoints
@@ -630,19 +774,23 @@ def compute_streamlines(folder, count=SEEDS, vtu=None, info=None, timings=None):
         raise cfd.CfdError("the volume has no point velocity U to follow")
     t["read"] = time.time() - t1
     t1 = time.time()
-    seeds = vtkPolyData()
-    pts = vtkPoints()
-    pts.SetData(numpy_to_vtk(np.ascontiguousarray(seed_points(info, count)), deep=True))
-    seeds.SetPoints(pts)
-    verts = vtkCellArray()
-    for i in range(pts.GetNumberOfPoints()):
-        verts.InsertNextCell(1)
-        verts.InsertCellPoint(i)
-    seeds.SetVerts(verts)
+    all_seeds = np.ascontiguousarray(seed_points(info, count))
+
+    def seed_cloud(chunk):
+        seeds = vtkPolyData()
+        pts = vtkPoints()
+        pts.SetData(numpy_to_vtk(np.ascontiguousarray(chunk), deep=True))
+        seeds.SetPoints(pts)
+        verts = vtkCellArray()
+        for i in range(pts.GetNumberOfPoints()):
+            verts.InsertNextCell(1)
+            verts.InsertCellPoint(i)
+        seeds.SetVerts(verts)
+        return seeds
+
     dom_lo, dom_hi = info["geometry"]["domain"]
     tracer = vtkStreamTracer()
     tracer.SetInputData(grid)
-    tracer.SetSourceData(seeds)
     tracer.SetInputArrayToProcess(0, 0, 0, 0, "U")  # vtkDataObject.FIELD_ASSOCIATION_POINTS == 0
     tracer.SetIntegrationDirectionToBoth()
     tracer.SetIntegratorTypeToRungeKutta45()
@@ -653,8 +801,28 @@ def compute_streamlines(folder, count=SEEDS, vtu=None, info=None, timings=None):
     tracer.SetIntegrationStepUnit(2)  # cell length
     tracer.SetMaximumNumberOfSteps(4000)
     tracer.SetTerminalSpeed(1e-9)
-    tracer.Update()
-    out = tracer.GetOutput()
+    # the lines do not depend on each other, so a progress report only needs the seeds in batches (the tracer's own
+    # ProgressEvent does not fire)
+    batches = 1 if progress is None else max(1, min(10, len(all_seeds) // 20))
+    parts = []
+    for i in range(batches):
+        tracer.SetSourceData(seed_cloud(all_seeds[i * len(all_seeds) // batches:(i + 1) * len(all_seeds) // batches]))
+        tracer.Update()
+        piece = vtkPolyData()
+        piece.DeepCopy(tracer.GetOutput())
+        parts.append(piece)
+        if progress is not None:
+            progress((i + 1) / batches)
+    if len(parts) == 1:
+        out = parts[0]
+    else:
+        from vtkmodules.vtkFiltersCore import vtkAppendPolyData
+
+        app = vtkAppendPolyData()
+        for piece in parts:
+            app.AddInputData(piece)
+        app.Update()
+        out = app.GetOutput()
     t["trace"] = time.time() - t1
     u = out.GetPointData().GetArray("U")
     if out.GetNumberOfPoints() == 0 or u is None:
@@ -719,3 +887,115 @@ def show_streamlines(analysis, path, label="Streamlines"):
         except Exception:
             pass
     return obj
+
+
+# ----- the same, off the GUI thread: a worker process ------------------------------------------------------------
+
+STREAM_WORKER = ("import sys, json; sys.path.insert(0, sys.argv[1]); import bruceworx_cfd_paraview as p; "
+                 "p.worker_main(sys.argv[2], int(sys.argv[3]))")
+
+
+def worker_main(folder, count):
+    """Entry of the worker process: traces, printing a ``@PROGRESS f`` line after each tenth of the seeds and ``@DONE path
+    {timings}`` at the end."""
+    def progress(f):
+        print(f"@PROGRESS {f:.3f}", flush=True)
+
+    t = {}
+    path = compute_streamlines(folder, count, timings=t, progress=progress)
+    print("@DONE " + json.dumps({"path": path, "timings": t}), flush=True)
+
+
+def worker_python():
+    """The Python of the app (it carries the VTK), or None."""
+    import sys
+
+    for p in (os.path.join(sys.prefix, "bin", "python3"), os.path.join(sys.exec_prefix, "bin", "python3")):
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+class StreamJob:
+    """vtkStreamTracer in a child process, so the window stays alive: ``poll()`` from a timer (True when finished),
+    ``progress`` 0..1, ``cancel()``.  ``state`` is "running", "done", "failed", "cancelled" or "unavailable"; ``path`` and
+    ``timings`` are set when done.  vtkStreamTracer does not let go of the GIL, so a Python thread would not help."""
+
+    def __init__(self, folder, count=SEEDS):
+        import queue
+        import threading
+
+        self.folder, self.count = folder, count
+        self.state, self.message, self.progress = "running", "", 0.0
+        self.path, self.timings, self.proc = None, {}, None
+        self.started = time.time()
+        self._lines = queue.Queue()
+        py = worker_python()
+        if py is None:
+            self.state, self.message = "unavailable", "no Python with VTK was found next to the app"
+            return
+        try:
+            self.proc = subprocess.Popen([py, "-I", "-c", STREAM_WORKER, os.path.dirname(os.path.abspath(__file__)), folder, str(count)],
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        except OSError as exc:
+            self.state, self.message = "unavailable", str(exc)
+            return
+        self._tail = []
+
+        def pump():
+            for line in self.proc.stdout:
+                self._lines.put(line.rstrip("\n"))
+            self._lines.put(None)
+
+        threading.Thread(target=pump, daemon=True).start()
+        self._eof = False
+
+    def running(self):
+        return self.state == "running"
+
+    def poll(self):
+        if self.state != "running":
+            return True
+        while True:
+            try:
+                line = self._lines.get_nowait()
+            except Exception:
+                break
+            if line is None:
+                self._eof = True
+            elif line.startswith("@PROGRESS "):
+                self.progress = float(line.split()[1])
+            elif line.startswith("@DONE "):
+                data = json.loads(line[6:])
+                self.path, self.timings, self.progress = data["path"], data["timings"], 1.0
+            else:
+                self._tail = (self._tail + [line])[-6:]
+        if self._eof:
+            code = self.proc.wait()
+            if code == 0 and self.path:
+                self.state = "done"
+            else:
+                self.state = "failed"
+                msg = [l for l in self._tail if l.strip()]
+                self.message = msg[-1] if msg else f"the worker ended with code {code}"
+            return True
+        return False
+
+    def cancel(self):
+        if self.state == "running" and self.proc:
+            self.proc.kill()
+            self.proc.wait()
+            self.state, self.message = "cancelled", "stopped"
+
+    def wait(self, step=0.05, timeout=300.0):
+        t0 = time.time()
+        while not self.poll():
+            if time.time() - t0 > timeout:
+                self.cancel()
+                break
+            time.sleep(step)
+        return self.state == "done"
+
+
+def start_streamlines(folder, count=SEEDS):
+    return StreamJob(folder, count)

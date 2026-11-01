@@ -94,3 +94,45 @@ pictures. \code{TestBruceWorxCfd}: see the commit messages for the result of the
 \paragraph{Your answers (1 Nov).} (1) Yes, pictures after every run. (2) Yes, a prop-wash set along the thrust axis.
 (3) Move tracing off the GUI thread if it is slow on a real frame (measure on the ROB-03 case first).
 
+
+\paragraph{Follow-up, 1 Nov.} Items 3 and 4 of your answers are built.
+\begin{itemize}[nosep]
+  \item \textbf{Pictures stay automatic} after every run (when ParaView is installed); unchanged.
+  \item \textbf{Prop-wash picture set.} For a prop-wash study the three generic pictures are joined by four kinds (a case with $n$
+        pairs of opposite disks gets $n$ cuts): \emph{Along the thrust axis} (camera on the wake side looking up the axis, through a plane
+        of speed half a propeller diameter below the disks, the frame behind it); \emph{Vertical cut} through each pair of opposite
+        disks (the plane holds the thrust axis and both disk centres, speed $|U|$ on it, the frame in front; pairs are found by
+        mirroring each disk about the centroid of all disks; a single or unpaired disk is cut towards the centroid); and
+        \emph{Wake surface}: the isosurface of $|U|$ at half the induced velocity $v_i$ (the mean of the disks' momentum-theory
+        values, $v_i=\sqrt{T/2\rho A}$ with the ring area, $9.33$\,m/s for the ROB-03 frame, so $4.67$\,m/s), translucent blue. The
+        same script serves the opened ParaView session (\file{view.py}) and \code{pvbatch} (\file{render.py}); the set is chosen by
+        \code{picture\_kinds}. The panel's picture list and the report follow the study: seven pictures for the frame, with
+        captions that name the disks and the iso speed; old pictures (also of kinds the case no longer makes) are cleared before a run
+        and in the report folder. On the ROB-03 results (217\,139 cells) all seven pictures took 13.4\,s of \code{pvbatch}
+        after \code{foamToVTK} (1.8\,s).
+\end{itemize}
+\begin{figure}[h]\centering
+\includegraphics[width=0.32\linewidth]{fig/sim06_wash_axis.png}\hfill
+\includegraphics[width=0.32\linewidth]{fig/sim06_wash_cut1.png}\hfill
+\includegraphics[width=0.32\linewidth]{fig/sim06_wash_wake.png}
+\caption{ROB-03 frame, hover, four disks: along the thrust axis, a vertical cut through two opposite disks, the wake at half the
+induced velocity.}
+\end{figure}
+\begin{itemize}[nosep]
+  \item \textbf{Streamline tracing time, measured} on the ROB-03 frame result (217\,139 cells, 200 seeds, Apple silicon,
+        \code{FreeCADCmd}, three runs): first time $3.5$\,s (making the millimetre copy $1.4$\,s, read $0.15$\,s, tracing $1.75$\,s);
+        later $2.0$\,s ($1.73$\,s tracing, repeatable to $0.02$\,s); 50 seeds $0.9$\,s; 400 seeds $3.7$\,s. That is above the 2\,s
+        line, and a thread cannot help: while a Python thread traced, the main thread was blocked for $1.9$\,s (200 seeds) and
+        $3.3$\,s (400 seeds), the whole tracing time, because \code{vtkStreamTracer.Update} holds the GIL. So the tracing now runs in
+        a \emph{worker process}: the app's own \file{bin/python3} (it has the VTK) runs \code{worker\_main}; the window polls it on a
+        timer (\code{StreamJob}). The results panel shows ``Tracing streamlines from 200 seeds: 40\,\%'' and a \emph{Cancel}
+        button; Cancel (or closing the panel, or changing the seed count) kills the worker. The seeds are traced in tenths because the
+        tracer's own progress event never fires; the tenths cost nothing measurable ($4.2$\,s against $3.3$ to $4.0$\,s for 400
+        seeds, the same 781 lines). The worker adds about $0.15$\,s of start-up (wall $2.34$\,s against $2.19$\,s in the process). The line
+        object appears in the 3D view when the worker is done; ticking off while it runs hides it on arrival. Without a worker Python the old path
+        (wait cursor, on the GUI thread) is used.
+\end{itemize}
+Tests added: the prop-wash picture kinds, pairs, plane normals and the iso speed ($2.5$ for $v_i=5$); the script carries the wash
+configuration, the contour and \code{mag(U)} and none for external flow; pvbatch makes all seven pictures of a synthetic
+wash case; the report copies the wash pictures and removes a stale one; the worker (done, progress never goes back, cancelled,
+failed with a message); the panel traces in the background, shows the lines, and Cancel leaves no object.

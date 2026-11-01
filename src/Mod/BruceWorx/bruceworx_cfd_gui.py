@@ -240,6 +240,10 @@ def _make_classes():
             self.pv_timer.setInterval(700)
             self.pv_timer.timeout.connect(slot(self._poll_pictures))
             self._streams = None  # (FemPostPipeline, seed count) of the streamlines in the 3D view
+            self.stream_job = None  # the worker process tracing them (bruceworx_cfd_paraview.StreamJob)
+            self.stream_timer = QtCore.QTimer()
+            self.stream_timer.setInterval(150)
+            self.stream_timer.timeout.connect(slot(self._poll_streamlines))
             self.form = [self._build_setup(), self._build_run(), self._build_results()]
             self._show_summary()
             self.check()
@@ -376,12 +380,13 @@ def _make_classes():
             self.seeds_spin.editingFinished.connect(slot(self._seeds_changed))
             self.pictures_button = button("Pictures", self.render_pictures,
                                           "Render iso, side and cut-plane pictures with ParaView in the background")
-            for b in (self.streams_check, self.seeds_spin, self.pictures_button):
+            self.streams_cancel = button("Cancel", self.cancel_streamlines, "Stop tracing the streamlines")
+            self.streams_cancel.hide()
+            for b in (self.streams_check, self.seeds_spin, self.streams_cancel, self.pictures_button):
                 row2.addWidget(b)
             w.layout().addLayout(row2)
             self.picture_choice = QtWidgets.QComboBox()
-            for kind, caption in pvm.IMAGES:
-                self.picture_choice.addItem({"iso": "Isometric", "side": "Side", "cut": "Cut plane"}[kind], kind)
+            self._fill_picture_choice()
             self.picture_choice.currentIndexChanged.connect(slot(self._show_picture))
             self.picture = QtWidgets.QLabel()
             self.picture.setAlignment(QtCore.Qt.AlignCenter)
@@ -415,6 +420,9 @@ def _make_classes():
             self.pv_timer.stop()
             if self.pv_job is not None:
                 self.pv_job.stop()
+            self.stream_timer.stop()
+            if self.stream_job is not None:
+                self.stream_job.cancel()
             return super().release()
 
         def _settings_changed(self, *_a):
@@ -506,8 +514,6 @@ def _make_classes():
                 self.stage_label.setText(f"Run {result}{note}.")
                 if result == "done":
                     summary = cfd.save_summary(self.analysis, self.folder, result)
-                    self.conv_label.setText(summary["convergence"]["text"] + (
-                        " — <b>converged</b>" if summary["convergence"]["converged"] else " — <b>not converged</b>"))
                     self._show_summary()
                     if not pvm.precheck_text():
                         self.render_pictures()
@@ -550,8 +556,15 @@ def _make_classes():
                     self.table.setItem(i, j, QtWidgets.QTableWidgetItem(text))
             disks = "; ".join(f"{d['label']}: {d['measured']:.2f} m/s (theory {d['theory']:.2f})"
                               for d in s.get("disks", []) if d.get("measured") is not None)
-            verdict = " — <b>converged</b>" if s["convergence"]["converged"] else " — <b>not converged</b>"
-            self.conv_label.setText(s["convergence"]["text"] + verdict + (f"<br>Induced velocity at the disks: {disks}" if disks else ""))
+            conv = s["convergence"]
+            verdict = f" — <b>{conv.get('label') or ('converged' if conv['converged'] else 'not converged')}</b>"
+            detail = ""
+            if conv.get("judged"):
+                detail = "<br>Forces along the thrust axis, mean (swing): " + "; ".join(
+                    f"{st['name']} {st['mean']:.3g} N ({st['swing'] * 100:.2g} %)" for st in conv["judged"])
+                if conv.get("listed"):
+                    detail += "<br>Under 2 % of the thrust, not judged: " + ", ".join(st["name"] for st in conv["listed"])
+            self.conv_label.setText(conv["text"] + verdict + detail + (f"<br>Induced velocity at the disks: {disks}" if disks else ""))
 
         def _pressure_changed(self):
             a = self.analysis
@@ -612,10 +625,68 @@ def _make_classes():
                 self.show_streamlines()
 
         def show_streamlines(self):
+            """Shows the streamlines of the case.  Tracing takes 2 to 4 s on a frame, so it runs in a worker process (the window
+            stays alive, with a progress figure and Cancel); returns the object when it is already there, else None (it
+            appears when the worker is done).  Without a worker Python it traces here behind a wait cursor."""
             count = self.seeds_spin.value()
             if self._streams is not None and self._streams[1] == count:
                 self._streams[0].ViewObject.Visibility = True
                 return self._streams[0]
+            if self.stream_job is not None and self.stream_job.running():
+                if self.stream_job.count == count:
+                    return None
+                self.stream_job.cancel()
+            job = pvm.start_streamlines(self.analysis.CaseFolder, count)
+            if job.state == "unavailable":
+                return self._show_streamlines_here(count)
+            self.stream_job = job
+            self.streams_cancel.show()
+            self.result_label.setText(f"Tracing streamlines from {count} seeds in the background…")
+            self.stream_timer.start()
+            return None
+
+        def cancel_streamlines(self):
+            if self.stream_job is not None:
+                self.stream_job.cancel()
+            self._end_streamlines("Streamlines stopped.")
+
+        def _end_streamlines(self, text):
+            self.stream_timer.stop()
+            self.streams_cancel.hide()
+            self.result_label.setText(text)
+
+        def _poll_streamlines(self):
+            job = self.stream_job
+            if not g._alive(self.result_label) or job is None:
+                self.stream_timer.stop()
+                return
+            if not job.poll():
+                self.result_label.setText(f"Tracing streamlines from {job.count} seeds: {job.progress * 100:.0f} %…")
+                return
+            if job.state != "done":
+                if job.state == "failed":
+                    self._end_streamlines(f"<span style='color:#b00020'>Streamlines: {job.message}</span>")
+                else:
+                    self._end_streamlines("Streamlines stopped.")
+                return
+            if job.count != self.seeds_spin.value() and self.streams_check.isChecked():  # the count changed meanwhile
+                self._end_streamlines("")
+                self.show_streamlines()
+                return
+            try:
+                if self._streams is not None:
+                    self.doc.removeObject(self._streams[0].Name)
+                    self._streams = None
+                obj = pvm.show_streamlines(self.analysis, job.path)
+            except Exception as exc:
+                self._end_streamlines(f"<span style='color:#b00020'>Streamlines: {exc}</span>")
+                return
+            self._streams = (obj, job.count)
+            obj.ViewObject.Visibility = self.streams_check.isChecked()
+            self._end_streamlines(f"Streamlines from {job.count} seeds in {job.timings.get('total', 0):.1f} s "
+                                  f"(tracing {job.timings.get('trace', 0):.1f} s, in the background).")
+
+        def _show_streamlines_here(self, count):
             timings = {}
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             try:
@@ -659,8 +730,27 @@ def _make_classes():
                                       else f"<span style='color:#8a6d00'>No pictures: {self.pv_job.message}</span>")
             self._show_picture()
 
+        PICTURE_NAMES = {"iso": "Isometric", "side": "Side", "cut": "Cut plane", "axis": "Along the thrust axis", "wake": "Wake surface"}
+
+        def _fill_picture_choice(self):
+            """The picture list of this study: the three generic ones, and for prop wash the axis view, a cut through each pair of
+            opposite disks and the wake surface.  Refilled when the case changes."""
+            folder = getattr(self.analysis, "CaseFolder", "") if getattr(self, "analysis", None) is not None else ""
+            kinds = [k for k, _c in pvm.picture_kinds(folder or None)]
+            if kinds == [self.picture_choice.itemData(i) for i in range(self.picture_choice.count())]:
+                return
+            keep = self.picture_choice.currentData()
+            self.picture_choice.blockSignals(True)
+            self.picture_choice.clear()
+            for k in kinds:
+                self.picture_choice.addItem(self.PICTURE_NAMES.get(k) or f"Cut through disk pair {k[3:]}", k)
+            if keep in kinds:
+                self.picture_choice.setCurrentIndex(kinds.index(keep))
+            self.picture_choice.blockSignals(False)
+
         def _show_picture(self, *_a):
             folder = self.analysis.CaseFolder
+            self._fill_picture_choice()
             path = pvm.images(folder).get(self.picture_choice.currentData()) if folder else None
             if not path:
                 self.picture.hide()

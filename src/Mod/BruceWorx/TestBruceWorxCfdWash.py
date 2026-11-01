@@ -322,6 +322,66 @@ class TestDiskBenchmark(unittest.TestCase):
         self.assertAlmostEqual(out[0.25] / out[1.0], 0.5, delta=0.04)
 
 
+class TestWashVerdict(unittest.TestCase):
+    """The convergence verdict of a prop-wash study: converged, steady average of an unsteady flow, not converged."""
+
+    def case(self, res, plate, arm, tiny, n=400):
+        """A synthetic hover case, thrust 4 N along +Z: forces[i] (Fz) per part as functions of the iteration."""
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        for name, fn in (("plate", plate), ("arm1", arm), ("tiny", tiny)):
+            d = os.path.join(folder, "postProcessing", "forces_" + name, "0")
+            os.makedirs(d)
+            open(os.path.join(d, "force.dat"), "w").write("# hdr\n" + "\n".join(f"{i} 0 0 {fn(i)}" for i in range(1, n + 1)) + "\n")
+        for patch in ("zmax",):
+            d = os.path.join(folder, "postProcessing", "flow_" + patch, "0")
+            os.makedirs(d)
+            open(os.path.join(d, "surfaceFieldValue.dat"), "w").write("# hdr\n" + "".join(f"{i} 1e-6\n" for i in range(1, n + 1)))
+        open(os.path.join(folder, "log.simpleFoam"), "w").write("".join(
+            f"Time = {i}\nsmoothSolver:  Solving for Ux, Initial residual = {res:g}, Final residual = 1e-9, No Iterations 1\n"
+            for i in range(1, n + 1)))
+        info = {"thrust_total": 4.0, "disks": [{"axis": [0, 0, 1]}], "flow_ref": 1.0, "flow_patches": ["zmax"],
+                "setup": {"speed": 0.0},
+                "parts": {k: {"name": k} for k in ("plate", "arm1", "tiny")}}
+        return folder, info
+
+    def test_converged(self):
+        folder, info = self.case(5e-4, lambda i: -0.40, lambda i: -0.12, lambda i: -0.003)
+        conv = wash.wash_convergence(folder, info)
+        self.assertEqual(conv["verdict"], "converged", conv["text"])
+        self.assertEqual(conv["window"], 200)
+        self.assertEqual([st["name"] for st in conv["listed"]], ["tiny"])  # 0.075 % of the thrust: listed, not judged
+
+    def test_a_small_part_that_swings_does_not_fail_the_verdict(self):
+        folder, info = self.case(5e-4, lambda i: -0.40, lambda i: -0.12, lambda i: -0.003 * (1 + 0.3 * (-1) ** i))
+        self.assertEqual(wash.wash_convergence(folder, info)["verdict"], "converged")
+
+    def test_residuals_above_the_limit_give_a_steady_average_of_an_unsteady_flow(self):
+        folder, info = self.case(4e-3, lambda i: -0.40, lambda i: -0.12, lambda i: -0.003)
+        conv = wash.wash_convergence(folder, info)
+        self.assertEqual(conv["verdict"], "unsteady")
+        self.assertEqual(conv["label"], "steady average of an unsteady flow")
+        self.assertAlmostEqual(conv["judged"][0]["mean"], -0.523, places=6)
+
+    def test_a_swinging_part_with_steady_average_is_unsteady(self):
+        folder, info = self.case(5e-4, lambda i: -0.40, lambda i: -0.12 * (1 + 0.03 * (-1) ** i), lambda i: -0.003)
+        conv = wash.wash_convergence(folder, info)
+        self.assertEqual(conv["verdict"], "unsteady")
+        arm = [st for st in conv["judged"] if st["name"] == "arm1"][0]
+        self.assertAlmostEqual(arm["swing"], 0.06, delta=0.005)
+
+    def test_a_drifting_average_is_not_converged(self):
+        folder, info = self.case(5e-4, lambda i: -0.40 - 0.1 * i / 400, lambda i: -0.12, lambda i: -0.003)
+        self.assertEqual(wash.wash_convergence(folder, info)["verdict"], "not converged")
+
+    def test_report_carries_the_verdict_and_the_window_table(self):
+        folder, info = self.case(4e-3, lambda i: -0.40, lambda i: -0.12, lambda i: -0.003)
+        conv = wash.wash_convergence(folder, info)
+        tex = "\n".join(wash._window_table(conv))
+        self.assertIn("plate", tex)
+        self.assertIn("no (under 2", tex)
+
+
 class TestXFrameRun(unittest.TestCase):
     @needs_foam
     @slow
@@ -569,7 +629,9 @@ class TestPropWashGui(unittest.TestCase):
         self.assertEqual(analysis.HubDiameter, 0.0)
         summary = {
             "kind": "prop_wash", "thrust_total": 3.8,
-            "convergence": {"text": "ok", "converged": True},
+            "convergence": {"text": "ok", "converged": False, "label": "steady average of an unsteady flow",
+                            "judged": [{"name": "Total", "mean": -0.7552, "swing": 0.0075}],
+                            "listed": [{"name": "Plate", "mean": -0.003, "swing": 0.11}]},
             "disks": [{"label": "Motor #1", "measured": 8.0, "theory": 7.4}],
             "forces": {"parts": [{"part": "Arm", "fx": 0.0, "fy": 0.0, "fz": -0.02, "download": 0.02, "fraction": 0.0053}],
                        "total": {"fx": 0.0, "fy": 0.0, "fz": -0.02, "download": 0.02, "fraction": 0.0053}}}
@@ -579,6 +641,9 @@ class TestPropWashGui(unittest.TestCase):
         self.assertEqual(study.table.item(0, 0).text(), "Arm")
         self.assertEqual(study.table.item(1, 5).text(), "0.53 %")
         self.assertIn("Induced velocity", study.conv_label.text())
+        self.assertIn("steady average of an unsteady flow", study.conv_label.text())
+        self.assertIn("Total -0.755 N (0.75 %)", study.conv_label.text())
+        self.assertIn("not judged: Plate", study.conv_label.text())
         Gui.Control.closeDialog()
 
 

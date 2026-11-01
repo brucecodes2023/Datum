@@ -39,7 +39,7 @@
      "value": 19.1,
      "unit": "m/s",
      "tolerance": 0.15,
-     "basis": "Far wake 2 v_i = 19.13 m/s in momentum theory (ideal, no mixing); the turbulent shear layer mixes the wake, so the core sits about 10 % low at 1 D."
+     "basis": "Far wake 2 v_i = 19.13 m/s in momentum theory (ideal, no mixing); the turbulent shear layer mixes the wake, so the core sits 10 to 13 % low at 1 D (the check allows 15 %)."
     }
    ],
    "citation": {

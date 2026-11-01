@@ -182,6 +182,48 @@ class TestScriptAndSeeds(unittest.TestCase):
                     self.assertEqual(cfg["vtu"], "")  # no foamToVTK: the OpenFOAM reader on case.foam
                     self.assertTrue(os.path.isfile(cfg["foam"]))
 
+    def test_the_prop_wash_picture_set(self):
+        self.assertEqual([k for k, _c in pvm.picture_kinds(info_external())], ["iso", "side", "cut"])
+        info = info_wash()
+        kinds = [k for k, _c in pvm.picture_kinds(info)]
+        self.assertEqual(kinds, ["iso", "side", "cut", "axis", "cut1", "cut2", "wake"])  # two pairs of opposite disks
+        plan = pvm.wash_plan(info)
+        self.assertEqual(plan["axis"], [0.0, 0.0, 1.0])
+        self.assertAlmostEqual(plan["iso_speed"], 2.5)  # half the induced velocity of 5 m/s
+        self.assertAlmostEqual(plan["plane_origin"][2], 0.1 - 0.05)  # half a diameter below the disks
+        pairs = pvm.disk_pairs(info)
+        self.assertEqual(len(pairs), 2)
+        for a, b in pairs:  # opposite: the centres mirror each other about the middle
+            self.assertEqual([x + y for x, y in zip(a["center"][:2], b["center"][:2])], [0.0, 0.0])
+        for cut in plan["cuts"]:  # the plane contains the thrust axis and both disk centres of its pair
+            n = cut["normal"]
+            self.assertAlmostEqual(n[2], 0.0)
+            self.assertAlmostEqual(sum(c * c for c in n), 1.0)
+        a, b = pairs[0]
+        n = plan["cuts"][0]["normal"]
+        self.assertAlmostEqual(sum(n[k] * (b["center"][k] - a["center"][k]) for k in range(3)), 0.0)
+        # one disk, and an odd arrangement, are still cut
+        one = dict(info, disks=info["disks"][:1])
+        self.assertEqual([k for k, _c in pvm.picture_kinds(one)][-3:], ["axis", "cut1", "wake"])
+        three = dict(info, disks=info["disks"][:3])
+        self.assertEqual(len(pvm.disk_pairs(three)), 3)  # no opposite partners: each is cut towards the middle
+
+    def test_the_script_carries_the_prop_wash_pictures(self):
+        folder = self.case_in("wash2", info_wash())
+        for mode in ("gui", "batch"):
+            text = open(pvm.write_script(folder, mode)).read()
+            ast.parse(text)
+            cfg = ast.literal_eval(text[text.index("CFG = ") + 6:text.index("\nMODE =")])
+            self.assertEqual([k for k, _p in cfg["pictures"]], ["iso", "side", "cut", "axis", "cut1", "cut2", "wake"])
+            self.assertEqual(len(cfg["wash"]["cuts"]), 2)
+            self.assertIn("Contour(", text)
+            self.assertIn("mag(U)", text)
+        ext = self.case(info_external())
+        os.makedirs(os.path.join(ext, "VTK", "5", "boundary"), exist_ok=True)
+        open(os.path.join(ext, "VTK", "5", "internal.vtu"), "w").close()
+        text = open(pvm.write_script(ext, "batch")).read()
+        self.assertIsNone(ast.literal_eval(text[text.index("CFG = ") + 6:text.index("\nMODE =")])["wash"])
+
     def test_report_figures_are_copied_and_become_latex(self):
         folder = self.case(info_external())
         os.makedirs(pvm.pv_dir(folder), exist_ok=True)
@@ -195,6 +237,51 @@ class TestScriptAndSeeds(unittest.TestCase):
         self.assertIn(r"\includegraphics[width=0.95\linewidth]{fig_pv_iso.png}", tex)
         self.assertEqual(pvm.report_figures_tex([]), "")
         self.assertEqual(pvm.report_figures(self.tmp + "/none", os.path.join(self.tmp, "r2")), [])
+
+
+@needs_vtk
+class TestStreamJob(unittest.TestCase):
+    def test_the_worker_process_traces_reports_progress_and_can_be_stopped(self):
+        tmp = tempfile.mkdtemp(prefix="bw stream job ")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        synthetic_case(tmp, n=(30, 20, 20))
+        job = pvm.start_streamlines(tmp, 100)
+        self.assertNotEqual(job.state, "unavailable")
+        seen = []
+        t0 = time.time()
+        while not job.poll() and time.time() - t0 < 90:
+            seen.append(job.progress)
+            time.sleep(0.05)
+        self.assertEqual(job.state, "done", job.message)
+        self.assertEqual(job.progress, 1.0)
+        self.assertEqual(seen, sorted(seen))  # never goes back
+        self.assertGreater(len(pvm.read_lines(job.path)), 50)
+        self.assertIn("trace", job.timings)
+        again = pvm.start_streamlines(tmp, 2000)
+        again.cancel()
+        self.assertEqual(again.state, "cancelled")
+        bad = pvm.start_streamlines(tmp + "/missing", 20)
+        self.assertFalse(bad.wait())
+        self.assertEqual(bad.state, "failed")
+        self.assertIn("vectorlabs.json", bad.message)
+
+
+class TestWashReportFigures(unittest.TestCase):
+    def test_wash_pictures_reach_the_report_and_stale_ones_go(self):
+        tmp = tempfile.mkdtemp(prefix="bw pv wash ")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        json.dump(info_wash(), open(os.path.join(tmp, "vectorlabs.json"), "w"))
+        os.makedirs(pvm.pv_dir(tmp))
+        for kind in ("iso", "axis", "cut2", "wake"):
+            open(pvm.image_path(tmp, kind), "wb").write(b"\x89PNG fake")
+        dest = os.path.join(tmp, "report")
+        os.makedirs(dest)
+        open(os.path.join(dest, "fig_pv_cut9.png"), "wb").write(b"old")
+        figs = pvm.report_figures(tmp, dest)
+        self.assertEqual([f for f, _c in figs], ["fig_pv_iso.png", "fig_pv_axis.png", "fig_pv_cut2.png", "fig_pv_wake.png"])
+        self.assertFalse(os.path.exists(os.path.join(dest, "fig_pv_cut9.png")))
+        self.assertIn("half the induced velocity", figs[-1][1])
+        self.assertIn("2.5", figs[-1][1])
 
 
 class TestDegradation(unittest.TestCase):
@@ -335,6 +422,16 @@ class TestStreamlines(unittest.TestCase):
 @needs_vtk
 @needs_paraview
 class TestParaViewRender(unittest.TestCase):
+    def test_pvbatch_renders_the_prop_wash_set(self):
+        tmp = tempfile.mkdtemp(prefix="bw pv wash render ")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        synthetic_case(tmp, info_wash())
+        job = pvm.start_render(tmp, timeout=240)
+        self.assertTrue(job.wait(), job.message)
+        self.assertEqual(sorted(job.images), ["axis", "cut", "cut1", "cut2", "iso", "side", "wake"])
+        for kind, path in job.images.items():
+            self.assertGreater(os.path.getsize(path), 5000, kind)
+
     def test_pvbatch_renders_the_three_pictures(self):
         tmp = tempfile.mkdtemp(prefix="bw pv render ")
         self.addCleanup(shutil.rmtree, tmp, True)
@@ -431,26 +528,47 @@ class TestResultsPanel(unittest.TestCase):
             Gui.updateGui()
             time.sleep(0.02)
 
+    def until(self, ready, seconds=90.0):
+        t0 = time.time()
+        while not ready() and time.time() - t0 < seconds:
+            self.pump(2)
+        self.assertTrue(ready(), "the streamlines did not come back from the worker process")
+
     def test_streamlines_toggle_and_seed_count(self):
         p = self.panel
         self.pump()
         self.assertFalse(p.streams_check.isChecked())
         p.streams_check.setChecked(True)
-        self.pump()
+        self.assertIsNotNone(p.stream_job)  # traced in a worker process, the window stays alive
+        self.assertIn(p.stream_job.state, ("running", "done"))
+        self.until(lambda: p._streams is not None)
         first = p._streams[0]
         first_name = first.Name
         self.assertEqual(p._streams[1], pvm.SEEDS)
         self.assertTrue(first.ViewObject.Visibility)
         self.assertIn("Streamlines from", p.result_label.text())
+        self.assertTrue(p.streams_cancel.isHidden())
         p.streams_check.setChecked(False)
         self.assertFalse(first.ViewObject.Visibility)
         p.streams_check.setChecked(True)  # same seeds: the same object comes back
         self.assertIs(p._streams[0], first)
         p.seeds_spin.setValue(50)
         p._seeds_changed()
-        self.assertEqual(p._streams[1], 50)
+        self.until(lambda: p._streams[1] == 50)
         self.assertIsNot(self.doc.getObject(first_name), first)  # the old lines are gone (the name is reused)
         self.assertEqual(len([o for o in self.doc.Objects if o.Name.startswith("Pipeline_Streamlines")]), 1)
+
+    def test_streamlines_can_be_cancelled(self):
+        p = self.panel
+        p.seeds_spin.setValue(2000)
+        p.streams_check.setChecked(True)
+        self.assertFalse(p.streams_cancel.isHidden())
+        p.cancel_streamlines()
+        self.pump()
+        self.assertTrue(p.streams_cancel.isHidden())
+        self.assertEqual(p.stream_job.state, "cancelled")
+        self.assertIsNone(p._streams)
+        self.assertIn("stopped", p.result_label.text())
 
     @needs_paraview
     def test_pictures_render_in_the_background_and_show_in_the_panel(self):

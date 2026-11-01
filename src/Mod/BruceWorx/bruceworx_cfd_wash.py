@@ -578,26 +578,102 @@ def wash_forces(folder, info=None):
                       "fraction": -along / thrust if thrust else None}}
 
 
-def wash_convergence(folder, info=None, reader=None):
-    """cfd.convergence with the mass-flow test of the open box: the net flow through all faces against the flow the disks
-    move (hover); forward flight keeps the phase-1 inlet/outlet test."""
+WASH_RESIDUAL = 1.0e-3  # jets from actuator disks never reach the external-flow limit of 1e-4
+SIGNIFICANT_SHARE = 0.02  # a part carrying more than 2 % of the thrust is judged; the others are listed only
+VERDICT_LABELS = {"converged": "converged", "unsteady": "steady average of an unsteady flow", "not converged": "not converged"}
+
+
+def _window_stats(rows, axis, window, change):
+    """Mean, swing and drift of a force along `axis` over the last `window` iterations.  swing = (max - min) / |mean|;
+    drift = |mean of the window - mean of the window before it| / |mean| (halves of the window on a short run).  None when there are too few iterations."""
+    n = len(rows)
+    if n < cfd.MIN_WINDOW:
+        return None
+    w = max(cfd.MIN_WINDOW, min(window, n // 2))
+    vals = [r[1] * axis[0] + r[2] * axis[1] + r[3] * axis[2] for r in rows[-w:]]
+    mean = sum(vals) / len(vals)
+    scale = max(abs(mean), 1e-30)
+    if n >= 2 * w:  # the mean of the window against the mean of the window before it
+        before = [r[1] * axis[0] + r[2] * axis[1] + r[3] * axis[2] for r in rows[-2 * w:-w]]
+        drift = abs(mean - sum(before) / len(before)) / scale
+    else:  # a short run: the second half of the window against the first
+        h = len(vals) // 2
+        drift = abs(sum(vals[h:]) / (len(vals) - h) - sum(vals[:h]) / h) / scale
+    swing = (max(vals) - min(vals)) / scale
+    return {"mean": mean, "swing": swing, "drift": drift, "window": w, "steady": swing <= change, "averages_ok": drift <= change}
+
+
+def wash_convergence(folder, info=None, reader=None, residual=WASH_RESIDUAL, window=None, change=None):
+    """The verdict of a prop-wash study.  Forces are judged along the thrust axis on the total and on every part that
+    carries more than 2 % of the total thrust, over the last ``window`` iterations: the averages must be steady to
+    ``change`` (the window's mean against the one before) and the residuals below ``residual``.
+    ``converged``: all of it, and the forces swing less than ``change``.  ``unsteady`` (shown as "steady average of an
+    unsteady flow"): the averages are steady but the residuals stay above the limit or the forces swing; the mean and
+    the swing are reported.  Otherwise ``not converged``.  The mass-flow test of the open box (hover: net flow through
+    all faces against the disks' flow; forward flight: inlet against outlet) is part of both positive verdicts."""
     info = info or json.load(open(os.path.join(folder, "vectorlabs.json")))
-    conv = cfd.convergence(folder, info, reader)
-    if info["setup"].get("speed", 0.0) > 1e-9:
-        return conv
-    net = 0.0
-    seen = 0
-    for p in info.get("flow_patches", []):
-        rows = cfd._latest_dat(folder, "flow_" + p, "surfaceFieldValue.dat")
+    window = window or cfd.FORCE_WINDOW
+    change = change or cfd.FORCE_CHANGE
+    reader = reader or cfd.LogReader(folder).update()
+    latest = reader.latest()
+    res_ok = bool(latest) and all(v < residual for v in latest.values())
+    axis = _unit([sum(d["axis"][k] for d in info["disks"]) for k in range(3)])
+    thrust = info["thrust_total"]
+    series = {}
+    for part, d in info["parts"].items():
+        rows = cfd.part_forces(folder, d["name"])
         if rows:
-            net += rows[-1][-1]
-            seen += 1
-    balance = abs(net) / max(info.get("flow_ref", 0.0), 1e-30) if seen == len(info.get("flow_patches", [])) and seen else None
-    flow_ok = balance is not None and balance < cfd.FLOW_BALANCE
-    conv = dict(conv, flow_balance=balance, flow_ok=flow_ok, converged=conv["residuals_ok"] and conv["forces_ok"] and flow_ok)
-    conv["text"] = (f"residuals {'below' if conv['residuals_ok'] else 'not below'} {cfd.CONVERGED_RESIDUAL:g}; forces change "
-                    f"{'<' if conv['forces_ok'] else '>='} {cfd.FORCE_CHANGE * 100:g} % over the last {cfd.FORCE_WINDOW} iterations; "
-                    f"net mass flow through the box {'n/a' if balance is None else f'{balance * 100:.3g} %'} of the disks' flow")
+            series[part] = rows
+    n = min((len(r) for r in series.values()), default=0)
+    total_rows = [(0,) + tuple(sum(r[-n + i][k] for r in series.values()) for k in (1, 2, 3)) for i in range(n)] if n else []
+    stats = {"Total": _window_stats(total_rows, axis, window, change)}
+    for part, rows in series.items():
+        stats[part] = _window_stats(rows, axis, window, change)
+    judged, listed = [], []
+    for name, st in stats.items():
+        if st is None:
+            continue
+        st["share"] = -st["mean"] / thrust if thrust else 0.0  # download as a share of the thrust, as in wash_forces
+        st["name"] = name
+        st["judged"] = name == "Total" or abs(st["share"]) > SIGNIFICANT_SHARE
+        (judged if st["judged"] else listed).append(st)
+    tot = stats["Total"]
+    averages_ok = tot is not None and all(st["averages_ok"] for st in judged)
+    steady = tot is not None and all(st["steady"] for st in judged)
+    balance, flow_ok = None, False
+    if info["setup"].get("speed", 0.0) > 1e-9:
+        balance = cfd.flow_balance(folder)
+        flow_ok = balance is not None and balance < cfd.FLOW_BALANCE
+    else:
+        net, seen = 0.0, 0
+        for p in info.get("flow_patches", []):
+            rows = cfd._latest_dat(folder, "flow_" + p, "surfaceFieldValue.dat")
+            if rows:
+                net += rows[-1][-1]
+                seen += 1
+        if seen and seen == len(info.get("flow_patches", [])):
+            balance = abs(net) / max(info.get("flow_ref", 0.0), 1e-30)
+            flow_ok = balance < cfd.FLOW_BALANCE
+    if averages_ok and flow_ok and res_ok and steady:
+        verdict = "converged"
+    elif averages_ok and flow_ok:
+        verdict = "unsteady"
+    else:
+        verdict = "not converged"
+    w = tot["window"] if tot else 0
+    conv = {"residuals": latest, "residuals_ok": res_ok, "residual_limit": residual, "forces_ok": averages_ok,
+            "forces_steady": steady, "force_change": max([st["swing"] for st in judged], default=float("inf")),
+            "flow_balance": balance, "flow_ok": flow_ok, "iteration": reader.iteration, "window": w, "verdict": verdict,
+            "label": VERDICT_LABELS[verdict], "converged": verdict == "converged", "unsteady": verdict == "unsteady",
+            "judged": judged, "listed": listed}
+    if tot:
+        flow = f"net mass flow through the box {'n/a' if balance is None else f'{balance * 100:.3g} %'} of the disks' flow"
+        conv["text"] = (f"residuals {'below' if res_ok else 'not below'} {residual:g}; along the thrust axis over the last {w} "
+                        f"iterations the total averages {tot['mean']:.4g} N (swing {tot['swing'] * 100:.2g} %, averages "
+                        f"{'steady' if averages_ok else 'not steady'} to {change * 100:g} %); "
+                        f"judged parts: {', '.join(st['name'] for st in judged)}; {flow}")
+    else:
+        conv["text"] = f"not enough iterations yet to judge the forces (at least {cfd.MIN_WINDOW})"
     return conv
 
 
@@ -610,6 +686,23 @@ def save_summary_wash(analysis, folder, stage_text=""):
                "thrust_total": info["thrust_total"]}
     analysis.CfdSummary = json.dumps(summary, default=str)
     return summary
+
+
+def _window_table(conv):
+    """LaTeX lines of the force statistics over the convergence window (total, judged parts, listed parts)."""
+    rows = list(conv.get("judged", [])) + list(conv.get("listed", []))
+    if not rows:
+        return []
+    out = [r"\begin{tabular}{@{}lrrrrl@{}}", r"\toprule",
+           r"Part & Mean (N) & Share of thrust & Swing & Drift & Judged\\", r"\midrule"]
+    under = r"no (under 2\,\%)"
+    for st in rows:
+        out.append(f"{cfd._tex(st['name'])} & {st['mean']:.4g} & {st['share'] * 100:.2f}\\,\\% & {st['swing'] * 100:.2g}\\,\\% & "
+                   f"{st['drift'] * 100:.2g}\\,\\% & {'yes' if st['judged'] else under}\\\\")
+    out += [r"\bottomrule", r"\end{tabular}",
+            r"Mean, swing (largest minus smallest over the window) and drift (the window's mean against the mean of the window before it) of the force "
+            r"along the thrust axis; parts under 2\,\% of the thrust are listed and do not decide the verdict."]
+    return out
 
 
 def report_section(summary):
@@ -626,12 +719,13 @@ def report_section(summary):
              f"Air & {s['temperature_c']:.3g}\\,$^\\circ$C, {s['altitude_m']:.0f}\\,m: $\\rho={a['rho']:.4f}$\\,kg/m$^3$\\\\",
              f"Mesh & {cfdr._tex(s['preset'])} preset, about {summary['estimate']['cells']:,} cells expected\\\\".replace(",", "\\,"),
              r"\end{tabular}", r"\subsection*{Convergence}", r"\begin{itemize}",
-             f"\\item Residuals below $10^{{-4}}$: {'yes' if conv['residuals_ok'] else 'no'} (after {conv['iteration']} iterations)",
-             f"\\item Forces change less than 0.5\\,\\% over the last {cfdr.FORCE_WINDOW} iterations: {'yes' if conv['forces_ok'] else 'no'}",
+             f"\\item Residuals below $10^{{-3}}$: {'yes' if conv['residuals_ok'] else 'no'} (after {conv['iteration']} iterations)",
+             f"\\item Forces along the thrust axis over the last {conv.get('window', cfdr.FORCE_WINDOW)} iterations: averages steady to "
+             f"0.5\\,\\%: {'yes' if conv['forces_ok'] else 'no'}; swing under 0.5\\,\\%: {'yes' if conv.get('forces_steady', conv['forces_ok']) else 'no'}",
              "\\item Mass flow balance: " + ("not available" if conv["flow_balance"] is None else
                                            f"{conv['flow_balance'] * 100:.3g}\\,\\%"),
-             f"\\item Verdict: \\textbf{{{'converged' if conv['converged'] else 'not converged'}}}",
-             r"\end{itemize}", r"\subsection*{Propellers}", r"\begin{tabular}{@{}lrrrr@{}}", r"\toprule",
+             f"\\item Verdict: \\textbf{{{conv.get('label', 'converged' if conv['converged'] else 'not converged')}}}",
+             r"\end{itemize}"] + _window_table(conv) + [r"\subsection*{Propellers}", r"\begin{tabular}{@{}lrrrr@{}}", r"\toprule",
              r"Disk & Thrust (N) & $D$ (mm) & $v_i$ momentum (m/s) & $v_i$ CFD (m/s)\\", r"\midrule"]
     for d in summary["disks"]:
         lines.append(f"{cfdr._tex(d['label'])} & {num(d['thrust'])} & {d['diameter'] * 1000:.1f} & {num(d['theory'])} & "

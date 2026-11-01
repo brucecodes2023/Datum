@@ -201,3 +201,42 @@ than 2\,\% of the thrust, each steady to 0.5\,\% over the last iterations, with 
 ``steady average of an unsteady flow'' when the forces pass and the flow still swings. The ring benchmark's wake check is
 15\,\%. The hub default stays $0.2\,D$.
 
+
+\paragraph{Follow-up, 1 Nov.} Items 1 and 2 of your answers are built. The verdict of a prop-wash study
+(\code{wash\_convergence} in \file{bruceworx\_cfd\_wash.py}; external flow keeps its own rule and limit $10^{-4}$) is now judged
+like this. The forces are taken along the thrust axis, on the total and on every part that carries more than 2\,\% of the total
+thrust (its mean over the window, as a share of the thrust). The window is the last 200 iterations (half the run when it is
+shorter, never under 50). A force is \emph{steady} when the mean of the window differs from the mean of the 200 iterations before
+it by no more than 0.5\,\%; its \emph{swing} is the largest minus the smallest value in the window, as a share of the mean.
+The residuals must be below $10^{-3}$, and the net mass flow through the box below 0.5\,\% of the disks' flow. Three outcomes:
+\emph{converged} (all of that, and every swing under 0.5\,\%); \emph{steady average of an unsteady flow} (the means are steady
+and the flow balances, but a residual stays above $10^{-3}$ or a force swings; the mean and the swing of each judged force are
+shown); \emph{not converged} (a mean still drifts, or the flow does not balance). Parts under 2\,\% are listed with their numbers
+and do not decide. The results panel shows the verdict word, the mean (and swing) of each judged force and the list of
+parts left out; the report has the same in a table (mean, share of the thrust, swing, drift, judged yes or no) under the
+verdict, and the setup tables now say $10^{-3}$.
+\begin{itemize}[nosep]
+  \item \textbf{ROB-03 frame, re-checked on its stored results} (no new run was needed: the comparison case of 31 Oct holds the
+        force history; coarse preset, 3 cores, 217\,139 cells, hub $0.2\,D$, $4\times0.952$\,N, 1500 iterations). Verdict:
+        \textbf{steady average of an unsteady flow}. Window: iterations 1300 to 1500. $U_x$ residual $2.1\times10^{-3}$ (over the
+        limit; $p$ $8\times10^{-5}$). Total download mean $0.7552$\,N, $19.84\,\%$ of the thrust, swing $0.75\,\%$, means
+        steady to $0.000\,\%$; mass flow $0.001\,\%$. Judged: total and six parts (motors 0 to 3, arms 0 and 2); the worst
+        mean change $0.44\,\%$ (motor 2), the worst swings arm 2 $3.7\,\%$ and motor 2 $2.7\,\%$, the other judged parts
+        $0.15$ to $0.4\,\%$. Listed, not judged: arms 1 and 3 ($1.98$ and $1.97\,\%$ of the thrust, just under the line; swings $1.2$
+        and $0.2\,\%$), plate ($0.08\,\%$, swing $11\,\%$), battery ($0.03\,\%$, swing $23\,\%$). The same check on the five solver
+        variants of that session (consistent off, upwind, linear limited, fused solid, 3000 iterations) reads ``unsteady'' for
+        every one (worst mean change $0.22\,\%$). A quick no-hub X frame (95\,515 cells, 4 cores, 33\,s, stopped by its residuals
+        at 429 iterations) reads \emph{converged}: total $0.145$\,N ($3.8\,\%$), swing $0.003\,\%$, residuals under $10^{-5}$.
+  \item \textbf{Why the mean is compared with the window before, not with its own first half.} The first try (second half of the
+        window against the first) made arm 2 fail at $0.57\,\%$ although its 50-iteration block means stay within
+        $0.5\,\%$ of each other and its mean moves by $0.05\,\%$ against the 200 before: a swinging signal read in half windows
+        reports the phase of the swing, not a drift. Runs shorter than 400 iterations fall back to the halves.
+  \item \textbf{Ring benchmark.} The wake-core check was already 15\,\% in the test
+        (\code{test\_disk\_with\_a\_hub\_against\_the\_ring\_area\_theory}) and in the \code{v\_wake} reference of B-CF4
+        (\file{Resources/Validation/cases.json}); the 10\,\% check at the ring stays. I corrected the basis text of B-CF4 (the core
+        sits 10 to 13\,\% low at 1\,$D$, the check allows 15\,\%).
+\end{itemize}
+Tests added (\code{TestWashVerdict}, plain Python on synthetic force and log files): converged; a small part that swings does not
+fail the verdict; residuals above the limit give the unsteady verdict with the right mean; a swinging judged part with steady mean
+gives it too, with a 6\,\% swing measured; a drifting mean is not converged; the report table lists the part under 2\,\%; the
+panel shows the word, the means and the parts left out.
