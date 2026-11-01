@@ -315,7 +315,8 @@ def _make_classes():
 
         # --- the document area's own tab bar
         def mdi_tabs(self):
-            return self.mdi.findChild(QtWidgets.QTabBar) if self.mdi is not None else None
+            # The document area is gone at shutdown while timers may still call sync(): no tabs then.
+            return self.mdi.findChild(QtWidgets.QTabBar) if _alive(self.mdi) else None
 
         def hide_mdi_tabs(self, hide):
             bar = self.mdi_tabs()
