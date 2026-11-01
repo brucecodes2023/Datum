@@ -56,3 +56,7 @@ worker mesh 0.3\,s of start-up plus the mesh. \textbf{Open questions.} (1) The h
 settings; the real fix is geometry (T\_HUB, root fillets) or a coarser size, not a faster mesher: is a Gmsh binary worth
 adding to the bundle? (2) Local-size model tests (\code{TestBruceWorxSimModel}, 4 failures) belong to the SIM-07 P2 work in the tree and were failing without this change. (3) The Cancel button position (Mesh node, study panel, or the run ribbon)? (4) Should the automatic
 limit be shown in the Mesh node so it can be set there?
+
+\paragraph{Your answers (1 Nov).} Add Gmsh as a second mesher, bundled in the app and tried automatically when Netgen
+fails or times out, also selectable per study. While a mesh or solve runs, the Compute button becomes Cancel (and each
+running Progress row gets a stop button). The Mesh node shows the time limit, automatic or your own.
