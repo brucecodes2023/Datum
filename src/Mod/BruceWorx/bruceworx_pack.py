@@ -801,6 +801,16 @@ INVENTORY = [
         True,
         note="Status bar as text: Report, units, navigation, view size, vault.",
     ),
+    # --- PRF-01 (2 Nov): shapes saved as binary BREP. FreeCAD reads both forms; stock writes text.
+    _e(
+        "BaseApp/Preferences/Document",
+        "SaveBinaryBrep",
+        "bool",
+        False,
+        True,
+        note="Binary shapes. Voron 2.4 350 (4582 objects): open 2.35 -> 1.35 s, save 7.9 -> 3.7 s, "
+        "51.8 -> 47.5 MB, same volume.",
+    ),
 ]
 
 
@@ -1014,6 +1024,29 @@ def restore_snapshot(store, snapshot_path: str) -> str:
             store.remove(path, name, typ)
         return "cleared"
     return "noop"
+
+
+def top_up(store, snapshot_path: str) -> list[str]:
+    """Keys added to the pack after this profile applied it (a later version, e.g. PRF-01's binary shapes):
+    each one's current value goes into the snapshot first, so Off still restores it, then the pack value is
+    set. Keys the snapshot already holds are left alone (a value changed since is the user's choice).
+    Returns "path/name" of the keys added; nothing when the pack is not applied or has no snapshot."""
+    if not _is_applied(store) or not os.path.exists(snapshot_path):
+        return []
+    with open(snapshot_path, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    have = {(r["path"], r["name"]) for r in payload.get("entries", [])}
+    theme = store.get("BaseApp/Preferences/MainWindow", "Theme", "text", "") or ""
+    mode = "dark" if "Dark" in str(theme) else "light"
+    new = [e for e in pack_entries(mode) if (e["path"], e["name"]) not in have]
+    if not new:
+        return []
+    payload.setdefault("entries", []).extend(_capture(store, e) for e in new)
+    with open(snapshot_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    apply_entries(store, new)
+    return [f"{e['path']}/{e['name']}" for e in new]
 
 
 def enable(store, snapshot_path: str, mode: str = "light") -> None:

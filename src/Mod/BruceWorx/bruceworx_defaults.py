@@ -194,6 +194,13 @@ def startup() -> str:
     except Exception as exc:
         _warn(f"BruceWorx first-run preference pack failed: {exc}")
         result = "error"
+    if result == "already":
+        try:  # keys a later version added to the pack (PRF-01's binary shapes, 2 Nov)
+            added = bruceworx_pack.top_up(store, bruceworx_pack.default_snapshot_path())
+            if added:
+                _log(f"BruceWorx: preference pack topped up with {', '.join(added)}.")
+        except Exception as exc:
+            _warn(f"BruceWorx preference pack top-up failed: {exc}")
     if result in ("applied", "healed"):
         try:
             import FreeCAD

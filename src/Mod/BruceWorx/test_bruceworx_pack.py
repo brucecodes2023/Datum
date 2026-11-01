@@ -366,6 +366,32 @@ class DefaultsOnTest(unittest.TestCase):
         self.assertTrue(defaults.pack_applied(self.store))
         self.assertEqual(defaults.on_switch_changed(self.store, self.snap, True), "noop")
 
+    def test_top_up_adds_a_later_key_and_off_restores_it(self):
+        # A profile that applied the pack before PRF-01: its snapshot has no SaveBinaryBrep record.
+        defaults.apply_first_run(self.store, self.snap)
+        import json
+
+        with open(self.snap, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        payload["entries"] = [r for r in payload["entries"] if r["name"] != "SaveBinaryBrep"]
+        with open(self.snap, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        self.store.remove("BaseApp/Preferences/Document", "SaveBinaryBrep", "bool")
+        self.assertEqual(pack.top_up(self.store, self.snap), ["BaseApp/Preferences/Document/SaveBinaryBrep"])
+        self.assertIs(self.store.get("BaseApp/Preferences/Document", "SaveBinaryBrep", "bool", False), True)
+        self.assertEqual(pack.top_up(self.store, self.snap), [])  # once
+        defaults.on_switch_changed(self.store, self.snap, False)  # Off: back to stock (no key)
+        self.assertFalse(self.store.has("BaseApp/Preferences/Document", "SaveBinaryBrep", "bool"))
+
+    def test_top_up_keeps_a_value_the_user_changed(self):
+        defaults.apply_first_run(self.store, self.snap)
+        self.store.set("BaseApp/Preferences/Document", "SaveBinaryBrep", "bool", False)  # the user turned it off
+        self.assertEqual(pack.top_up(self.store, self.snap), [])
+        self.assertIs(self.store.get("BaseApp/Preferences/Document", "SaveBinaryBrep", "bool", True), False)
+
+    def test_top_up_does_nothing_without_the_pack(self):
+        self.assertEqual(pack.top_up(self.store, self.snap), [])
+
     def test_preference_page_has_every_switch_default_on(self):
         ui = ET.parse(os.path.join(ROOT, "src", "Mod", "BruceWorx", "preferences-bruceworx.ui"))
         switches = {}
@@ -383,6 +409,7 @@ class DefaultsOnTest(unittest.TestCase):
             ("BruceWorx", "LoadHooks"),
             ("BruceWorx", "FloatingModelTree"),
             ("MainWindow", "UnifiedTitleAndToolBar"),
+            ("Document", "SaveBinaryBrep"),
         ):
             self.assertEqual(switches.get(key), "true", key)
 

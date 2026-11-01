@@ -194,6 +194,25 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="SaveBinaryBrep">
+        <property name="toolTip">
+         <string>On by default (PRF-01). Shapes are saved in OpenCascade's binary form instead of text: about 40 % faster to open and twice as fast to save on large assemblies, lossless. FreeCAD opens both forms, so older files and other FreeCAD versions still work. Off saves text again.</string>
+        </property>
+        <property name="text">
+         <string>Save shapes in binary (faster open and save)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>SaveBinaryBrep</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>Document</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="PatternCommands">
         <property name="toolTip">
          <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
