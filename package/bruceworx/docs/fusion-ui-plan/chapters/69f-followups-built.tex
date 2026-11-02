@@ -3,8 +3,8 @@
 %======================================================================
 
 Seven follow-ups you approved after the PDM-14 and SIM-07 phase~1 reports, in two commits (PDM-14: four items;
-SIM-07: the named-selection and Mesher items). The spin-then-vibrate validation case was \emph{not} built: see
-the open questions.
+SIM-07: the named-selection and Mesher items). The spin-then-vibrate validation case followed on 2 Nov as the
+rotating cantilever beam (case G-RB1, below), after you chose it over the spinning disc.
 
 \paragraph{What you can do now.}
 \begin{itemize}[nosep]
@@ -43,15 +43,11 @@ the open questions.
 
 \paragraph{Tests.} Addon unit tests 730 OK; headless TestBruceWorxSimModel 50 OK, Preview 12 OK, Vlsim 2 OK; GUI TestBruceWorxSimWorkspace 32 OK, TestBruceWorxProjectPage 9 OK. Besides that, \code{TestBruceWorxSimVault} has one error that
 predates this work (\code{test\_results\_summary\_and\_stripped\_copy}, GUI run: the stripped copy loses
-\code{max\_vm} after a re-save; it fails the same with the earlier module).
+\code{max\_vm} after a re-save; it fails the same with the earlier module). Fixed on 2 Nov (b967e19a): a stale
+remembered summary from the save inside \code{stripped\_copy} was taken as the previous one by a later stamp.
 
-\paragraph{Open questions.}
-\begin{itemize}[nosep]
-  \item \textbf{Spin, then vibration modes.} I found no closed form for a spinning disc I could cite with
-        confidence: Lamb and Southwell (1921) and Southwell (1922, Proc.\ R.\ Soc.\ A 101, 133--153) are the
-        sources, but their formulas are not available to me as text. Not guessed. Options: you supply the paper, or
-        I use the rotating cantilever beam (Wright et al., 1982) as the benchmark instead.
-\end{itemize}
+\paragraph{Open questions.} None left from this round: the spinning-disc question was answered by choosing the
+rotating cantilever beam (2 Nov).
 
 \subsection*{Spin, then vibration modes: the rotating cantilever beam (case G-RB1)}
 
