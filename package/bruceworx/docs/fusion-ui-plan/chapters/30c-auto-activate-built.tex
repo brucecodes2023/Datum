@@ -22,3 +22,7 @@ open task dialog anywhere still blocks. A file with no assembly and exactly one 
 active body (and its App::Part, if it has one); two or more bodies, or a STEP import of plain Part features, are
 left alone. The same switch gates it. A linked file loaded without a 3D view waits until the view exists.
 
+
+\paragraph{Added 2 Nov, night: imported parts.} A file with no assembly and no single Body but exactly one root
+App::Part (what the body import makes: a Part holding a plain Part::Feature ``Body'') gets that Part as the active
+part, revealed in the tree like an assembly, with the file left unmodified. Two or more parts, or a Part and an assembly, stay untouched; tests: 21.

@@ -462,7 +462,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="AutoActivateAssembly">
         <property name="toolTip">
-         <string>On by default. When a file becomes the active document and nothing is being edited, its assembly is activated (as a double-click in the tree would), so the joint and assemble tools are ready, and the tree scrolls to it. An assembly active in another open file is let go first. A file with no assembly and exactly one Body gets that body as the active body. Skipped with two or more assemblies (or bodies), while a sketch, body or dialog is open, and outside the Design workspace.</string>
+         <string>On by default. When a file becomes the active document and nothing is being edited, its assembly is activated (as a double-click in the tree would), so the joint and assemble tools are ready, and the tree scrolls to it. An assembly active in another open file is let go first. A file with no assembly and exactly one Body gets that body as the active body; with neither, a single Part (an imported part) becomes the active part. Skipped with two or more assemblies, or with several bodies or parts and no assembly, while a sketch, body or dialog is open, and outside the Design workspace.</string>
         </property>
         <property name="text">
          <string>Activate the assembly or body when a file opens</string>

@@ -33,6 +33,11 @@ class TestRules(unittest.TestCase):
         # one assembly wins over any number of bodies
         self.assertIsNone(aa.should_activate(**{**OK, "n_assemblies": 1, "n_bodies": 3}))
 
+    def test_single_part_without_assembly_or_body(self):
+        self.assertIsNone(aa.should_activate(**{**OK, "n_assemblies": 0, "n_parts": 1}))
+        self.assertIsNotNone(aa.should_activate(**{**OK, "n_assemblies": 0, "n_parts": 2}))
+        self.assertIsNotNone(aa.should_activate(**{**OK, "n_assemblies": 2, "n_parts": 1}))
+
     def test_other_addon_detected(self):
         self.assertTrue(aa.other_addon_loaded({"VLAutoActivate": object()}))
         self.assertFalse(aa.other_addon_loaded({}))
@@ -57,6 +62,9 @@ class TestOpen(unittest.TestCase):
         cls.body1 = cls.make_bodies("body1", 1)
         cls.body2 = cls.make_bodies("body2", 2)
         cls.step = cls.make_step("step")
+        cls.imp = cls.make_import("imp", 1)
+        cls.imp2 = cls.make_import("imp2", 2)
+        cls.pdpart = cls.make_pd_part("pdpart")
 
     @classmethod
     def tearDownClass(cls):
@@ -117,6 +125,31 @@ class TestOpen(unittest.TestCase):
             doc.addObject("Part::Feature", f"Shape{i}").Shape = Part.makeBox(5, 5, 5)
         doc.recompute()
         return cls._save(doc, name)
+
+    @classmethod
+    def make_import(cls, name, n):
+        """What the body import gives: n App::Parts, each holding a Part::Feature "Body" (no PartDesign Body)."""
+        import Part
+
+        doc = FreeCAD.newDocument("AA" + name)
+        for i in range(n):
+            part = doc.addObject("App::Part", f"Part{i}")
+            feat = doc.addObject("Part::Feature", f"Body{i}")
+            feat.Shape = Part.makeBox(5, 5, 5)
+            part.addObject(feat)
+        doc.recompute()
+        return cls._save(doc, name)
+
+    @classmethod
+    def make_pd_part(cls, name):
+        doc = FreeCAD.newDocument("AA" + name)
+        part = doc.addObject("App::Part", "Part")
+        part.addObject(doc.addObject("PartDesign::Body", "Body"))
+        doc.recompute()
+        return cls._save(doc, name)
+
+    def active_part(self, doc):
+        return self.Gui.getDocument(doc.Name).ActiveView.getActiveObject("part")
 
     def active_body(self, doc):
         return self.Gui.getDocument(doc.Name).ActiveView.getActiveObject("pdbody")
@@ -213,6 +246,30 @@ class TestOpen(unittest.TestCase):
         doc = self.open(self.step)
         self.assertIsNone(self.active_body(doc))
         self.assertIsNone(self.active_assembly(doc))
+
+    def test_imported_part_becomes_active(self):
+        doc = self.open(self.imp)
+        part = self.active_part(doc)
+        self.assertIsNotNone(part, f"{self.why} {aa._state(doc.Name)}")
+        self.assertEqual(part.Name, "Part0")
+        self.assertEqual(part.TypeId, "App::Part")
+        self.assertFalse(self.Gui.getDocument(doc.Name).Modified)
+        self.assertIsNone(self.active_body(doc))
+        self.assertEqual(len(self.Gui.Selection.getSelection()), 0)
+
+    def test_two_imported_parts_nothing(self):
+        doc = self.open(self.imp2)
+        self.assertIsNone(self.active_part(doc))
+
+    def test_pd_part_gets_body_and_part(self):
+        doc = self.open(self.pdpart)
+        self.assertEqual(self.active_body(doc).Name, "Body")
+        self.assertEqual(self.active_part(doc).Name, "Part")
+
+    def test_imported_part_preference_off_nothing(self):
+        self.param.SetBool(aa.PREF_NAME, False)
+        doc = self.open(self.imp)
+        self.assertIsNone(self.active_part(doc))
 
     def test_single_body_preference_off_nothing(self):
         self.param.SetBool(aa.PREF_NAME, False)

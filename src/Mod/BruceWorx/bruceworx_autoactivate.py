@@ -5,6 +5,8 @@ Bruce: "when I open a file, that one becomes the active one". The joint and asse
 the assembly is activated (a double-click on it in the tree). When a document becomes the active one and
 nothing is being edited, its single top Assembly is activated the same way, and the tree scrolls to it.
 A document without an assembly but with exactly one PartDesign Body gets that body as the active body.
+A document with neither but exactly one root App::Part (what the body import makes: a Part holding a plain
+Part::Feature) gets that Part as the active part.
 
 Rules (``should_activate`` is FreeCAD-free and tested):
 * the preference ``AutoActivateAssembly`` (BaseApp/Preferences/BruceWorx, default on) is on;
@@ -42,12 +44,12 @@ _warned = False
 # ----- pure helpers (unit tested) -----------------------------------------------------------------
 
 
-def should_activate(enabled, n_assemblies, dialog_open, editing, active_part, busy, workbench, n_bodies=0):
+def should_activate(enabled, n_assemblies, dialog_open, editing, active_part, busy, workbench, n_bodies=0, n_parts=0):
     """None when the assembly (or the single body) should be activated now, else why not (a short reason)."""
     if not enabled:
         return "preference off"
-    if n_assemblies != 1 and not (n_assemblies == 0 and n_bodies == 1):
-        return "no single assembly or body"
+    if n_assemblies != 1 and not (n_assemblies == 0 and (n_bodies == 1 or n_parts == 1)):
+        return "no single assembly, body or part"
     if dialog_open:
         return "task dialog open"
     if editing:
@@ -85,6 +87,11 @@ def _assemblies(doc):
 
 def _bodies(doc):
     return [o for o in doc.Objects if o.TypeId == "PartDesign::Body"]
+
+
+def _root_parts(doc):
+    """The App::Parts nothing in this same document holds."""
+    return [o for o in doc.Objects if o.TypeId == "App::Part" and not any(p.Document is doc for p in o.InList)]
 
 
 def _is_assembly_edit(vp):
@@ -140,6 +147,7 @@ def _state(name):
         "enabled": enabled(),
         "n": len(_assemblies(doc)),
         "bodies": len(_bodies(doc)),
+        "parts": len(_root_parts(doc)),
         "reset": assembly_docs,
         "dialog": Gui.Control.activeDialog(),
         "editing": editing,
@@ -160,7 +168,7 @@ def activate(name, retries=RETRIES):
         if facts is None:
             return None
         why = should_activate(facts["enabled"], facts["n"], facts["dialog"], facts["editing"],
-                              facts["active_part"], facts["busy"], facts["workbench"], facts["bodies"])
+                              facts["active_part"], facts["busy"], facts["workbench"], facts["bodies"], facts["parts"])
         if why == "document busy" and retries > 0:
             QtCore.QTimer.singleShot(RETRY_MS, lambda: activate(name, retries - 1))
             return why
@@ -188,8 +196,11 @@ def _activate_body(doc):
     """Make the document's single PartDesign Body the active body (and its App::Part the active part)."""
     import FreeCADGui as Gui
 
-    body = _bodies(doc)[0]
+    bodies = _bodies(doc)
     view = Gui.getDocument(doc.Name).ActiveView
+    if len(bodies) != 1:
+        return _activate_part(doc)
+    body = bodies[0]
     view.setActiveObject("pdbody", body)
     parts = [o for o in body.InList if o.TypeId == "App::Part"]
     if parts:
@@ -198,6 +209,19 @@ def _activate_body(doc):
     Gui.Selection.addSelection(doc.Name, body.Name)
     from PySide import QtCore
 
+    QtCore.QTimer.singleShot(CLEAR_MS, Gui.Selection.clearSelection)
+    return None
+
+
+def _activate_part(doc):
+    """Make the document's single root App::Part the active part (an imported part: Part > Body feature)."""
+    import FreeCADGui as Gui
+    from PySide import QtCore
+
+    part = _root_parts(doc)[0]
+    Gui.getDocument(doc.Name).ActiveView.setActiveObject("part", part)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, part.Name)
     QtCore.QTimer.singleShot(CLEAR_MS, Gui.Selection.clearSelection)
     return None
 
