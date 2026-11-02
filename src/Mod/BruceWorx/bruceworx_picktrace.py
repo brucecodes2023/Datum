@@ -704,11 +704,15 @@ class _AssemblyPick:
     def picked(self, doc, obj, sub):
         """An observer pick (FreeCAD reports the resolved object and element, e.g. Box/Face1). The full
         path from the assembly is read back from the selection on the next tick."""
-        if self.busy or not _on(ASM_PICK_PREF) or not sub or sub.endswith("."):
+        if self.busy or not sub or sub.endswith("."):
             return  # a tree click names no element
+        import bruceworx_selectfilter as sf
+
+        if not sf.rewrite_on(_on(ASM_PICK_PREF)):
+            return  # Auto with the pref off, or Face, Edge, Vertex (the selection gate's modes)
         from PySide import QtCore, QtWidgets
 
-        if QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.AltModifier:
+        if sf.mode() == sf.AUTO and QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.AltModifier:
             return  # Option-click: the face itself
         import time
 
@@ -718,11 +722,14 @@ class _AssemblyPick:
     def _resolve(self, doc, element, cleared_before):
         import FreeCADGui
 
+        import bruceworx_selectfilter as sf
+
+        pick_mode = sf.mode()
         try:
             if FreeCADGui.Control.activeDialog():
                 return  # a task panel (joint, measure) wants faces
             picks = [(s.Object, name) for s in FreeCADGui.Selection.getSelectionEx(doc, 0)
-                     if s.Object is not None and s.Object.TypeId in ASSEMBLY_TYPES
+                     if s.Object is not None and (pick_mode == sf.BODY or s.Object.TypeId in ASSEMBLY_TYPES)
                      for name in s.SubElementNames if name.endswith(element)]
         except Exception:
             return
@@ -730,7 +737,10 @@ class _AssemblyPick:
             return
         root, sub = picks[-1]
         last = self.last if self.last and self.last[:2] == (doc, root.Name) and not cleared_before else None
-        new = component_pick(sub, last[2] if last else None)
+        if pick_mode == sf.AUTO:
+            new = component_pick(sub, last[2] if last else None)
+        else:  # Component: always the top; Body: the whole solid, "" for the root itself
+            new = sf.retarget(pick_mode, sub, None, sf.chain_types(root, sub) if pick_mode == sf.BODY else None)
         if new is not None:
             self._apply(doc, root.Name, sub, new)
 

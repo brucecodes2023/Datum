@@ -36,6 +36,7 @@ APP_TOOLBARS = (
     "Individual Views",
     "SearchBar",
     "BruceWorxSearchBar",
+    "BruceWorxSelectFilter",
 )
 # Shown in every workbench (Structure comes with the standard workbench), so not a
 # sign that the workbench's own toolbars show.
