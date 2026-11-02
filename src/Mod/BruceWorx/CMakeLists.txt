@@ -185,12 +185,15 @@ SET(BruceWorx_SRCS
     bruceworx_sim_thermal.py
     bruceworx_sim_post.py
     TestBruceWorxSimRotor.py
+    TestBruceWorxDeckWrite.py
     TestBruceWorxSimCore.py
     bruceworx_cfd.py
     bruceworx_cfd_gui.py
     bruceworx_cfd_wash.py
+    bruceworx_cfd_paraview.py
     TestBruceWorxCfd.py
     TestBruceWorxCfdWash.py
+    TestBruceWorxCfdParaView.py
     bruceworx_sim_gui.py
     bruceworx_sim_events.py
     bruceworx_sim_meshworker.py
@@ -199,13 +202,11 @@ SET(BruceWorx_SRCS
     TestBruceWorxSimWorkspace.py
     TestBruceWorxSimulation.py
     bruceworx_sim_model.py
-    TestBruceWorxSimModel.py
-    bruceworx_cfd_paraview.py
     bruceworx_sim_defs.py
     bruceworx_sim_steps.py
+    TestBruceWorxSimModel.py
     bruceworx_validation.py
     bruceworx_validation_cases.py
-    TestBruceWorxCfdParaView.py
     bruceworx_validation_gui.py
     BruceWorx_Validation.svg
     TestBruceWorxValidation.py

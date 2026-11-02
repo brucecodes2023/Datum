@@ -43,14 +43,15 @@ FreeCAD.__unit_test__.append("TestBruceWorxHardware")
 FreeCAD.__unit_test__.append("TestBruceWorxRoutingCore")
 FreeCAD.__unit_test__.append("TestBruceWorxSimCore")
 FreeCAD.__unit_test__.append("TestBruceWorxSimRotor")
+FreeCAD.__unit_test__.append("TestBruceWorxDeckWrite")
 FreeCAD.__unit_test__.append("TestBruceWorxSimModel")
 FreeCAD.__unit_test__.append("TestBruceWorxCfd")
 FreeCAD.__unit_test__.append("TestBruceWorxSimWorkspace")
+FreeCAD.__unit_test__.append("TestBruceWorxCfdParaView")
 FreeCAD.__unit_test__.append("TestBruceWorxMaterials")
 FreeCAD.__unit_test__.append("TestBruceWorxVlsim")
 FreeCAD.__unit_test__.append("TestBruceWorxSimVault")
 
-FreeCAD.__unit_test__.append("TestBruceWorxCfdParaView")
 # BruceWorx's own material library (FR-4, PCB copper, ...), also used headless.
 try:
     import bruceworx_board

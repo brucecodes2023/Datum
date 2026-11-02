@@ -1,0 +1,67 @@
+%======================================================================
+\subsection{BW-SIM-04 --- Built, 2 Nov: the CalculiX deck writes fast on multi-solid models}\label{sec:sim-deck-built}
+%======================================================================
+
+The turbojet session spent most of a 773\,s run writing the \file{.inp} for a three-solid rotor (146k nodes, second
+order, an M8 thread). The profile says where: 99.97\,\% of the deck write was \code{FemMesh.getNodesBySolid}, an OCC
+point-in-solid test (\code{BRepExtrema\_DistShapeShape}, solid treatment) for every node and every solid. The deck is now
+written from the mesh itself and is the same deck.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item Nothing changes in the panels. A multi-solid study (a material per solid) writes its input in minutes
+        instead of tens of minutes; spin and centrifugal loads on a solid use the same shortcut.
+  \item If the shortcut cannot decide (hex or wedge elements, a reference that is not a solid, overlapping solids, a mesh
+        without surface elements) the old node search runs, unchanged.
+\end{itemize}
+
+\paragraph{How it works.}
+The volume mesh keeps one surface triangle on every face of the CAD shape, including the faces two solids share.
+Cutting the tetrahedra at those triangles leaves one connected piece per solid (\code{meshtools.\_MeshPieces}, scipy
+connected components). Seven element centroids per piece decide which solid it is. Only the mid-edge nodes that can lie
+off a solid (both end nodes on a surface triangle) are measured, and only against their own solid, as the node search
+did; elements with such a node go to the existing leftover handling (nearest solid, \code{LAST\_UNREFERENCED}), so the
+warning in the run pane is unchanged. Mid nodes the mesher placed on a curved surface are measured on a plane, cylinder,
+cone, sphere or torus face first (microseconds) and on the solid only when that fails.
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item \textbf{Volume ids do not survive.} A FemMesh exposes no shape ids, and the study rebuilds the mesh (orphans,
+        Tet10 upgrade, folded-element repair) before the deck is written, so reading element$\to$solid from the mesher was
+        not possible; the pieces come from the mesh topology.
+  \item \textbf{Node sets use it too.} \code{get\_femnodes\_by\_refshape} returns the nodes of a solid's pieces without
+        its off-solid mid nodes, in sorted order like the C++ set.
+  \item \textbf{Freeform curved mid nodes.} Up to 2000 per solid, and any far from the chord midpoint, are all
+        measured; beyond that a spread sample of 60 is measured and, if one is off, all. This is the one place where the
+        result rests on the mesher having put the node on the surface; the test with a moved node shows a displaced node
+        is still found.
+  \item \textbf{Switch.} \code{meshtools.FAST\_SOLID\_SETS = False} restores the old search (the test uses it).
+  \item \textbf{No fork pool.} Measuring nodes in forked workers deadlocks in OCC after \code{fork}; the remaining time is
+        the serial OCC distance of the straight mid nodes that are not on an analytic face.
+\end{itemize}
+
+\paragraph{Timings} (repo build, FreeCADCmd; the machine was shared, so read the ratios).
+\begin{center}
+\begin{tabular}{lrrr}
+\hline
+Model (3 solids, Tet10) & old & new & deck \\
+\hline
+Netgen, 65k nodes, M8-like thread & 480\,s & 56\,s & identical \\
+Gmsh, 59k nodes & 120\,s & 45\,s & identical (1104 leftover elements) \\
+Netgen, 160k nodes & hours (starved) & 164\,s & not compared \\
+Gmsh, 181k nodes & --- & 89\,s & not compared \\
+\hline
+\end{tabular}
+\end{center}
+Deck equality means the \file{Mesh.inp} files equal line for line apart from the comment lines (date, file name).
+
+\paragraph{Tests.} \file{TestBruceWorxDeckWrite}: element sets, node sets, a pushed-off mid node (leftover elements) and
+the whole \file{.inp}, old against new, on a shaft, disc and cap compound. SimCore, SimRotor, SimModel and Validation
+suites pass (4, 63, 68 and 50, 32 tests); \file{TestMaterialSetsOutsideSolids} caught a corner node pushed off a face, so surface corner nodes are measured too.
+
+\paragraph{Open.}
+\begin{itemize}[nosep]
+  \item The straight mid nodes still cost about 25\,ms each on a thread (one OCC solid test); a cheaper inside test would
+        make the 160k-node case well under a minute.
+  \item The node search itself (\code{getNodesBySolid}) is untouched; constraints on faces and edges still use it.
+\end{itemize}

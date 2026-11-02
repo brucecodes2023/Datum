@@ -112,10 +112,12 @@ def get_femnodes_by_refshape(femmesh, ref):
         elif r.ShapeType == "Face":
             nodes += femmesh.getNodesByFace(r)
         elif r.ShapeType == "Solid":
-            nodes += femmesh.getNodesBySolid(r)
+            fast = get_solid_femnodes_fast(femmesh, [r])
+            nodes += fast if fast is not None else femmesh.getNodesBySolid(r)
         elif r.ShapeType == "Compound":
             for s in r.Solids:
-                nodes += femmesh.getNodesBySolid(s)
+                fast = get_solid_femnodes_fast(femmesh, [s])
+                nodes += fast if fast is not None else femmesh.getNodesBySolid(s)
         else:
             FreeCAD.Console.PrintMessage("  No Vertice, Edge, Face or Solid as reference shapes!\n")
     return nodes
@@ -462,6 +464,13 @@ def get_femelement_sets(femmesh, femelement_table, fem_objects, femnodes_ele_tab
     count_femelements = 0
     referenced_femelements = np.zeros((max(femelement_table.keys()) + 1,), dtype=int)
     has_remaining_femelements = None
+    fast = None
+    if FAST_SOLID_SETS and femnodes_ele_table:  # volume tables only (SIM-04 deck write speed)
+        try:
+            fast = get_solid_femelements_fast(femmesh, femelement_table, fem_objects)
+        except Exception as exc:
+            FreeCAD.Console.PrintWarning(f"Fast solid element sets failed, using the node search: {exc}\n")
+            fast = None
     for fem_object_i, fem_object in enumerate(fem_objects):
         obj = fem_object["Object"]
         FreeCAD.Console.PrintMessage(
@@ -471,10 +480,12 @@ def get_femelement_sets(femmesh, femelement_table, fem_objects, femnodes_ele_tab
         # unique short identifier
         fem_object["ShortName"] = get_elset_short_name(obj, fem_object_i)
         if obj.References:
-            ref_shape_femelements = []
-            ref_shape_femelements = get_femelements_by_references(
-                femmesh, femelement_table, obj.References, femnodes_ele_table
-            )
+            if fast is not None:
+                ref_shape_femelements = fast[fem_object_i]
+            else:
+                ref_shape_femelements = get_femelements_by_references(
+                    femmesh, femelement_table, obj.References, femnodes_ele_table
+                )
             ref_shape_femelements_array = np.zeros_like(referenced_femelements)
             ref_shape_femelements_array[ref_shape_femelements] = 1
             referenced_femelements += ref_shape_femelements_array
@@ -513,6 +524,316 @@ def get_femelement_sets(femmesh, femelement_table, fem_objects, femnodes_ele_tab
             "Error in get_femelement_sets -- > femelements_count_ok() failed!\n"
         )
         return False
+
+
+# ************************************************************************************************
+# SIM-04 (deck write speed): element -> solid without a distance test per node and solid.
+# getNodesBySolid measures every node in a solid's bounding box against the solid (OCC, one node at a
+# time): minutes for 150k nodes of a threaded multi-solid part. The mesh already says where the solids
+# are: the mesher keeps one surface element on every face of the CAD shape (outer and shared faces), so
+# cutting the volume mesh at those triangles leaves one connected piece per solid. A few element centroids
+# per piece decide which solid it is; only the mid-edge nodes that can lie off the surface (both end
+# nodes on a surface triangle) are then measured against that one solid, as the node search did, and
+# elements with such a node go to get_femelement_sets' leftover handling like before.
+# Anything the shortcut cannot decide (hex/penta elements, a reference that is not a solid, pieces whose
+# samples disagree, more or fewer pieces than solids) returns None and the node search runs as before.
+FAST_SOLID_SETS = True
+CURVED_ALL = 2000  # freeform-face curved mid nodes up to this many are all measured
+CURVED_SAMPLE = 60  # curved mid nodes measured per solid (all of them when one of these is off)
+FAST_LAST = {}  # what the last fast run did (seconds per step, pieces, measured nodes), for tests and logs
+
+
+class _Undecided(Exception):
+    """the shortcut cannot say for this mesh: the node search runs instead"""
+
+
+def _solid_key(shape):
+    c = shape.CenterOfMass
+    return (round(shape.Volume, 6), round(c.x, 6), round(c.y, 6), round(c.z, 6))
+
+
+class _MeshPieces:
+    """The volume mesh cut at its surface triangles: label[e] is the piece of element e (table order)."""
+
+    def __init__(self, femmesh):
+        import time
+
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+
+        t0 = time.time()
+        self.femmesh = femmesh
+        self.signature = (femmesh.NodeCount, femmesh.VolumeCount, femmesh.FaceCount)
+        if not femmesh.VolumeCount:
+            raise _Undecided("no volume elements")
+        self.ids = list(femmesh.Volumes)  # the order of get_femelement_table
+        self.table = [femmesh.getElementNodes(i) for i in self.ids]
+        if not {len(row) for row in self.table} <= {4, 10}:
+            raise _Undecided("not a tetrahedron mesh")
+        self.tet10 = len(self.table[0]) == 10
+        n = len(self.ids)
+        self.corners = np.array([row[:4] for row in self.table], dtype=np.int64)
+        face_ids = list(femmesh.Faces)
+        if not face_ids:
+            raise _Undecided("no surface elements")
+        self.ftri = np.array([sorted(femmesh.getElementNodes(f)[:3]) for f in face_ids], dtype=np.int64)
+        base = int(max(self.corners.max(), self.ftri.max())) + 1
+        if base > 2_000_000:
+            raise _Undecided("node ids too large")
+
+        def tri_key(a, b, c):
+            s = np.sort(np.stack([a, b, c], axis=1), axis=1)
+            return (s[:, 0] * base + s[:, 1]) * base + s[:, 2]
+
+        face_keys = np.unique(tri_key(self.ftri[:, 0], self.ftri[:, 1], self.ftri[:, 2]))
+        combos = ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3))
+        keys = np.concatenate([tri_key(self.corners[:, a], self.corners[:, b], self.corners[:, c]) for a, b, c in combos])
+        owner = np.tile(np.arange(n), 4)
+        order = np.argsort(keys, kind="stable")
+        ks, os_ = keys[order], owner[order]
+        same = np.nonzero(ks[1:] == ks[:-1])[0]
+        # an inner triangle is shared by two tets; it is cut when a surface element sits on it (a face of the shape)
+        keep = same[~np.isin(ks[same], face_keys)]
+        rows, cols = os_[keep], os_[keep + 1]
+        graph = coo_matrix((np.ones(len(rows), dtype=np.int8), (rows, cols)), shape=(n, n))
+        self.count, self.label = connected_components(graph, directed=False)
+        self.on_surface = np.zeros(base, dtype=bool)
+        self.on_surface[self.ftri.ravel()] = True
+        self.nodes = femmesh.Nodes
+        self.placement = femmesh.Placement
+        self.moved = not self.placement.isIdentity()
+        self.seconds = round(time.time() - t0, 2)
+        self.stray_cache = {}
+        self.counts = {}
+
+    def point(self, nid):
+        v = self.nodes[nid]
+        p = FreeCAD.Vector(v.x, v.y, v.z)
+        return self.placement.multVec(p) if self.moved else p
+
+    def classify(self, solids):
+        """index into solids (the one containing it) for every piece, -1 when none does"""
+        boxes = [sh.BoundBox for sh in solids]
+        out = np.full(self.count, -1, dtype=np.int64)
+        for piece in range(self.count):
+            members = np.nonzero(self.label == piece)[0]
+            picks = members[np.linspace(0, len(members) - 1, min(7, len(members))).astype(int)]
+            votes = set()
+            for e in picks:
+                pts = [self.nodes[nid] for nid in self.corners[e]]
+                c = FreeCAD.Vector(sum(p.x for p in pts) / 4, sum(p.y for p in pts) / 4, sum(p.z for p in pts) / 4)
+                if self.moved:
+                    c = self.placement.multVec(c)
+                inside = [i for i, sh in enumerate(solids) if boxes[i].isInside(c) and sh.isInside(c, 1e-7, True)]
+                if len(inside) > 1:
+                    raise _Undecided("overlapping solids")
+                votes.add(inside[0] if inside else -1)
+            if len(votes) != 1:
+                raise _Undecided("a piece of the mesh lies in two solids")
+            out[piece] = votes.pop()
+        return out
+
+    def off_surface(self, shape, elements):
+        """(element indices, node ids, nodes measured) of ``elements`` (indices) with a mid-edge node farther than the
+        solid's tolerance from ``shape``. Only an edge whose end nodes are both on a surface triangle can bend off the
+        solid. A mid node that sits exactly halfway between its end nodes (a straight edge, or a node straightened after
+        meshing) is measured; one the mesher placed on the curved surface is measured on a spread sample and, if any
+        sample is off, all of them (the mesher puts them on the surface, the doubt is only a later move)."""
+        key = (_solid_key(shape), len(elements))
+        if key in self.stray_cache:
+            return self.stray_cache[key]
+        import Part
+
+        limit = shape.getTolerance(1, Part.Shape)  # the largest tolerance in the solid, as the node search takes it
+        faces = []  # analytic faces first: a node on one of them is settled in microseconds
+        for f in shape.Faces:
+            analytic = f.Surface.TypeId in ("Part::GeomPlane", "Part::GeomCylinder", "Part::GeomCone", "Part::GeomSphere", "Part::GeomToroid")
+            if analytic:
+                bb = f.BoundBox
+                bb.enlarge(max(limit, 1e-6))
+                faces.append((f, bb))
+        edge_ends = ((0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3))  # Tet10 mid nodes 4..9
+        owners = {}  # mid node id -> [element index], straight?
+        straight, curved = {}, {}
+        if self.tet10:
+            sel = np.zeros(len(self.ids), dtype=bool)
+            sel[elements] = True
+            for k, (a, b) in enumerate(edge_ends):
+                hit = np.nonzero(sel & self.on_surface[self.corners[:, a]] & self.on_surface[self.corners[:, b]])[0]
+                for e in hit:
+                    row = self.table[e]
+                    nid = row[4 + k]
+                    owners.setdefault(nid, []).append(int(e))
+                    if nid in straight or nid in curved:
+                        continue
+                    pa, pb, pm = self.nodes[row[a]], self.nodes[row[b]], self.nodes[nid]
+                    off = max(abs(pm.x - (pa.x + pb.x) / 2), abs(pm.y - (pa.y + pb.y) / 2), abs(pm.z - (pa.z + pb.z) / 2))
+                    ratio = off / max((pa - pb).Length, 1e-12)
+                    if off < 1e-6 * max(1.0, (pa - pb).Length):
+                        straight[nid] = ratio
+                    else:
+                        curved[nid] = ratio
+        # the corner nodes on a surface triangle sit on the surface unless something moved them: measured like the curved ones
+        sel = np.zeros(len(self.ids), dtype=bool)
+        sel[elements] = True
+        for c in range(4):
+            for e in np.nonzero(sel & self.on_surface[self.corners[:, c]])[0]:
+                nid = int(self.corners[e, c])
+                owners.setdefault(nid, []).append(int(e))
+                if nid not in curved and nid not in straight:
+                    curved[nid] = 0.0
+        measured = [0]
+
+        def on_analytic(nid, pt):
+            vertex = Part.Vertex(pt)
+            return any(bb.isInside(pt) and f.distToShape(vertex)[0] < limit for f, bb in faces)
+
+        def off_solid(nid):
+            pt = self.point(nid)
+            measured[0] += 1
+            if on_analytic(nid, pt):
+                return False
+            return Part.Vertex(pt).distToShape(shape)[0] >= limit
+
+        m0 = measured[0]
+        bad = {nid for nid in straight if off_solid(nid)}
+        self.counts = {"straight": len(straight), "straight_measured": measured[0] - m0, "curved": len(curved)}
+        # curved mid nodes: the ones on a plane, cylinder, cone, sphere or torus face are settled the same way (fast);
+        # those on freeform (thread) faces cost ~25 ms each: all when there are few or the node sits far from the chord
+        # midpoint, otherwise a spread sample, and all of them when one of the sample is off
+        rest = []
+        for nid in sorted(curved):
+            pt = self.point(nid)
+            if on_analytic(nid, pt):
+                continue
+            rest.append(nid)
+        if rest:
+            far = [nid for nid in rest if curved[nid] > 0.1]
+            near = [nid for nid in rest if curved[nid] <= 0.1]
+            bad |= {nid for nid in far if off_solid(nid)}
+            if len(near) <= CURVED_ALL:
+                sample = near
+            else:
+                sample = near[:: max(1, len(near) // CURVED_SAMPLE)]
+            self.counts.update(freeform=len(rest), far=len(far), near=len(near))
+            if any(off_solid(nid) for nid in sample):
+                bad |= {nid for nid in near if off_solid(nid)}
+        bad_elems = {e for nid in bad for e in owners[nid]}
+        self.stray_cache[key] = (bad_elems, bad, measured[0])
+        return self.stray_cache[key]
+
+
+_PIECES = {"pieces": None}
+
+
+def _mesh_pieces(femmesh):
+    cached = _PIECES["pieces"]
+    signature = (femmesh.NodeCount, femmesh.VolumeCount, femmesh.FaceCount)
+    if cached is not None and cached.femmesh is femmesh and cached.signature == signature:
+        return cached
+    _PIECES["pieces"] = None
+    pieces = _MeshPieces(femmesh)
+    _PIECES["pieces"] = pieces
+    return pieces
+
+
+def _ref_solids(ref):
+    """the solid shapes of one reference [obj, (sub names)]; _Undecided for anything else"""
+    out = []
+    for refelement in ref[1]:
+        r = sub_shape_at_global_placement(ref[0], refelement)
+        if r.ShapeType == "Solid":
+            out.append(r)
+        elif r.ShapeType == "Compound" and r.Solids:
+            out += list(r.Solids)
+        else:
+            raise _Undecided("a reference is not a solid")
+    return out
+
+
+def get_solid_femelements_fast(femmesh, femelement_table, fem_objects):
+    """{fem_object index: [element ids]} like get_femelements_by_references for fem_objects whose references are
+    solids; None when the shortcut does not apply (the caller then uses the node search)."""
+    import time
+
+    global FAST_LAST
+    t0 = time.time()
+    try:
+        if not fem_objects or not femelement_table or femmesh.VolumeCount != len(femelement_table):
+            return None
+        solids, keys, per_obj = [], [], []
+        for fem_object in fem_objects:
+            if not fem_object["Object"].References:
+                return None
+            refs = []
+            for ref in fem_object["Object"].References:
+                got = []
+                for sh in _ref_solids(ref):
+                    key = _solid_key(sh)
+                    if key not in keys:
+                        keys.append(key)
+                        solids.append(sh)
+                    got.append(keys.index(key))
+                refs.append(got)
+            per_obj.append(refs)
+        pieces = _mesh_pieces(femmesh)
+        if list(femelement_table) != pieces.ids:
+            return None
+        piece_solid = pieces.classify(solids)
+        t1 = time.time()
+        solid_of = piece_solid[pieces.label]
+        stray, measured = set(), 0
+        for s, sh in enumerate(solids):
+            bad_elems, _bad_nodes, seen = pieces.off_surface(sh, np.nonzero(solid_of == s)[0])
+            stray |= bad_elems
+            measured += seen
+        result = {}
+        for i, refs in enumerate(per_obj):
+            out = []
+            for got in refs:
+                want = np.isin(solid_of, np.array(sorted(set(got)), dtype=np.int64))
+                if stray:
+                    want[list(stray)] = False
+                out += [pieces.ids[e] for e in np.nonzero(want)[0]]
+            result[i] = out
+    except _Undecided as exc:
+        FreeCAD.Console.PrintMessage(f"Solid element sets by the node search ({exc}).\n")
+        return None
+    FAST_LAST = {
+        "pieces": pieces.count, "solids": len(solids), "stray": len(stray), "measured_nodes": measured,
+        "counts": getattr(pieces, "counts", {}),
+        "seconds": {"pieces": pieces.seconds, "classify": round(t1 - t0, 2), "total": round(time.time() - t0, 2)},
+    }
+    FreeCAD.Console.PrintMessage(f"Solid element sets from mesh pieces: {FAST_LAST}\n")
+    return result
+
+
+def get_solid_femnodes_fast(femmesh, shapes):
+    """sorted node ids getNodesBySolid would return for the solids ``shapes`` (one list for all of them); None when
+    the shortcut does not apply. Nodes of the elements of the solid's pieces, without the mid-edge nodes off the solid."""
+    if not FAST_SOLID_SETS:
+        return None
+    try:
+        pieces = _mesh_pieces(femmesh)
+        keys, solids = [], []
+        for sh in shapes:
+            if _solid_key(sh) not in keys:
+                keys.append(_solid_key(sh))
+                solids.append(sh)
+        piece_solid = pieces.classify(solids)
+        solid_of = piece_solid[pieces.label]
+        out = set()
+        for s, sh in enumerate(solids):
+            elements = np.nonzero(solid_of == s)[0]
+            _be, bad_nodes, _seen = pieces.off_surface(sh, elements)
+            used = set(np.unique(np.array([pieces.table[e] for e in elements], dtype=np.int64)).tolist()) if len(elements) else set()
+            out |= used - bad_nodes
+        return sorted(out)
+    except _Undecided:
+        return None
+    except Exception as exc:
+        FreeCAD.Console.PrintWarning(f"Fast solid node set failed, using the node search: {exc}\n")
+        return None
 
 
 # ************************************************************************************************
