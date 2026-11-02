@@ -105,6 +105,13 @@ def _stock_keys(target):
     return [pn] if pn else []
 
 
+def _board_keys(target):
+    """An inserted KiCad board (bruceworx_board, ECD-05) lives in the assembly's own file but is its vault
+    item's PCBA line: its PartNumber (2 Nov 2026; before, it was listed as not a vault item)."""
+    pn = str(getattr(target, "PartNumber", "") or "").strip() if getattr(target, "BoardSource", "") else ""
+    return [pn] if pn else []
+
+
 def _is_line(obj):
     if getattr(getattr(obj, "Proxy", None), "Type", "") == "BruceWorx::RoutePath":
         return False  # [BW] ROU-04: a route centreline is construction, not an item
@@ -235,7 +242,8 @@ def walk(doc, imported=None) -> list:
                     if target.Name not in seen:
                         visit(list(target.Group), mult * count, seen | {target.Name})
                     continue
-                row = {"keys": _stock_keys(target), "name": f"{target.Label} (in this file)", "qty": mult * count}
+                row = {"keys": _board_keys(target) + _stock_keys(target), "name": f"{target.Label} (in this file)",
+                       "qty": mult * count}
                 rows.append(_maker(_metered(row, target), target))
                 rows.extend(_extras(target, mult * count))  # [BW] ROU-05: terminals
                 continue

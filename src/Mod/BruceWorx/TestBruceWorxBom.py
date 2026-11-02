@@ -120,6 +120,29 @@ class TestWalker(_Base):
         rows = bb.walk(self.objs["bracket"].Document)
         self.assertEqual([(r["name"], r["qty"]) for r in rows], [("plate.FCStd", 1), ("bolt.FCStd", 4)])
 
+    def test_an_inserted_board_is_its_vault_item(self):
+        """An inserted KiCad board (in-file App::Part with BoardSource) is keyed by its PartNumber; an ordinary
+        in-file part still is not a vault item."""
+        import Part
+
+        doc = self.objs["bracket"].Document
+        asm = doc.getObject("Assembly")
+        for name, board in (("Board", True), ("Loose", False)):
+            part = doc.addObject("App::Part", name)
+            solid = doc.addObject("Part::Feature", name + "Solid")
+            solid.Shape = Part.makeBox(10, 10, 1.6)
+            part.addObject(solid)
+            part.addProperty("App::PropertyString", "PartNumber", "BruceWorx")
+            part.PartNumber = "BW-01-01099-001" if board else "BW-01-01098-001"
+            if board:
+                part.addProperty("App::PropertyFile", "BoardSource", "Board")
+                part.BoardSource = "/tmp/hub.kicad_pcb"
+            asm.addObject(part)
+        doc.recompute()
+        rows = {r["name"]: r for r in bb.walk(doc)}
+        self.assertEqual(rows["Board (in this file)"]["keys"], ["BW-01-01099-001"])
+        self.assertEqual(rows["Loose (in this file)"]["keys"], [])
+
     def test_hidden_array_elements_and_stale_link_elements(self):
         doc = self.objs["bracket"].Document
         array = doc.getObject("boltArray")
