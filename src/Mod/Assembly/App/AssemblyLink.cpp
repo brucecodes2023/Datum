@@ -691,6 +691,15 @@ void AssemblyLink::synchronizeJoints()
 
     JointGroup* jGroup = ensureJointGroup();
 
+    // [BW] A nested flexible AssemblyLink made by synchronizeComponents has no children yet
+    // (it executes after this one), and the joints copied below name them: fill it now.
+    for (const auto& [srcObj, linkObj] : objLinkMap) {
+        auto* lnkAsm = freecad_cast<AssemblyLink*>(linkObj);
+        if (lnkAsm && !lnkAsm->isRigid() && lnkAsm->Group.getValues().empty()) {
+            lnkAsm->updateContents();
+        }
+    }
+
     std::vector<App::DocumentObject*> assemblyJoints
         = assembly->getJoints(assembly->isTouched(), false, false);
     std::vector<App::DocumentObject*> assemblyLinkJoints = getJoints();
@@ -749,6 +758,58 @@ void AssemblyLink::synchronizeJoints()
 }
 
 
+// [BW] A copied joint of a flexible sub-assembly can name a component inside a nested flexible
+// AssemblyLink of that sub-assembly (Gantry's joint on a part of its X Axis). Find the local copy:
+// the child of the matching nested link in 'lnk' that shows the same component.
+static App::DocumentObject* shownBy(App::DocumentObject* child)
+{
+    if (auto* childAsm = freecad_cast<AssemblyLink*>(child)) {
+        return childAsm->getLinkedObject2(false);
+    }
+    if (auto* childLink = dynamic_cast<App::Link*>(child)) {
+        return childLink->getLinkedObject(false);
+    }
+    return nullptr;
+}
+
+static App::DocumentObject* mapIntoNested(
+    AssemblyLink* src,
+    AssemblyLink* lnk,
+    App::DocumentObject* target
+)
+{
+    for (auto* child : src->Group.getValues()) {
+        if (!child) {
+            continue;
+        }
+        App::DocumentObject* shown = shownBy(child);
+        if (!shown) {
+            continue;
+        }
+        App::DocumentObject* mine = nullptr;  // the child of lnk that shows the same
+        for (auto* cand : lnk->Group.getValues()) {
+            if (cand && shownBy(cand) == shown) {
+                mine = cand;
+                break;
+            }
+        }
+        if (!mine) {
+            continue;
+        }
+        if (child == target) {
+            return mine;
+        }
+        auto* childAsm = freecad_cast<AssemblyLink*>(child);
+        auto* mineAsm = freecad_cast<AssemblyLink*>(mine);
+        if (childAsm && mineAsm) {
+            if (auto* found = mapIntoNested(childAsm, mineAsm, target)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void AssemblyLink::handleJointReference(
     App::DocumentObject* joint,
     App::DocumentObject* lJoint,
@@ -769,7 +830,21 @@ void AssemblyLink::handleJointReference(
 
     // 2. Map to local link
     auto it = objLinkMap.find(externalComponent);
+    App::DocumentObject* nestedLink = nullptr;
     if (it == objLinkMap.end()) {
+        // [BW] a component of a nested flexible AssemblyLink
+        for (const auto& [srcObj, linkObj] : objLinkMap) {
+            auto* srcAsm = freecad_cast<AssemblyLink*>(srcObj);
+            auto* lnkAsm = freecad_cast<AssemblyLink*>(linkObj);
+            if (srcAsm && lnkAsm && !srcAsm->isRigid()) {
+                nestedLink = mapIntoNested(srcAsm, lnkAsm, externalComponent);
+                if (nestedLink) {
+                    break;
+                }
+            }
+        }
+    }
+    if (it == objLinkMap.end() && !nestedLink) {
         Base::Console().warning(
             "AssemblyLink: Could not map external component %s to a local link for joint %s\n",
             externalComponent->getNameInDocument(),
@@ -777,7 +852,7 @@ void AssemblyLink::handleJointReference(
         );
         return;
     }
-    App::DocumentObject* localLink = it->second;
+    App::DocumentObject* localLink = nestedLink ? nestedLink : it->second;
 
     // 3. Set the new reference
     // The local joint now points to the local link [LocalLink, "Sub"]
