@@ -172,6 +172,11 @@ class SimVaultTests(unittest.TestCase):
         self.assertEqual(sv.result_objects(again), [])
         self.assertTrue(sim.studies(again))
         self.assertTrue(sim.members(sim.studies(again)[0])["mesh"] is not None)
+        # a stamp that runs late (the save observer's timer) after a summary was remembered before the copy was stripped
+        sv._PREVIOUS[os.path.realpath(staged)] = full
+        preview.stamp_saved(again, staged, "simulation")
+        late = vs.read_entry(staged, vs.SUMMARY_ENTRY)
+        self.assertEqual((late["results_stripped"], late["max_vm"]), (True, full["max_vm"]))
         # saving the stripped document keeps the numbers it had
         sv.remember_previous(staged)  # what the vault observer does just before a save
         again.save()

@@ -205,8 +205,12 @@ def extra_entries(doc, path: str, kind: str) -> dict:
     """Zip entries to add to the file just saved to ``path``: {name: bytes}. ``kind`` is the vault item type."""
     entries = {}
     if kind == "simulation" or is_simulation_path(path):
-        previous = _PREVIOUS.pop(os.path.realpath(path), None) or (
-            vs.read_entry(path, vs.SUMMARY_ENTRY) if os.path.exists(path) else None)
+        remembered = _PREVIOUS.pop(os.path.realpath(path), None)
+        current = vs.read_entry(path, vs.SUMMARY_ENTRY) if os.path.exists(path) else None
+        # The summary of a copy saved without its results wins over a remembered one that lacks the flag: a stamp that
+        # runs late (the save observer's timer) can find a summary remembered before the copy was stripped, and the
+        # numbers of the last solve would be lost (PDM-14, 2 Nov).
+        previous = next((c for c in (remembered, current) if c and c.get("results_stripped")), remembered or current)
         entries[vs.SUMMARY_ENTRY] = json.dumps(summary_of(doc, path, previous), indent=1).encode("utf-8")
         mesh = solid_mesh(doc)  # a study hides its solid under the result: the preview shows the solid anyway
         if mesh:
@@ -319,6 +323,7 @@ def stripped_copy(path: str, staging: str) -> str:
     with preview.opened(copy) as doc:
         strip_results(doc)
         doc.save()
+    _PREVIOUS.pop(os.path.realpath(copy), None)  # the save above was remembered by the save observer; this copy's summary is set below
     entries = dict(full)
     entries.update({"has_results": False, "results_stripped": True, "saved_at": _now()})
     pm.rewrite(copy, {vs.SUMMARY_ENTRY: json.dumps(entries, indent=1).encode("utf-8")})

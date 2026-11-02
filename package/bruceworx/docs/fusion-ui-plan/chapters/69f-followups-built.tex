@@ -75,3 +75,15 @@ plane of rotation).
         rotating-frame softening, so its first in-plane mode (7.16 in the same units) is that of a stationary beam under
         the tension: stiffened, where the rotating beam is softened. Measured and reported (\code{lead1}), not asserted.
 \end{itemize}
+
+\subsection*{Stripped simulation copy keeps its numbers (the \code{max\_vm} error above)}
+
+The error in the Tests paragraph above came from the save observer: a \code{.vlsim} save remembers the file's summary
+(\code{remember\_previous}) and a timer stamps the saved document afterwards. The save inside \code{stripped\_copy}
+left such a remembered summary (the one from before stripping, without \code{results\_stripped}); when the timer ran
+after the copy was reopened, it took that summary as the previous one and wrote a summary with no \code{max\_vm}.
+Fixed in \code{bruceworx\_sim\_vault.py}: \code{stripped\_copy} drops what its own save remembered, and a stamp prefers
+whichever of the remembered and the current file summary is marked \code{results\_stripped}. The test now also
+stamps with that stale entry in place (it failed with the old code with a missing \code{results\_stripped}). The
+original error did not repeat in four plain GUI runs afterwards, so it depended on when the timer fired.
+GUI TestBruceWorxSimVault 7 OK, Vlsim 2 OK, Preview 12 OK.
