@@ -411,6 +411,21 @@ class ImportTests(_Tmp):
     def by_name(self, candidates):
         return {os.path.basename(c.path): c for c in candidates}
 
+    def test_an_assembly_holding_a_board_is_not_the_board(self):
+        """2 Nov 2026: an assembly with an inserted KiCad board (an App::Part carrying the board's PartNumber)
+        was read as that board and refused as "already an item"."""
+        folder = os.path.join(self.tmp, "boardasm")
+        make_fcstd(os.path.join(folder, "box.FCStd"), [
+            ("Assembly", "Assembly::AssemblyObject", {"Label": "Box with board"}),
+            ("can_hub", "App::Part", {"Label": "can-hub", "PartNumber": "BW-01-01009-001"}),
+        ])
+        make_fcstd(os.path.join(folder, "inner.FCStd"), [  # a part file whose number sits on an inner object
+            ("Body", "PartDesign::Body", {"Label": "Body", "PartNumber": "BW-01-01010-001"}),
+        ])
+        found = self.by_name(vs.scan_for_import(folder))
+        self.assertEqual((found["box.FCStd"].kind, found["box.FCStd"].existing_part_number), ("assembly", ""))
+        self.assertEqual(found["inner.FCStd"].existing_part_number, "BW-01-01010-001")
+
     def test_scan(self):
         found = self.by_name(vs.scan_for_import(self.src, document_types=vs.DEFAULT_DOCUMENT_TYPES))
         self.assertEqual(sorted(found), sorted([

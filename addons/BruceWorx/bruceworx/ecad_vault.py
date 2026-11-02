@@ -134,7 +134,11 @@ def find_project(folder: str, name: str = "") -> Project:
         raise FileNotFoundError(f"no such folder: {folder}")
     found = sorted(n for n in os.listdir(folder) if n.endswith(".kicad_pro") and not n.startswith("._"))
     if name:
-        stem = os.path.splitext(os.path.basename(name))[0]
+        stem = os.path.basename(name)
+        for ext in (".kicad_pro", ".kicad_pcb", ".kicad_sch", ".pro"):  # a stem may hold dots: Leviathan_V1.3
+            if stem.endswith(ext):
+                stem = stem[:-len(ext)]
+                break
         found = [n for n in found if n[:-len(".kicad_pro")] == stem]
     if not found:
         raise ValueError(f"{folder} holds no KiCad project (.kicad_pro)" + (f" named {name}" if name else ""))

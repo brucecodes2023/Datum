@@ -114,6 +114,11 @@ class TestFolder(Base):
         with self.assertRaisesRegex(ValueError, "no KiCad project"):
             ev.find_project(os.path.join(self.src, "3dmodels"))
 
+    def test_find_project_with_a_dot_in_its_name(self):
+        make_project(self.src, stem="Leviathan_V1.3")
+        for name in ("Leviathan_V1.3", "Leviathan_V1.3.kicad_pro", "Leviathan_V1.3.kicad_pcb"):
+            self.assertEqual(ev.find_project(self.src, name).stem, "Leviathan_V1.3", name)
+
     def test_pack_is_deterministic_and_round_trips(self):
         a, b = os.path.join(self.tmp, "a.kicad.zip"), os.path.join(self.tmp, "b.kicad.zip")
         sha = ev.pack(self.src, a)

@@ -646,8 +646,14 @@ def _candidate(path: str, hashes: dict, document_types: dict | None = None,
     main = info["objects"][0] if info["objects"] and info["objects"][0][0] < 9 else None
     if main and main[2].get("Label") and not _GENERIC_LABEL_RE.fullmatch(main[2]["Label"]):
         candidate.label = main[2]["Label"]
-    candidate.existing_part_number = next(
-        (props["PartNumber"].upper() for _r, _o, props in info["objects"] if props.get("PartNumber")), "")
+    # The number belongs to the object that stands for the file. An assembly holding an inserted KiCad board
+    # (bruceworx_board: an App::Part with the board's PartNumber) is not that board (2 Nov 2026); a part file
+    # whose number sits on an inner object still finds it.
+    if main is not None and main[0] == 0:
+        candidate.existing_part_number = (main[2].get("PartNumber") or "").upper()
+    else:
+        candidate.existing_part_number = next(
+            (props["PartNumber"].upper() for _r, _o, props in info["objects"] if props.get("PartNumber")), "")
     if candidate.existing_part_number and existing_key(candidate.existing_part_number) is None:
         candidate.issues.append(Issue(
             "warning",
