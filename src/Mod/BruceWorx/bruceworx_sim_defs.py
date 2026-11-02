@@ -22,6 +22,8 @@ Named selections
     ``Selection`` objects (App::FeaturePython, property ``References`` = PropertyLinkSubList) in the study's group.
     A support, load or local size points at one with its hidden ``BW_Selection`` link; ``sync(study)`` copies the
     selection's references into that object's own ``References``, which the FEM writers read. Several objects share one.
+    An object may use several selections and have faces of its own beside them (``set_links``): its ``References`` are
+    the union, duplicates removed (hidden ``BW_Selections``, ``BW_OwnFaces``).
 
 Local mesh sizes
     ``LocalSize`` objects (``Size`` mm, ``References`` or a named selection) feed Netgen: ``write_size_file`` samples
@@ -38,7 +40,9 @@ from dataclasses import dataclass
 
 ROLE_PROP = "BW_Role"
 EXPR_PROP = "BW_Expr"
-LINK_PROP = "BW_Selection"
+LINK_PROP = "BW_Selection"  # the first selection (older documents have only this)
+LINKS_PROP = "BW_Selections"  # all of them
+OWN_PROP = "BW_OwnFaces"  # the object's own faces beside them
 META_PROP = "BW_ParamMeta"
 ORDER_PROP = "BW_ParamOrder"
 HOLDER_NAME = "Parameters"
@@ -671,37 +675,105 @@ def selection_named(analysis, label):
 def selection_users(analysis, sel):
     """The objects that point at the named selection."""
     return [o for o in getattr(analysis, "Group", []) or []
-            if LINK_PROP in o.PropertiesList and getattr(o, LINK_PROP) is not None and getattr(o, LINK_PROP).Name == sel.Name]
+            if any(x.Name == sel.Name for x in linked_all(o))]
 
 
-def link(obj, sel):
-    """Makes ``obj`` use the named selection ``sel`` (None: its own list again, keeping the faces it has)."""
-    if sel is None:
-        if LINK_PROP in obj.PropertiesList:
-            setattr(obj, LINK_PROP, None)
-        return
-    if "References" not in obj.PropertiesList:
-        raise DefsError(f"{obj.Label} has no faces to take from a selection")
-    if LINK_PROP not in obj.PropertiesList:
-        obj.addProperty("App::PropertyLink", LINK_PROP, "BW", "[BW] The named selection this object uses")
-        _hide(obj, LINK_PROP)
-    setattr(obj, LINK_PROP, sel)
-    _copy_refs(sel, obj)
+def linked_all(obj):
+    """The named selections an object uses, in order (the several-selection list; an older document has the single
+    ``BW_Selection`` link only, which counts as a list of one)."""
+    if LINKS_PROP in obj.PropertiesList:
+        return [x for x in getattr(obj, LINKS_PROP) or [] if x is not None]
+    one = getattr(obj, LINK_PROP, None) if LINK_PROP in obj.PropertiesList else None
+    return [one] if one is not None else []
 
 
 def linked(obj):
-    """The named selection an object uses, or None."""
-    if LINK_PROP in obj.PropertiesList:
-        return getattr(obj, LINK_PROP)
-    return None
+    """The first named selection an object uses, or None."""
+    found = linked_all(obj)
+    return found[0] if found else None
+
+
+def own_faces(obj):
+    """The object's own extra faces next to its named selections: [(object, [subs])]."""
+    if OWN_PROP in obj.PropertiesList:
+        return list(getattr(obj, OWN_PROP) or [])
+    return []
+
+
+def merge_refs(*lists):
+    """Several reference lists as one, duplicates removed, an object's sub-elements kept together in first-seen
+    order: [(object, [subs])]."""
+    order, grouped = [], {}
+    for refs in lists:
+        for base, subs in refs:
+            if base.Name not in grouped:
+                grouped[base.Name] = (base, [])
+                order.append(base.Name)
+            seen = grouped[base.Name][1]
+            for sub in ([subs] if isinstance(subs, str) else list(subs)):
+                if sub not in seen:
+                    seen.append(sub)
+    return [grouped[n] for n in order]
+
+
+def union_refs(obj):
+    """What the object's faces are: its named selections' references, then its own extra faces, duplicates removed."""
+    return merge_refs(*[list(sel.References) for sel in linked_all(obj)], own_faces(obj))
+
+
+def _ensure_link_props(obj):
+    if "References" not in obj.PropertiesList:
+        raise DefsError(f"{obj.Label} has no faces to take from a selection")
+    if LINK_PROP not in obj.PropertiesList:
+        obj.addProperty("App::PropertyLink", LINK_PROP, "BW", "[BW] The (first) named selection this object uses")
+        _hide(obj, LINK_PROP)
+    if LINKS_PROP not in obj.PropertiesList:
+        obj.addProperty("App::PropertyLinkList", LINKS_PROP, "BW", "[BW] The named selections this object uses")
+        _hide(obj, LINKS_PROP)
+    if OWN_PROP not in obj.PropertiesList:
+        obj.addProperty("App::PropertyLinkSubList", OWN_PROP, "BW", "[BW] Faces of its own, next to the named selections")
+        _hide(obj, OWN_PROP)
+
+
+def set_links(obj, sels, extra=None):
+    """Makes ``obj`` use the named selections ``sels`` (a list; empty: its own list again, keeping the faces it has)
+    plus its own extra faces ``extra`` ([(object, [subs])], None: as they are). Its References become the union."""
+    sels = [x for x in sels or [] if x is not None]
+    if not sels:
+        if LINKS_PROP in obj.PropertiesList and getattr(obj, LINKS_PROP):
+            setattr(obj, LINKS_PROP, [])
+        if LINK_PROP in obj.PropertiesList:
+            setattr(obj, LINK_PROP, None)
+        if OWN_PROP in obj.PropertiesList and getattr(obj, OWN_PROP):
+            setattr(obj, OWN_PROP, [])
+        return
+    _ensure_link_props(obj)
+    names = []
+    for x in sels:  # a selection once
+        if x.Name not in names:
+            names.append(x.Name)
+    unique = [next(x for x in sels if x.Name == n) for n in names]
+    setattr(obj, LINKS_PROP, unique)
+    setattr(obj, LINK_PROP, unique[0])
+    if extra is not None:
+        setattr(obj, OWN_PROP, merge_refs(extra))
+    _copy_refs(obj)
+
+
+def link(obj, sel):
+    """Makes ``obj`` use the named selection ``sel`` alone (None: its own list again, keeping the faces it has)."""
+    if sel is None:
+        set_links(obj, [])
+        return
+    set_links(obj, [sel], extra=[])
 
 
 def _refs_key(refs):
     return [(o.Name, tuple(s)) for o, s in refs]
 
 
-def _copy_refs(sel, obj):
-    refs = list(sel.References)
+def _copy_refs(obj):
+    refs = union_refs(obj)
     if _refs_key(refs) != _refs_key(list(obj.References)):
         obj.References = refs
         return True
@@ -709,11 +781,10 @@ def _copy_refs(sel, obj):
 
 
 def sync(analysis):
-    """Copies each named selection's references into the objects that use it. Returns the objects written."""
+    """Writes the union of each object's named selections and extra faces into its References. Returns the objects written."""
     written = []
     for obj in getattr(analysis, "Group", []) or []:
-        sel = linked(obj)
-        if sel is not None and "References" in obj.PropertiesList and _copy_refs(sel, obj):
+        if linked_all(obj) and "References" in obj.PropertiesList and _copy_refs(obj):
             written.append(obj)
     return written
 
@@ -724,7 +795,13 @@ def remove_selection(analysis, sel):
     doc.openTransaction("Delete named selection")
     try:
         for user in selection_users(analysis, sel):
-            setattr(user, LINK_PROP, None)
+            # the faces stay: those of the removed selection become the object's own, the other selections remain
+            rest = [x for x in linked_all(user) if x.Name != sel.Name]
+            own = merge_refs(own_faces(user), list(sel.References))
+            if rest:
+                set_links(user, rest, extra=own)
+            else:
+                set_links(user, [])
         doc.removeObject(sel.Name)
     except Exception as exc:
         doc.abortTransaction()
@@ -749,7 +826,8 @@ def make_local_size(analysis, size="2 mm", refs=None, selection=None, label="Loc
         obj.Size = size
         _ensure_refs(obj, "[BW] The faces, edges or bodies the size applies to")
         if selection is not None:
-            link(obj, selection)
+            sels = list(selection) if isinstance(selection, (list, tuple)) else [selection]
+            set_links(obj, sels, extra=_normalise_refs(doc, refs) if refs else [])
         elif refs:
             obj.References = _normalise_refs(doc, refs)
     except Exception as exc:

@@ -327,7 +327,7 @@ _SKIP = {"Label", "Label2", "Visibility", "Proxy", "Placement", "Scale", "Points
 # study properties that only change how results are shown, or that the solver writes back
 _DISPLAY = {"MeshNodeLimit", "StressMeasure", "SFThresholds", "SFColors", "MaterialUUID", "Model", "CaseFolder",
             "CfdSummary", "ThermalSummary", "TempMargin", "TempColors", "HDTLimit", "ProbePoint", "ProbeSet",
-            "PressureFixed", "PressureMin", "PressureMax", "ModeScale", FINGERPRINT_PROP}
+            "PressureFixed", "PressureMin", "PressureMax", "ModeScale", "Mesher", FINGERPRINT_PROP}
 _STUDY_GROUPS = {"Study", "Modal", "Excitation", "Buckling", "Thermal", "Airflow"}
 
 
@@ -438,6 +438,8 @@ def fingerprints(analysis):
         mesh = m["mesh"]
         local = defs.local_size_signature(analysis)
         parts = ("mesh", out["geo/part"], _obj_settings(mesh, {"MeshParams"}, {"MeshSizeFile"}) if mesh is not None else "")
+        if _get(analysis, "Mesher", "Netgen") != "Netgen":  # the mesher changes the mesh; Netgen adds nothing, so older hashes stay
+            parts += (("mesher", str(_get(analysis, "Mesher", "Netgen"))),)
         mesh_fp = _hash(*(parts + ((local,) if local else ())))
     out["mesh/main"] = mesh_fp
     out["step/main"] = _hash("solution", study, solver, mesh_fp, sorted(mat_fps), sorted(phys_fps), out["geo/part"])
@@ -646,6 +648,7 @@ REFS = ("References", "Faces, edges or vertices the setting applies to")
 
 
 NO_SELECTION = "(own list)"
+SEVERAL_SELECTIONS = "(several)"  # what the single pick shows when the setting uses more than one
 
 
 def _refs_fields(analysis=None):
@@ -653,9 +656,14 @@ def _refs_fields(analysis=None):
     if analysis is not None:
         import bruceworx_sim_defs as defs
 
-        names = [NO_SELECTION] + [o.Label for o in defs.selections(analysis)]
+        names = [NO_SELECTION] + [o.Label for o in defs.selections(analysis)] + [SEVERAL_SELECTIONS]
         out.append(_f("NamedSelection", "Named selection", "enum", choices=names, access="namedsel",
                       help="Use a named selection from Global Definitions instead of this setting's own faces"))
+        out.append(_f("NamedSelections", "Named selections", "text", access="namedsels",
+                      help="Several named selections, separated by commas; the faces are their union, "
+                           "duplicates removed (empty: none)"))
+        out.append(_f("ExtraFaces", "Extra faces", "selection", access="ownfaces",
+                      help="Faces of its own, added to those of the named selections"))
     out.append(_f("References", "Selection", "selection", help="Faces, edges or vertices the setting applies to"))
     return out
 
@@ -761,7 +769,10 @@ def settings(node):
                 _f("Fineness", "Fineness", "enum", choices=sim.FINENESS),
                 _f("SecondOrder", "Second order (Tet10)", "bool"),
                 A("MeshNodeLimit", "Node limit", "int", help="Hard limit on the estimated nodes; 0 = the preference"))
-            add("Time limit", _readonly("timelimit", "Time limit",
+            add("Mesher and time limit",
+                A("Mesher", "Mesher", "enum", choices=("Netgen", "Gmsh"),
+                  help="The volume mesher tried first; the other is the next try when it fails. Netgen is the default"),
+                _readonly("timelimit", "Time limit",
                                         help="How long one Netgen try may take before it is stopped; automatic from the node estimate"),
                 A("MeshTimeLimit", "Own limit (0 = automatic)", "float", "s", min=0.0,
                   help="Seconds one Netgen try may take in its worker process; 0 = automatic"))
@@ -1040,8 +1051,18 @@ def _access_get(node, f, analysis, target):
     if kind == "namedsel":
         import bruceworx_sim_defs as defs
 
-        sel = defs.linked(target)
-        return sel.Label if sel is not None else NO_SELECTION
+        found = defs.linked_all(target)
+        if len(found) > 1:
+            return SEVERAL_SELECTIONS
+        return found[0].Label if found else NO_SELECTION
+    if kind == "namedsels":
+        import bruceworx_sim_defs as defs
+
+        return ", ".join(x.Label for x in defs.linked_all(target))
+    if kind == "ownfaces":
+        import bruceworx_sim_defs as defs
+
+        return _selection_get(defs.own_faces(target))
     if kind == "card":
         uuid = _get(analysis, "MaterialUUID", "")
         cards = _card_choices()
@@ -1262,6 +1283,8 @@ def _write(node, f, target, analysis, new):
         elif kind == "namedsel":
             import bruceworx_sim_defs as defs
 
+            if new == SEVERAL_SELECTIONS:
+                return  # only a description of the state: change it with Named selections
             sel = None if new == NO_SELECTION else defs.selection_named(analysis, new)
             if new != NO_SELECTION and sel is None:
                 raise ValueError(f"no named selection {new!r}")
@@ -1269,6 +1292,29 @@ def _write(node, f, target, analysis, new):
             if sel is not None:
                 node_doc = analysis.Document
                 node_doc.recompute([target]) if target.TypeId.startswith("Fem::Constraint") else None
+        elif kind == "namedsels":
+            import bruceworx_sim_defs as defs
+
+            labels = [t.strip() for t in str(new).split(",") if t.strip() and t.strip() != NO_SELECTION]
+            sels = []
+            for label_ in labels:
+                sel = defs.selection_named(analysis, label_)
+                if sel is None:
+                    raise ValueError(f"no named selection {label_!r}")
+                sels.append(sel)
+            if sels:
+                defs.set_links(target, sels)  # its extra faces stay
+            else:
+                defs.set_links(target, [])
+            if sels and target.TypeId.startswith("Fem::Constraint"):
+                analysis.Document.recompute([target])
+        elif kind == "ownfaces":
+            import bruceworx_sim_defs as defs
+
+            if not defs.linked_all(target):
+                raise ValueError(f"{target.Label} uses no named selection: give it its faces in Selection, "
+                                 "or pick a named selection first")
+            defs.set_links(target, defs.linked_all(target), extra=new or [])
         elif kind == "card":
             values = dict(_card_choices()).get(new)
             if values is None:

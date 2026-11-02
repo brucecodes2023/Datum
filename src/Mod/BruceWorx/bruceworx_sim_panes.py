@@ -569,8 +569,8 @@ def select_key(key, from_tree=False, force=False):
         return True
     _p["key"] = key
     _p["pick"] = None
-    if key == "mesh/main" and not model.is_airflow(study) and "MeshTimeLimit" not in study.PropertiesList:
-        sim.ensure_study_properties(study)  # an older study gets its time-limit setting when its Mesh node is opened
+    if key == "mesh/main" and not model.is_airflow(study) and ("MeshTimeLimit" not in study.PropertiesList or "Mesher" not in study.PropertiesList):
+        sim.ensure_study_properties(study)  # an older study gets its mesher and time-limit settings when its Mesh node is opened
         node = model.find_node(study, key) or node
     build_form(node)
     if _refs_field(node) is not None or _p["fields"].get("Direction") or _p["fields"].get("RotationAxis"):

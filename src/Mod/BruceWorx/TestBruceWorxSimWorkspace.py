@@ -700,6 +700,12 @@ class TestPanesInWindow(unittest.TestCase):
         self.assertEqual(self.panes.field_text("timelimit"), "5.0 min (set)")
         self.assertTrue(self.panes.edit("MeshTimeLimit", "0"))
         self.assertTrue(self.panes.field_text("timelimit").startswith("automatic ("))
+        # the Mesher choice sits beside the time limit, Netgen by default
+        self.assertIn("Mesher", self.panes.field_names())
+        self.assertEqual(str(study.Mesher), "Netgen")
+        self.assertTrue(self.panes.edit("Mesher", "Gmsh"))
+        self.assertEqual(str(study.Mesher), "Gmsh")
+        self.assertTrue(self.panes.edit("Mesher", "Netgen"))
         self.panes._set_running("mesh", True)  # the Mesh node's button reads Cancel while it meshes
         self.assertIn("Cancel", self.panes._p["buttons"])
         self.assertEqual(self.panes._p["buttons"]["Cancel"].text(), "Cancel")

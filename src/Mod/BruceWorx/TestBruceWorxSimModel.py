@@ -147,7 +147,7 @@ class TestSettings(unittest.TestCase):
     def test_force_fields_and_units(self):
         n = node(self.analysis, "phys/Force")
         names = [f.name for s in model.settings(n) for f in s.fields]
-        self.assertEqual(names, ["NamedSelection", "References", "Force", "Direction", "Reversed"])
+        self.assertEqual(names, ["NamedSelection", "NamedSelections", "ExtraFaces", "References", "Force", "Direction", "Reversed"])
         self.assertAlmostEqual(model.get_value(n, "Force"), 500.0)
         model.set_value(n, "Force", "2 kN")
         self.assertAlmostEqual(model.get_value(n, "Force"), 2000.0)
@@ -666,6 +666,101 @@ class TestNamedSelections(unittest.TestCase):
         self.assertIsNone(defs.linked(self.doc.getObject("Force")))
         self.assertEqual(model.get_value(node(self.analysis, "phys/Force"), "References"), [(self.cut.Name, self.right)])
         self.assertEqual(defs.selections(self.analysis), [])
+
+    def faces_of(self, obj):
+        return sorted(s for _o, subs in obj.References for s in subs)
+
+    def test_several_selections_and_own_faces_make_a_union(self):
+        bottom = face_at(self.shape, 1, False)
+        top = face_at(self.shape, 1, True)
+        defs.make_selection(self.analysis, "Right end", [(self.cut, [self.right])])
+        defs.make_selection(self.analysis, "Both", [(self.cut, [self.right, bottom])])  # overlaps the first
+        force = self.doc.getObject("Force")
+        n = node(self.analysis, "phys/Force")
+        model.set_value(n, "NamedSelections", "Right end, Both")
+        self.assertEqual(model.get_value(n, "NamedSelections"), "Right end, Both")
+        self.assertEqual(model.get_value(n, "NamedSelection"), model.SEVERAL_SELECTIONS)
+        self.assertEqual(self.faces_of(force), sorted([self.right, bottom]))  # the shared face once
+        model.set_value(n, "ExtraFaces", [(self.cut.Name, [top, self.right])])
+        self.assertEqual(self.faces_of(force), sorted([self.right, bottom, top]))
+        self.assertEqual(model.get_value(n, "ExtraFaces"), [(self.cut.Name, top), (self.cut.Name, self.right)])
+        # the geometry follows: editing a selection moves every user, extra faces stay
+        sn = node(self.analysis, f"defs/sel/{defs.selection_named(self.analysis, 'Right end').Name}")
+        model.set_value(sn, "References", [(self.cut.Name, [self.left])])
+        self.assertEqual(self.faces_of(force), sorted([self.left, self.right, bottom, top]))
+        self.assertEqual(model.get_value(node(self.analysis, f"defs/sel/{defs.selection_named(self.analysis, 'Both').Name}"),
+                                         "users"), "Force")
+        marks = model.state(self.analysis, precheck=False)
+        self.assertEqual(marks["step/main"], "stale")
+        # the single pick still works and drops back to one
+        model.set_value(n, "NamedSelection", "Both")
+        self.assertEqual(self.faces_of(force), sorted([self.right, bottom]))
+        # an own list again keeps the faces it has
+        model.set_value(n, "NamedSelections", "")
+        self.assertEqual(self.faces_of(force), sorted([self.right, bottom]))
+        self.assertEqual(defs.linked_all(force), [])
+        with self.assertRaises(ValueError):
+            model.set_value(n, "NamedSelections", "No such")
+        with self.assertRaises(ValueError):
+            model.set_value(n, "ExtraFaces", [(self.cut.Name, [top])])
+
+    def test_removing_one_of_several_keeps_its_faces(self):
+        bottom = face_at(self.shape, 1, False)
+        a = defs.make_selection(self.analysis, "A", [(self.cut, [self.right])])
+        defs.make_selection(self.analysis, "B", [(self.cut, [bottom])])
+        force = self.doc.getObject("Force")
+        model.set_value(node(self.analysis, "phys/Force"), "NamedSelections", "A, B")
+        defs.remove_selection(self.analysis, a)
+        self.assertEqual([x.Label for x in defs.linked_all(force)], ["B"])
+        self.assertEqual(self.faces_of(force), sorted([self.right, bottom]))
+
+    def test_several_selections_survive_save_and_load(self):
+        bottom = face_at(self.shape, 1, False)
+        defs.make_selection(self.analysis, "A", [(self.cut, [self.right])])
+        defs.make_selection(self.analysis, "B", [(self.cut, [bottom])])
+        n = node(self.analysis, "phys/Force")
+        model.set_value(n, "NamedSelections", "A, B")
+        path = os.path.join(tempfile.mkdtemp(), "s.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        doc = App.openDocument(path)
+        analysis = sim.studies(doc)[0]
+        n = model.find_node(analysis, "phys/Force")
+        self.assertEqual(model.get_value(n, "NamedSelections"), "A, B")
+        self.assertEqual(self.faces_of(doc.getObject("Force")), sorted([self.right, bottom]))
+
+    def test_an_older_single_link_still_counts(self):
+        defs.make_selection(self.analysis, "A", [(self.cut, [self.right])])
+        force = self.doc.getObject("Force")
+        sel = defs.selection_named(self.analysis, "A")
+        force.addProperty("App::PropertyLink", defs.LINK_PROP, "BW", "")  # as an older document has it
+        setattr(force, defs.LINK_PROP, sel)
+        self.assertEqual(defs.linked_all(force), [sel])
+        self.assertEqual(model.get_value(node(self.analysis, "phys/Force"), "NamedSelections"), "A")
+
+
+class TestMesherChoice(unittest.TestCase):
+    def setUp(self):
+        self.doc, self.analysis, self.cut, self.shape = plate_study(meshed=True)
+        fake_result(self.analysis)
+        model.record(self.analysis, "solution")
+
+    def tearDown(self):
+        close_all()
+
+    def test_mesher_field_default_and_stale(self):
+        n = node(self.analysis, "mesh/main")
+        self.assertIn("Mesher", [f.name for sec in model.settings(n) for f in sec.fields])
+        self.assertEqual(model.get_value(n, "Mesher"), "Netgen")
+        before = model.fingerprints(self.analysis)
+        model.set_value(n, "Mesher", "Gmsh")
+        self.assertEqual(str(self.analysis.Mesher), "Gmsh")
+        marks = model.state(self.analysis, precheck=False)
+        self.assertEqual((marks["mesh/main"], marks["step/main"]), ("stale", "stale"))
+        model.set_value(n, "Mesher", "Netgen")
+        self.assertEqual(model.fingerprints(self.analysis), before)  # Netgen leaves every fingerprint as it was
+        with self.assertRaises(ValueError):
+            model.set_value(n, "Mesher", "Tetgen")
 
 
 class TestLocalSize(unittest.TestCase):

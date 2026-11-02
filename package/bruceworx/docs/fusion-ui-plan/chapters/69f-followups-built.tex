@@ -1,0 +1,54 @@
+%======================================================================
+\subsection{PDM-14 and SIM-07 follow-ups --- Built, 1 Nov}\label{sec:followups-built}
+%======================================================================
+
+Seven follow-ups you approved after the PDM-14 and SIM-07 phase~1 reports, in two commits (PDM-14: four items;
+SIM-07: the named-selection and Mesher items). The spin-then-vibrate validation case was \emph{not} built: see
+the open questions.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item \textbf{Save As lists the simulation filter.} When the active document is a simulation (its file ends in
+        \code{.vlsim}, or it holds the \code{Simulation source} object of a study copied from a part), the Save As
+        dialog lists ``Vector Labs simulation (*.vlsim)'' first and FCStd second; a normal document still sees
+        FCStd only (\file{src/Gui/Document.cpp}, \code{Document::saveAs}). A name typed without a suffix takes
+        \code{.vlsim} from the first filter. The native dialog cannot be driven by a test: the C++ builds, the
+        filter logic is two lines.
+  \item \textbf{Refresh Pictures records the shape fingerprint} of a part, assembly or bought item that has none, in
+        the same Mac-side cache as the pictures (never in the vault), so studies of parts checked in before PDM-14
+        stop reading ``unknown''. A part with no solid records an empty fingerprint, so it is not opened again.
+        An assembly drawn from an older work copy is skipped (that file is not this version's shape).
+  \item \textbf{Parts with several bodies:} the fingerprint covers all the visible solids (a compound: volumes and
+        areas summed, the box of all, face and solid counts summed). One body gives exactly the shape it always gave;
+        a test pins the box value recorded before the change (\code{7c4ec29572c5}).
+  \item \textbf{All projects} no longer shows the four totals tiles when project cards are shown. A vault without
+        projects keeps them. The tiles were in \file{bruceworx\_dashboard.py}, not in the project page (whose own
+        count tiles stay).
+  \item \textbf{A load, support or local size may use several named selections plus faces of its own.} Its faces
+        are the union, duplicates removed. Settings: \emph{Named selections} (comma separated) and \emph{Extra
+        faces}; the single \emph{Named selection} pick still works and reads ``(several)'' when there are more.
+        Editing a selection moves every user and the solution goes stale, as before; removing one of several keeps
+        its faces as the object's own. Older documents (one \code{BW\_Selection} link) read as a list of one.
+  \item \textbf{Mesher} (Netgen or Gmsh) is a setting of the Mesh node beside the time limit; Netgen is the
+        default and leaves every existing fingerprint unchanged; Gmsh marks the mesh and the solution stale.
+\end{itemize}
+
+\paragraph{Decided while building.}
+\begin{itemize}[nosep]
+  \item The ``refresh'' fingerprint is cached by the version's hash, like the summary, so it costs one file open.
+  \item \code{Mesher} is left out of the study fingerprint and put into the mesh fingerprint only when it is not
+        Netgen: adding the property to an older study does not make it stale.
+  \item Extra faces cannot be set on an object that uses no named selection (it has its own list already).
+\end{itemize}
+
+\paragraph{Tests.} Addon unit tests 730 OK; headless TestBruceWorxSimModel 50 OK, Preview 12 OK, Vlsim 2 OK; GUI TestBruceWorxSimWorkspace 32 OK, TestBruceWorxProjectPage 9 OK. Besides that, \code{TestBruceWorxSimVault} has one error that
+predates this work (\code{test\_results\_summary\_and\_stripped\_copy}, GUI run: the stripped copy loses
+\code{max\_vm} after a re-save; it fails the same with the earlier module).
+
+\paragraph{Open questions.}
+\begin{itemize}[nosep]
+  \item \textbf{Spin, then vibration modes.} I found no closed form for a spinning disc I could cite with
+        confidence: Lamb and Southwell (1921) and Southwell (1922, Proc.\ R.\ Soc.\ A 101, 133--153) are the
+        sources, but their formulas are not available to me as text. Not guessed. Options: you supply the paper, or
+        I use the rotating cantilever beam (Wright et al., 1982) as the benchmark instead.
+\end{itemize}
