@@ -145,6 +145,17 @@ public:
 
     // Auto generated code (Tools/params_utils.py:138)
     //@{
+    /// Accessor for parameter ActiveDocumentOnly
+    static const bool& getActiveDocumentOnly();
+    static const bool& defaultActiveDocumentOnly();
+    static void removeActiveDocumentOnly();
+    static void setActiveDocumentOnly(const bool& v);
+    static const char* docActiveDocumentOnly();
+    static void onActiveDocumentOnlyChanged();
+    //@}
+
+    // Auto generated code (Tools/params_utils.py:138)
+    //@{
     /// Accessor for parameter StatusTimeout
     static const long& getStatusTimeout();
     static const long& defaultStatusTimeout();

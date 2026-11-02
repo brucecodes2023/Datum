@@ -39,6 +39,24 @@ STOCK_THEMES = ("FreeCAD Light", "FreeCAD Dark", "FreeCAD Classic")
 HEALED = "FirstStartChecked"
 
 
+TREE_GROUP = "BaseApp/Preferences/TreeView"
+TREE_KEY = "ActiveDocumentOnly"
+TREE_DONE = "TreeActiveOnlyDefaulted"
+
+
+def default_tree_active_only(store) -> bool:
+    """First start: the model tree lists only the active document (Vector Labs), unless the user already
+    set "Active document only". Linked documents open for an assembly would otherwise bury it. Returns
+    True when the default was written."""
+    if not switch_on(store) or store.get(GROUP, TREE_DONE, "bool", False):
+        return False
+    store.set(GROUP, TREE_DONE, "bool", True)
+    if store.has(TREE_GROUP, TREE_KEY, "bool"):
+        return False
+    store.set(TREE_GROUP, TREE_KEY, "bool", True)
+    return True
+
+
 def switch_on(store) -> bool:
     return bool(store.get(GROUP, SWITCH, "bool", True))
 
@@ -214,6 +232,10 @@ def startup() -> str:
             )
         except Exception:
             pass
+    try:
+        default_tree_active_only(store)
+    except Exception as exc:
+        _warn(f"BruceWorx tree default not applied: {exc}")
     _live["last"] = switch_on(store)
     if _live["observer"] is None:
         try:

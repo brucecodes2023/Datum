@@ -51,6 +51,7 @@ public:
     bool SyncPlacement;
     bool RecordSelection;
     long DocumentMode;
+    bool ActiveDocumentOnly;
     long StatusTimeout;
     long SelectionTimeout;
     long PreSelectionTimeout;
@@ -106,6 +107,8 @@ public:
         funcs["RecordSelection"] = &TreeParamsP::updateRecordSelection;
         DocumentMode = handle->GetInt("DocumentMode", 2);
         funcs["DocumentMode"] = &TreeParamsP::updateDocumentMode;
+        ActiveDocumentOnly = handle->GetBool("ActiveDocumentOnly", false);
+        funcs["ActiveDocumentOnly"] = &TreeParamsP::updateActiveDocumentOnly;
         StatusTimeout = handle->GetInt("StatusTimeout", 100);
         funcs["StatusTimeout"] = &TreeParamsP::updateStatusTimeout;
         SelectionTimeout = handle->GetInt("SelectionTimeout", 100);
@@ -235,6 +238,15 @@ public:
         if (self->DocumentMode != v) {
             self->DocumentMode = v;
             TreeParams::onDocumentModeChanged();
+        }
+    }
+    // Auto generated code (Tools/params_utils.py:296)
+    static void updateActiveDocumentOnly(TreeParamsP* self)
+    {
+        auto v = self->handle->GetBool("ActiveDocumentOnly", false);
+        if (self->ActiveDocumentOnly != v) {
+            self->ActiveDocumentOnly = v;
+            TreeParams::onActiveDocumentOnlyChanged();
         }
     }
     // Auto generated code (Tools/params_utils.py:288)
@@ -704,6 +716,38 @@ void TreeParams::setDocumentMode(const long& v)
 void TreeParams::removeDocumentMode()
 {
     instance()->handle->RemoveInt("DocumentMode");
+}
+
+// Auto generated code (Tools/params_utils.py:350)
+const char* TreeParams::docActiveDocumentOnly()
+{
+    return "";
+}
+
+// Auto generated code (Tools/params_utils.py:358)
+const bool& TreeParams::getActiveDocumentOnly()
+{
+    return instance()->ActiveDocumentOnly;
+}
+
+// Auto generated code (Tools/params_utils.py:366)
+const bool& TreeParams::defaultActiveDocumentOnly()
+{
+    const static bool def = false;
+    return def;
+}
+
+// Auto generated code (Tools/params_utils.py:375)
+void TreeParams::setActiveDocumentOnly(const bool& v)
+{
+    instance()->handle->SetBool("ActiveDocumentOnly", v);
+    instance()->ActiveDocumentOnly = v;
+}
+
+// Auto generated code (Tools/params_utils.py:384)
+void TreeParams::removeActiveDocumentOnly()
+{
+    instance()->handle->RemoveBool("ActiveDocumentOnly");
 }
 
 // Auto generated code (Tools/params_utils.py:350)
@@ -1751,6 +1795,11 @@ void TreeParams::onCheckBoxesSelectionChanged()
 void TreeParams::onDocumentModeChanged()
 {
     App::GetApplication().setActiveDocument(App::GetApplication().getActiveDocument());
+}
+
+void TreeParams::onActiveDocumentOnlyChanged()
+{
+    TreeWidget::refreshDocumentVisibility();
 }
 
 void TreeParams::onResizableColumnChanged()

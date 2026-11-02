@@ -1,0 +1,28 @@
+%======================================================================
+\subsection{UIX --- Built, 2 Nov: model tree ``Active document only''}\label{sec:tree-active-only-built}
+%======================================================================
+
+Opening the TL printer and then one of its sub-assemblies loaded about forty linked documents, and each one was a
+top-level item in the model tree. The tree now has a switch that lists only the active document.
+
+\paragraph{What you can do now.}
+\begin{itemize}[nosep]
+  \item Right-click in the tree, \emph{Tree Settings} $\rightarrow$ \emph{Active Document Only}, or tick
+        \emph{Model tree: active document only} in Preferences $\rightarrow$ BruceWorx.
+  \item On: one top-level item, the active document. A document open only because something links to it is not
+        listed on its own; its objects still appear under the links that use them. Changing tab, opening a file or
+        closing the active document updates the list. A document opened while another is active stays out of the list
+        until you activate it.
+  \item Off: the tree is as it was.
+  \item First start of Vector Labs: the switch is turned on once, unless you had already set it.
+\end{itemize}
+
+\paragraph{Decided while building.}
+FreeCAD already had a hidden setting for this (\code{TreeView/DocumentMode} $=0$ hides every document but the active
+one) with no menu entry and no preference box, and it did not hide documents opened later. It is kept and still
+honoured. The new boolean \code{TreeView/ActiveDocumentOnly} is what the menu and the preference box set, because a
+preference check box needs a boolean.
+
+\paragraph{Tests.} \file{TestBruceWorxTreeActiveOnly}: an assembly linking two saved documents shows three items
+off and one on; activating a linked document shows that one; closing the active one leaves one; new documents stay
+out of the list until activated.

@@ -135,6 +135,8 @@ public:
     void itemSearch(const QString& text, bool select);
 
     static void synchronizeSelectionCheckBoxes();
+    /// [BW] Show or hide the document items for the "Active document only" setting.
+    static void refreshDocumentVisibility();
     static void updateVisibilityIcons();
 
     QList<QTreeWidgetItem*> childrenOfItem(const QTreeWidgetItem& item) const;
@@ -234,6 +236,7 @@ private:
     void slotDeleteDocument(const Gui::Document&);
     void slotRenameDocument(const Gui::Document&);
     void slotActiveDocument(const Gui::Document&);
+    void applyDocumentVisibility(const Gui::Document* active);
     void slotRelabelDocument(const Gui::Document&);
     void slotShowHidden(const Gui::Document&);
     void slotChangedViewObject(const Gui::ViewProvider&, const App::Property&);

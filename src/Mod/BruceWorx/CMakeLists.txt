@@ -116,6 +116,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxSelectFilterGui.py
     bruceworx_autoactivate.py
     TestBruceWorxAutoActivate.py
+    TestBruceWorxTreeActiveOnly.py
     TestBruceWorxFastOpen.py
     TestBruceWorxTimeline.py
     bruceworx_inspector.py

@@ -51,6 +51,7 @@ Params = [
     ParamBool("SyncPlacement", False),
     ParamBool("RecordSelection", True),
     ParamInt("DocumentMode", 2, on_change=True),
+    ParamBool("ActiveDocumentOnly", False, on_change=True),
     ParamInt("StatusTimeout", 100),
     ParamInt("SelectionTimeout", 100),
     ParamInt("PreSelectionTimeout", 500),

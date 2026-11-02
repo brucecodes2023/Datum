@@ -95,6 +95,14 @@ const int TreeWidget::ObjectType = 1001;
 static bool _DraggingActive;
 static bool _DragEventFilter;
 
+// [BW] "Active document only": the tree lists just the active document. Documents open only because
+// something links to them are not listed; their objects still show under the links that use them.
+// DocumentMode 0 (the older switch) means the same.
+static bool isActiveDocumentOnly()
+{
+    return TreeParams::getActiveDocumentOnly() || TreeParams::getDocumentMode() == 0;
+}
+
 static bool isVisibilityIconEnabled()
 {
     return TreeParams::getVisibilityIcon();
@@ -1521,6 +1529,24 @@ void TreeWidget::contextMenuEvent(QContextMenuEvent* e)
     internalNameAction->setChecked(!hGrp->GetBool("HideInternalNames", true));
 
     settingsMenu.addAction(internalNameAction);
+
+    // [BW] Only the active document is listed (linked documents appear under their links).
+    QAction* activeOnlyAction = new QAction(tr("Active Document Only"), this);
+    activeOnlyAction->setStatusTip(
+        tr("Lists only the active document. Documents open because something links to them are not "
+           "listed on their own; their objects still show under the links that use them.")
+    );
+    activeOnlyAction->setCheckable(true);
+    activeOnlyAction->setChecked(isActiveDocumentOnly());
+    settingsMenu.addAction(activeOnlyAction);
+    QObject::connect(activeOnlyAction, &QAction::triggered, this, [activeOnlyAction]() {
+        bool on = activeOnlyAction->isChecked();
+        TreeParams::setActiveDocumentOnly(on);
+        if (!on && TreeParams::getDocumentMode() == 0) {
+            TreeParams::setDocumentMode(2);
+        }
+        TreeWidget::refreshDocumentVisibility();
+    });
 
     QObject::connect(
         internalNameAction,
@@ -3422,6 +3448,27 @@ void TreeWidget::slotNewDocument(const Gui::Document& Doc, bool isMainDoc)
     item->setIcon(0, *documentPixmap);
     item->setText(0, QString::fromUtf8(Doc.getDocument()->Label.getValue()));
     DocumentMap[&Doc] = item;
+    // [BW] A document opened while another is active stays out of the list until it is activated.
+    auto active = Application::Instance->activeDocument();
+    if (isActiveDocumentOnly() && active && active != &Doc) {
+        item->setHidden(true);
+    }
+}
+
+void TreeWidget::applyDocumentVisibility(const Gui::Document* active)
+{
+    bool only = isActiveDocumentOnly() && active;
+    for (auto& v : DocumentMap) {
+        v.second->setHidden(only && v.first != active);
+    }
+}
+
+void TreeWidget::refreshDocumentVisibility()
+{
+    auto active = Application::Instance->activeDocument();
+    for (auto tree : Instances) {
+        tree->applyDocumentVisibility(active);
+    }
 }
 
 
@@ -3549,7 +3596,7 @@ void TreeWidget::slotActiveDocument(const Gui::Document& Doc)
     for (auto it = DocumentMap.begin(); it != DocumentMap.end(); ++it) {
         QFont f = it->second->font(0);
         f.setBold(it == jt);
-        it->second->setHidden(0 == displayMode && it != jt);
+        it->second->setHidden(isActiveDocumentOnly() && it != jt);
         if (2 == displayMode) {
             it->second->setExpanded(it == jt);
         }
