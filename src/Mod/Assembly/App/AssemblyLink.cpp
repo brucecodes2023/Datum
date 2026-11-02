@@ -356,6 +356,55 @@ void AssemblyLink::synchronizeRoutedItems(AssemblyObject* assembly)
     }
 }
 
+// [BW] Nested flexible sub-assemblies (Top > Gantry > X Axis, all flexible).
+// A flexible AssemblyLink keeps an identity placement and its child links carry the placements
+// the solver works with. A flexible AssemblyLink inside another one (a "nested" one) has its
+// children seated here like the outer one seats its own: from the layout of what it links.
+static bool isNestedInAssemblyLink(const AssemblyLink* link)
+{
+    for (auto* obj : link->getInList()) {
+        if (obj->isDerivedFrom<AssemblyLink>()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// The placement of the component 'obj' of the linked assembly, in the layout of the linked object:
+// the component's own placement when the link shows an assembly, the placement of the child link
+// that shows it when the link shows another (flexible, already laid out) AssemblyLink.
+static bool sourcePlacement(const AssemblyLink* link, App::DocumentObject* obj, Base::Placement& plc)
+{
+    auto* src = freecad_cast<AssemblyLink*>(link->LinkedObject.getValue());
+    if (!src) {
+        auto* prop = dynamic_cast<App::PropertyPlacement*>(obj->getPropertyByName("Placement"));
+        if (!prop) {
+            return false;
+        }
+        plc = prop->getValue();
+        return true;
+    }
+    for (auto* child : src->Group.getValues()) {
+        App::DocumentObject* shown = nullptr;
+        if (auto* childAsm = freecad_cast<AssemblyLink*>(child)) {
+            shown = childAsm->getLinkedObject2(false);
+        }
+        else if (auto* childLink = dynamic_cast<App::Link*>(child)) {
+            shown = childLink->getLinkedObject(false);
+        }
+        if (shown != obj) {
+            continue;
+        }
+        auto* prop = dynamic_cast<App::PropertyPlacement*>(child->getPropertyByName("Placement"));
+        if (!prop) {
+            return false;
+        }
+        plc = prop->getValue();
+        return true;
+    }
+    return false;
+}
+
 void AssemblyLink::synchronizeComponents()
 {
     App::Document* doc = getDocument();
@@ -366,6 +415,24 @@ void AssemblyLink::synchronizeComponents()
     }
 
     objLinkMap.clear();
+
+    // [BW] A nested flexible AssemblyLink is given its outer link's frame as a placement (see
+    // onChanged). It moves that into its children, so that it stays at the identity.
+    const bool seatChildren = !isRigid() && isNestedInAssemblyLink(this);
+    if (seatChildren && !Placement.getValue().isIdentity()) {
+        const Base::Placement frame = Placement.getValue();
+        for (auto* child : Group.getValues()) {
+            if (child && (child->isDerivedFrom<App::Link>() || child->isDerivedFrom<AssemblyLink>())
+                && !child->isLinkGroup() && !isRoutedCopy(child)) {
+                auto* prop
+                    = dynamic_cast<App::PropertyPlacement*>(child->getPropertyByName("Placement"));
+                if (prop) {
+                    prop->setValue(frame * prop->getValue());
+                }
+            }
+        }
+        Placement.setValue(Base::Placement());
+    }
 
     std::vector<App::DocumentObject*> assemblyGroup = assembly->Group.getValues();
     std::vector<App::DocumentObject*> assemblyLinkGroup = Group.getValues();
@@ -475,10 +542,18 @@ void AssemblyLink::synchronizeComponents()
                     = doc->addObject("Assembly::AssemblyLink", obj->getNameInDocument());
                 auto* subAsmLink = static_cast<AssemblyLink*>(newObj);
                 subAsmLink->LinkedObject.setValue(obj);
-                subAsmLink->Rigid.setValue(asmLink->Rigid.getValue());
                 subAsmLink->Label.setValue(obj->Label.getValue());
                 addObject(subAsmLink);
+                // [BW] after addObject: setting Rigid fills the new link, and a nested flexible one
+                // must know that it is nested to seat its children.
+                subAsmLink->Rigid.setValue(asmLink->Rigid.getValue());
                 link = subAsmLink;
+                if (seatChildren) {
+                    Base::Placement plc;  // [BW] a flexible one has the identity, but make sure
+                    if (sourcePlacement(this, obj, plc)) {
+                        subAsmLink->Placement.setValue(plc);
+                    }
+                }
             }
             else if (obj->isDerivedFrom<App::Link>() && obj->isLinkGroup()) {
                 auto* srcLink = static_cast<App::Link*>(obj);
@@ -512,6 +587,14 @@ void AssemblyLink::synchronizeComponents()
                 newLink->Label.setValue(obj->Label.getValue());
                 addObject(newLink);
                 link = newLink;
+                if (seatChildren) {
+                    // [BW] Seat it like its source: a new link would sit at the identity until
+                    // the solver moves it, and the solver does not reach it from outside.
+                    Base::Placement plc;
+                    if (sourcePlacement(this, obj, plc)) {
+                        newLink->Placement.setValue(plc);
+                    }
+                }
             }
         }
 
