@@ -9,5 +9,16 @@ selected. It stays out when the file has two or more assemblies, while a sketch,
 assembly is open, while the document is still loading or recomputing (checked again for five seconds), and outside
 the Design workspace (Simulation, Drawing, Manufacture stay where they are). Setting the edit from code does not
 switch workbench; only the double-click does. The switch is Preferences $>$ BruceWorx $>$ ``Activate the assembly
-when a file opens'' (\code{BruceWorx/AutoActivateAssembly}, on). Code: \file{bruceworx\_autoactivate.py}; it
-steps aside if the stopgap add-on VLAutoActivate is loaded. Tests: \file{TestBruceWorxAutoActivate.py} (9).
+or body when a file opens'' (\code{BruceWorx/AutoActivateAssembly}, on). Code: \file{bruceworx\_autoactivate.py}; it
+steps aside if the stopgap add-on VLAutoActivate is loaded. Tests: \file{TestBruceWorxAutoActivate.py} (16).
+
+\paragraph{Added 2 Nov, evening: sub-assemblies and bodies.} Opening a sub-assembly after the printer used to do
+nothing, for two reasons, both fixed. First, an assembly that another open file links to is not a root object of its
+own file (the cross-document link is in its \code{InList}), so it was not found; it is now any assembly that no
+object of the same document holds. Second, the printer's assembly was still in edit, and ``something is in edit''
+looked at every document. Now only the document itself blocks. If another document has an \emph{active assembly},
+that edit is reset and the new file's assembly is activated; any other edit (sketch, body feature, simulation) or an
+open task dialog anywhere still blocks. A file with no assembly and exactly one PartDesign Body gets that body as the
+active body (and its App::Part, if it has one); two or more bodies, or a STEP import of plain Part features, are
+left alone. The same switch gates it. A linked file loaded without a 3D view waits until the view exists.
+

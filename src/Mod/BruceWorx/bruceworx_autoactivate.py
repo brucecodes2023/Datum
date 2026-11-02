@@ -1,14 +1,18 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Auto-activate the assembly (ASM, Bruce 2 Nov 2026).
+"""Auto-activate the assembly or body (ASM, Bruce 2 Nov 2026).
 
 Bruce: "when I open a file, that one becomes the active one". The joint and assemble tools stay greyed until
 the assembly is activated (a double-click on it in the tree). When a document becomes the active one and
-nothing is being edited, its single root Assembly is activated the same way, and the tree scrolls to it.
+nothing is being edited, its single top Assembly is activated the same way, and the tree scrolls to it.
+A document without an assembly but with exactly one PartDesign Body gets that body as the active body.
 
 Rules (``should_activate`` is FreeCAD-free and tested):
 * the preference ``AutoActivateAssembly`` (BaseApp/Preferences/BruceWorx, default on) is on;
-* the document has exactly one root Assembly::AssemblyObject;
-* no task dialog is open, no document is in edit (sketch, body feature, ...), no assembly, part or body is already active;
+* the document has exactly one top Assembly::AssemblyObject (one no other object of the SAME document holds:
+  an assembly that another open file links to is still the top one here), or no assembly and exactly one Body;
+* no task dialog is open, nothing is in edit in this document, and no other document has anything in edit
+  except an active assembly (that edit is reset first: the printer's assembly lets go for a sub-assembly
+  opened after it); no assembly, part or body is already active here;
 * the document is not loading or recomputing (the check is repeated for a few seconds, then given up);
 * the current workbench belongs to the Design workspace (PartDesign, Assembly, Part, Start): a Simulation,
   Drawing or Manufacture session is left where it is.
@@ -38,12 +42,12 @@ _warned = False
 # ----- pure helpers (unit tested) -----------------------------------------------------------------
 
 
-def should_activate(enabled, n_assemblies, dialog_open, editing, active_part, busy, workbench):
-    """None when the assembly should be activated now, else why not (a short reason)."""
+def should_activate(enabled, n_assemblies, dialog_open, editing, active_part, busy, workbench, n_bodies=0):
+    """None when the assembly (or the single body) should be activated now, else why not (a short reason)."""
     if not enabled:
         return "preference off"
-    if n_assemblies != 1:
-        return "no single assembly"
+    if n_assemblies != 1 and not (n_assemblies == 0 and n_bodies == 1):
+        return "no single assembly or body"
     if dialog_open:
         return "task dialog open"
     if editing:
@@ -71,7 +75,45 @@ def enabled():
 
 
 def _assemblies(doc):
-    return [o for o in doc.RootObjects if o.isDerivedFrom("Assembly::AssemblyObject")]
+    """The assemblies nothing in this same document holds. Not RootObjects: an assembly that another open
+    document links to has that cross-document link in its InList and is not a root."""
+    return [
+        o for o in doc.Objects
+        if o.isDerivedFrom("Assembly::AssemblyObject") and not any(p.Document is doc for p in o.InList)
+    ]
+
+
+def _bodies(doc):
+    return [o for o in doc.Objects if o.TypeId == "PartDesign::Body"]
+
+
+def _is_assembly_edit(vp):
+    """True when the view provider in edit is an assembly's (the Python wrapper may not expose .Object)."""
+    obj = getattr(vp, "Object", None)
+    if obj is not None:
+        return obj.isDerivedFrom("Assembly::AssemblyObject")
+    return "ViewProviderAssembly" in str(getattr(vp, "TypeId", ""))
+
+
+def _active_assembly_edits(skip_name):
+    """The Gui documents (not ``skip_name``) whose edit is an active assembly, and True when any other
+    document has something else in edit (sketch, body feature, simulation ...)."""
+    import FreeCAD as App
+    import FreeCADGui as Gui
+
+    assembly_docs, other = [], False
+    for d in App.listDocuments().values():
+        gd = Gui.getDocument(d.Name)
+        if gd is None or d.Name == skip_name:
+            continue
+        vp = gd.getInEdit()
+        if vp is None:
+            continue
+        if _is_assembly_edit(vp):
+            assembly_docs.append(gd)
+        else:
+            other = True
+    return assembly_docs, other
 
 
 def _state(name):
@@ -82,10 +124,8 @@ def _state(name):
     doc = App.ActiveDocument
     if doc is None or doc.Name != name or Gui.getDocument(name) is None:
         return None
-    editing = any(
-        Gui.getDocument(d.Name) is not None and Gui.getDocument(d.Name).getInEdit() is not None
-        for d in App.listDocuments().values()
-    )
+    assembly_docs, other_edit = _active_assembly_edits(name)
+    editing = other_edit or Gui.getDocument(name).getInEdit() is not None
     view = Gui.getDocument(name).ActiveView
     active_part = False
     for key in ("assembly", "part", "pdbody"):
@@ -93,11 +133,14 @@ def _state(name):
             active_part = active_part or view.getActiveObject(key) is not None
         except Exception:
             pass
-    busy = bool(getattr(doc, "Restoring", False) or getattr(doc, "Recomputing", False))
+    # no 3D view yet (a file loaded only because another file links it): wait for the view to appear
+    busy = view is None or bool(getattr(doc, "Restoring", False) or getattr(doc, "Recomputing", False))
     wb = Gui.activeWorkbench()
     return {
         "enabled": enabled(),
         "n": len(_assemblies(doc)),
+        "bodies": len(_bodies(doc)),
+        "reset": assembly_docs,
         "dialog": Gui.Control.activeDialog(),
         "editing": editing,
         "active_part": active_part,
@@ -117,15 +160,20 @@ def activate(name, retries=RETRIES):
         if facts is None:
             return None
         why = should_activate(facts["enabled"], facts["n"], facts["dialog"], facts["editing"],
-                              facts["active_part"], facts["busy"], facts["workbench"])
+                              facts["active_part"], facts["busy"], facts["workbench"], facts["bodies"])
         if why == "document busy" and retries > 0:
             QtCore.QTimer.singleShot(RETRY_MS, lambda: activate(name, retries - 1))
             return why
         if why:
             return why
         doc = App.ActiveDocument
-        asm = _assemblies(doc)[0]
-        Gui.ActiveDocument.setEdit(asm)
+        asms = _assemblies(doc)
+        if not asms:
+            return _activate_body(doc)
+        asm = asms[0]
+        for gd in facts["reset"]:  # let go of the assembly active in another file
+            gd.resetEdit()
+        Gui.getDocument(name).setEdit(asm)
         # Bring it into view in the tree, then drop the selection so the first joint pick starts clean.
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, asm.Name)
@@ -134,6 +182,24 @@ def activate(name, retries=RETRIES):
     except Exception as exc:  # never get in the way of opening a file
         App.Console.PrintLog(f"BruceWorx auto-activate: {exc}\n")
         return "error"
+
+
+def _activate_body(doc):
+    """Make the document's single PartDesign Body the active body (and its App::Part the active part)."""
+    import FreeCADGui as Gui
+
+    body = _bodies(doc)[0]
+    view = Gui.getDocument(doc.Name).ActiveView
+    view.setActiveObject("pdbody", body)
+    parts = [o for o in body.InList if o.TypeId == "App::Part"]
+    if parts:
+        view.setActiveObject("part", parts[0])
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, body.Name)
+    from PySide import QtCore
+
+    QtCore.QTimer.singleShot(CLEAR_MS, Gui.Selection.clearSelection)
+    return None
 
 
 class _DocObserver:

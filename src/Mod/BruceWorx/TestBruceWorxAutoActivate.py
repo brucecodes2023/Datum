@@ -26,6 +26,13 @@ class TestRules(unittest.TestCase):
     def test_assembly_workbench_is_design(self):
         self.assertIsNone(aa.should_activate(**{**OK, "workbench": "AssemblyWorkbench"}))
 
+    def test_single_body_without_assembly(self):
+        self.assertIsNone(aa.should_activate(**{**OK, "n_assemblies": 0, "n_bodies": 1}))
+        for n_asm, n_body in ((0, 0), (0, 2), (2, 1), (2, 0)):
+            self.assertIsNotNone(aa.should_activate(**{**OK, "n_assemblies": n_asm, "n_bodies": n_body}), (n_asm, n_body))
+        # one assembly wins over any number of bodies
+        self.assertIsNone(aa.should_activate(**{**OK, "n_assemblies": 1, "n_bodies": 3}))
+
     def test_other_addon_detected(self):
         self.assertTrue(aa.other_addon_loaded({"VLAutoActivate": object()}))
         self.assertFalse(aa.other_addon_loaded({}))
@@ -45,6 +52,11 @@ class TestOpen(unittest.TestCase):
         Gui.activateWorkbench("PartDesignWorkbench")
         cls.one = cls.make("one", 1)
         cls.two = cls.make("two", 2)
+        cls.sub = cls.make("sub", 1)
+        cls.parent = cls.make_parent("parent", cls.sub)
+        cls.body1 = cls.make_bodies("body1", 1)
+        cls.body2 = cls.make_bodies("body2", 2)
+        cls.step = cls.make_step("step")
 
     @classmethod
     def tearDownClass(cls):
@@ -63,6 +75,51 @@ class TestOpen(unittest.TestCase):
         doc.saveAs(path)
         FreeCAD.closeDocument(doc.Name)
         return path
+
+    @classmethod
+    def _save(cls, doc, name):
+        path = os.path.join(cls.dir, name + ".FCStd")
+        doc.saveAs(path)
+        FreeCAD.closeDocument(doc.Name)
+        return path
+
+    @classmethod
+    def make_parent(cls, name, sub_path):
+        """An assembly document that links the assembly of another file (a sub-assembly in a machine)."""
+        sub = FreeCAD.openDocument(sub_path)
+        doc = FreeCAD.newDocument("AA" + name)
+        doc.addObject("Assembly::AssemblyObject", "Assembly0")
+        path = os.path.join(cls.dir, name + ".FCStd")
+        doc.saveAs(path)  # a cross-document link needs the owner saved
+        link = doc.addObject("App::Link", "SubLink")
+        link.LinkedObject = sub.getObject("Assembly0")
+        doc.recompute()
+        doc.save()
+        FreeCAD.closeDocument(doc.Name)
+        FreeCAD.closeDocument(sub.Name)
+        return path
+
+    @classmethod
+    def make_bodies(cls, name, n):
+        doc = FreeCAD.newDocument("AA" + name)
+        for i in range(n):
+            doc.addObject("PartDesign::Body", f"Body{i}")
+        doc.recompute()
+        return cls._save(doc, name)
+
+    @classmethod
+    def make_step(cls, name):
+        """What a STEP import gives: plain Part::Features, no Body."""
+        import Part
+
+        doc = FreeCAD.newDocument("AA" + name)
+        for i in range(2):
+            doc.addObject("Part::Feature", f"Shape{i}").Shape = Part.makeBox(5, 5, 5)
+        doc.recompute()
+        return cls._save(doc, name)
+
+    def active_body(self, doc):
+        return self.Gui.getDocument(doc.Name).ActiveView.getActiveObject("pdbody")
 
     def wait(self, ms=1500):
         from PySide import QtCore, QtWidgets
@@ -112,6 +169,55 @@ class TestOpen(unittest.TestCase):
         self.assertIsNotNone(aa.activate(doc.Name))  # edit or its task dialog
         self.wait(500)
         self.assertIsNone(self.active_assembly(doc))
+
+    def test_sub_assembly_after_parent(self):
+        """The printer is active; a sub-assembly it links opened afterwards (not a root: linked from the
+        printer's file) becomes active and the printer's edit is let go."""
+        pdoc = self.open(self.parent)
+        self.assertIsNotNone(self.active_assembly(pdoc), f"{self.why}")
+        sub = [d for d in FreeCAD.listDocuments().values() if d.FileName == self.sub]
+        self.assertEqual(len(sub), 1, "the linked file is open too")
+        sub = sub[0]
+        self.Gui.setActiveDocument(sub.Name)
+        self.Gui.getDocument(sub.Name).createView("Gui::View3DInventor")  # the user opens the linked file
+        self.assertEqual(len(aa._assemblies(sub)), 1)  # the link from the other file does not hide it
+        self.assertIsNone(aa.activate(sub.Name), aa._state(sub.Name))
+        self.wait()
+        self.assertEqual(self.active_assembly(sub).Name, "Assembly0")
+        self.assertIsNone(self.Gui.getDocument(pdoc.Name).getInEdit(), "the parent's edit was reset")
+        self.assertIsNotNone(self.Gui.getDocument(sub.Name).getInEdit())
+
+    def test_sketch_in_other_document_nothing(self):
+        other = FreeCAD.newDocument("AAsketchdoc")
+        sk = other.addObject("Sketcher::SketchObject", "Sketch")
+        other.recompute()
+        self.Gui.getDocument(other.Name).setEdit(sk)
+        self.assertIsNotNone(self.Gui.getDocument(other.Name).getInEdit())
+        doc = FreeCAD.openDocument(self.one)
+        self.assertIsNotNone(aa.activate(doc.Name))
+        self.wait(500)
+        self.assertIsNone(self.active_assembly(doc))
+        self.assertIsNotNone(self.Gui.getDocument(other.Name).getInEdit(), "the sketch stays in edit")
+
+    def test_single_body_becomes_active(self):
+        doc = self.open(self.body1)
+        body = self.active_body(doc)
+        self.assertIsNotNone(body, f"{self.why} {aa._state(doc.Name)}")
+        self.assertEqual(body.Name, "Body0")
+
+    def test_two_bodies_nothing(self):
+        doc = self.open(self.body2)
+        self.assertIsNone(self.active_body(doc))
+
+    def test_step_like_part_features_nothing(self):
+        doc = self.open(self.step)
+        self.assertIsNone(self.active_body(doc))
+        self.assertIsNone(self.active_assembly(doc))
+
+    def test_single_body_preference_off_nothing(self):
+        self.param.SetBool(aa.PREF_NAME, False)
+        doc = self.open(self.body1)
+        self.assertIsNone(self.active_body(doc))
 
     def test_preference_off_nothing(self):
         self.param.SetBool(aa.PREF_NAME, False)
