@@ -1,0 +1,18 @@
+%======================================================================
+\subsection{ASM --- Built, 2 Nov: no crash on joints made headless}\label{sec:asm-joint-crash-built}
+%======================================================================
+
+Reported twice from the printer: activating (or solving) an assembly aborted FreeCAD. Cause, confirmed by
+reproducing it: a joint written by a headless \code{FreeCADCmd} script has no view provider proxy, so in the GUI
+\code{joint.ViewObject.Proxy} is a plain integer. \code{AssemblyObject::redrawJointPlacement} calls the joint's Python
+\code{redrawJointPlacements}, which called \code{proxy.redrawJointPlacements} on that integer; the
+\code{AttributeError} left C++ uncaught through \code{solve()} and \code{setEdit}, and the process aborted.
+
+Three fixes, one each for cause, symptom and repair. (1) The C++ call catches Python and FreeCAD exceptions, clears
+the Python error and logs one warning per joint (the drawing is cosmetic and must never stop a solve). (2)
+\code{Joint.redrawJointPlacements} returns quietly unless the view proxy really has that method. (3) The joint draws
+again: \code{Joint.onDocumentRestored} and \code{GroundedJoint.onDocumentRestored} call \code{ensureViewProvider},
+which gives a joint without a proxy its \code{ViewProviderJoint} (or \code{ViewProviderGroundedJoint}) when the file
+opens in the GUI. It sets only the proxy, so the document is not marked modified by opening it. Tests:
+\file{AssemblyTests/TestBWJointViewProvider.py} (a headless file opened in the GUI gets proxies and solves; the
+redraw without a proxy is quiet; the original open, \code{setEdit}, \code{solve} run in a subprocess exits cleanly).

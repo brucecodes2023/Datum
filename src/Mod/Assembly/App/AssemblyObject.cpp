@@ -23,6 +23,8 @@
 
 #include <boost/core/ignore_unused.hpp>
 #include <cmath>
+#include <set>
+#include <string>
 #include <vector>
 #include <unordered_map>
 
@@ -804,11 +806,35 @@ void AssemblyObject::redrawJointPlacement(App::DocumentObject* joint)
         return;
     }
 
-    Py::Object attr = jointPy.getAttr("redrawJointPlacements");
-    if (attr.ptr() && attr.isCallable()) {
-        Py::Tuple args(1);
-        args.setItem(0, Py::asObject(joint->getPyObject()));
-        Py::Callable(attr).apply(args);
+    // [BW] The drawing is cosmetic: a Python error here (a joint made headless has no view provider
+    // proxy) must not abort the solve. Log it once per joint and carry on.
+    static std::set<std::string> reported;
+    auto report = [&](const std::string& what) {
+        std::string key = joint->getDocument()->getName() + std::string(".") + joint->getNameInDocument();
+        if (reported.insert(key).second) {
+            Base::Console().warning(
+                "Assembly: cannot redraw joint %s: %s\n",
+                joint->getFullName().c_str(),
+                what.c_str()
+            );
+        }
+    };
+
+    try {
+        Py::Object attr = jointPy.getAttr("redrawJointPlacements");
+        if (attr.ptr() && attr.isCallable()) {
+            Py::Tuple args(1);
+            args.setItem(0, Py::asObject(joint->getPyObject()));
+            Py::Callable(attr).apply(args);
+        }
+    }
+    catch (Py::Exception&) {
+        Base::PyException pyErr;  // takes the Python error and its text
+        PyErr_Clear();
+        report(pyErr.what());
+    }
+    catch (const Base::Exception& e) {
+        report(e.what());
     }
 }
 

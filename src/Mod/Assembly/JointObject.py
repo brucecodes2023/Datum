@@ -344,6 +344,7 @@ class Joint:
 
     def onDocumentRestored(self, joint):
         self.createProperties(joint)
+        ensureViewProvider(joint)  # [BW] joints made headless have no view provider proxy
 
     def createProperties(self, joint):
         self.migrationScript(joint)
@@ -1196,10 +1197,13 @@ class Joint:
             joint.LimitLengthZero = length
 
     def redrawJointPlacements(self, joint):
-        if joint.ViewObject:
-            proxy = joint.ViewObject.Proxy
-            if proxy:
-                proxy.redrawJointPlacements(joint)
+        # [BW] A joint made headless (FreeCADCmd) has no view provider proxy: ViewObject.Proxy is an int.
+        vobj = joint.ViewObject
+        if vobj is None:
+            return
+        proxy = getattr(vobj, "Proxy", None)
+        if proxy is not None and hasattr(proxy, "redrawJointPlacements"):
+            proxy.redrawJointPlacements(joint)
 
     """
     So here we want to find a placement that corresponds to a local coordinate system that would be placed at the selected vertex.
@@ -1363,6 +1367,30 @@ class Joint:
         globalJcsPlc2 = UtilsAssembly.getJcsGlobalPlc(joint.Placement2, joint.Reference2)
 
         return UtilsAssembly.arePlacementZParallel(globalJcsPlc1, globalJcsPlc2)
+
+
+def ensureViewProvider(joint):
+    """[BW] Give a joint opened in the GUI its view provider proxy when it has none.
+
+    A document written by a headless FreeCADCmd script has no GuiDocument.xml, so the joint's ViewObject comes
+    up with a plain int as Proxy and the joint is never drawn. Returns True when a proxy was set.
+    """
+    if not App.GuiUp:
+        return False
+    vobj = getattr(joint, "ViewObject", None)
+    if vobj is None:
+        return False
+    proxy = getattr(vobj, "Proxy", None)
+    if proxy is not None and not isinstance(proxy, int):
+        return False
+    jointProxy = getattr(joint, "Proxy", None)
+    if isinstance(jointProxy, GroundedJoint):
+        ViewProviderGroundedJoint(vobj)
+    elif isinstance(jointProxy, Joint):
+        ViewProviderJoint(vobj)
+    else:
+        return False
+    return True
 
 
 class ViewProviderJoint:
@@ -1552,6 +1580,7 @@ class GroundedJoint:
 
     def onDocumentRestored(self, joint):
         self.migrationScript(joint)
+        ensureViewProvider(joint)  # [BW] grounded joints made headless have no view provider proxy
 
     def migrationScript(self, joint):
         if (
