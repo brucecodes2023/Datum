@@ -35,7 +35,7 @@ class TestCases(unittest.TestCase):
         ids = [c["id"] for c in val.load_cases()]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sorted(ids), sorted(["B-ST1", "B-ST2", "B-ST3", "B-MO1", "B-MO2", "B-MO3", "B-BU1", "B-TH1", "B-TH2",
-                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "G-RD2", "G-RD3", "B-CF4"]))
+                                              "B-TT1", "G-TS1", "G-PM1", "G-NB1", "G-RD1", "G-RD2", "G-RD3", "G-RB1", "B-CF4"]))
         self.assertEqual([c["id"] for c in self.doc["cfd"]], ["B-CF4"])  # the SIM-06 cases (bruceworx_cfd_wash)
         for case in self.cases.values():
             if case.get("kind", "fe") == "fe":
@@ -185,6 +185,45 @@ class TestCases(unittest.TestCase):
         refs = {r["key"]: r["value"] for r in self.cases["G-NB1"]["references"]}
         self.assertAlmostEqual(refs["lambda_southwell"], eigen.euler_column(500.0, 10.0, 210000.0, 1000.0), places=9)
 
+    def test_rotating_beam_table_values_by_rayleigh_ritz(self):
+        """G-RB1: the exact out-of-plane frequencies of the rotating uniform cantilever (Wright et al. 1982, as reproduced in
+        Table 4 of arXiv:2401.17519) from an independent Rayleigh-Ritz solution (the beam equation with the centrifugal
+        tension T = rho A Omega^2 (L^2 - x^2) / 2, in the first 12 cantilever modes), and the Southwell coefficient."""
+        import numpy as np
+
+        betas = [1.8751040687119611, 4.694091132974175, 7.854757438237613, 10.995540734875467, 14.137168391046471] + [
+            (n - 0.5) * math.pi for n in range(6, 13)]
+        g, wt = np.polynomial.legendre.leggauss(200)
+        x, wt = (g + 1) / 2, wt / 2
+        phi, dphi = [], []
+        for b in betas:
+            sg = (math.cosh(b) + math.cos(b)) / (math.sinh(b) + math.sin(b))
+            phi.append(np.cosh(b * x) - np.cos(b * x) - sg * (np.sinh(b * x) - np.sin(b * x)))
+            dphi.append(b * (np.sinh(b * x) + np.sin(b * x) - sg * (np.cosh(b * x) - np.cos(b * x))))
+        phi, dphi = np.array(phi), np.array(dphi)
+        mass = (phi * wt) @ phi.T
+        stiff = np.diag([b ** 4 * (phi[i] ** 2 * wt).sum() for i, b in enumerate(betas)])
+
+        def frequencies(eta):
+            geo = (dphi * wt * eta ** 2 * (1 - x ** 2) / 2) @ dphi.T
+            inv = np.linalg.inv(np.linalg.cholesky(mass))
+            return np.sqrt(np.linalg.eigvalsh(inv @ (stiff + geo) @ inv.T))
+
+        table = {0: (3.5160, 22.0345), 3: (4.7973, 23.3203), 6: (7.3604, 26.8091), 12: (13.1702, 37.6031)}
+        for eta, (f1, f2) in table.items():
+            got = frequencies(eta)
+            self.assertAlmostEqual(got[0], f1, delta=6e-4, msg=eta)
+            self.assertAlmostEqual(got[1], f2, delta=6e-4, msg=eta)
+        refs = {r["key"]: r["value"] for r in self.cases["G-RB1"]["references"]}
+        self.assertEqual((refs["f1"], refs["f2"]), (4.7973, 23.3203))
+        K = ((1 - x ** 2) / 2 * dphi[0] ** 2 * wt).sum() / (phi[0] ** 2 * wt).sum()  # Rayleigh quotient, Omega = 1
+        self.assertAlmostEqual(K, 1.19, delta=0.01)
+        self.assertAlmostEqual(math.sqrt(betas[0] ** 4 + 9 * K), 4.806, delta=1e-3)  # Southwell at eta = 3
+        p = self.cases["G-RB1"]["params"]
+        omega = vc.rotating_beam_omega(p["eta"], p["length_mm"], p["thickness_mm"], p["E_MPa"], p["density"])
+        self.assertAlmostEqual(omega * 60 / (2 * math.pi), 1710.95, delta=0.01)  # the rpm in the case's setup text
+        self.assertAlmostEqual(vc.rotating_beam_unit(500.0, 10.0, 210000.0, 7850.0) / (2 * math.pi), 9.5053, delta=1e-4)
+
     def test_comparison_and_marks(self):
         case = {"tolerance": 0.02, "references": [{"key": "a", "value": 100.0, "unit": "m", "label": "a"},
                                                   {"key": "b", "value": -5.0, "unit": "m", "label": "b", "informative": True}]}
@@ -326,6 +365,12 @@ class TestFastSet(unittest.TestCase):
 
     def test_gap_rotating_disc_with_blade_mass(self):
         self.check("G-RD3")
+
+    def test_gap_rotating_beam_spin_then_modes(self):
+        self.check("G-RB1")
+        v = self.by_id["G-RB1"]["values"]
+        self.assertGreater(v["f1"], 1.3 * 3.5160)  # the spin stiffens the flapping mode by 36 percent
+        App.Console.PrintMessage(f"\n[G-RB1] f1 {v['f1']:.4f} (Wright 4.7973), f2 {v['f2']:.4f} (23.3203), lead-lag {v['lead1']:.4f}\n")
 
     def test_report_of_the_run(self):
         out = val.write_report(self.vrun, folder=self.tmp, compile=bool(sim.find_tex()[0]))

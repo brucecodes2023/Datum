@@ -52,3 +52,26 @@ predates this work (\code{test\_results\_summary\_and\_stripped\_copy}, GUI run:
         sources, but their formulas are not available to me as text. Not guessed. Options: you supply the paper, or
         I use the rotating cantilever beam (Wright et al., 1982) as the benchmark instead.
 \end{itemize}
+
+\subsection*{Spin, then vibration modes: the rotating cantilever beam (case G-RB1)}
+
+Built on the SIM-07 steps Stationary + Eigenfrequency (a static step with the centrifugal load, then a perturbation
+frequency step about that state). The benchmark is the uniform cantilever with zero hub radius, flapping (out of the
+plane of rotation).
+
+\begin{itemize}[nosep]
+  \item \textbf{Reference.} Wright, Smith, Thresher and Wang (J.\ Appl.\ Mech.\ 49, 1982, 197--202), exact out-of-plane
+        frequencies as reproduced in Table~4 of Rodrigues et al.\ (arXiv:2401.17519), in units of
+        $\sqrt{EI/\rho A L^4}$: mode 1 is 3.5160, 4.7973, 7.3604, 13.1702 and mode 2 is 22.0345, 23.3203, 26.8091, 37.6031 at
+        $\eta=\Omega\sqrt{\rho A L^4/EI}=0,3,6,12$. I did not read Wright et al.\ itself; the numbers are checked
+        in the test by an independent Rayleigh--Ritz solution (12 cantilever modes), which agrees to 5 digits.
+        The Southwell coefficient is the Rayleigh quotient $K_1=1.1933$ (computed, about 1.19); Southwell gives 4.806 at
+        $\eta=3$, 0.2\,\% above the exact value.
+  \item \textbf{Case.} Steel 500\,$\times$\,20\,$\times$\,10\,mm ($L/h=50$), $\eta=3$ (1711 rpm), first flapping mode 33.4 to
+        45.7\,Hz (+37\,\%). Compared: modes 1 and 2, tolerance 1\,\%. Mesh check (tetrahedra, element size 20, 14, 10, 7, 5\,mm):
+        mode 1 is 4.8104, 4.8052, 4.8047, 4.8061, 4.8035 (0.27 to 0.13\,\% above 4.7973; spread 0.15\,\%), mode 2 is 23.371,
+        23.334, 23.332, 23.344, 23.324 (0.02 to 0.22\,\%). The rest is shear deformation and the Poisson effect of the 3D beam.
+  \item \textbf{Lead-lag (in-plane) modes.} CalculiX's perturbation step carries the centrifugal tension, not the
+        rotating-frame softening, so its first in-plane mode (7.16 in the same units) is that of a stationary beam under
+        the tension: stiffened, where the rotating beam is softened. Measured and reported (\code{lead1}), not asserted.
+\end{itemize}

@@ -1212,6 +1212,57 @@
    },
    "licence": "Textbook closed form (a derivation, no data copied)",
    "setup": "As G-RD1 (quarter annulus a=10, b=50 mm, 2 mm thick, symmetry planes x=0, y=0 and the mid-plane, 30 000 rpm about Z) with a Blade mass load on the rim face: 24 blades on the whole wheel of 2 g each with the centre of mass at r=55 mm, so F = m r omega^2 = 1085.7 N per blade and 26055.76 N in all, spread evenly over the rim as a uniform outward pressure of 41.47 MPa (the model, an eighth of the wheel, carries 3 blades; the load divides N F by the area of the faces it is put on). The reference is the Timoshenko disc plus Lame's outer tension T = N F / (2 pi b t), superposed. Bore and rim values are the mean of the nodes on the circle, mid-radius a cubic fit over the radius on the mid-plane."
+  },
+  {
+   "id": "G-RB1",
+   "title": "Spin, then vibration modes: rotating cantilever beam, flapping modes (centrifugal stiffening)",
+   "tier": "G",
+   "kind": "fe",
+   "study": "modal",
+   "builder": "rotating_beam",
+   "params": {
+    "length_mm": 500.0,
+    "width_mm": 20.0,
+    "thickness_mm": 10.0,
+    "eta": 3.0,
+    "modes": 8,
+    "E_MPa": 210000.0,
+    "nu": 0.3,
+    "density": 7850.0
+   },
+   "mesh": {
+    "fast": 10.0,
+    "slow": [
+     14.0,
+     10.0,
+     7.0
+    ]
+   },
+   "tolerance": 0.01,
+   "primary": "f1",
+   "references": [
+    {
+     "key": "f1",
+     "label": "flapping mode 1, omega / sqrt(E I / rho A L^4), eta = 3 (unspun 3.5160)",
+     "value": 4.7973,
+     "unit": "-",
+     "derived": false
+    },
+    {
+     "key": "f2",
+     "label": "flapping mode 2, omega / sqrt(E I / rho A L^4), eta = 3 (unspun 22.0345)",
+     "value": 23.3203,
+     "unit": "-",
+     "derived": false
+    }
+   ],
+   "citation": {
+    "document": "Wright, Smith, Thresher and Wang, Vibration modes of centrifugally stiffened beams, J. Appl. Mech. 49 (1982) 197-202: exact (Frobenius series) out-of-plane frequencies of the uniform cantilever with zero hub radius. Values read from their reproduction as 'Exact [1]' in Table 4 of Rodrigues, Alazard, Sanfedino, Mauriello and Iannelli, Modeling and analysis of a flexible spinning Euler-Bernoulli beam with centrifugal stiffening and softening (ISAE-SUPAERO, arXiv:2401.17519): out-of-plane mode 1 = 3.5160, 4.7973, 7.3604, 13.1702 and mode 2 = 22.0345, 23.3203, 26.8091, 37.6031 at eta = 0, 3, 6, 12; eta = Omega sqrt(rho A L^4 / (E I))",
+    "location": "arXiv:2401.17519 Table 4 (rows 'Exact [1]', out-of-plane, eta = 3 column); the values were also reproduced to 5 digits by an independent Rayleigh-Ritz computation (TestBruceWorxValidation, 12 cantilever modes)",
+    "url": "https://arxiv.org/abs/2401.17519"
+   },
+   "licence": "Published numerical values (facts) quoted with their source; no text or figures copied",
+   "setup": "Steel cantilever 500 x 20 x 10 mm (flap thickness h = 10 mm, L/h = 50, so Euler-Bernoulli applies to better than 0.5 percent for modes 1 and 2), clamped at x = 0 on the axis of rotation (zero hub radius). Study steps Stationary + Eigenfrequency (SIM-07): a static CalculiX step with a Centrifugal load of 1710.95 rpm about Z (eta = 3, i.e. Omega = 179.2 rad/s; the first flapping frequency rises 36 percent, 33.4 to 45.6 Hz), then *STEP, PERTURBATION *FREQUENCY about that state. The flapping modes (bending in z, out of the plane of rotation) are the modes with their modal mass in z; reported as f / sqrt(E I / rho A L^4). The first in-plane (lead-lag) frequency is measured as lead1 and not compared: CalculiX's perturbation step carries the centrifugal tension (stiffening) but not the rotating-frame softening term, so its in-plane modes are those of a stationary beam under the centrifugal tension. The Southwell estimate omega^2 = omega0^2 + K Omega^2 with the Rayleigh-quotient K1 = 1.1933 (about 1.19; computed in the test) gives 4.806 for mode 1 (0.2 percent above the exact value)."
   }
  ]
 }

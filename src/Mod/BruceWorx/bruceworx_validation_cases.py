@@ -915,11 +915,63 @@ def build_rotating_disc_full(params, size):
     return Setup(doc, objs, measure)
 
 
+# ----- gap: spin, then vibration modes (a rotating cantilever, centrifugal stiffening) --------------------------------
+
+
+def rotating_beam_omega(eta, length, thickness, E, density):
+    """Spin speed (rad/s) of the rotation speed ratio eta = Omega sqrt(rho A L^4 / (E I)) of a beam of flap thickness h:
+    E I / (rho A) = E h^2 / (12 rho), so Omega = eta sqrt(E h^2 / (12 rho)) / L^2 (SI units from mm, MPa, kg/m^3)."""
+    return eta * math.sqrt(E * 1e6 * (thickness * 1e-3) ** 2 / (12.0 * density)) / (length * 1e-3) ** 2
+
+
+def rotating_beam_unit(length, thickness, E, density):
+    """sqrt(E I / (rho A L^4)) in rad/s: the unit of the non-dimensional frequencies of the rotating beam tables."""
+    return math.sqrt(E * 1e6 * (thickness * 1e-3) ** 2 / (12.0 * density)) / (length * 1e-3) ** 2
+
+
+def build_rotating_beam(params, size):
+    """A uniform steel cantilever (L x w x h, h the flap thickness) clamped at x = 0 on the axis of the spin (zero hub
+    radius), spinning about Z at the speed of the rotation speed ratio ``eta``.  The study is the SIM-07 steps Stationary
+    (the spin load) + Eigenfrequency (bruceworx_sim_steps): a static CalculiX step with *DLOAD CENTRIF, then a *STEP,
+    PERTURBATION *FREQUENCY about that state.  The flapping (out of the plane of rotation, bending in z) modes are the
+    modes whose modal mass is in z; the lead-lag modes (in y) are read as informative numbers only (CalculiX's
+    perturbation step carries the centrifugal tension, not the rotating-frame softening term)."""
+    import Part
+
+    import bruceworx_sim_post as post
+    import bruceworx_sim_steps as steps
+
+    doc = App.newDocument("RotatingBeam")
+    L, w, h = params["length_mm"], params["width_mm"], params["thickness_mm"]
+    solid = Part.makeBox(L, w, h, App.Vector(0, -w / 2.0, -h / 2.0))
+    body = shape_object(doc, "Beam", solid)
+    mat = material(params["E_MPa"], params["nu"], params["density"], name="Steel")
+    objs = sim.new_study(doc, sim.StudyPlan(name="Rotating beam", model=body, material=mat, max_size=size))
+    an = objs["analysis"]
+    add_displacement(doc, an, body, faces_where(solid, plane_at(0, 0.0)), "xyz", "Clamp")
+    omega = rotating_beam_omega(params["eta"], L, h, params["E_MPa"], params["density"])
+    post.add_spin(an, omega * 60.0 / (2.0 * math.pi), axis="z")
+    steps.set_steps(an, ["stationary", "modal"])
+    an.ModeCount = int(params["modes"])
+    doc.recompute()
+
+    def measure(analysis, result):
+        unit = rotating_beam_unit(L, h, params["E_MPa"], params["density"]) / (2.0 * math.pi)  # Hz per unit of the tables
+        rows = [r for r in eigen.modal_rows(analysis) if not r["rigid"]]
+        flap = sorted(r["frequency"] for r in rows if r["mass"] and r["mass"][2] > r["mass"][1])
+        lead = sorted(r["frequency"] for r in rows if r["mass"] and r["mass"][1] > r["mass"][2])
+        if len(flap) < 2 or not lead:
+            raise ValueError(f"modes found: {len(flap)} flapping, {len(lead)} in-plane of {len(rows)}")
+        return {"f1": flap[0] / unit, "f2": flap[1] / unit, "lead1": lead[0] / unit, "f1_hz": flap[0], "f2_hz": flap[1]}
+
+    return Setup(doc, objs, measure)
+
+
 BUILDERS = {
     "le10": build_le10, "sslv07": build_sslv07, "sslv301": build_sslv301, "fv52": build_fv52,
     "sdlv401": build_sdlv401, "sdlv100": build_sdlv100, "sslv139": build_sslv139, "tplv06": build_tplv06,
     "tplv304": build_tplv304, "ttlv01": build_ttlv01, "thick_cylinder": build_thick_cylinder,
     "tensioned_beam": build_tensioned_beam, "bowed_column": build_bowed_column, "rotating_disc": build_rotating_disc,
     "rotating_disc_blades": build_rotating_disc_blades,
-    "rotating_disc_full": build_rotating_disc_full,
+    "rotating_disc_full": build_rotating_disc_full, "rotating_beam": build_rotating_beam,
 }
