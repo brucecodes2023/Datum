@@ -536,6 +536,21 @@ EPICS = [
       "MB, 37 of 37 files open with identical shapes.",
       "The real vault migrated with one journal event; every item keeps its numbers, revisions and status; "
       "drawings are not out of date; reopening replays with no problems."),
+    E("PRF-05", "Vector Labs worker: headless background jobs", "M5", "To do", [],
+      "Bruce 2 Nov (tonight's session)",
+      "Background jobs (vault imports and check-ins with their BOMs, interference checks, previews, renders, "
+      "KiCad board inserts) start the whole GUI app today with its window made invisible, because Qt's offscreen "
+      "platform crashes on macOS (no OpenGL). It shows in the Dock as FreeCAD, loads every workbench, and while a "
+      "long boolean runs macOS marks it Not Responding; on 2 Nov three runs were force-quit that way. A light "
+      "worker instead: an App-only process (FreeCADCmd underneath, named Vector Labs worker, no Dock icon) at "
+      "macOS background priority, loading only what a job needs; the vault session, check-in hooks (BOM), board "
+      "insert and interference work split from their GUI modules so they run there; renders without a window "
+      "(offscreen GL, or the vault's preview meshes from PDM-13/PRF-03); jobs as files in a queue folder, one at a "
+      "time, each with a log and a result, never touching the open app's documents; vault writes take the "
+      "vault's own lock.",
+      "The 2 Nov TL-P01 jobs (Fanny Pack import and verify, Leviathan and LRS-600 swap) run through the worker "
+      "with no window or Dock icon, give the same vault result, and use a fraction of the GUI run's memory and "
+      "CPU; renders come out without a window; nothing is ever Not Responding."),
 ]
 
 

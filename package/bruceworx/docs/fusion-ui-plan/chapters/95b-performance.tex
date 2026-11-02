@@ -60,3 +60,39 @@ maps old to new; replay moves versions, drawings' made-from, released files and 
 objects stay, so an older Vector Labs still reads the vault. On a copy of the vault: 114 of 165 stored files,
 767 shapes, 26.9 to 18.5\,MB, statuses unchanged, 37 of 37 files open in FreeCAD with identical shapes.
 \end{epic}
+
+\begin{epic}{PRF-05}{Vector Labs worker: headless background jobs}{M5}{\stTodo}{Bruce 2 Nov (tonight)}
+Bruce, 2 Nov: \emph{a headless Vector Labs that doesn't trigger a program to run, a lighter version that can run
+in the background}. Today a background job (a vault import with its BOMs, an interference check, a render, a
+KiCad board insert) starts the full GUI app with its window made invisible, because Qt's offscreen platform
+crashes on macOS (no OpenGL): it appears in the Dock as \emph{FreeCAD}, loads every workbench, and while a long
+boolean runs macOS shows it \emph{Not Responding} (three runs were force-quit that way on 2 Nov).
+
+The worker is an App-only process (\code{FreeCADCmd} underneath, named \emph{Vector Labs worker}, no Dock icon)
+at macOS background priority, loading only the modules a job needs. The pieces those jobs use today from GUI
+modules move to App-level code: the vault session and its check-in hooks (the BOM), the board insert, the
+interference check. Renders come without a window, from offscreen GL or from the vault's preview meshes
+(PDM-13, PRF-03). Jobs are files in a queue folder, run one at a time with a log and a result each; the worker
+never touches the documents open in the app, and its vault writes take the vault's own lock.
+
+Design points (the simulation session, which builds and installs the app):
+\begin{itemize}
+\item \textbf{Installs.} The install swap waits for every process running from the app bundle, so a long-lived
+worker would block it: the worker quits when idle (about 60\,s) and takes a \emph{stop after this job} signal
+that the swap sends.
+\item \textbf{GUI-module jobs.} TechDraw pages, view thumbnails and anything with a \code{QOpenGLWidget} crash
+under Qt's offscreen platform; for those the worker runs a real QApplication marked \code{LSUIElement} (no Dock
+icon, no window), not offscreen. Everything else runs App-only.
+\item \textbf{Its own user home.} Like the smoke tests (a \code{cp -c} clone with its own bundle identifier,
+\code{open -g -n} with \code{FREECAD\_USER\_HOME}, then \code{lsregister -u}), so jobs never touch Bruce's
+preferences or recent files.
+\item \textbf{Light on the system.} Background QoS (\code{taskpolicy -b}), one job at a time per worker, and the
+existing cap of three FreeCADs.
+\item \textbf{One layer.} The simulation mesh worker (Netgen, Gmsh), the CFD streamline worker and CalculiX
+already run as subprocesses of the app; the worker hosts them rather than adding another layer.
+\end{itemize}
+
+\textbf{Done when} the 2 Nov TL-P01 jobs (Fanny Pack import and check, Leviathan and LRS-600 swap) run through
+the worker with no window or Dock icon, give the same vault result, use a fraction of the GUI run's memory and
+CPU, render without a window, and never show \emph{Not Responding}.
+\end{epic}
