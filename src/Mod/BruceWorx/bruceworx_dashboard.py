@@ -767,7 +767,8 @@ def classes():
             self.project_tabs.setVisible(self.has_projects)
             self.project_page.setVisible(inside)
             self.head_box.setVisible(not inside)
-            self.tiles_box.setVisible(not inside and not empty)
+            # PDM-14 follow-up: the project cards replace the four totals tiles; a vault without projects keeps them
+            self.tiles_box.setVisible(not inside and not empty and not self.has_projects)
             self.cards.setVisible(not inside and self.has_projects)
             self.projects_card.setVisible(not inside and not empty and not self.has_projects)
             self.cols_box.setVisible(not inside)

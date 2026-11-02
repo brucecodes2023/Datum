@@ -42,9 +42,19 @@ def fingerprint_of_shape(shape) -> str:
 
 
 def model_shape(doc):
-    """The shape of the document's first model candidate (what a new study would analyse), or None."""
+    """The shape a new study would analyse, or None: the one model candidate's shape as it is, or, for a part with
+    several bodies, the compound of all the visible ones (so volume and area are summed, the box covers all,
+    and face and solid counts are summed). One body gives exactly the shape it always gave, so the fingerprint
+    of a single-solid part does not change."""
     found = sim.model_candidates(doc)
-    return sim.shape_of(found[0]) if found else None
+    shapes = [shape for shape in (sim.shape_of(obj) for obj in found) if shape is not None]
+    if not shapes:
+        return None
+    if len(shapes) == 1:
+        return shapes[0]
+    import Part
+
+    return Part.makeCompound(shapes)
 
 
 def geometry_of_doc(doc) -> dict | None:

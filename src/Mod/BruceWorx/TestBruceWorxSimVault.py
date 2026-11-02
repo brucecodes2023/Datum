@@ -15,6 +15,9 @@ import bruceworx_sim_vault as sv
 from bruceworx import vault_simulations as vs
 
 
+BOX_40_20_10 = "7c4ec29572c5"  # H("geo", geometry_settings) of a 40 x 20 x 10 box, recorded with the code before PDM-14 follow-up 3
+
+
 def close_all():
     for doc in list(App.listDocuments().values()):
         App.closeDocument(doc.Name)
@@ -60,6 +63,67 @@ class SimVaultTests(unittest.TestCase):
         names = zipfile.ZipFile(out).namelist()
         self.assertIn("bruceworx/preview.bin", names)
         self.assertIn("thumbnails/Thumbnail.png", names)
+
+    def test_single_solid_fingerprint_is_unchanged(self):
+        """One body gives exactly the shape's own numbers; the value below was recorded before the change."""
+        close_all()
+        doc = App.newDocument("One")
+        box = doc.addObject("Part::Box", "Block")
+        box.Length, box.Width, box.Height = 40, 20, 10
+        doc.recompute()
+        self.assertEqual(sv.fingerprint_of_shape(box.Shape), sv.geometry_of_doc(doc)["fingerprint"])
+        self.assertEqual(sv.geometry_of_doc(doc)["settings"], model.geometry_settings(box.Shape))
+        self.assertEqual(sv.geometry_of_doc(doc)["fingerprint"], BOX_40_20_10)
+
+    def test_several_bodies_are_summed(self):
+        close_all()
+        doc = App.newDocument("Two")
+        a = doc.addObject("Part::Box", "A")
+        a.Length, a.Width, a.Height = 40, 20, 10
+        b = doc.addObject("Part::Box", "B")
+        b.Length, b.Width, b.Height = 10, 10, 10
+        b.Placement.Base = App.Vector(100, 0, 0)
+        doc.recompute()
+        one = sv.geometry_of_doc(doc)
+        settings = one["settings"]
+        self.assertEqual(settings["solids"], 2)
+        self.assertEqual(settings["faces"], 12)
+        self.assertEqual(float(settings["volume"]), 8000.0 + 1000.0)
+        self.assertEqual(float(settings["area"]), 2 * (800 + 400 + 200) + 600.0)
+        self.assertEqual([float(v) for v in settings["bbox"]], [0, 0, 0, 110, 20, 10])
+        b.Visibility = False  # headless: no view object, so hiding is only a GUI matter
+        # the same two bodies in the other order give the same fingerprint
+        self.assertEqual(one["fingerprint"], sv.fingerprint_of_shape(
+            __import__("Part").makeCompound([b.Shape, a.Shape])))
+
+    def test_refresh_pictures_records_a_missing_fingerprint(self):
+        from types import SimpleNamespace
+
+        doc, path = self.part_file()  # saved without the PDM-14 entry: a part checked in before it
+        os.makedirs(os.path.join(self.tmp, "vault", "objects"))
+        stored = os.path.join(self.tmp, "vault", "objects", "v1.FCStd")
+        shutil.copy(path, stored)
+        cache = os.path.join(self.tmp, "cache")
+        old = os.environ.get("BW_SIM_CACHE")
+        os.environ["BW_SIM_CACHE"] = cache
+        self.addCleanup(lambda: os.environ.pop("BW_SIM_CACHE") if old is None else os.environ.update(BW_SIM_CACHE=old))
+        self.addCleanup(setattr, preview, "entries_for", preview.entries_for)
+        preview.entries_for = lambda _doc: {}  # no 3D view here: only the fingerprint is under test
+        latest = SimpleNamespace(sha256="v1sha", object_name="objects/v1.FCStd", filename="P.FCStd")
+        vault = SimpleNamespace(root=os.path.join(self.tmp, "vault"), items={"P": SimpleNamespace(item_type="part")},
+                                latest_version=lambda pn: latest)
+        work = SimpleNamespace(path=lambda pn: os.path.join(self.tmp, "none.FCStd"), local_hash=lambda p: "")
+        s = SimpleNamespace(vault=vault, work=work)
+        self.assertIsNone(vs.geometry_of_version(vault, latest))
+        self.assertTrue(preview._geometry_missing(s, latest))
+        self.assertTrue(preview.needs_picture(s, "P"))
+        preview.refresh_one(s, "P")
+        recorded = vs.geometry_of_version(vault, latest)
+        self.assertEqual(recorded["fingerprint"], sv.geometry_of_doc(doc)["fingerprint"])
+        self.assertFalse(preview._geometry_missing(s, latest))
+        # a study of that part, made before, now reads current instead of unknown
+        summary = {"geometry": recorded["fingerprint"]}
+        self.assertEqual(vs.judge(summary, recorded), vs.CURRENT)
 
     def test_study_fingerprint_is_the_parts(self):
         doc, path = self.part_file()

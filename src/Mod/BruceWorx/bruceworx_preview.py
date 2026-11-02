@@ -12,7 +12,9 @@ open document or one opened hidden for the purpose.
 * At check-in the same happens to the work file just before it is stored, so the version carries both
   (``stamp_work_file``): a file saved before PDM-13, or saved from a script, gets them there.
 * Files checked in before that keep their old thumbnails in the vault; "Refresh Pictures" in the Files
-  tab's menu renders each one once into a cache on this Mac (``cache_path``), never into the vault.
+  tab's menu renders each one once into a cache on this Mac (``cache_path``), never into the vault. The same
+  pass records the shape fingerprint (PDM-14) of a part that has none, in the same cache, so a study of a part
+  checked in before PDM-14 stops reading "unknown".
 
 A picture made here carries a PNG text key (``MARK``), so a file whose thumbnail is already one is
 not rendered again.
@@ -348,6 +350,30 @@ def cached(sha) -> str:
     return path if path and os.path.exists(path) else ""
 
 
+GEOMETRY_KINDS = ("part", "assembly", "cots")  # the items whose files carry a shape fingerprint (PDM-14)
+
+
+def _geometry_missing(s, version) -> bool:
+    """True when no shape fingerprint is known for ``version``: neither in the file nor in the cache."""
+    from bruceworx import vault_simulations
+
+    return vault_simulations.geometry_of_version(s.vault, version) is None
+
+
+def _record_geometry(s, version, doc) -> None:
+    """Store the fingerprint of the opened ``doc`` in the cache for ``version`` unless one is known. A document
+    without a solid records an empty fingerprint, so it is not opened again for this."""
+    from bruceworx import vault_simulations
+
+    if not _geometry_missing(s, version):
+        return
+    import bruceworx_sim_vault
+
+    geo = bruceworx_sim_vault.geometry_of_doc(doc) or {"fingerprint": "", "settings": {"none": True}}
+    sha = s.vault.canonical(version.sha256) if hasattr(s.vault, "canonical") else version.sha256
+    vault_simulations.store_cached("geometry", sha, geo)
+
+
 def needs_picture(s, pn) -> bool:
     """Whether Refresh Pictures has work for ``pn``: a part or assembly whose latest version lacks a
     picture made here (in the file or cached) or a preview mesh (in the file or cached, PDM-13)."""
@@ -363,6 +389,8 @@ def needs_picture(s, pn) -> bool:
     picture = bool(cached(latest.sha256)) or is_iso(thumbnail_of(stored))
     if item.item_type not in MESH_KINDS:  # a drawing: its sheet picture only
         return not picture
+    if item.item_type in GEOMETRY_KINDS and _geometry_missing(s, latest):
+        return True
     mesh = bool(bruceworx_previewmesh.cached(latest.sha256)) or bool(bruceworx_previewmesh.read(stored))
     return not (picture and mesh)
 
@@ -387,8 +415,19 @@ def refresh_one(s, pn) -> bool:
     import bruceworx_previewmesh
 
     latest = s.vault.latest_version(pn)
-    with opened(source_for(s, pn)) as doc:
+    item = s.vault.items.get(pn)
+    source = source_for(s, pn)
+    # an assembly may be drawn from a work copy of an older version: that file's shape is not this version's
+    is_version = source != s.work.path(pn) or s.work.local_hash(source) == latest.sha256
+    with opened(source) as doc:
         entries = entries_for(doc)
+        if item is not None and item.item_type in GEOMETRY_KINDS and is_version:
+            try:
+                _record_geometry(s, latest, doc)
+            except Exception as exc:  # noqa: BLE001 -- the picture does not depend on it
+                import FreeCAD
+
+                FreeCAD.Console.PrintWarning(f"BruceWorx: no fingerprint for {pn} ({exc})\n")
     mesh = entries.get(bruceworx_previewmesh.ENTRY)
     if mesh:  # the preview mesh (PDM-13), cached beside the pictures
         bruceworx_previewmesh.store_cached(latest.sha256, mesh)

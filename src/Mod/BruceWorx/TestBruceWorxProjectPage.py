@@ -124,6 +124,7 @@ class WidgetTests(unittest.TestCase):
         self.assertEqual(list(d.project_tabs.buttons), ["", "DM"])
         self.assertEqual(d.project_tabs.buttons["DM"].text(), "DM · DM")
         self.assertTrue(d.cards.isVisibleTo(d) and not d.project_page.isVisibleTo(d))
+        self.assertFalse(d.tiles_box.isVisibleTo(d))  # the project cards replace the four totals tiles
         d.set_project("DM")
         self.assertTrue(d.project_page.isVisibleTo(d))
         self.assertFalse(d.cards.isVisibleTo(d))
