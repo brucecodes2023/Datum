@@ -441,6 +441,25 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="AutoActivateAssembly">
+        <property name="toolTip">
+         <string>On by default. When a file becomes the active document and nothing is being edited, its assembly is activated (as a double-click in the tree would), so the joint and assemble tools are ready, and the tree scrolls to it. Skipped with two or more assemblies, while a sketch, body or dialog is open, and outside the Design workspace.</string>
+        </property>
+        <property name="text">
+         <string>Activate the assembly when a file opens</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>AutoActivateAssembly</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="StartPage">
         <property name="toolTip">
          <string>On by default. The Start tab shows the BruceWorx page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off brings back FreeCAD's own Start page.</string>

@@ -265,6 +265,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx Fast Open was not installed: {exc}")
 
 try:
+    import bruceworx_autoactivate
+
+    bruceworx_autoactivate.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx assembly auto-activate was not installed: {exc}")
+
+try:
     import bruceworx_inspector
 
     bruceworx_inspector.install()

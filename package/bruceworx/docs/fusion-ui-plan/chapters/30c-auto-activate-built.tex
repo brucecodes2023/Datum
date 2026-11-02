@@ -1,0 +1,13 @@
+%======================================================================
+\subsection{ASM --- Built, 2 Nov: the assembly activates when a file opens}\label{sec:asm-autoactivate-built}
+%======================================================================
+
+Your words: ``when I open a file, that one becomes the active one.'' When a document becomes the active one
+(opened, or its tab chosen) and nothing is being edited, its single root assembly is activated as a double-click
+in the tree would, so the joint and assemble tools are no longer grey, and the tree scrolls to it with nothing left
+selected. It stays out when the file has two or more assemblies, while a sketch, body, task dialog or an active
+assembly is open, while the document is still loading or recomputing (checked again for five seconds), and outside
+the Design workspace (Simulation, Drawing, Manufacture stay where they are). Setting the edit from code does not
+switch workbench; only the double-click does. The switch is Preferences $>$ BruceWorx $>$ ``Activate the assembly
+when a file opens'' (\code{BruceWorx/AutoActivateAssembly}, on). Code: \file{bruceworx\_autoactivate.py}; it
+steps aside if the stopgap add-on VLAutoActivate is loaded. Tests: \file{TestBruceWorxAutoActivate.py} (9).
