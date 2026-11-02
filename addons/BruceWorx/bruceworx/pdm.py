@@ -772,6 +772,49 @@ class Vault:
             config.obsolete = True
         return rev
 
+    def withdraw(self, part_number, reason="", replaced_by=None):
+        """Withdraw an item that was never released (Obsolete without a release). Bruce, 2 Nov: "replace
+        obsolete part" -- the VL-P01-165 nut, dropped in rev J while VL-P01 is still pre-release. ``retire``
+        is for released items; a WIP item that is no longer part of the design is withdrawn instead, so no
+        release that never happened is recorded. ``reason`` is required; ``replaced_by`` names the items
+        that take over its job (recorded; each must exist and not be obsolete). Refused for an item that was
+        ever released (retire it), while In Review, while a current revision of an assembly uses it, and
+        while a drawing of it is current (withdraw the drawing first). Its configurations go with it."""
+        item = self._own(part_number, "withdraw")
+        if item.obsolete:
+            raise LifecycleError(f"{part_number} is already obsolete")
+        if any(r.state == RELEASED or r.record("approve") or r.record("release_eco") for r in item.revisions):
+            raise LifecycleError(f"{part_number} was released; retire it instead")
+        latest = item.latest
+        if latest.state != WIP:
+            raise LifecycleError(f"{part_number} is {latest.state}; only a WIP item is withdrawn")
+        self._text(reason, "a reason for withdrawing it")
+        replaced = []
+        for pn in replaced_by or ():
+            other = self.items.get(pn)
+            if other is None:
+                raise LifecycleError(f"{pn} is not an item")
+            if pn == part_number or other.obsolete:
+                raise LifecycleError(f"{pn} cannot replace {part_number}")
+            if pn not in replaced:
+                replaced.append(pn)
+        own = [part_number] + [c.part_number for c in self.configurations_of(part_number)]
+        users = {f"{use.part_number} rev {use.revision}"
+                 for pn in own for use in self.where_used_revisions(pn) if use.exact and use.current}
+        if users:
+            raise LifecycleError(f"{part_number} is still used by {', '.join(sorted(users))}")
+        drawings = sorted(d.part_number for d in self.drawings_of(part_number) if not d.obsolete)
+        if drawings:
+            raise LifecycleError(f"{part_number} has current drawing(s) {', '.join(drawings)}; withdraw them first")
+        note = f"withdrawn: {reason}" + (f" (replaced by {', '.join(replaced)})" if replaced else "")
+        latest.history.append(note)
+        latest.records.append(self._entry("withdraw", reason=reason, replaced_by=replaced))
+        latest.state = OBSOLETE
+        item.obsolete = True
+        for config in self.configurations_of(part_number):
+            config.obsolete = True
+        return latest
+
     # ----- change control ----------------------------------------------
 
     def raise_ecr(self, number, problem, items, attachments=None):

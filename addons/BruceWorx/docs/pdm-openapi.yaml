@@ -127,6 +127,22 @@ paths:
         content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string, minLength: 1}}}}}
       responses: {"204": {description: Retired}, "409": {$ref: "#/components/responses/Lifecycle"}}
 
+  /items/{pn}/withdraw:
+    post:
+      operationId: withdraw
+      summary: >
+        WIP -> Obsolete for an item that was never released (2 Nov 2026): a part or drawing dropped
+        from the design before its first release. No release is recorded. Refused for an item that
+        was ever released (retire it), while In Review or checked out, without a reason, while the
+        current revision of an assembly uses it, or while a drawing of it is current (withdraw the
+        drawing first). replaced_by names the items that take over its job; each must exist and
+        not be obsolete.
+      parameters: [{$ref: "#/components/parameters/pn"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string, minLength: 1}, replaced_by: {type: array, items: {type: string}}}}}}
+      responses: {"204": {description: Withdrawn}, "409": {$ref: "#/components/responses/Lifecycle"}}
+
   /items/{pn}/type:
     put:
       operationId: set_item_type

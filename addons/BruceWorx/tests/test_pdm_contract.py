@@ -60,6 +60,7 @@ TRANSITIONS = (
     ("T13", "set_item_type", "PUT /items/{pn}/type", "part or cots, not Obsolete", "cots or part"),
     ("T15", "set_category", "PUT /items/{pn}/category", "any item, any state", "category set or cleared"),
     ("T17", "set_description", "PUT /items/{pn}/description", "WIP", "description replaced; no new version"),
+    ("T18", "withdraw", "POST /items/{pn}/withdraw", "WIP, never released, unused", "Obsolete; no release"),
     ("T16", "renumber", "POST /items/{pn}/renumber", "any item but In Review, with a reason",
      "same item under a new number, the old one an alias"),
     ("T14", "add_configuration", "POST /items/{pn}/configurations", "part or assembly, not Obsolete",
@@ -228,6 +229,25 @@ class _Lifecycle:
         self.released()
         with self.assertRaises(LifecycleError):  # a released description changes with the next revision
             self.v.set_description(PART, "Housing, anodised")
+
+    def test_T18_withdraw(self):
+        self.v.create_item(PART, description="Nut")
+        self.v.create_item(DWG, "drawing", drawing_of=PART)
+        with self.assertRaises(LifecycleError):
+            self.v.withdraw(PART, "dropped")  # its drawing is current
+        self.v.withdraw(DWG, "the part is dropped")
+        with self.assertRaises(LifecycleError):
+            self.v.withdraw(PART, " ")  # a reason is required
+        self.v.withdraw(PART, "dropped")
+        item = self.v.items[PART]
+        self.assertEqual((item.state, item.obsolete, item.latest.state, item.released), (OBSOLETE, True, OBSOLETE, None))
+        for refused in (self.v.submit, self.v.approve):
+            with self.assertRaises(LifecycleError):
+                refused(PART)
+        other = "LE-01-01009-001"
+        self.released(other)
+        with self.assertRaises(LifecycleError):  # released once: retire, not withdraw
+            self.v.withdraw(other, "dropped")
 
     def test_T16_renumber(self):
         other = "LE-01-01002-001"

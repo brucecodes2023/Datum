@@ -71,6 +71,7 @@ LIFECYCLE_OPS = {
     "reject": ("part_number", "reason", "checklist", "attachments"),
     "approve": ("part_number", "note", "checklist", "attachments"),
     "retire": ("part_number", "reason"),
+    "withdraw": ("part_number", "reason", "replaced_by"),  # a never-released item goes Obsolete (2 Nov 2026)
     "raise_ecr": ("number", "problem", "items", "attachments"),
     "decide_ecr": ("number", "approved", "reason", "attachments"),
     "open_eco": ("number", "ecr_numbers"),
@@ -697,6 +698,15 @@ class FolderVault:
         """Retire a released item (Obsolete); the reason is required and recorded (PDM-05). The
         released files' links count as uses for items without a BOM (pdm.Vault.retire)."""
         return self._record("retire", dict(part_number=part_number, reason=reason))
+
+    def withdraw(self, part_number, reason="", replaced_by=None):
+        """Withdraw a never-released WIP item (Obsolete without a release; pdm.Vault.withdraw). Refused while
+        it is checked out: its work would have nowhere to go."""
+        holder = self.locks.get(part_number)
+        if holder:
+            raise pdm.LifecycleError(f"{part_number} is checked out by {holder}; check it in or undo the check-out first")
+        return self._record("withdraw", _optional(dict(part_number=part_number, reason=reason),
+                                                  replaced_by=list(replaced_by or [])))
 
     def raise_ecr(self, number, problem, items, attachments=None):
         """``number`` None takes the next ``ECR-0001`` number. ``attachments`` are file
