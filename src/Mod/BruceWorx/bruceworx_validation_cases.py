@@ -934,8 +934,9 @@ def build_rotating_beam(params, size):
     radius), spinning about Z at the speed of the rotation speed ratio ``eta``.  The study is the SIM-07 steps Stationary
     (the spin load) + Eigenfrequency (bruceworx_sim_steps): a static CalculiX step with *DLOAD CENTRIF, then a *STEP,
     PERTURBATION *FREQUENCY about that state.  The flapping (out of the plane of rotation, bending in z) modes are the
-    modes whose modal mass is in z; the lead-lag modes (in y) are read as informative numbers only (CalculiX's
-    perturbation step carries the centrifugal tension, not the rotating-frame softening term)."""
+    modes whose modal mass is in z; the lead-lag modes (in y) are read as informative numbers only.  CalculiX's
+    perturbation step includes the spin softening term: lead1 = 7.157 against 7.155 from w^2 = w0^2 + (K1 - 1) eta^2 at
+    the in-plane speed ratio eta/2 (7.758 without softening)."""
     import Part
 
     import bruceworx_sim_post as post

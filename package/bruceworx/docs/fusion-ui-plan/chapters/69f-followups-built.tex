@@ -67,9 +67,12 @@ plane of rotation).
         45.7\,Hz (+37\,\%). Compared: modes 1 and 2, tolerance 1\,\%. Mesh check (tetrahedra, element size 20, 14, 10, 7, 5\,mm):
         mode 1 is 4.8104, 4.8052, 4.8047, 4.8061, 4.8035 (0.27 to 0.13\,\% above 4.7973; spread 0.15\,\%), mode 2 is 23.371,
         23.334, 23.332, 23.344, 23.324 (0.02 to 0.22\,\%). The rest is shear deformation and the Poisson effect of the 3D beam.
-  \item \textbf{Lead-lag (in-plane) modes.} CalculiX's perturbation step carries the centrifugal tension, not the
-        rotating-frame softening, so its first in-plane mode (7.16 in the same units) is that of a stationary beam under
-        the tension: stiffened, where the rotating beam is softened. Measured and reported (\code{lead1}), not asserted.
+  \item \textbf{Lead-lag (in-plane) modes.} CalculiX's first in-plane mode is 7.157 in the same units (\code{lead1},
+        measured, not asserted). The in-plane bending stiffness is 4$\times$ the flapping one, so the in-plane speed
+        ratio is $\eta/2=1.5$; with the spin softening term, $\omega^2=\omega_0^2+(K_1-1)\,\eta^2$ gives
+        $2\sqrt{3.5160^2+0.1933\cdot1.5^2}=7.155$, and without it 7.758. CalculiX matches the softened value to
+        0.03\,\%, so its perturbation step does include spin softening (Coriolis aside). Checked by the lead session, 2 Nov;
+        the first draft of this note said the opposite.
 \end{itemize}
 
 \subsection*{Stripped simulation copy keeps its numbers (the \code{max\_vm} error above)}
