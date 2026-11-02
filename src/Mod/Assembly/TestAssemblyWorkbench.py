@@ -27,6 +27,7 @@ from AssemblyTests.TestCore import TestCore
 from AssemblyTests.TestCommandInsertLink import TestCommandInsertLink
 from AssemblyTests.TestBWJoints import TestBWJoints
 from AssemblyTests.TestBWBom import TestBWBom
+from AssemblyTests.TestBWNestedFlexible import TestBWNestedFlexible
 from AssemblyTests.TestBWMotion import TestFormulas, TestStudy, TestLinks
 
 
@@ -35,4 +36,5 @@ True if TestCore else False
 True if TestCommandInsertLink else False
 True if TestBWJoints else False
 True if TestBWBom else False
+True if TestBWNestedFlexible else False
 True if TestFormulas and TestStudy and TestLinks else False

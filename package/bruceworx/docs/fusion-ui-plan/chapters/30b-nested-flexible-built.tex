@@ -1,0 +1,36 @@
+%======================================================================
+\subsection{BW-ASM --- Built, 2 Nov: flexible sub-assemblies inside flexible sub-assemblies}\label{sec:asm-nested-built}
+%======================================================================
+
+A flexible sub-assembly (an \code{AssemblyLink} with \code{Rigid} off) that itself holds a flexible sub-assembly
+(printer $\rightarrow$ Gantry $\rightarrow$ X Axis) did not work in the solver. The Vector Labs session reported
+three faults and carried Python workarounds (\code{seat\_nested}, \code{remap\_nested\_refs}); all three are now fixed
+in the C++ of the Assembly module, in three commits (\code{AssemblyLink.cpp}, \code{AssemblyObject.cpp}).
+
+\paragraph{What was wrong, and what changed.}
+\begin{enumerate}[nosep]
+  \item \textbf{Child links stood at the identity.} \code{synchronizeComponents} placed new child links only for a
+        rigid link, and the frame an outer link passes down when it turns flexible reached only its direct children.
+        A nested flexible link now seats a new child like the child of the link it shows (the layout the Gantry
+        already solved), and moves any placement it is given into its children, so it stays at the identity.
+        The nested link used to be filled while it was still outside its parent; it is now added first.
+  \item \textbf{Copied joints pointed into the sub-assembly's file.} \code{handleJointReference} looked a connector up
+        only among the direct children. It now also searches the nested flexible links, matching by what they show,
+        and fills a freshly made nested link before the joints are copied (that link executes after its parent).
+        The ``Broken link \ldots\ no longer exists'' error on the copied joint at the first recompute was this
+        fault and is gone.
+  \item \textbf{The top-level solve did not reach the nested parts.} \code{AssemblyObject::getSubAssemblies} took
+        only the links directly in the assembly, so the joints of a link inside a link never entered the model.
+        It is now recursive.
+\end{enumerate}
+
+\paragraph{Tests.} \file{src/Mod/Assembly/AssemblyTests/TestBWNestedFlexible.py} (run with the Assembly suite) builds three
+documents: X Axis (rail, carriage, slider), Gantry (frame, flexible X Axis, a fixed joint), Top (a base, the
+Gantry link turned flexible in a rotated frame, a fixed joint from the base to the frame, another from a shuttle to
+the carriage two levels down). It checks the placements of the nested links, that every copied joint names links of
+the top document, that the top solve ties shuttle and carriage on the rail axis, and that dragging the carriage
+moves it and the shuttle together and nothing else. All four failed before; all pass now; the Assembly suite
+(48 tests), \code{TestBruceWorxPickTrace} and \code{TestBruceWorxFlexSub} are unchanged.
+
+\paragraph{Open.} Dragging a part that is fixed-jointed to another is bundled with it by the solver (upstream
+behaviour), so the drag has to start on the bundle's main part; printer-level drag should pick that part.

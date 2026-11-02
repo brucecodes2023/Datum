@@ -2255,7 +2255,8 @@ std::vector<AssemblyLink*> AssemblyObject::getSubAssemblies()
         Assembly::AssemblyLink::getClassTypeId()
     );
     for (auto assembly : assemblies) {
-        if (hasObject(assembly)) {
+        // [BW] recursive: a flexible AssemblyLink inside another one joins the solve too
+        if (hasObject(assembly, true)) {
             subAssemblies.push_back(freecad_cast<AssemblyLink*>(assembly));
         }
     }
