@@ -114,7 +114,8 @@
                 "BruceWorx_InsertFastener",
                 "BruceWorx_Joint",
                 "Assembly_CreateJointRevolute",
-                "Assembly_CreateJointSlider"
+                "Assembly_CreateJointSlider",
+                "BruceWorx_Mate"
               ],
               "more": [
                 "Assembly_InsertNewPart",

@@ -439,6 +439,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx simulation window shell (SIM-07) was not installed: {exc}")
 
 try:
+    import bruceworx_asm_panes
+
+    bruceworx_asm_panes.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx assembly Model Builder (ASM-UI-01) was not installed: {exc}")
+
+try:
     import bruceworx_validation_gui
 
     bruceworx_validation_gui.install()

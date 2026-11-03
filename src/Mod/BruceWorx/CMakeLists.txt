@@ -208,7 +208,9 @@ SET(BruceWorx_SRCS
     bruceworx_sim_steps.py
     TestBruceWorxSimModel.py
     TestBruceWorxAsmModel.py
+    TestBruceWorxAsmPanes.py
     bruceworx_asm_model.py
+    bruceworx_asm_panes.py
     bruceworx_validation.py
     bruceworx_validation_cases.py
     bruceworx_validation_gui.py

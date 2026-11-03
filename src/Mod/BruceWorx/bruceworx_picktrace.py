@@ -716,6 +716,8 @@ class _AssemblyPick:
         path from the assembly is read back from the selection on the next tick."""
         if self.busy or not sub or sub.endswith("."):
             return  # a tree click names no element
+        if slot_armed:
+            return  # the assembly Model Builder wants the raw element pick (bruceworx_asm_panes)
         import bruceworx_selectfilter as sf
 
         if not sf.rewrite_on(_on(ASM_PICK_PREF)):
@@ -769,6 +771,9 @@ class _AssemblyPick:
             pass
         finally:
             self.busy = False
+
+
+slot_armed = False  # set by bruceworx_asm_panes while a mate's pick slot (or the new-mate node) takes picks
 
 
 _assembly_pick = _AssemblyPick()

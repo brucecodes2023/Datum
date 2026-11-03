@@ -127,7 +127,7 @@ def study_label():
 
 # ----- the widgets -------------------------------------------------------------------------------------------
 
-_s = {"built": False, "active": False, "docks": {}, "panes": {}, "saved": {}, "timer": None, "kind": "?", "bridge": None, "listener": None, "views": {}}
+_s = {"tabs": {}, "built": False, "active": False, "docks": {}, "panes": {}, "saved": {}, "timer": None, "kind": "?", "bridge": None, "listener": None, "views": {}}
 
 
 def _level_icon(level):
@@ -551,16 +551,30 @@ def _left():
     return _overlay_widget(LEFT)
 
 
-def _sidebar_index():
-    """The overlay tab of the Simulation sidebar (the dock's tab is the one after the model tree's), or -1."""
+def _tab_index(title):
+    """The overlay tab of the sidebar named ``title`` (a tab added with ``show_tab``), or -1."""
     left = _left()
-    dock = _s.get("sidebar")
-    if left is None or dock is None:
+    if left is None or title not in _s["tabs"]:
         return -1
     for i in range(left.count()):
-        if left.tabText(i) == SIDEBAR_TITLE:
+        if left.tabText(i) == title:
             return i
     return -1
+
+
+def _sidebar_index():
+    """The overlay tab of the Simulation sidebar (the dock's tab is the one after the model tree's), or -1."""
+    return _tab_index(SIDEBAR_TITLE)
+
+
+def _tab_title(index):
+    """The strip's text for overlay tab ``index``: a sidebar tab's own title, else "Browser"."""
+    left = _left()
+    if left is not None:
+        for title in _s["tabs"]:
+            if index == _tab_index(title):
+                return title
+    return "Browser"
 
 
 def _tab_strip_class():
@@ -660,7 +674,7 @@ def _tab_strip_class():
                 self.show()
             self.raise_()
             current = self.tabs.currentIndex()
-            items = [(i, "Simulation" if i == _sidebar_index() else "Browser", i == current)
+            items = [(i, _tab_title(i), i == current)
                      for i in range(self.tabs.count()) if self.tabs.tabBar().isTabVisible(i)]
             if [(i, t, c) for i, t, c in items] != [(b.index, b.text(), bool(b.property("current"))) for b in self.buttons]:
                 self.rebuild(items)
@@ -751,53 +765,79 @@ def _refresh_left():
         pass
 
 
-def _show_sidebar():
-    """The left panel gets its Simulation tab (made on first use) and the horizontal strip, and selects the tab."""
+def show_tab(title, dock_name, widget, width=SIDEBAR_WIDTH):
+    """The left panel gets a sidebar tab ``title`` (the dock is made on first use, around ``widget``) and the horizontal
+    strip, and the tab is selected. Shared by the Simulation and Assembly tabs."""
     import FreeCADGui
     from PySide import QtCore
 
     left = _left()
     if left is None:
         return False
-    if _s.get("sidebar") is None:
-        dock = FreeCADGui.addDockWindow(SIDEBAR, _s["split"], int(QtCore.Qt.LeftDockWidgetArea.value), LEFT)
-        _s["sidebar"] = dock
-        left.setTabText(left.count() - 1, SIDEBAR_TITLE)
-    dock = _s["sidebar"]
-    _s["saved"]["tab"] = left.currentIndex()
+    tab = _s["tabs"].get(title)
+    if tab is not None and _tab_index(title) < 0:
+        _s["tabs"].pop(title)  # the panel dropped the tab (its dock was removed): make it again
+        tab = None
+    if tab is None:
+        dock = FreeCADGui.addDockWindow(dock_name, widget, int(QtCore.Qt.LeftDockWidgetArea.value), LEFT)
+        left.setTabText(left.count() - 1, title)
+        tab = _s["tabs"][title] = {"dock": dock, "width": None}
+    dock = tab["dock"]
     dock.show()
-    index = _sidebar_index()
+    index = _tab_index(title)
     if index < 0:
         return False
     left.tabBar().setTabVisible(index, True)
     if _s.get("strip") is None:
         _s["strip"] = _tab_strip_class()(left)
-    _s["saved"]["width"] = left.width()
+    tab["width"] = left.width()
     _s["strip"].activate()
     _refresh_left()  # the panel reserved room for the native tab bar before the strip took over
     _show_index(index)
-    if left.width() < SIDEBAR_WIDTH:
-        _widen_left(SIDEBAR_WIDTH)
+    if left.width() < width:
+        _widen_left(width)
     _s["strip"].sync()
     return True
 
 
-def _hide_sidebar():
-    """Back to the model tree alone: the strip goes away, the Simulation tab is hidden, the panel has its old width."""
+def hide_tab(title):
+    """Back to the model tree alone: the strip goes away (unless another sidebar tab is up), the tab is hidden, the panel has
+    its old width."""
     left = _left()
-    dock = _s.get("sidebar")
-    if left is None or dock is None:
+    tab = _s["tabs"].get(title)
+    if left is None or tab is None:
         return
-    index = _sidebar_index()
+    index = _tab_index(title)
     _show_index(0)
     if _s.get("strip") is not None:
-        _s["strip"].deactivate()
-    if _s["saved"].get("width") and left.width() != _s["saved"]["width"]:
-        _widen_left(_s["saved"]["width"])
+        others = [t for t in _s["tabs"] if t != title and _tab_index(t) >= 0 and left.tabBar().isTabVisible(_tab_index(t))]
+        if not others:
+            _s["strip"].deactivate()
+    if tab.get("width") and left.width() != tab["width"]:
+        _widen_left(tab["width"])
     if index >= 0:
         left.tabBar().setTabVisible(index, False)
-    dock.hide()
+    tab["dock"].hide()
     _refresh_left()
+    if _s.get("strip") is not None and _s["strip"].on:
+        _s["strip"].sync()
+
+
+def tab_shown(title):
+    left = _left()
+    index = _tab_index(title)
+    return left is not None and index >= 0 and left.currentIndex() == index and left.tabBar().isTabVisible(index)
+
+
+def _show_sidebar():
+    """The left panel gets its Simulation tab (made on first use) and the horizontal strip, and selects the tab."""
+    ok = show_tab(SIDEBAR_TITLE, SIDEBAR, _s["split"])
+    _s["sidebar"] = _s["tabs"].get(SIDEBAR_TITLE, {}).get("dock")
+    return ok
+
+
+def _hide_sidebar():
+    hide_tab(SIDEBAR_TITLE)
 
 
 def _widen_left(width):
