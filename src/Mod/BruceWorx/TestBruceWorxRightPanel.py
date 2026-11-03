@@ -147,5 +147,99 @@ class TaskDialogInThePanel(unittest.TestCase):
                 self.assertTrue(mw.rect().contains(corner), f"{button.text()} at {corner} outside the window")
 
 
+class DrawerStaysClosedForACommand(unittest.TestCase):
+    """GUI: Bruce, 3 Nov: "make sure the right task bar can drawer close too". A closed drawer stays closed
+    when a command opens (the mate bar runs Assembly_CreateJointDistance), and closing it while a command is
+    open holds until it is opened again; the pull tab stays meanwhile. (Hovering the window's right edge
+    still slides it in: that is FreeCAD's auto hide, which the drawer uses.)"""
+
+    def setUp(self):
+        import FreeCAD as App
+
+        if not App.GuiUp:
+            self.skipTest("GUI only")
+        import FreeCADGui as Gui
+
+        self.doc = App.newDocument("RightPanelDrawer")
+        self.asm = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        self.asm.newObject("Part::Box", "B1")
+        self.asm.newObject("Part::Box", "B2").Placement.Base = App.Vector(20, 0, 0)
+        self.doc.recompute()
+        self.was_hidden = rp.is_hidden()
+        self.addCleanup(self._restore)
+        Gui.getDocument(self.doc.Name).setEdit(self.asm)
+        Gui.activateWorkbench("AssemblyWorkbench")
+        Gui.Selection.clearSelection()
+        self._pump()
+
+    def close_command(self):
+        """Cancel the joint command as its Cancel button does (closeDialog alone leaves JointObject.activeTask
+        set, and the next joint command then fails rejecting it)."""
+        import FreeCADGui as Gui
+        import JointObject
+
+        if JointObject.activeTask is not None:
+            JointObject.activeTask.reject()
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        self._pump()
+
+    def _restore(self):
+        import FreeCAD as App
+        import FreeCADGui as Gui
+
+        self.close_command()
+        gd = Gui.getDocument(self.doc.Name)
+        if gd is not None:
+            gd.resetEdit()
+        App.closeDocument(self.doc.Name)
+        rp.set_hidden(self.was_hidden)
+
+    def _pump(self, n=30):
+        import time
+
+        import FreeCADGui as Gui
+
+        for _ in range(n):
+            Gui.updateGui()
+            time.sleep(0.02)
+
+    def open_joint(self):
+        import FreeCADGui as Gui
+
+        Gui.runCommand("Assembly_CreateJointDistance")
+        self._pump(60)
+        self.assertTrue(Gui.Control.activeDialog(), "the joint command did not open")
+
+    def assertClosed(self, when):
+        tabs = rp._overlay()
+        self.assertIsNotNone(tabs)
+        self.assertFalse(tabs.isVisible(), f"the panel opened {when}")
+        self.assertTrue(rp._handle is not None and rp._handle.isVisible(), f"no pull tab {when}")
+
+    def test_a_command_does_not_open_a_closed_drawer(self):
+        import FreeCADGui as Gui
+
+        rp.set_hidden(True)
+        self._pump()
+        self.open_joint()
+        self.assertClosed("when the joint command opened")
+
+    def test_closing_while_a_command_is_open_holds(self):
+        import FreeCADGui as Gui
+
+        rp.set_hidden(False)
+        self.open_joint()
+        self.assertTrue(rp._overlay().isVisible(), "an open drawer shows the command")
+        rp.set_hidden(True)
+        self._pump(60)
+        self.assertClosed("after closing it with the command open")
+        self.close_command()
+        self.assertClosed("after the command ended")
+        rp.set_hidden(False)
+        self._pump()
+        self.assertTrue(rp._overlay().isVisible(), "the pull tab's action did not open it")
+
+
 if __name__ == "__main__":
     unittest.main()
