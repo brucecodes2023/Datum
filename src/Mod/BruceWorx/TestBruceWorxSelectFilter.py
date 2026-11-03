@@ -46,9 +46,10 @@ class TestGate(unittest.TestCase):
         return [gate.allow(None, None, sub) for sub in self.SUBS]
 
     def test_each_element_mode_lets_only_its_kind_through(self):
-        self.assertEqual(self.decisions(sf.FACE), [True, False, False, False, False, True, False])
-        self.assertEqual(self.decisions(sf.EDGE), [False, True, False, False, False, False, False])
-        self.assertEqual(self.decisions(sf.VERTEX), [False, False, True, False, False, False, False])
+        # whole objects ("", "Body.Pad.", None: tree clicks) always pass, as in SolidWorks
+        self.assertEqual(self.decisions(sf.FACE), [True, False, False, True, True, True, True])
+        self.assertEqual(self.decisions(sf.EDGE), [False, True, False, True, True, False, True])
+        self.assertEqual(self.decisions(sf.VERTEX), [False, False, True, True, True, False, True])
 
     def test_other_modes_let_everything_through(self):
         for mode in (sf.AUTO, sf.COMPONENT, sf.BODY):

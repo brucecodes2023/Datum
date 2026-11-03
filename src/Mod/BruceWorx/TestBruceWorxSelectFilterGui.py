@@ -47,7 +47,8 @@ class TestSelectFilterGui(unittest.TestCase):
         self.Gui.Selection.clearSelection()
         self.assertEqual(self.select(sf.FACE, "Edge1"), [])
         self.assertEqual(self.select(sf.FACE, "Vertex1"), [])
-        self.assertEqual(self.select(sf.FACE, ""), [])
+        self.Gui.Selection.clearSelection()
+        self.assertEqual(len(self.select(sf.FACE, "")), 1)  # a tree click on the whole object still selects
 
     def test_edge_and_vertex_modes(self):
         self.assertEqual(len(self.select(sf.EDGE, "Edge2")), 1)

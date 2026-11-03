@@ -9,8 +9,10 @@ status bar. The mode is Preferences/BruceWorx/SelectionFilter (a string) and sta
 * Component: always the component directly under the open assembly (the AssemblyPick rule, even when that
   pref is off, and no drilling down).
 * Body: the whole solid that was clicked (its body, else the deepest object), no face, edge or vertex.
-* Face, Edge, Vertex: only elements of that kind can be pre-selected and selected. FreeCAD's selection gate
-  does it (Gui.Selection.addSelectionGate); tree clicks name no element, so they are ignored too.
+* Face, Edge, Vertex: in the 3D view only elements of that kind can be pre-selected and selected. FreeCAD's
+  selection gate does it (Gui.Selection.addSelectionGate). A whole object (a tree click names no element) is
+  always let through, as in SolidWorks, where the filter limits picks in the graphics area only (Bruce, 2 Nov:
+  with Face on, clicking the printer's assembly in the tree only dinged).
 
 Component and Body rewrite the pick in the picktrace selection observer (it asks this module which rule
 applies, see rewrite_active); Face, Edge and Vertex leave that observer idle so the two never fight.
@@ -68,9 +70,10 @@ def element_type(sub):
 
 
 def allows(mode, sub):
-    """Whether a pick of ``sub`` may be selected in ``mode``: the gate's decision."""
+    """Whether a pick of ``sub`` may be selected in ``mode``: the gate's decision. A whole object (no element:
+    a tree click) always may."""
     if mode in ELEMENT_MODES:
-        return element_type(sub) == mode
+        return element_type(sub) in (mode, "")
     return True
 
 
