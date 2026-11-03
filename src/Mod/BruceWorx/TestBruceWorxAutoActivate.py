@@ -220,6 +220,27 @@ class TestOpen(unittest.TestCase):
         self.assertIsNone(self.Gui.getDocument(pdoc.Name).getInEdit(), "the parent's edit was reset")
         self.assertIsNotNone(self.Gui.getDocument(sub.Name).getInEdit())
 
+    def test_switching_tabs_moves_the_edit(self):
+        """Bruce: "whatever window I am in should be the active window". The printer and a sub-assembly are
+        both open; choosing either tab gives its assembly the edit, even when that tab's view still holds
+        the "assembly" marker from before (seen 2 Nov: drags in the sub-assembly tab went nowhere)."""
+        pdoc = self.open(self.parent)
+        sub = [d for d in FreeCAD.listDocuments().values() if d.FileName == self.sub][0]
+        self.Gui.setActiveDocument(sub.Name)
+        self.Gui.getDocument(sub.Name).createView("Gui::View3DInventor")
+        self.assertIsNone(aa.activate(sub.Name), aa._state(sub.Name))
+        self.wait()
+        self.assertEqual(self.Gui.editDocument().Document.Name, sub.Name)
+        for doc in (pdoc, sub, pdoc):
+            other = sub if doc is pdoc else pdoc
+            # the stale state: the marker is still set here while the other file holds the edit
+            self.Gui.getDocument(doc.Name).ActiveView.setActiveObject("assembly", doc.getObject("Assembly0"))
+            self.Gui.setActiveDocument(doc.Name)
+            self.assertIsNone(aa.activate(doc.Name), aa._state(doc.Name))
+            self.wait()
+            self.assertEqual(self.Gui.editDocument().Document.Name, doc.Name)
+            self.assertIsNone(self.Gui.getDocument(other.Name).getInEdit(), "the other file let go")
+
     def test_sketch_in_other_document_nothing(self):
         other = FreeCAD.newDocument("AAsketchdoc")
         sk = other.addObject("Sketcher::SketchObject", "Sketch")

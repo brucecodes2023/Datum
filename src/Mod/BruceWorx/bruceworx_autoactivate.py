@@ -14,7 +14,8 @@ Rules (``should_activate`` is FreeCAD-free and tested):
   an assembly that another open file links to is still the top one here), or no assembly and exactly one Body;
 * no task dialog is open, nothing is in edit in this document, and no other document has anything in edit
   except an active assembly (that edit is reset first: the printer's assembly lets go for a sub-assembly
-  opened after it); no assembly, part or body is already active here;
+  opened after it, and takes it back when its tab is chosen again); no part or body is already active here
+  (an assembly is active only while it is in edit: the view's marker may outlive the edit);
 * the document is not loading or recomputing (the check is repeated for a few seconds, then given up);
 * the current workbench belongs to the Design workspace (PartDesign, Assembly, Part, Start): a Simulation,
   Drawing or Manufacture session is left where it is.
@@ -134,8 +135,10 @@ def _state(name):
     assembly_docs, other_edit = _active_assembly_edits(name)
     editing = other_edit or Gui.getDocument(name).getInEdit() is not None
     view = Gui.getDocument(name).ActiveView
+    # An active assembly here is this document's edit (counted in ``editing``). The view's "assembly" marker
+    # alone is not: it can stay set after another file took the edit, and then the tab never got it back.
     active_part = False
-    for key in ("assembly", "part", "pdbody"):
+    for key in ("part", "pdbody"):
         try:
             active_part = active_part or view.getActiveObject(key) is not None
         except Exception:
