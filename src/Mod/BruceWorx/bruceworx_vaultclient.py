@@ -1995,8 +1995,12 @@ class _DocumentObserver:
             QtCore.QTimer.singleShot(0, lambda name=doc.Name, path=filename: _stamp_saved(name, path))
 
     def slotOpenTransaction(self, doc, name):
-        """The first edit of a read-only vault file offers a check-out (once per document)."""
+        """The first edit of a read-only vault file offers a check-out (once per document), when the preference
+        OfferCheckOutOnFirstEdit is on. Off by default (Bruce, 2 Nov: "can we not force the checkout dialogue
+        unless I do it or go to save it?"): Check Out and the question on save stay."""
         if doc.Name in self.asked or getattr(doc, "Restoring", False):
+            return
+        if not _prefs().GetBool("OfferCheckOutOnFirstEdit", False):
             return
         import FreeCAD
 

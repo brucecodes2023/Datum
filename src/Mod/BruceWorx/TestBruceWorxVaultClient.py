@@ -834,6 +834,22 @@ class TestFirstEditOffer(unittest.TestCase):
         # In place: the assembly hosting the edit of its part is not being edited (live check, 2 Nov)
         self.assertFalse(vc.offers_first_edit("LE_02_01002_001", "LE_02_01002_001", "LE_01_01003_001"))
 
+    def test_first_edit_offer_is_off_by_default(self):
+        """Only the preference OfferCheckOutOnFirstEdit turns the offer on; off, an edit asks nothing."""
+        calls = []
+        saved = vc._prefs, vc.offers_first_edit
+        doc = SimpleNamespace(Name="LE_01_01003_001", Restoring=False)
+        try:
+            vc.offers_first_edit = lambda *a: calls.append(a) or False
+            for prefs, expected in ((FakeGroup(), 0), (FakeGroup(OfferCheckOutOnFirstEdit=False), 0),
+                                    (FakeGroup(OfferCheckOutOnFirstEdit=True), 1)):
+                calls.clear()
+                vc._prefs = lambda prefs=prefs: prefs
+                vc._DocumentObserver().slotOpenTransaction(doc, "Move")
+                self.assertEqual(len(calls), expected, prefs.bools)
+        finally:
+            vc._prefs, vc.offers_first_edit = saved
+
     def test_open_is_read_only_unless_the_old_question_is_switched_on(self):
         import FreeCAD
 
