@@ -1,0 +1,172 @@
+%======================================================================
+\subsection{Mates and motion, SolidWorks-style --- Plan for the fork work (2 Nov 2026)}\label{sec:mates-motion-plan}
+%======================================================================
+
+You asked, on 2 Nov: \emph{``after I join two parts together I should see them move with each other. Like how
+fusion or solidworks moves they keep those constraints. VectorLabs should be more constraint based instead of the
+rigid joints''} and \emph{``make sure we touch motion to have those capabilities too''}. Your choices: a pop-up
+mate bar, a first scope of Standard + Advanced + Mechanical mates with a degrees-of-freedom (DOF) readout, and the
+TL printer's Fixed joints converted automatically.
+
+The work is split three ways. The Vector Labs session builds the \textbf{mate bar} (pick two faces, edges or
+points; the mates that fit are offered, with a value, Flip and OK) and the \textbf{printer conversion}. This plan
+covers the \textbf{fork work}, B1--B3 below. B4 (the right-panel drawer stays closed while a command is open) and
+B5 (a dragged part stays under the cursor) are already built and installed (1.1.4-bw.1+5de7697d).
+
+\paragraph{What the solver already does (read in the source, 2 Nov).}
+\begin{itemize}
+  \item The standard mates exist as joints. A \emph{Distance} joint picks its solver constraint from the two
+        picked shapes (\file{AssemblyObject.cpp}, \code{makeMbdJointDistance}): plane--plane is a planar joint
+        (Coincident or Distance), plane--cylinder is Tangent, point--plane is a point on a face, and so on.
+        Parallel, Perpendicular, Angle, Fixed (Lock), Revolute (Hinge), Slider, Cylindrical, Ball, Gears, Rack \&
+        pinion, Screw and Belt are joints of their own. Several joints between two parts stack.
+  \item \textbf{One trap for the mate bar:} a cylinder--cylinder Distance of 0 means the cylinders \emph{touch}
+        (the solver adds both radii), not that they are concentric. Concentric is the Cylindrical joint;
+        Concentric + Coincident is the Revolute (Hinge). The Vector Labs session has been told.
+  \item The solver reports no degrees of freedom. The assembly's ``Under-constrained: $n$ DOF'' text exists, but
+        its number is a placeholder (6 per part) that is never computed, and \code{solve()} returns only
+        ``solved'', ``nothing grounded'' or ``failed''.
+  \item A motion study can drive only Revolute, Slider and Cylindrical joints. Joint limits are left out of the
+        solver while a study runs (to avoid clashes with the driven motion), so a run can pass a limit. Gears,
+        Rack \& pinion, Screw and Belt are part of the run and carry the motion through.
+  \item Nothing in the solver centres one face pair between another (Width) or mirrors two parts about a plane
+        (Symmetric).
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{B2. The DOF readout (first)}
+
+\emph{What you see.} Every component the assembly holds shows \textbf{(-)} in the tree while it can still move,
+\textbf{(+)} when a joint on it is redundant or conflicting, and nothing when it is fully defined, as in
+SolidWorks. Selecting it, the Properties tab says how it can move: ``Free: 1 rotation, 1 translation'', and
+``moves with Part~7'' when gears or a belt tie it to another part. The assembly row says ``Fully defined'' or
+``Under-defined: 4 DOF''.
+
+\emph{Theory.} Give every part a small motion: a velocity $\mathbf v_i$ and a spin $\boldsymbol\omega_i$, six
+numbers per part, stacked into $\dot{\mathbf q}$. Each joint is a set of equations $\Phi(\mathbf q)=0$; a motion
+keeps them true when $\Phi_{\mathbf q}\,\dot{\mathbf q}=0$, where $\Phi_{\mathbf q}$ is the joints' Jacobian.
+The motions the assembly still allows are the null space of $\Phi_{\mathbf q}$ (grounded parts fixed). Take a basis
+$N$ of that null space and its six rows $N_i$ for part $i$:
+\[
+  \mathrm{DOF}_i=\operatorname{rank} N_i,\qquad \text{rotations}_i=\operatorname{rank} N_i^{\omega},\qquad
+  \text{translations}_i=\mathrm{DOF}_i-\text{rotations}_i ,
+\]
+where $N_i^{\omega}$ is the spin half of $N_i$. The assembly's DOF is $\operatorname{rank} N$. Two parts share a
+column of $N$ when their motions are tied (gears): that gives ``moves with''. Rows of $\Phi_{\mathbf q}$ that are
+linear combinations of others are the redundant joints, the (+). The ranks come from a singular value
+decomposition with a tolerance scaled to the assembly's size.
+
+\emph{How.} The solver builds $\Phi_{\mathbf q}$ to solve positions but keeps it private. I add one call to our
+copy of OndselSolver that returns it at the solved position, compute the ranks in \file{AssemblyObject.cpp} after
+each solve (not during a drag), and fill the existing DOF and redundancy fields, so the assembly's message becomes
+true. The tree mark uses the Browser's row hook (no tree change); the Properties line is a row in the Properties
+tab. First a spike: if the Jacobian cannot be reached cleanly, the fallback probes each free part with the drag
+solver (six small trial moves; a move the joints allow is a freedom), which needs no solver change but is slower.
+
+\emph{Cost.} The printer has a few hundred parts, so $\Phi_{\mathbf q}$ has some 2000 columns; the decomposition
+takes about a second. It runs after a solve, is skipped while dragging, and is cached until a joint changes.
+
+\emph{Tests.} A box on a Slider (1 translation), on a Revolute (1 rotation), on a Cylindrical (1 + 1), on a
+Ball (3 rotations), on a planar Distance (2 translations, 1 rotation), a gear pair (1, moves with), a part with
+two Fixed joints (+), and a fully fixed part (no mark).
+
+%----------------------------------------------------------------------
+\subsubsection*{B3. Motion on the new mates}
+
+Built on the motion study you already have since 27 Oct (Drive Joint, Motion Study, Motion Link).
+\begin{enumerate}
+  \item \textbf{Motors on more mates.} Revolute, Slider and Cylindrical keep the solver's kinematic run. A
+        Distance or Angle mate gets a \emph{driven value}: the study sets the mate's distance or angle frame by
+        frame and solves, so a ``Distance 0~$\rightarrow$~300\,mm'' motor works on any mate the bar makes. Both kinds
+        play back through the same timeline.
+  \item \textbf{Limits respected.} Limits stay out of the solver during a run (they clash with a driven motion),
+        but every frame is checked. The run stops at the first frame past a limit and says which:
+        ``Carriage slider reaches its 287\,mm limit at 0.96\,s''. This is what SolidWorks does at a limit.
+  \item \textbf{Gears, rack, screw, belt} already carry the motion; tested here with a driven gear pair and a rack.
+  \item \textbf{Followers.} Parts mated to a moving part follow it, because they are in the same solve; tested
+        with screws on hinge mates riding a carriage.
+\end{enumerate}
+\emph{Acceptance} (on a test model first; on the printer once its joints are converted): a rail carriage on a Slider
+driven 0~$\rightarrow$~300\,mm with its four screws (Hinge mates) riding along, each screw keeping its place on the
+carriage; then a gear pair driven by an angular motor, the second gear turning by the ratio.
+
+%----------------------------------------------------------------------
+\subsubsection*{B1. Width and Symmetric (last: the most uncertain)}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[scale=0.9,>=Stealth]
+  % slot (part 1)
+  \fill[black!8] (-3,0) rectangle (-1.2,2.4);
+  \fill[black!8] (1.2,0) rectangle (3,2.4);
+  \draw[thick] (-3,2.4) -- (-1.2,2.4) -- (-1.2,0.4) -- (1.2,0.4) -- (1.2,2.4) -- (3,2.4);
+  \node[font=\small] at (-2.1,1.2) {part 1};
+  \node[font=\small,bwgrey] at (-1.2,2.75) {$A_1$};
+  \node[font=\small,bwgrey] at (1.2,2.75) {$A_2$};
+  % tab (part 2)
+  \fill[bwblue!15] (-0.6,1.0) rectangle (0.6,3.2);
+  \draw[thick,bwblue] (-0.6,1.0) rectangle (0.6,3.2);
+  \node[font=\small,bwblue,anchor=east] at (-0.7,3.0) {part 2};
+  \node[font=\small,bwblue] at (-0.85,1.55) {$B_1$};
+  \node[font=\small,bwblue] at (0.85,1.55) {$B_2$};
+  % midplanes
+  \draw[dashed,bworange,thick] (0,-0.3) -- (0,3.9);
+  \node[font=\small,bworange] at (0,-0.65) {midplane of $A_1A_2$ = midplane of $B_1B_2$};
+  \draw[<->] (-1.2,0.15) -- (0,0.15);
+  \draw[<->] (0,0.15) -- (1.2,0.15);
+\end{tikzpicture}
+\caption{Width: the tab's two faces $B_1,B_2$ are centred between the slot's faces $A_1,A_2$. Each face pair is on
+one rigid part, so its midplane is a fixed frame on that part; the mate is a planar joint between the two midplanes.}
+\label{fig:width-mate}
+\end{figure}
+
+\textbf{Width} (figure~\ref{fig:width-mate}) needs no solver change. The mate keeps two faces on each side; the
+joint's two frames are the two midplanes, computed where every joint computes its frames today
+(\file{JointObject.py}), and the solver gets a planar joint between them. The tab can still slide along the slot
+and lift out of it, as in SolidWorks' centred Width. Its new joint type is added at the end of the list (stored
+files keep their numbers), with an icon, the mate bar entry and a test: a tab centred in slots of 20, 30 and 40\,mm
+wide stays centred while it is dragged.
+
+\textbf{Symmetric} mirrors an entity on one part and an entity on another about a plane.
+\begin{itemize}
+  \item When the plane is on one of the two parts, the mirror image is a fixed frame on that part, and the mate is
+        an ordinary joint between the other part's entity and that image. No solver change; built with Width.
+  \item The usual case, though, is three parts: two vise jaws mirrored about the centre plane of the base. Both
+        jaws move, so their motions are tied (one moves out by as much as the other). The solver's joints join
+        two parts each, and its couplings (gears, rack, screw) tie a rotation to a rotation or to a translation,
+        never two translations. This needs a new solver constraint: point--point and plane--plane symmetric about
+        a plane on a third part, three equations each. That is real solver work, about two to three days, with the
+        Jacobian derivatives tested against finite differences.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsubsection*{Order and estimate}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+Step & What & Estimate\\
+\midrule
+B2 & Spike (reach the Jacobian), then the DOF readout: tree (-)/(+), Properties line, assembly message & half a day to a day\\
+B3 & Driven Distance and Angle mates, limits checked every frame, gear/rack/screw/follower tests, acceptance model & a day\\
+B1a & Width, and Symmetric with the plane on one of the two parts & a day\\
+B1b & Symmetric across three parts (new solver constraint), if you want it now & two to three days\\
+\bottomrule
+\end{tabularx}
+\end{center}
+Each step is committed and staged when it passes its tests, as usual; nothing waits for the whole set.
+
+\paragraph{Questions for you.}
+\begin{enumerate}
+  \item The \textbf{(-)} mark: before the name, as in SolidWorks (``(-) TL-01-01147 Carriage''), which needs a
+        small change to how the tree draws a row; or as a small chip after the name, which the tree can already
+        draw? I recommend before the name.
+  \item \textbf{Symmetric across three parts} (the vise case): build it now (B1b, two to three days of solver work),
+        or first Width and the two-part Symmetric (B1a) and the three-part case later? I recommend B1a first.
+  \item \textbf{A motion that reaches a limit}: stop the run there and say which limit (recommended, as
+        SolidWorks), or hold that joint at its limit and let the rest of the run continue?
+  \item \textbf{Width options}: centred only for now (recommended), or also SolidWorks' ``free'' (the tab may move
+        between the walls), ``distance from one wall'' and ``percent'' variants?
+  \item \textbf{DOF inside sub-assemblies}: marks on the top assembly's own components and on the parts of
+        flexible sub-assemblies (recommended), or on every level, rigid sub-assemblies included (they cannot move
+        inside, so they would all read fully defined)?
+\end{enumerate}
