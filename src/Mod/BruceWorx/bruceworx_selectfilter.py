@@ -111,7 +111,7 @@ def retarget(mode, sub, last=None, types=None):
     if mode == COMPONENT:
         return pt.component_pick(sub)
     if mode == BODY:
-        new = body_pick(sub.split(".")[:-1], types or [])
+        new = body_pick(pt.path_names(sub), types or [])
         return new if new != sub else None
     return None
 
@@ -156,8 +156,10 @@ def rewrite_on(assembly_pick_on):
 
 def chain_types(root, sub):
     """Type ids of ``root`` and of each object along the path in ``sub`` ("Link.Body.Face3"), for body_pick."""
+    import bruceworx_picktrace as pt
+
     types = [root.TypeId]
-    path = sub.split(".")[:-1]
+    path = pt.path_names(sub)
     for i in range(len(path)):
         try:
             obj = root.getSubObject(".".join(path[:i + 1]) + ".", 1)

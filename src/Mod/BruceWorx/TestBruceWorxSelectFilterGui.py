@@ -2,6 +2,9 @@
 """GUI tests for the selection filter (bruceworx_selectfilter): the gate on the live selection, the top bar
 box, the commands and the status readout. Needs the running app (FreeCAD.GuiUp)."""
 
+import os
+import shutil
+import tempfile
 import unittest
 
 import FreeCAD
@@ -78,6 +81,59 @@ class TestSelectFilterGui(unittest.TestCase):
             self.assertIsNotNone(self.Gui.Command.get(sf.COMMAND_PREFIX + mode), mode)
         self.Gui.runCommand(sf.COMMAND_PREFIX + sf.VERTEX)
         self.assertEqual(sf.get_mode(self.param), sf.VERTEX)
+
+
+@unittest.skipUnless(FreeCAD.GuiUp, "needs the GUI")
+class TestAssemblyPickOtherDocument(unittest.TestCase):
+    """Component and Body under an assembly link to a part in another document: the observer reports the
+    part's document, the selection entry is the assembly's (the 2 Nov "body is working as face" bug)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import FreeCADGui as Gui
+
+        cls.Gui = Gui
+        cls.param = FreeCAD.ParamGet(sf.PREFS_PATH)
+        cls.saved = cls.param.GetString(sf.PREF_NAME, sf.AUTO)
+        cls.part_doc = FreeCAD.newDocument("PickPart")
+        part = cls.part_doc.addObject("App::Part", "Part")
+        body = cls.part_doc.addObject("PartDesign::Body", "Body")
+        part.addObject(body)
+        body.addObject(cls.part_doc.addObject("PartDesign::AdditiveBox", "Box"))
+        cls.part_doc.recompute()
+        cls.tmp = tempfile.mkdtemp()
+        cls.part_doc.saveAs(os.path.join(cls.tmp, "PickPart.FCStd"))  # a link needs both documents saved
+        cls.asm_doc = FreeCAD.newDocument("PickAssembly")
+        cls.asm_doc.saveAs(os.path.join(cls.tmp, "PickAssembly.FCStd"))
+        asm = cls.asm_doc.addObject("Assembly::AssemblyObject", "Assembly")
+        link = cls.asm_doc.addObject("App::Link", "Link")
+        link.LinkedObject = part
+        asm.addObject(link)
+        cls.asm_doc.recompute()
+
+    @classmethod
+    def tearDownClass(cls):
+        sf.set_mode(cls.param, cls.saved)
+        sf.apply()
+        FreeCAD.closeDocument(cls.asm_doc.Name)
+        FreeCAD.closeDocument(cls.part_doc.Name)
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def pick(self, mode):
+        import bruceworx_picktrace as pt
+
+        sf.set_mode(self.param, mode)
+        sf.apply()
+        self.Gui.Selection.clearSelection()
+        self.Gui.Selection.addSelection(self.asm_doc.Name, "Assembly", "Link.Body.Box.Face2")
+        pt._AssemblyPick()._resolve(self.part_doc.Name, "Face2", False)
+        return [(s.Object.Name, n) for s in self.Gui.Selection.getSelectionEx("", 0) for n in s.SubElementNames]
+
+    def test_body_takes_the_whole_solid(self):
+        self.assertEqual(self.pick(sf.BODY), [("Assembly", "Link.Body.")])
+
+    def test_component_takes_the_link(self):
+        self.assertEqual(self.pick(sf.COMPONENT), [("Assembly", "Link.")])
 
 
 if __name__ == "__main__":

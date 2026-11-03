@@ -102,6 +102,16 @@ def element_kind(subname):
     return last if last.rstrip("0123456789") in ELEMENT_KINDS and last[-1:].isdigit() else ""
 
 
+def path_names(sub):
+    """The objects along a pick's path: ["Link", "Body"] for "Link.Body.Face3" and for an imported solid's
+    "Link.Body.;Face45;:M;CMN;:Hfac:7,F.Face107" (a mapped element name starts with ";" and may hold dots)."""
+    path = (sub or "").split(".")[:-1]
+    for i, name in enumerate(path):
+        if name.startswith(";"):
+            return path[:i]
+    return path
+
+
 def component_pick(sub, last=None):
     """The subname a 3D pick ``sub`` (under an assembly: "Link.Link001.Body.Face3") becomes: the component
     directly under the assembly ("Link."), or one level below ``last`` (the component this rule selected
@@ -109,7 +119,7 @@ def component_pick(sub, last=None):
     element; a pick inside the deepest object keeps its face)."""
     if not sub or sub.endswith("."):
         return None
-    path = sub.split(".")[:-1]
+    path = path_names(sub)
     if not path:
         return None
     level = 1
@@ -728,7 +738,9 @@ class _AssemblyPick:
         try:
             if FreeCADGui.Control.activeDialog():
                 return  # a task panel (joint, measure) wants faces
-            picks = [(s.Object, name) for s in FreeCADGui.Selection.getSelectionEx(doc, 0)
+            # Every document: a pick under an assembly link reports the part's document, while the
+            # selection entry is the assembly's (root "Assembly", sub "Link.Body.Box.Face2")
+            picks = [(s.Object, name) for s in FreeCADGui.Selection.getSelectionEx("", 0)
                      if s.Object is not None and (pick_mode == sf.BODY or s.Object.TypeId in ASSEMBLY_TYPES)
                      for name in s.SubElementNames if name.endswith(element)]
         except Exception:
@@ -736,6 +748,7 @@ class _AssemblyPick:
         if not picks:
             return
         root, sub = picks[-1]
+        doc = root.Document.Name
         last = self.last if self.last and self.last[:2] == (doc, root.Name) and not cleared_before else None
         if pick_mode == sf.AUTO:
             new = component_pick(sub, last[2] if last else None)

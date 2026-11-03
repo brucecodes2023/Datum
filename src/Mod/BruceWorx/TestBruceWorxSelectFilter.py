@@ -92,6 +92,15 @@ class TestRewrite(unittest.TestCase):
         types = ["Assembly::AssemblyObject", "App::Link", "Part::Box"]
         self.assertEqual(sf.retarget(sf.BODY, "Link.Box.Face1", types=types), "Link.Box.")
 
+    def test_mapped_element_names_are_not_objects(self):
+        # an imported solid's pick carries the mapped name (starts with ";", may hold dots) before the element
+        sub = "Link010.Body.;Face45;:M;CMN;:Hfac:7,F;:Hfac:5,F.Face107"
+        types = ["Assembly::AssemblyObject", "App::Link", "PartDesign::Body"]
+        self.assertEqual(sf.retarget(sf.BODY, sub, types=types), "Link010.Body.")
+        self.assertEqual(sf.retarget(sf.COMPONENT, sub), "Link010.")
+        self.assertIsNone(sf.retarget(sf.AUTO, sub, "Link010.Body."))  # inside the deepest object: the face
+        self.assertEqual(sf.retarget(sf.BODY, "Link.Body.;#5:1;:H1,F.Face3", types=types), "Link.Body.")
+
     def test_element_modes_never_retarget(self):
         for mode in sf.ELEMENT_MODES:
             self.assertIsNone(sf.retarget(mode, "Door.Panel.Body.Face3"))
