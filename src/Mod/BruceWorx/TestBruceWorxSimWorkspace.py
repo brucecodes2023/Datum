@@ -198,6 +198,17 @@ def _settle(seconds=0.5):
         time.sleep(0.02)
 
 
+def _until(check, seconds=2.0):
+    """Events until ``check()`` holds or ``seconds`` pass: the left panel hides and shows again on a tab switch, and the
+    strip follows it when it is back (sooner or later, by the machine's load)."""
+    import FreeCADGui as Gui
+
+    end = time.time() + seconds
+    while not check() and time.time() < end:
+        Gui.updateGui()
+        time.sleep(0.02)
+
+
 @unittest.skipUnless(App.GuiUp, "needs a GUI FreeCAD")
 class TestShellInWindow(unittest.TestCase):
     def setUp(self):
@@ -266,11 +277,11 @@ class TestShellInWindow(unittest.TestCase):
         # the model tree is the other tab: one click brings it back, and the Simulation tab comes back with one
         browser = [b for b in sw.strip().buttons if b.text() == "Browser"][0]
         browser.click()  # a click on the strip's Browser tab brings the model tree back
-        _settle(0.4)
+        _until(lambda: sw.strip_tabs() == [("Browser", True), ("Simulation", False)])
         self.assertFalse(sw.sidebar_shown())
         self.assertEqual(sw.strip_tabs(), [("Browser", True), ("Simulation", False)])
         [b for b in sw.strip().buttons if b.text() == "Simulation"][0].click()
-        _settle(0.4)
+        _until(lambda: sw.strip_tabs() == [("Browser", False), ("Simulation", True)])
         self.assertTrue(sw.sidebar_shown())
         self.assertEqual(sw.strip_tabs(), [("Browser", False), ("Simulation", True)])
         ws.activate_workspace("Design")
