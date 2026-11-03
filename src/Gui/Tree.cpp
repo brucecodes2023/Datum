@@ -52,7 +52,9 @@
 #include <App/DocumentObjectGroup.h>
 #include <App/AutoTransaction.h>
 #include <App/GeoFeatureGroupExtension.h>
+#include <App/GeoFeature.h>
 #include <App/Link.h>
+#include <App/Part.h>
 
 #include "Tree.h"
 #include "BitmapFactory.h"
@@ -3455,6 +3457,59 @@ void TreeWidget::slotNewDocument(const Gui::Document& Doc, bool isMainDoc)
     }
 }
 
+// [BW] A document row that stands for one assembly, part or body shows that object's icon instead of
+// the document page (Bruce, 3 Nov: "the top assemblies in the model tree should actually be assemblies
+// and not that weird icon"). Its single root counts geometry and containers only: a spreadsheet, text
+// or variable set beside the assembly does not make it a multi-root document.
+static bool countsAsTreeRoot(App::DocumentObject* obj)
+{
+    return obj && (obj->isDerivedFrom<App::GeoFeature>() || obj->isDerivedFrom<App::Link>());
+}
+
+static bool standsForDocument(App::DocumentObject* obj)
+{
+    if (!obj) {
+        return false;
+    }
+    Base::Type type = obj->getTypeId();
+    return type.isDerivedFrom(App::Part::getClassTypeId())  // also Assembly::AssemblyObject
+        || type.isDerivedFrom(Base::Type::fromName("PartDesign::Body"));
+}
+
+void TreeWidget::updateDocumentIcon(DocumentItem* docItem)
+{
+    if (!docItem) {
+        return;
+    }
+    DocumentObjectItem* root = nullptr;
+    for (int i = 0; i < docItem->childCount(); ++i) {
+        auto child = docItem->child(i);
+        if (child->type() != ObjectType) {
+            continue;
+        }
+        auto item = static_cast<DocumentObjectItem*>(child);
+        if (!item->object() || !countsAsTreeRoot(item->object()->getObject())) {
+            continue;
+        }
+        if (root) {
+            root = nullptr;  // several roots: the document page
+            break;
+        }
+        root = item;
+    }
+    bool partial = docItem->document()->getDocument()->testStatus(App::Document::PartialDoc);
+    QIcon icon = partial ? *documentPartialPixmap : *documentPixmap;
+    if (root && standsForDocument(root->object()->getObject())) {
+        icon = root->object()->getIcon();
+        if (partial) {  // greyed, as the partial document's page
+            icon = QIcon(icon.pixmap(documentPixmap->size(), QIcon::Disabled));
+        }
+    }
+    if (docItem->icon(0).cacheKey() != icon.cacheKey()) {
+        docItem->setIcon(0, icon);
+    }
+}
+
 void TreeWidget::applyDocumentVisibility(const Gui::Document* active)
 {
     bool only = isActiveDocumentOnly() && active;
@@ -3847,6 +3902,10 @@ void TreeWidget::onUpdateStatus()
     }
     if (errItem) {
         scrollToItem(errItem);
+    }
+
+    for (auto& v : DocumentMap) {
+        updateDocumentIcon(v.second);  // [BW] a single assembly, part or body: its icon
     }
 
     updateGeometries();

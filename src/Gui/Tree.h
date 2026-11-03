@@ -237,6 +237,7 @@ private:
     void slotRenameDocument(const Gui::Document&);
     void slotActiveDocument(const Gui::Document&);
     void applyDocumentVisibility(const Gui::Document* active);
+    void updateDocumentIcon(DocumentItem* docItem);  // [BW]
     void slotRelabelDocument(const Gui::Document&);
     void slotShowHidden(const Gui::Document&);
     void slotChangedViewObject(const Gui::ViewProvider&, const App::Property&);

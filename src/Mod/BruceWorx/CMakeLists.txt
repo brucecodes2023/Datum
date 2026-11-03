@@ -117,6 +117,7 @@ SET(BruceWorx_SRCS
     bruceworx_autoactivate.py
     TestBruceWorxAutoActivate.py
     TestBruceWorxTreeActiveOnly.py
+    TestBruceWorxTreeRootIcon.py
     TestBruceWorxFastOpen.py
     TestBruceWorxTimeline.py
     bruceworx_inspector.py
