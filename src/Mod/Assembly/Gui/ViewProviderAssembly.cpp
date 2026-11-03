@@ -511,7 +511,8 @@ bool ViewProviderAssembly::tryMouseMove(const SbVec2s& cursorPos, Gui::View3DInv
             newPos = Base::Vector3d(vec[0], vec[1], vec[2]);
         }
         else {
-            SbVec3f vec = viewer->getPointOnFocalPlane(cursorPos);
+            SbVec3f vec = hasGrabPoint ? viewer->getPointOnXYPlaneOfPlacement(cursorPos, dragPlanePlc)
+                                       : viewer->getPointOnFocalPlane(cursorPos);
             newPos = Base::Vector3d(vec[0], vec[1], vec[2]);
         }
 
@@ -657,6 +658,12 @@ bool ViewProviderAssembly::mouseButtonPressed(
             lastClickTime = nowMillis;
 
             canStartDragging = true;
+            // BruceWorx: the point under the cursor, where a free drag grabs the part
+            hasGrabPoint = Gui::Selection().hasPreselection();
+            if (hasGrabPoint) {
+                const auto& pre = Gui::Selection().getPreselection();
+                grabPoint = Base::Vector3d(pre.x, pre.y, pre.z);
+            }
         }
         else {  // Button 1 released
             // release event is not received when user click on a part for selection.
@@ -1074,6 +1081,16 @@ void ViewProviderAssembly::tryInitMove(const SbVec2s& cursorPos, Gui::View3DInve
     else if (dragMode == DragMode::TranslationOnPlane) {
         vec = viewer->getPointOnXYPlaneOfPlacement(cursorPos, jcsGlobalPlc);
         initialPosition = Base::Vector3d(vec[0], vec[1], vec[2]);
+    }
+    else if (hasGrabPoint) {
+        // the plane through the grabbed point, normal to the view: that point stays under the cursor in
+        // perspective too (the focal plane moves a nearer part faster than the cursor). The drag starts at
+        // the grabbed point, where the button went down, not at this first move (that step was lost).
+        SbVec3f dir = viewer->getViewDirection();
+        Base::Rotation toView(Base::Vector3d(0., 0., 1.), Base::Vector3d(dir[0], dir[1], dir[2]));
+        dragPlanePlc = Base::Placement(grabPoint, toView);
+        initialPosition = grabPoint;
+        prevPosition = initialPosition;
     }
     else {
         vec = viewer->getPointOnFocalPlane(cursorPos);

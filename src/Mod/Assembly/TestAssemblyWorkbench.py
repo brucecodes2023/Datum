@@ -29,6 +29,7 @@ from AssemblyTests.TestBWJoints import TestBWJoints
 from AssemblyTests.TestBWBom import TestBWBom
 from AssemblyTests.TestBWNestedFlexible import TestBWNestedFlexible
 from AssemblyTests.TestBWJointViewProvider import TestBWJointViewProvider
+from AssemblyTests.TestBWDragFollowsCursor import TestBWDragFollowsCursor
 from AssemblyTests.TestBWMotion import TestFormulas, TestStudy, TestLinks
 
 

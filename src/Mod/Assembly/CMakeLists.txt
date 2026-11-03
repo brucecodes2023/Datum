@@ -60,6 +60,7 @@ SET(AssemblyTests_SRCS
     AssemblyTests/TestBWMotion.py
     AssemblyTests/TestBWNestedFlexible.py
     AssemblyTests/TestBWJointViewProvider.py
+    AssemblyTests/TestBWDragFollowsCursor.py
     AssemblyTests/TestCommandInsertLink.py
     AssemblyTests/mocks/__init__.py
     AssemblyTests/mocks/MockGui.py

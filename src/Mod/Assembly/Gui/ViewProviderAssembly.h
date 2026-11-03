@@ -232,6 +232,11 @@ public:
     Base::Vector3d prevPosition;
     Base::Vector3d initialPosition;
     Base::Vector3d initialPositionRot;
+    // BruceWorx: a free drag follows the cursor on the plane through the grabbed point, normal to the
+    // view (the focal plane slips under a perspective camera when the part is nearer or farther)
+    Base::Vector3d grabPoint;
+    bool hasGrabPoint {false};
+    Base::Placement dragPlanePlc;
     Base::Placement jcsPlc;
     Base::Placement jcsGlobalPlc;
     Base::Placement draggerInitPlc;
