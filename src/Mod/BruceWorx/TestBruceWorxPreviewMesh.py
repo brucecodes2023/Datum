@@ -27,6 +27,14 @@ class TestBruceWorxPreviewMeshFormat(unittest.TestCase):
         self.assertEqual(mesh["instances"][0]["file"], "VL-01-01001-001.FCStd")
         self.assertEqual(mesh["instances"][0]["matrix"][11], 5)
 
+    def test_transparency_round_trip(self):
+        # the clear acrylic panels keep their transparency; an opaque part's mesh is written as before
+        clear = pm.decode(pm.encode([dict(_square(), transparency=0.7)]))["parts"][0]
+        self.assertAlmostEqual(clear["transparency"], 0.7)
+        opaque = pm.encode([dict(_square(), transparency=0.0)])
+        self.assertEqual(opaque, pm.encode([_square()]))
+        self.assertEqual(pm.decode(opaque)["parts"][0]["transparency"], 0.0)
+
     def test_refuses_what_is_not_a_mesh(self):
         good = pm.encode([_square()])
         for bad in (b"", b"PK\x03\x04", good[:-8], good.replace(b'"version":1', b'"version":9')):

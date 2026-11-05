@@ -27,6 +27,7 @@ LIMIT_PREF = "FastOpenLimit"
 DEFAULT_LIMIT = 100
 COMMAND = "BruceWorx_FastOpen"
 HIGHLIGHT = (0.20, 0.55, 1.00)
+CLICK_SLOP = 4  # pixels a click may move and still be a click
 
 
 # ----- pure helpers (unit tested) -----------------------------------------------------------------
@@ -138,6 +139,7 @@ def build_scene(components):
             transform.matrix.setValue(coin.SbMatrix(*_coin_matrix(matrix)))
             material = coin.SoMaterial()
             material.diffuseColor.setValue(*part["color"])
+            material.transparency.setValue(part.get("transparency", 0.0))  # the clear panels stay clear
             material.setName(f"bwFastMat{index}")
             sep.addChild(transform)
             sep.addChild(material)
@@ -203,14 +205,23 @@ class FastView:
         return None
 
     def _on_click(self, cb):
+        """A click picks the component under it (empty space clears the pick). Only a click: the press
+        that starts an orbit or a pan, and its release somewhere else, change nothing (Bruce 5 Nov: turning
+        the view lost the component chosen in the list)."""
         from pivy import coin
 
         event = cb.getEvent()
-        if event.getButton() != coin.SoMouseButtonEvent.BUTTON1 or event.getState() != coin.SoButtonEvent.DOWN:
+        if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
             return
         pos = event.getPosition()
-        index = self._component_at((pos[0], pos[1]))
-        self.select(index)
+        pos = (int(pos[0]), int(pos[1]))
+        if event.getState() == coin.SoButtonEvent.DOWN:
+            self._press = pos
+            return
+        press, self._press = getattr(self, "_press", None), None
+        if press is None or abs(pos[0] - press[0]) > CLICK_SLOP or abs(pos[1] - press[1]) > CLICK_SLOP:
+            return
+        self.select(self._component_at(pos))
 
     def select(self, index, fit=False):
         if self.selected is not None:
@@ -306,6 +317,10 @@ class FastView:
             self.list.addItem(row)
         self.list.currentItemChanged.connect(
             lambda cur, _prev: self.select(cur.data(QtCore.Qt.UserRole), fit=True) if cur is not None else None)
+        # A click on the row that is already current changes no current item: choose it all the same.
+        self.list.itemClicked.connect(
+            lambda row: self.select(row.data(QtCore.Qt.UserRole), fit=True)
+            if row.data(QtCore.Qt.UserRole) != self.selected else None)
         search.textChanged.connect(lambda text: [self.list.item(i).setHidden(text.lower() not in self.list.item(i).text().lower())
                                                  for i in range(self.list.count())])
         lay.addWidget(self.list, 1)
@@ -383,6 +398,10 @@ class FastView:
             self.picked.setText("Click a component, or choose one above.")
             self.open_part.setEnabled(False)
             self.hide_button.setEnabled(False)
+            self.list.blockSignals(True)  # no row looks chosen when nothing is
+            self.list.setCurrentRow(-1)
+            self.list.clearSelection()
+            self.list.blockSignals(False)
             return
         comp = self.components[self.selected]
         item = self.session.vault.items.get(comp["pn"])

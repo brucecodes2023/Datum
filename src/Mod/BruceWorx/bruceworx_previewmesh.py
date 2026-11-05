@@ -4,7 +4,8 @@
 The Files tab shows a part or an assembly in 3D without opening it. Opening a document costs
 0.1-2 s and moves the user's views; the preview mesh is read from the file in milliseconds.
 
-* A part file carries its visible shapes as triangles, one mesh per shape with its colour.
+* A part file carries its visible shapes as triangles, one mesh per shape with its colour (and its
+  transparency, when it has one: the clear acrylic panels, Bruce 5 Nov).
 * An assembly file carries no triangles for the parts it links: it records each link's file and
   placement (an *instance*), and the viewer reads the linked file's own mesh. A bolt used forty
   times is stored once, in the bolt's file (plan, "Why assemblies are instanced").
@@ -57,7 +58,8 @@ def _values(data, code, start, count):
 
 
 def encode(parts, instances=()) -> bytes:
-    """``parts``: [{"name", "color": (r, g, b), "points": [x, y, z, ...], "triangles": [i, j, k, ...]}];
+    """``parts``: [{"name", "color": (r, g, b), "points": [x, y, z, ...], "triangles": [i, j, k, ...]},
+    optionally "transparency": 0-1 (left out when 0, so an opaque part's mesh is as before)];
     ``instances``: [{"file": "<P/N>.FCStd", "object": name, "matrix": 16 numbers, row-major}]."""
     header = {"version": 1, "parts": [], "instances": []}
     blocks, offset = [], 0
@@ -67,6 +69,8 @@ def encode(parts, instances=()) -> bytes:
         header["parts"].append({"name": part.get("name", ""), "color": [round(c, 4) for c in part.get("color", GREY)],
                                 "points": [offset, len(part["points"]) // 3],
                                 "triangles": [offset + len(points), len(part["triangles"]) // 3]})
+        if part.get("transparency"):
+            header["parts"][-1]["transparency"] = round(float(part["transparency"]), 3)
         blocks += [points, triangles]
         offset += len(points) + len(triangles)
     for inst in instances:
@@ -78,7 +82,7 @@ def encode(parts, instances=()) -> bytes:
 
 
 def decode(data: bytes) -> dict:
-    """{"parts": [{"name", "color", "points": array('f'), "triangles": array('I')}], "instances": [...]};
+    """{"parts": [{"name", "color", "transparency", "points": array('f'), "triangles": array('I')}], "instances": [...]};
     raises ValueError for anything that is not a preview mesh."""
     if not data or not data.startswith(MAGIC) or len(data) < len(MAGIC) + 4:
         raise ValueError("not a preview mesh")
@@ -100,6 +104,7 @@ def decode(data: bytes) -> dict:
         if triangles and max(triangles) >= pc:
             raise ValueError("preview mesh index out of range")
         parts.append({"name": p.get("name", ""), "color": tuple(p.get("color", GREY)),
+                      "transparency": min(max(float(p.get("transparency", 0.0)), 0.0), 1.0),
                       "points": _values(data, "f", base + po, pc * 3), "triangles": triangles})
     return {"parts": parts, "instances": list(header.get("instances", []))}
 
@@ -195,6 +200,19 @@ def _colour(obj):
         return GREY
 
 
+def _transparency(obj) -> float:
+    """0 (opaque) to 1 (clear), as the part shows in the 3D view."""
+    view = getattr(obj, "ViewObject", None)
+    try:
+        return float(view.ShapeAppearance[0].Transparency)
+    except Exception:  # noqa: BLE001 -- headless, or a view provider without appearance
+        pass
+    try:
+        return int(view.Transparency) / 100.0
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
 def _shown(obj) -> bool:
     view = getattr(obj, "ViewObject", None)
     if view is not None:
@@ -264,7 +282,7 @@ def tessellate(doc):
         points, facets = mesh.Topology
         if not facets:
             continue
-        parts.append({"name": obj.Label, "color": _colour(obj),
+        parts.append({"name": obj.Label, "color": _colour(obj), "transparency": _transparency(obj),
                       "points": [c for p in points for c in (p.x, p.y, p.z)],
                       "triangles": [i for f in facets for i in f]})
     return parts, instances
