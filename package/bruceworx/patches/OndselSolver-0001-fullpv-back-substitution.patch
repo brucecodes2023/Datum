@@ -1,0 +1,47 @@
+From a2dccccdf34ecbfa917f5157b3dd4c3663264a0a Mon Sep 17 00:00:00 2001
+From: brucecodes2023 <104692637+brucecodes2023@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 22:13:07 -0600
+Subject: [PATCH] [BW] GESpMatFullPv: 0-based last row in back substitution;
+ postSolve does nothing
+
+The redundant-constraint check (PosICNewtonRaphson::lookForRedundantConstraints) solves with
+GESpMatFullPvPosIC. When the full-pivot elimination finds no redundant row, it back-substitutes,
+and backSubstituteIntoDU read colOrder->at(n), rightHandSideB->at(m) and matrixA->at(m): the
+1-based last index of the Smalltalk original. That threw std::out_of_range ("vector"), which
+FreeCAD reports as "Solve failed: vector". postSolve then threw "To be implemented.".
+Both match upstream OndselSolver main (4be80ee).
+
+Repro: the Vector Labs B Drive state (20 joints, ~16 free Revolutes) solves rc=0 instead of -1.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BX5U4uvdUNsiimYi5f9LBc
+---
+ OndselSolver/GESpMatFullPv.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/OndselSolver/GESpMatFullPv.cpp b/OndselSolver/GESpMatFullPv.cpp
+index e225639..6977208 100644
+--- a/OndselSolver/GESpMatFullPv.cpp
++++ b/OndselSolver/GESpMatFullPv.cpp
+@@ -115,8 +115,8 @@ void GESpMatFullPv::backSubstituteIntoDU()
+ //    assert(n < localLen);
+ 
+ 	answerX = std::make_shared<FullColumn<double>>(m);
+-	auto jn = colOrder->at(n);
+-	answerX->at(jn) = rightHandSideB->at(m) / matrixA->at(m)->at(jn);
++	auto jn = colOrder->at(n - 1);
++	answerX->at(jn) = rightHandSideB->at(m - 1) / matrixA->at(m - 1)->at(jn);
+ 	//auto rhsZeroElement = this->rhsZeroElement();
+ 	for (ssize_t i = (ssize_t)n - 2; i >= 0; i--)	//Use ssize_t because of decrement
+ 	{
+@@ -140,7 +140,6 @@ void GESpMatFullPv::backSubstituteIntoDU()
+ 
+ void GESpMatFullPv::postSolve()
+ {
+-	throw SimulationStoppingError("To be implemented.");
+ }
+ 
+ void GESpMatFullPv::preSolvewithsaveOriginal(SpMatDsptr spMat, FColDsptr fullCol, bool saveOriginal)
+-- 
+2.55.0
+
