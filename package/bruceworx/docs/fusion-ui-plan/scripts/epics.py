@@ -159,6 +159,20 @@ EPICS = [
       "#33186, extended); handles and a right-panel tab with expressions. Planned, approved and built 25 Oct. UAT 25 Oct: the crash on dragging fixed (Coin 4.0.10, callbacks through the view); the Section button is a toggle (on, off, the last one back) and cuts on a face picked inside a body or an assembly.",
       "Gearbox section caps all 24 components, survives save/reopen, opens in stock FreeCAD; 3 planes; the old sun "
       "hub shows red against the carrier; grid never cut; 30 fps while dragging."),
+    E("MOD-17", "Design spec & calculations drive the model", "M1", "To do", ["MOD-02", "MOD-05"],
+      "Bruce 7 Nov (front end, high priority)",
+      "Bruce 7 Nov: 'I want freecad to be the tool that Opus can use to develop designs but also be user friendly "
+      "for me to make tweaks on my own', and 'a full suite of tools that we can use in order to develop designs "
+      "from prototype all the way through fabrication'. A design spec does the calculations; its results become "
+      "parameters in the Parameters spreadsheet (MOD-02); those drive dimensions, joints (offsets, limits) and "
+      "properties (material, insert type, fastener size); the same values carry into drawings (DRW-06), "
+      "simulation and analysis (SIM) and print and fabrication outputs (STL/3MF/DXF, MFG-01). Builds on MOD-15 "
+      "(design worksheet, now M2): its calc lines come first, so MOD-15 would move up to M1 with this epic "
+      "(to confirm with Bruce).",
+      "On a test part, changing one spec input (a load or a fastener size) recomputes the calculation and updates "
+      "the Parameters spreadsheet; the model's dimensions, a joint offset, the hole and insert type, the drawing "
+      "dimension, the simulation input and the exported STL/3MF/DXF all follow with no hand edits; Bruce can "
+      "make the same change by hand in the spec or the Parameters sheet."),
     E("ASM-01", "File model: one part per file", "M1", "To do", [],
       "(new)",
       "Assemblies link external part files; relative paths; 'make external' from a multi-body file.",
@@ -439,6 +453,25 @@ EPICS = [
       "(new, UI plan)",
       "AutoCAD-style aliases, inline Python, CadQuery/build123d (pinned), OpenSCAD; CodeFeature with trust prompt.",
       "CPATTERN @Bolt Q 8 reproduces the component pattern; build123d box lands in the timeline."),
+    E("AUT-06", "Agent-efficient design interface", "M1", "To do", ["AUT-02", "AUT-03", "MOD-05"],
+      "Bruce 7 Nov (front end; to discuss)",
+      "To discuss with Bruce before planning. How agents view designs (renders, sections, joint frames, fit "
+      "reports; today the Vector Labs session renders through a hidden GUI), make edits (parametric, through "
+      "the API or MCP, not booleans on plain solids), know how parts work (a bought part carries its sourced "
+      "datasheet rules: a heat-set insert its knurl OD, length, recommended hole and depth, tied to MOD-05's "
+      "'checked' flag) and carry a change from spec to drawings and print and fabrication files. Bruce must "
+      "still be able to tweak by hand. Evidence from the TL-P01 mating work (7 Nov, Vector Labs session): the "
+      "Fanny Pack (TL-02-01109) plates are imported Part::Feature solids, so their insert holes cannot change by "
+      "parameter; its 12 insert holes are 4.7 mm with 4.5-5.2 mm of material, while the modelled insert is the "
+      "generic IUTHeatInsert M3 (4.55 x 5.74), and nothing checked the fit until it was measured; 71 part links "
+      "are saved hidden in 4 assemblies (01021, 01100, 01107, 01109), so hardware looks missing; the "
+      "hole_presets.json entry 'Heat-set M3x5.7' says 4.0 x 6.7 deep with checked false, while CNC Kitchen "
+      "('Are our heat-set insert datasheets wrong?') gives a 4.0 datasheet hole, a 4.6 knurl OD and 4.2 in CAD "
+      "for printed holes (depth and wall not stated there).",
+      "Through MCP alone (no hidden GUI, no plain-solid booleans) an agent renders a section and a fit report "
+      "of the Fanny Pack insert holes, changes the hole by its parameter, and the change reaches the drawing and "
+      "the print files; each insert's sourced rules (knurl OD, length, hole and depth, minimum wall, source) are "
+      "checked against its hole; Bruce makes the same tweak by hand in the Hole or Parameters dialog."),
     # UI ------------------------------------------------------------------
     E("UIX-01", "Theme, pref pack & viewport styling", "UI", "Done", [],
       "FCB-P1-01..05, P1V-01..07, P1V-10..18",
