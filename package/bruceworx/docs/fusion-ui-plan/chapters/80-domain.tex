@@ -124,38 +124,59 @@ Cables workbench on an assembly with two moving links, then write the decision d
 inside one document. The spike is there so a workbench that cannot follow an \code{Assembly} joint is not
 vendored. The expected result is to build.
 
-\begin{epic}{WIR-01}{Adopt versus build}{M3}{\stTodo}{(new)}
+\paragraph{Built 10 Nov 2026.} The add-on is at \file{package/bruceworx/mods/WireRouting/} and all six epics
+have code and headless tests (20 unit tests and a FreeCADCmd run on real documents). Three things differ from
+the plan above:
+\begin{itemize}
+  \item \textbf{The corner maths is its own module}, not Draft's \code{filletWire}. A corner that turns by
+        $\theta$ takes $r\tan(\theta/2)$ of each neighbouring segment; a segment shorter than the two tangent
+        lengths at its ends fails, and the message names the segment and the shortfall. Length is
+        $\sum L - \sum 2r\tan(\theta/2) + \sum r\theta$, taken from the centerline, never from the tube.
+  \item \textbf{A recompute is not enough to follow a joint.} The solver runs in the assembly's own
+        recompute, after the assembly's children, so a wire would be one solve behind. A document observer
+        rebuilds the wires that hang on a part when it moves, in a recompute and during a drag.
+  \item \textbf{Joint sweep (new).} A routed path across a joint changes length as the joint moves, and a
+        real wire does not. The sweep drives each joint with both limits set (\eref{ASM-03}) through its range
+        and records each wire's shortest and longest path and the range where it kinks. The cut length is the
+        longest path plus an allowance. On the test arm the same wire runs from 56\,mm to 100\,mm over
+        $0$--$90^\circ$.
+\end{itemize}
+Open: the three menu commands and a drag with the mouse have not been tried on screen, and the clip-graph
+router is a Python call without a command. \eref{WIR-01} was decided by reading Cables~0.4.1, not by running it
+(\file{mods/WireRouting/docs/DECISION.md}).
+
+\begin{epic}{WIR-01}{Adopt versus build}{M3}{\stDone}{(new)}
 Try the community Cables workbench on an assembly with two moving links. Record the decision: adopt it
 unmodified, or build the Python add-on described above.
 \emph{Acceptance:} the decision memo is written.
 \end{epic}
 
-\begin{epic}{WIR-02}{Port and wire}{M3}{\stTodo}{(new)}
+\begin{epic}{WIR-02}{Port and wire}{M3}{\stProg}{(new)}
 A port datum, a straight lead-out along local $+Z$, \code{filletWire} at the minimum bend radius, a circle
 swept with \code{makePipeShell}, and a read-only length.
 \emph{Acceptance:} a three-corner wire matches the analytic line-plus-arc length within 0.01\,mm. A corner
 tighter than the radius fails the check and produces no solid.
 \end{epic}
 
-\begin{epic}{WIR-03}{Assembly follow}{M3}{\stTodo}{(new)}
+\begin{epic}{WIR-03}{Assembly follow}{M3}{\stProg}{(new)}
 The wire lives in the assembly. Both ends are ports on links, and a recompute after the solver moves a
 link rebuilds the centerline. Depends on \eref{WIR-02} and \eref{ASM-03}.
 \emph{Acceptance:} dragging a revolute joint updates the length, and both ends stay on their ports.
 \end{epic}
 
-\begin{epic}{WIR-04}{From-to cut list}{M3}{\stTodo}{(new)}
+\begin{epic}{WIR-04}{From-to cut list}{M3}{\stProg}{(new)}
 Gauge, color, from, to and length for each wire. The assembly BOM (\eref{ASM-04}) carries the same rows.
 \emph{Acceptance:} the cut list matches the wire lengths, and the BOM carries the rows.
 \end{epic}
 
-\begin{epic}{WIR-05}{Clips and bundles}{M5}{\stTodo}{(new)}
+\begin{epic}{WIR-05}{Clips and bundles}{M5}{\stProg}{(new)}
 Clips are waypoints. A bundle is a shared sleeve with a breakout: several wires share a middle segment,
 then split to their own ports. Depends on \eref{WIR-03}.
 \emph{Acceptance:} two wires share one middle segment and split to two ports; the sleeve length is that
 segment.
 \end{epic}
 
-\begin{epic}{WIR-06}{Route on the clip graph}{M5}{\stTodo}{(new)}
+\begin{epic}{WIR-06}{Route on the clip graph}{M5}{\stProg}{(new)}
 A from-to list becomes a shortest feasible path through clips the user placed. A segment is feasible when
 its fillet succeeds. Board pins become ports only after \eref{ECD-04}; this epic does not wait on that.
 \emph{Acceptance:} a three-clip fixture picks the shorter feasible path and reports its length.

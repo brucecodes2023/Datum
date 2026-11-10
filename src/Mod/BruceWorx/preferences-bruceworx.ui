@@ -99,6 +99,25 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="WireRouting">
+        <property name="toolTip">
+         <string>On by default. Adds Add Wire Port, Add Wire and Wire Cut List… to the BruceWorx menu, and keeps wires on their ports while a joint is dragged. Takes effect on the next start. Wires already in a file still load and recompute when this is off.</string>
+        </property>
+        <property name="text">
+         <string>Wire routing (ports, wires that follow joints, cut list)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>WireRouting</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="PatternCommands">
         <property name="toolTip">
          <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>

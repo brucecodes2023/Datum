@@ -160,6 +160,13 @@ if(BUILD_BW_HISTORY_TIMELINE)
         ${CMAKE_BINARY_DIR}/bruceworx/HistoryTimeline
     )
 endif()
+option(BUILD_BW_WIRE_ROUTING "BruceWorx: install the wire routing add-on (Mod/WireRouting)" ON)
+if(BUILD_BW_WIRE_ROUTING)
+    add_subdirectory(
+        ${CMAKE_SOURCE_DIR}/package/bruceworx/mods/WireRouting
+        ${CMAKE_BINARY_DIR}/bruceworx/WireRouting
+    )
+endif()
 if(BUILD_BW_HOOKS)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/addons/BruceWorx

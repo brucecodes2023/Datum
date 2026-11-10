@@ -58,6 +58,9 @@ jobs:
       - name: Part numbering, CLI and hook unit tests
         run: python3 -m unittest discover -s addons/BruceWorx/tests -v
 
+      - name: Wire routing unit tests
+        run: python3 -m unittest discover -s package/bruceworx/mods/WireRouting/tests -v
+
   linux-x86_64:
     name: Linux x86_64 (pixi)
     runs-on: ubuntu-latest
@@ -171,6 +174,15 @@ jobs:
       - name: BruceWorx headless hooks
         timeout-minutes: 15
         run: pixi run bash addons/BruceWorx/tests/run_freecad_smoke.sh
+
+      # Wire routing on real documents: length, bend check, joint follow, sweep, cut list.
+      - name: BruceWorx wire routing
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -o pipefail
+          pixi run FreeCADCmd "${{ github.workspace }}/package/bruceworx/mods/WireRouting/tests/freecad_wire.py" 2>&1 | tee "${logdir}WireRouting.log"
+          grep -q "BW_WIRE PASS" "${logdir}WireRouting.log"
 
       # Same as upstream sub_buildPixi.yml: Python CLI tests on the installed build.
       # (Upstream's GUI-on-install test is disabled there for Qt6; we follow suit.)
