@@ -3,19 +3,19 @@
  <class>BruceWorxPreferences</class>
  <widget class="QWidget" name="BruceWorxPreferences">
   <property name="windowTitle">
-   <string>BruceWorx</string>
+   <string>Vector Labs</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QGroupBox" name="groupDefaults">
      <property name="title">
-      <string>BruceWorx features</string>
+      <string>Vector Labs features</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayoutDefaults">
       <item>
        <widget class="QLabel" name="labelDefaults">
         <property name="text">
-         <string>Everything BruceWorx adds is on by default. Uncheck a box to turn that feature off.</string>
+         <string>Everything Vector Labs adds is on by default. Uncheck a box to turn that feature off.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -44,7 +44,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="HistoryTimelineEnabled">
         <property name="toolTip">
-         <string>On by default. Same switch as BruceWorx &gt; History Timeline. Closing the dock also turns it off.</string>
+         <string>On by default. Same switch as Vector Labs &gt; History Timeline. Closing the dock also turns it off.</string>
         </property>
         <property name="text">
          <string>History timeline (bottom bar: PartDesign history, assembly order)</string>
@@ -82,10 +82,10 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="LoadHooks">
         <property name="toolTip">
-         <string>On by default. Loads the BruceWorx hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.</string>
+         <string>On by default. Loads the Vector Labs hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.</string>
         </property>
         <property name="text">
-         <string>Hooks add-on (part numbers: BruceWorx &gt; Assign Part Number…)</string>
+         <string>Hooks add-on (part numbers: Vector Labs &gt; Assign Part Number…)</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -120,7 +120,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="DrawingAutoFill">
         <property name="toolTip">
-         <string>On by default. Drawings on the BruceWorx sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard, projection, who drew, checked and approved). Fields you type yourself are kept. Needs the hooks add-on.</string>
+         <string>On by default. Drawings on the Vector Labs sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard, projection, who drew, checked and approved). Fields you type yourself are kept. Needs the hooks add-on.</string>
         </property>
         <property name="text">
          <string>Fill drawing title blocks from the part and the vault</string>
@@ -158,7 +158,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="ClaudeBridge">
         <property name="toolTip">
-         <string>On by default. Lets Claude Code (the BruceWorx MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick "Don't ask again" to be asked only once); a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
+         <string>On by default. Lets Claude Code (the Vector Labs MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick "Don't ask again" to be asked only once); a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
         </property>
         <property name="text">
          <string>Claude Code bridge</string>
@@ -196,7 +196,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="ClaudeBridgeAlways">
         <property name="toolTip">
-         <string>Set by the Allow prompt's "Don't ask again on this Mac" box (or BruceWorx &gt; Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the "Claude connected" chip showing. Untick it, Deny, or click the chip to be asked again.</string>
+         <string>Set by the Allow prompt's "Don't ask again on this Mac" box (or Vector Labs &gt; Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the "Claude connected" chip showing. Untick it, Deny, or click the chip to be asked again.</string>
         </property>
         <property name="text">
          <string>Allow Claude Code without asking (remembered)</string>
@@ -234,7 +234,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="PatternCommands">
         <property name="toolTip">
-         <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
+         <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Vector Labs menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
         </property>
         <property name="text">
          <string>Rectangular and Circular Pattern commands</string>
@@ -253,7 +253,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="KiCadBoards">
         <property name="toolTip">
-         <string>On by default. Adds Insert Board… (Assemble group and BruceWorx menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems at the board origin and mounting holes.</string>
+         <string>On by default. Adds Insert Board… (Assemble group and Vector Labs menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems at the board origin and mounting holes.</string>
         </property>
         <property name="text">
          <string>KiCad boards (Insert Board command)</string>
@@ -272,7 +272,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="SheetMetalAddon">
         <property name="toolTip">
-         <string>On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design &gt; Sheet Metal tab: base wall, flanges, relief, unfold, and BruceWorx's sheet-metal rules and Export Flat (shop DXF). Off skips any SheetMetal add-on, a copy from the Addon Manager too. Takes effect on the next start.</string>
+         <string>On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design &gt; Sheet Metal tab: base wall, flanges, relief, unfold, and Vector Labs's sheet-metal rules and Export Flat (shop DXF). Off skips any SheetMetal add-on, a copy from the Addon Manager too. Takes effect on the next start.</string>
         </property>
         <property name="text">
          <string>Sheet metal add-on (Design &gt; Sheet Metal tab)</string>
@@ -351,7 +351,7 @@
          <string>On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.</string>
         </property>
         <property name="text">
-         <string>BruceWorx top bar (turns the FreeCAD-Ribbon add-on off)</string>
+         <string>Vector Labs top bar (turns the FreeCAD-Ribbon add-on off)</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -422,6 +422,25 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="AssemblyTabOnActivate">
+        <property name="toolTip">
+         <string>On by default. While an assembly is the active one, the Design workspace shows its Assembly tab; when it stops being active, the tab you had comes back. Needs Workspaces and tabs.</string>
+        </property>
+        <property name="text">
+         <string>Show the Assembly tab when an assembly is being edited</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>AssemblyTabOnActivate</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="CommandSearch">
         <property name="toolTip">
          <string>On by default. A search field on the first toolbar row (Cmd-K) finds commands, objects in the document and settings. The SearchBar add-on's toolbar is hidden while it is on.</string>
@@ -481,10 +500,10 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="StartPage">
         <property name="toolTip">
-         <string>On by default. The Start tab shows the BruceWorx page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off brings back FreeCAD's own Start page.</string>
+         <string>On by default. The Start tab shows the Vector Labs page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off brings back FreeCAD's own Start page.</string>
         </property>
         <property name="text">
-         <string>BruceWorx Start page</string>
+         <string>Vector Labs Start page</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -744,7 +763,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="StudioShading">
         <property name="toolTip">
-         <string>On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ivory, PETG charcoal...). A colour you set by hand is kept. Same switch as BruceWorx &gt; Studio Shading. Off: FreeCAD's own shading, exactly. Drawn while the preference pack is applied.</string>
+         <string>On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ivory, PETG charcoal...). A colour you set by hand is kept. Same switch as Vector Labs &gt; Studio Shading. Off: FreeCAD's own shading, exactly. Drawn while the preference pack is applied.</string>
         </property>
         <property name="text">
          <string>Studio shading (soft lights, reflections, colours from materials)</string>
@@ -836,6 +855,44 @@
         </property>
         <property name="prefEntry" stdset="0">
          <cstring>UndoToasts</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="CodeCad">
+        <property name="toolTip">
+         <string>New Code Part, the script editor and the approval prompt for scripts not written on this Mac. Off: code parts in a file still load and keep their shapes. Takes effect at the next start.</string>
+        </property>
+        <property name="text">
+         <string>Code parts (build123d / CadQuery scripts as parametric parts)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>CodeCad</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="CodeCadDimensions">
+        <property name="toolTip">
+         <string>Selecting a code part shows its dimensions in the 3D view, on dimension lines where the geometry they measure was found. Takes effect at the next start.</string>
+        </property>
+        <property name="text">
+         <string>Code part dimensions on the model (double-click one to change it)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>CodeCadDimensions</cstring>
         </property>
         <property name="prefPath" stdset="0">
          <cstring>BruceWorx</cstring>

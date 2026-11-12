@@ -179,7 +179,7 @@ def combo(obj, parent=None):
         box.addItems(names)
         current = bc.active(obj.Document)
         box.setCurrentIndex(names.index(current) if current in names else -1)
-        box.setToolTip("The file's active configuration (Configuration Table: BruceWorx > Configurations...)")
+        box.setToolTip("The file's active configuration (Configuration Table: Vector Labs > Configurations...)")
 
         def picked(index):
             name = box.itemText(index)

@@ -41,6 +41,16 @@ class TestPlan(unittest.TestCase):
         xs = sorted(m[3] for _part, m in comps[0]["draws"])
         self.assertEqual(xs, [10, 11, 12])  # the plate at 10, its bolts at 10+1 and 10+2
 
+    def test_each_body_knows_the_part_it_is_in(self):
+        # Bruce 9 Nov: a pick on a panel selects that part, not the whole sub-assembly
+        sub = fo.plan(library(), "TOP")[0]
+        self.assertEqual(sub["owners"], [(), (0,), (1,)])  # the plate (SUB's own body), then each bolt
+        self.assertEqual(sub["files"], {(): "SUB", (0,): "BOLT", (1,): "BOLT"})
+        self.assertEqual(fo.owner_at(sub["owners"], 2), (1,))  # the second bolt, not the first
+        self.assertEqual(fo.draws_of(sub["owners"], (1,)), [2])
+        self.assertEqual(fo.draws_of(sub["owners"], ()), [0, 1, 2])  # the whole component
+        self.assertEqual(fo.draws_of(sub["owners"], (), deep=False), [0])  # a pick on the plate: SUB's own body
+
     def test_a_missing_mesh_gives_nothing(self):
         self.assertEqual(fo.plan(library(), "NOPE"), [])
 

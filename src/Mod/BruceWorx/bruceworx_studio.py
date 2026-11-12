@@ -624,7 +624,7 @@ def _install_menu():
         action.setCheckable(True)
         action.setToolTip(
             "Soft studio lights and reflections, parts coloured from their material. "
-            "Off: FreeCAD's own shading (Preferences > BruceWorx)."
+            "Off: FreeCAD's own shading (Preferences > Vector Labs)."
         )
         action.triggered.connect(lambda _checked=False: toggle())
         bruceworx_menu.add_action(action)

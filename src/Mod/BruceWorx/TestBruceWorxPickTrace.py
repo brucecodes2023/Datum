@@ -49,6 +49,32 @@ class TestAssemblyPick(unittest.TestCase):
         self.assertIsNone(pt.component_pick("Bolt.Edge2", "Bolt."))  # a part: its face next
 
 
+class TestPartPick(unittest.TestCase):
+    """Auto, part first (Bruce 9 Nov): a pick on a panel selects the panel, not the Panels sub-assembly."""
+
+    PANEL = "Panels.Panel003.Body.Face3"
+    FILES = [True, True, False]  # Panels (sub-assembly file), Panel003 (part file), Body
+
+    def test_first_pick_selects_the_deepest_file(self):
+        self.assertEqual(pt.part_pick(self.PANEL, self.FILES), "Panels.Panel003.")
+        self.assertEqual(pt.part_pick("Bolt.Edge2", [True]), "Bolt.")
+
+    def test_picking_it_again_goes_to_its_body_then_the_face(self):
+        self.assertEqual(pt.part_pick(self.PANEL, self.FILES, "Panels.Panel003."), "Panels.Panel003.Body.")
+        self.assertIsNone(pt.part_pick(self.PANEL, self.FILES, "Panels.Panel003.Body."))
+
+    def test_another_part_starts_again(self):
+        self.assertEqual(pt.part_pick("Panels.Panel001.Body.Face1", self.FILES, "Panels.Panel003."), "Panels.Panel001.")
+
+    def test_no_files_along_the_path_takes_the_top(self):
+        self.assertEqual(pt.part_pick(self.PANEL, [False, False, False]), "Panels.")
+        self.assertEqual(pt.part_pick(self.PANEL, []), "Panels.")
+
+    def test_tree_clicks_are_left_alone(self):
+        self.assertIsNone(pt.part_pick("Panels.Panel003.", self.FILES))
+        self.assertIsNone(pt.part_pick("Face3", []))
+
+
 class TestWords(unittest.TestCase):
     def test_element_kind(self):
         self.assertEqual(pt.element_kind("Body.Pad.Face3"), "Face3")

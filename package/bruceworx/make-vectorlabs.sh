@@ -139,6 +139,15 @@ else
     say "warning: no tectonic in the environment (pixi.toml lists it): study reports stay LaTeX unless MacTeX is installed"
 fi
 
+# Code-CAD (AUT-05): build123d and CadQuery come with site-packages above, and OCP's libraries through the
+# relocation step. lib3mf is the exception: build123d's lib3mf package loads it by name at import
+# (ctypes.util.find_library, which looks in Contents/lib), so nothing links to it and it is copied here.
+if compgen -G "$env/lib/lib3mf*.dylib" >/dev/null; then
+    cp -a "$env"/lib/lib3mf*.dylib "$C/lib/"
+else
+    say "warning: no lib3mf in the environment (pixi.toml lists build123d): code parts cannot run"
+fi
+
 # The real executable sits in Contents/MacOS (as "vectorlabs"), so FreeCAD takes its home from the
 # executable's parent folder, Contents. macOS sees "Vector Labs.app" (menu bar, Dock, icon) through the
 # bundle's Info.plist; the bundle's own executable, MacOS/"Vector Labs", is a small launcher that first
@@ -346,6 +355,8 @@ FREECAD_USER_HOME="$stage/home" PYTHONHOME="$C" PYTHONNOUSERSITE=1 "$C/bin/FreeC
     >"$stage/check.log" 2>&1 || { cat "$stage/check.log"; fail "the staged FreeCADCmd does not start"; }
 grep -q "^ok" "$stage/check.log" || { cat "$stage/check.log"; fail "the staged FreeCADCmd did not import Part"; }
 say "$(grep '^ok' "$stage/check.log")"
+codecad_out="$("$C/bin/FreeCADCmd" -c "import build123d, cadquery; print('code-CAD ok: build123d', build123d.__version__)" 2>&1 | grep '^code-CAD ok' || true)"
+if [[ -n "$codecad_out" ]]; then say "$codecad_out"; else say "warning: build123d does not import in the bundle: code parts cannot run"; fi
 if [[ -x "$C/bin/ccx" ]]; then
     # ccx -v exits 201 after printing its version, so judge it by the output, not the status (pipefail).
     ccx_out="$("$C/bin/ccx" -v 2>&1 || true)"

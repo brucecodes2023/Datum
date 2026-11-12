@@ -563,6 +563,16 @@ def _log(message):
         pass
 
 
+def _tell(text, ms=6000):
+    """A short message in the status bar, for an action the user started that did not work."""
+    try:
+        import FreeCADGui
+
+        FreeCADGui.getMainWindow().statusBar().showMessage(text, ms)
+    except Exception:
+        pass
+
+
 def _icon(names, workbench=""):
     """The first of ``names`` found in the Qt resources, else the workbench's icon."""
     from PySide import QtCore, QtGui
@@ -637,19 +647,64 @@ def _new_in(workbench, *commands):
         FreeCADGui.activateWorkbench(workbench)
     except Exception as exc:
         _log(f"{workbench}: {exc}")
+        _tell("Could not start that: its workbench did not open. The Report view has the details.")
         return
     _run(*commands)
     _post_start()
 
 
+def _new_assembly():
+    """A new document with an assembly, in the Design workspace on its Assembly tab (the stock Assembly
+    workbench only while the workspace bar is off)."""
+    import FreeCADGui
+
+    try:
+        import bruceworx_workspaces as workspaces
+
+        design = workspaces.workspace(workspaces.definition(), "Design") if workspaces.enabled() else None
+    except Exception as exc:
+        _log(f"workspaces: {exc}")
+        design = None
+    if design is None:
+        return _new_in("AssemblyWorkbench", "Assembly_CreateAssembly", "Std_Refresh")
+    _run("Std_New")
+    try:
+        FreeCADGui.activateWorkbench(design["workbench"])
+        import bruceworx_wsload  # noqa: F401 -- registers the Assembly commands the Design groups borrow
+    except Exception as exc:
+        _log(f"{design['workbench']}: {exc}")
+        _tell("Could not start the assembly: the Design workspace did not open. The Report view has the details.")
+        return
+    workspaces.show_tab("Design", "Assembly")
+    _run("Assembly_CreateAssembly", "Std_Refresh")
+    _post_start()
+
+
+def _in_open_document(workbench, command):
+    """Run one of our commands that works on the open document's part (New Drawing, New Study) in its
+    workspace. With no document open it starts an empty one, where the command says what it needs."""
+    import FreeCAD
+    import FreeCADGui
+
+    if FreeCAD.ActiveDocument is None:
+        _run("Std_New")
+    try:
+        FreeCADGui.activateWorkbench(workbench)
+    except Exception as exc:
+        _log(f"{workbench}: {exc}")
+        _tell("Could not start that: its workbench did not open. The Report view has the details.")
+        return
+    _run(command)
+    _post_start()
+
+
 NEW_ITEMS = (
     ("Part", KIND_ICONS["part"], lambda: _new_in("PartDesignWorkbench", "PartDesign_Body")),
-    ("Assembly", KIND_ICONS["assembly"],
-     lambda: _new_in("AssemblyWorkbench", "Assembly_CreateAssembly", "Std_Refresh")),
-    ("Drawing", KIND_ICONS["drawing"], lambda: _new_in("TechDrawWorkbench", "TechDraw_PageDefault")),
+    ("Assembly", KIND_ICONS["assembly"], _new_assembly),
+    ("Drawing", KIND_ICONS["drawing"], lambda: _in_open_document("TechDrawWorkbench", "BruceWorx_NewDrawing")),
     ("Sketch", (("Sketcher_NewSketch", "general/Sketcher_NewSketch", "SketcherWorkbench"), "SketcherWorkbench"),
      lambda: _new_in("SketcherWorkbench", "Sketcher_NewSketch")),
-    ("Simulation study", KIND_ICONS["simulation"], lambda: _new_in("FemWorkbench", "FEM_Analysis")),
+    ("Simulation study", KIND_ICONS["simulation"], lambda: _in_open_document("FemWorkbench", "BruceWorx_NewStudy")),
 )
 
 
@@ -772,7 +827,7 @@ def open_vault(parent=None) -> None:
             return
         answer = QtWidgets.QMessageBox.question(
             parent, "Open vault",
-            f"{folder} is not a BruceWorx vault: it has no {REF_SUFFIX} file.\n\n"
+            f"{folder} is not a Vector Labs vault: it has no {REF_SUFFIX} file.\n\n"
             "Make it a new vault? Its files, journal and ref file are written into this folder.",
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Cancel)
         if answer != QtWidgets.QMessageBox.Yes:
@@ -877,7 +932,7 @@ class _Loader:
             read_ms = (time.perf_counter() - started) * 1000
             snap = read_vault(path, actor, vault=vault, options=options, read_ms=read_ms)
         except ImportError:
-            snap = {"error": "The vault needs the BruceWorx hooks add-on"}
+            snap = {"error": "The vault needs the Vector Labs hooks add-on"}
         except Exception as exc:
             self.vaults.pop(path, None)
             snap = {"error": f"Vault unreadable: {exc}"}
@@ -1580,7 +1635,7 @@ def _make_classes():
                 elif self.vault.get("loading"):
                     self.dash_wait.setText("Reading the vault…")
                 else:
-                    self.dash_wait.setText("The dashboard needs a newer BruceWorx hooks add-on.")
+                    self.dash_wait.setText("The dashboard needs a newer Vector Labs hooks add-on.")
                 return
             if snap is None:
                 return

@@ -936,7 +936,7 @@ def show_mass_properties():
     import bruceworx_rightpanel as rp
 
     if not rp.show_tab(bp.TAB):
-        _message("Turn the right panel on (BruceWorx > Right Panel) to see mass properties.")
+        _message("Turn the right panel on (Vector Labs > Right Panel) to see mass properties.")
         return False
     return True
 

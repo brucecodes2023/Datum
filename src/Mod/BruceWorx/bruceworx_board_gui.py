@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Insert Board… command (ECD-02): a KiCad board into the active assembly.
 
-Design > Solid > Assemble (the group's More list) and the BruceWorx menu.
+Design > Assembly > Assemble (the group's More list) and the BruceWorx menu.
 Picks a ``.kicad_pcb``, then :func:`bruceworx_board.insert_board` does the
 work. Target: the active assembly; else the active document's only
 assembly; else a new document named by the board.

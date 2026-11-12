@@ -1247,7 +1247,7 @@ def new_project():
 
     s = _vc().session()
     if s is None:
-        _message("New Project", "Open a vault first (the Start page, or Preferences > BruceWorx).")
+        _message("New Project", "Open a vault first (the Start page, or Preferences > Vector Labs).")
         return False
     if FreeCADGui.Control.activeDialog():
         _message("New Project", "Another command is open in the task panel. Close it (OK or Cancel) first.")
@@ -1255,7 +1255,7 @@ def new_project():
     try:
         panel = classes()["NewProjectPanel"](s)
     except ImportError as exc:
-        _message("New Project", f"New Project needs the BruceWorx hooks add-on: {exc}", "warning")
+        _message("New Project", f"New Project needs the Vector Labs hooks add-on: {exc}", "warning")
         return False
     _state["panel"] = panel
     FreeCADGui.Control.showDialog(panel)

@@ -942,405 +942,453 @@
 "area": "BIM"
 },
 {
+"text": "Activate the assembly or body when a file opens",
+"tip": "On by default. When a file becomes the active document and nothing is being edited, its assembly is activated (as a double-click in the tree would), so the joint and assemble tools are ready, and the ",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Allow Claude Code without asking (remembered)",
+"tip": "Set by the Allow prompt's \"Don't ask again on this Mac\" box (or Vector Labs > Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the \"Claude connected\" chip showin",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Assembly pick: select the component first",
+"tip": "On by default. In an assembly, a pick in the 3D view selects the component directly under the open assembly (its vault file), not the body inside it. Pick inside it again to go one level deeper each t",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "Auto-hide",
 "tip": "OverlayLeft AutoHide. The panel hides when the pointer leaves and shows on hover.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Bottom inset",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Browser header in small caps",
 "tip": "On by default. The model tree card is titled BROWSER in small capitals instead of Model.",
-"page": "BruceWorx",
-"area": "BruceWorx"
-},
-{
-"text": "BruceWorx Start page",
-"tip": "On by default. The Start tab shows the BruceWorx page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off",
-"page": "BruceWorx",
-"area": "BruceWorx"
-},
-{
-"text": "BruceWorx features",
-"tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "BruceWorx preference pack",
 "tip": "On by default. Applied once on first start (theme, millimetres, Fusion-like navigation, PartDesign startup). Your previous values are saved first. Uncheck to restore them (same as the BruceWorx Off pa",
-"page": "BruceWorx",
-"area": "BruceWorx"
-},
-{
-"text": "BruceWorx top bar (turns the FreeCAD-Ribbon add-on off)",
-"tip": "On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Captioned tool groups",
 "tip": "On by default. Each workbench toolbar gets a small caption under it (CREATE, PATTERN, ...). Click a caption for a menu with every command of the group, named.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
-"text": "Claude Code bridge (asks once per session)",
-"tip": "On by default. Lets Claude Code (the BruceWorx MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call in a session asks you; a \"Claude connec",
-"page": "BruceWorx",
+"text": "Claude Code bridge",
+"tip": "On by default. Lets Claude Code (the Vector Labs MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick \"Don't ask again\" to b",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Code part dimensions on the model (double-click one to change it)",
+"tip": "Selecting a code part shows its dimensions in the 3D view, on dimension lines where the geometry they measure was found. Takes effect at the next start.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Code parts (build123d / CadQuery scripts as parametric parts)",
+"tip": "New Code Part, the script editor and the approval prompt for scripts not written on this Mac. Off: code parts in a file still load and keep their shapes. Takes effect at the next start.",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Constraint up to",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Create Vault in a full-window tab",
 "tip": "On by default. Create Vault opens as a full-window tab of its own, with numbered sections and Cancel / Create at the bottom. Off runs it in the task panel on the right.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Dependency lines on hover",
 "tip": "Hovering a Browser row draws thin lines to the rows it uses (Sketch to Pad) and the rows that use it.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Document tabs",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Document tabs and status bar",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Document tabs in the title bar (macOS)",
 "tip": "On by default (macOS). The title bar becomes the first toolbar row: traffic lights, save, undo, redo, the document tabs and the search field. Off brings back the title bar and the tab row under the to",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Dot on modified document tabs",
 "tip": "On by default. A modified document shows a dot on its tab instead of the close button; the close button appears on hover. Unmodified tabs show it on the current tab only.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Error chip on failed features",
 "tip": "A feature whose recompute failed gets a red ERROR chip in the Browser; click it to open the feature.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
-"text": "Everything BruceWorx adds is on by default. Uncheck a box to turn that feature off.",
+"text": "Everything Vector Labs adds is on by default. Uncheck a box to turn that feature off.",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Fasteners add-on (Insert Fastener)",
 "tip": "On by default. Loads the bundled Fasteners add-on (Mod/fasteners: ISO / DIN screws, nuts, washers, inserts) that Insert Fastener uses. Off skips any Fasteners add-on, a copy from the Addon Manager too",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Feature summary in the Browser",
 "tip": "On by default. Quiet text after a feature's name with its main dimension: Pad 8 mm, R5, Ø9 × 4.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Fill drawing title blocks from the part and the vault",
-"tip": "On by default. Drawings on the BruceWorx sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard,",
-"page": "BruceWorx",
+"tip": "On by default. Drawings on the Vector Labs sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standar",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Float the task panel (command dialog)",
 "tip": "On by default. While the model tree floats, the task panel floats on the right as a card that shows while a command is open. Uncheck to dock it again.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Floating model tree",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Follow the macOS light/dark setting",
 "tip": "On by default. Switches between the BruceWorx and BruceWorx Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences > General.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Hide the history timeline when there is no history",
 "tip": "On by default. The timeline hides while the active document has no history (no body with features, no assembly) and comes back when it has. Uncheck to keep it visible with a short message.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "History timeline (bottom bar: PartDesign history, assembly order)",
-"tip": "On by default. Same switch as BruceWorx > History Timeline. Closing the dock also turns it off.",
-"page": "BruceWorx",
+"tip": "On by default. Same switch as Vector Labs > History Timeline. Closing the dock also turns it off.",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Hole presets, cosmetic threads and the fastener library",
 "tip": "On by default. Hole Preset (heat-set insert, tapped, clearance, counterbore and countersink holes), Cosmetic Thread, Hole Callouts on drawings, Insert Fastener and Mark as COTS. Takes effect at once f",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
-"text": "Hooks add-on (part numbers: BruceWorx > Assign Part Number…)",
-"tip": "On by default. Loads the BruceWorx hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.",
-"page": "BruceWorx",
+"text": "Hooks add-on (part numbers: Vector Labs > Assign Part Number…)",
+"tip": "On by default. Loads the Vector Labs hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Icon plates in the Browser (dark mode)",
 "tip": "On by default. In dark mode, a faint light plate behind each tree icon keeps dark-outlined icons readable.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Keep the Start page as the first tab",
 "tip": "On by default. The Start page, where the vault is, stays the first document tab and has no close button, so one click goes back to it.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "KiCad boards (Insert Board command)",
-"tip": "On by default. Adds Insert Board… (Assemble group and BruceWorx menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems",
-"page": "BruceWorx",
+"tip": "On by default. Adds Insert Board… (Assemble group and Vector Labs menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate syste",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Left inset",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Lifecycle state of parts follows the vault",
 "tip": "On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by BruceWorx/Vau",
-"page": "BruceWorx",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Model tree: active document only",
+"tip": "On by default. The model tree lists only the active document. Documents open because something links to them are not listed on their own; their objects still show under the links that use them. Also i",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Navigation pill at the bottom of the 3D view",
 "tip": "A small bar at the bottom of each 3D view: orbit, pan, zoom (click, then drag in the view; Esc stops), fit all, display style, orthographic/perspective, clipping planes, measure.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Navigation pill orbits about",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "New sheet-metal parts take the vault's default rule",
 "tip": "On by default. The first sheet-metal wall of a document without a rule gets the vault's default sheet-metal rule (thickness, bend radius, K-factor, relief); change it with Sheet Metal > Rules.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Offer to close the gaps of an open sketch profile",
 "tip": "When a Pad, Pocket, Revolution or Groove fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing changes without a click",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "On by default. Puts the model tree on the existing left overlay panel (auto-hide, transparency, width, and insets below)",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "On by default. Unified title bar and toolbar, with the native close, minimize, and zoom buttons in that bar. Uncheck to ",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "On-canvas editing (double-click a face: drag arrow and value field)",
 "tip": "Double-click a face of a Pad, Pocket, Fillet or Hole in the 3D view (or Alt-double-click its Browser row): a drag arrow, a value field and a command bar appear. Drag or type; one drag is one undo step",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Overlay the model tree",
 "tip": "On by default. Overlay the Model dock (or Tree view, if the panels are split). Uncheck to restore the stock docks.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Part number and state badges in the Browser",
 "tip": "On by default. A part with the BruceWorx part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Pick a face: show the feature that made it",
 "tip": "Picking a face, edge or vertex in the 3D view highlights the feature that made it in the Browser and on the history timeline. The selection is not changed.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Preview while dragging when a recompute takes over",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Quiet property group captions",
 "tip": "On by default. Property groups are small-caps captions instead of grey bars (BruceWorx theme).",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Rectangular and Circular Pattern commands",
-"tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the BruceWorx menu. They pattern features (through PartDesign), bodies and assembly componen",
-"page": "BruceWorx",
+"tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Vector Labs menu. They pattern features (through PartDesign), bodies and assembly compon",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Right panel tabs: Properties, Vault, Parameters, Physical",
 "tip": "Properties, Vault, Parameters and Physical as tabs of the right panel; a command opens as a tab of its own. Cmd-I hides and shows the panel. Takes effect after a restart.",
-"page": "BruceWorx",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Save shapes in binary (faster open and save)",
+"tip": "On by default (PRF-01). Shapes are saved in OpenCascade's binary form instead of text: about 40 % faster to open and twice as fast to save on large assemblies, lossless. FreeCAD opens both forms, so o",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Search field (Cmd-K)",
 "tip": "On by default. A search field on the first toolbar row (Cmd-K) finds commands, objects in the document and settings. The SearchBar add-on's toolbar is hidden while it is on.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Sheet metal add-on (Design > Sheet Metal tab)",
-"tip": "On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design > Sheet Metal tab: base wall, flanges, relief, unfold, and BruceWorx's sheet-metal rules and Export Flat (shop ",
-"page": "BruceWorx",
+"tip": "On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design > Sheet Metal tab: base wall, flanges, relief, unfold, and Vector Labs's sheet-metal rules and Export Flat (sho",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Show the Assembly tab when an assembly is being edited",
+"tip": "On by default. While an assembly is the active one, the Design workspace shows its Assembly tab; when it stops being active, the tab you had comes back. Needs Workspaces and tabs.",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Show the grid when a sketch opens",
 "tip": "FreeCAD saves the grid setting in each sketch. On: every sketch shows the grid when it opens for editing, including sketches made before. The sketch panel can still hide it.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Show workbench command lists in the task panel",
 "tip": "The BruceWorx pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Sketch grid strength",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Status bar as text readouts",
 "tip": "On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by BruceWorx/VaultPath.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Studio shading (soft lights, reflections, colours from materials)",
 "tip": "On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Top offset",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Trackpad: swipe pans, Shift + swipe zooms, Cmd + swipe orbits",
-"tip": "Two-finger swipe on a trackpad: a plain swipe pans in any direction (the model follows the fingers), Shift + swipe zooms at the pointer, Cmd + swipe orbits. A mouse wheel and pinch are not affected. Off: a swipe zooms, as in stock FreeCAD.",
-"page": "BruceWorx",
+"tip": "Two-finger swipe on a trackpad: a plain swipe pans in any direction (the model follows the fingers), Shift + swipe zooms at the pointer, Cmd + swipe orbits. A mouse wheel and pinch are not affected. O",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Transparent background",
 "tip": "On by default. OverlayLeft Transparent: the model shows through the Browser; the text keeps a halo so it stays readable. Uncheck for an opaque card.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Two toolbar rows",
 "tip": "On by default. After each workbench switch, File, the workbench tabs and View share the first toolbar row and the workbench's tools follow on the second.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Undo toast after each command",
 "tip": "A small card above the navigation pill after each command (Pad created, Deleted) with an Undo button; it fades after four seconds. Not shown for property edits or while a sketch is open.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Unified title bar and toolbar on macOS",
 "tip": "On by default. Calls QMainWindow.setUnifiedTitleAndToolBarOnMac. Uncheck to set that property false, which is Qt stock. Known risk: Qt 6.8 documents painting problems when the window contains an OpenG",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Use the macOS accent colour",
 "tip": "On by default. The accent from System Settings > Appearance colours buttons, checkboxes, selection and the view cube highlight. Text on it turns dark when white would be hard to read.",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Vault client: check out, check in, Vault panel",
 "tip": "On by default. Check out and check in from FreeCAD: the Vault panel, vault status in the Browser and the status bar, a check-out offer when you save or edit a vault file that is not checked out to you",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Vault dashboard on the Start page",
 "tip": "On by default. With a vault open, the Start page has two tabs: the vault's dashboard (counts by type and state, top assemblies, your work, changes, activity and vault health; every tile opens the filt",
-"page": "BruceWorx",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Vector Labs Start page",
+"tip": "On by default. The Start tab shows the Vector Labs page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. O",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Vector Labs features",
+"tip": "",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Vector Labs top bar (turns the FreeCAD-Ribbon add-on off)",
+"tip": "On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Width",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Workspaces and tabs",
 "tip": "On by default. A workspace menu (Design, Simulation, Manufacture, Drawing; Ctrl+1 to Ctrl+4) and tabs (Solid, Surface, Mesh, Utilities) replace the workbench selector. Opening a sketch adds a SKETCH t",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "macOS window",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "short line up to",
 "tip": "",
-"page": "BruceWorx",
+"page": "Vector Labs",
 "area": "BruceWorx"
 },
 {

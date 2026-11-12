@@ -1709,7 +1709,7 @@ class MakeVaultItemCommand(_Command):
         container = found[0]
         s = vc.session()
         if s is None:
-            _message("Open a vault first (Preferences > BruceWorx, or the Start page).")
+            _message("Open a vault first (Preferences > Vector Labs, or the Start page).")
             return
         _QtCore, _QtGui, QtWidgets = _qt()
         text, ok = QtWidgets.QInputDialog.getText(_gui().getMainWindow(), "Make vault item", "Harness description:",

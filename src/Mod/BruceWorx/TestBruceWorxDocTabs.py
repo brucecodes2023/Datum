@@ -32,5 +32,29 @@ class TitleTests(unittest.TestCase):
         self.assertEqual(dt.clean_title("A : B"), "A : B")
 
 
+class SubFileTests(unittest.TestCase):
+    def test_files_linked_into_are_sub_files(self):
+        deps = {"Printer": ["Printer", "Frame", "Bolt"], "Frame": ["Frame", "Bolt"], "Bolt": ["Bolt"], "Sheet": ["Sheet"]}
+        self.assertEqual(dt.sub_files(deps), {"Frame", "Bolt"})
+
+    def test_label_drops_lock_and_view_number(self):
+        self.assertEqual(dt.tab_label("\U0001F512 TL-01-01058-001 : 1"), "TL-01-01058-001")
+        self.assertEqual(dt.tab_label("\U0001F512 TL-01-01058-001"), "TL-01-01058-001")
+        self.assertEqual(dt.tab_label("Start"), "Start")
+
+    def test_only_sub_file_tabs_hide(self):
+        labels = ["Start", "Printer", "Frame", "Bolt", "Buy list"]
+        by_label = {"Printer": {"Printer"}, "Frame": {"Frame"}, "Bolt": {"Bolt"}}
+        self.assertEqual(dt.hidden_tabs(labels, by_label, {"Frame", "Bolt"}), {2, 3})
+
+    def test_current_tab_stays(self):
+        by_label = {"Printer": {"Printer"}, "Frame": {"Frame"}}
+        self.assertEqual(dt.hidden_tabs(["Printer", "Frame"], by_label, {"Frame"}, current=1), set())
+
+    def test_shared_label_with_an_open_file_stays(self):
+        by_label = {"Plate": {"Plate", "Plate001"}}
+        self.assertEqual(dt.hidden_tabs(["Plate"], by_label, {"Plate001"}), set())
+
+
 if __name__ == "__main__":
     unittest.main()

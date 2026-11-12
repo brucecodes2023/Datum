@@ -5,6 +5,7 @@ The pure parts (framing, token, consent, arguments, sketch constraints) and the
 modelling tools on the main thread, headless. Run: FreeCADCmd -t TestBruceWorxBridge
 """
 
+import importlib.util
 import json
 import os
 import socket
@@ -17,6 +18,8 @@ import FreeCAD
 
 import bruceworx_bridge as bb
 import bruceworx_bridge_tools as tools
+
+HAVE_OCP = importlib.util.find_spec("OCP") is not None  # code_cad's kernel binding
 
 
 class TestFraming(unittest.TestCase):
@@ -227,6 +230,64 @@ class TestModelling(unittest.TestCase):
         out = self.run_tool("export_step", doc=self.doc, path=path)
         self.assertGreater(out["bytes"], 1000)
         self.assertEqual(out["objects"], ["Box"])
+
+    @unittest.skipUnless(HAVE_OCP, "no OCP in this Python (pixi.toml: ocp, build123d, cadquery)")
+    def test_code_cad_build123d(self):
+        code = ("from build123d import *\nwith BuildPart() as p:\n    Box(30, 20, 10)\n"
+                "    Hole(4)\nprint('made')\nresult = p")
+        out = self.run_tool("code_cad", doc=self.doc, code=code, name="Block")
+        self.assertEqual(out["stdout"], "made\n")
+        (made,) = out["objects"]
+        self.assertEqual(made["label"], "Block")
+        self.assertEqual(made["solids"], 1)
+        self.assertTrue(made["valid"])
+        self.assertAlmostEqual(made["volume_mm3"], 30 * 20 * 10 - 3.141592653589793 * 16 * 10, places=5)
+        self.assertEqual(made["bbox"]["size"], [30.0, 20.0, 10.0])
+        obj = FreeCAD.getDocument(self.doc).getObject(made["name"])
+        self.assertEqual(obj.CodeCadScript, code)  # the script stays with the part
+        self.assertEqual(made["status"], "Up to date")
+        self.assertEqual(self.run_tool("undo", doc=self.doc)["undone"], ["Claude: code_cad"])
+        self.assertIsNone(FreeCAD.getDocument(self.doc).getObject(made["name"]))
+
+    @unittest.skipUnless(HAVE_OCP, "no OCP in this Python (pixi.toml: ocp, build123d, cadquery)")
+    def test_code_cad_cadquery_and_several_shapes(self):
+        code = ("import cadquery as cq\nplate = cq.Workplane('XY').box(10, 10, 2)\n"
+                "pin = cq.Workplane('XY').circle(1).extrude(8)\n"
+                "show_object(plate, name='Plate')\nshow_object(pin, name='Pin')")
+        out = self.run_tool("code_cad", doc=self.doc, code=code)
+        self.assertEqual([o["label"] for o in out["objects"]], ["Plate", "Pin"])
+        self.assertAlmostEqual(out["objects"][0]["volume_mm3"], 200, places=6)
+        self.assertAlmostEqual(out["objects"][1]["volume_mm3"], 3.141592653589793 * 8, places=6)
+        named = self.run_tool("code_cad", doc=self.doc, code=code, name="Kit")
+        self.assertEqual([o["label"] for o in named["objects"]], ["Kit 1", "Kit 2"])
+
+    @unittest.skipUnless(HAVE_OCP, "no OCP in this Python (pixi.toml: ocp, build123d, cadquery)")
+    def test_code_cad_failures_leave_nothing(self):
+        count = len(FreeCAD.getDocument(self.doc).Objects)
+        with self.assertRaisesRegex(Exception, "made no shape"):
+            self.run_tool("code_cad", doc=self.doc, code="x = 1")
+        with self.assertRaisesRegex(Exception, "int is not a shape"):
+            self.run_tool("code_cad", doc=self.doc, code="result = 5")
+        with self.assertRaisesRegex(Exception, "ZeroDivisionError"):
+            self.run_tool("code_cad", doc=self.doc, code="from build123d import *\nresult = Box(1, 1, 1)\n1/0")
+        self.assertEqual(len(FreeCAD.getDocument(self.doc).Objects), count)
+
+    @unittest.skipUnless(HAVE_OCP, "no OCP in this Python (pixi.toml: ocp, build123d, cadquery)")
+    def test_code_cad_dimensions_follow_the_sheet(self):
+        code = ("from build123d import *\nw = param('cc_w', 30, 'Width')\nn = param.count('cc_n', 2)\n"
+                "result = Box(w, 10, 5 * n)")
+        out = self.run_tool("code_cad", doc=self.doc, code=code, name="Bar")
+        self.assertEqual(out["parameters_added"], ["cc_w", "cc_n"])
+        self.assertEqual([(p["name"], p["value"], p["unit"]) for p in out["parameters"]],
+                         [("cc_w", 30.0, "mm"), ("cc_n", 2, "")])
+        self.assertAlmostEqual(out["objects"][0]["volume_mm3"], 3000, places=6)
+        bar = out["objects"][0]["name"]
+        self.run_tool("set_parameter", doc=self.doc, alias="cc_w", value="45 mm")   # the Parameters sheet drives it
+        self.assertAlmostEqual(self.run_tool("measure", doc=self.doc, object=bar)["volume_mm3"], 4500, places=6)
+        edited = self.run_tool("code_cad", doc=self.doc, object=bar, code=code.replace("10, 5 * n", "20, 5 * n"))
+        self.assertEqual(edited["objects"][0]["name"], bar)                         # edited in place
+        self.assertEqual(edited["parameters_added"], [])
+        self.assertAlmostEqual(edited["objects"][0]["volume_mm3"], 9000, places=6)  # keeps cc_w = 45
 
     def test_screenshot_needs_window(self):
         import FreeCAD

@@ -22,6 +22,10 @@ and hide toolbars, so there is no rebuild.
   the sketch removes them. A workbench from More gets one tab with its own toolbars.
 * The last tab of each workspace is kept in BruceWorx/Workspaces/<name>/Tab.
 
+* While an assembly is the active one (in edit), its workspace shows the Assembly
+  tab; when it stops being active the tab it had comes back.
+  Preferences/BruceWorx/AssemblyTabOnActivate (default on).
+
 Preferences/BruceWorx/WorkspaceBar (default on). Off removes the bar, the
 groups and the manipulator, so the stock toolbars and selector come back.
 """
@@ -34,6 +38,8 @@ import re
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF_NAME = "WorkspaceBar"
+ASSEMBLY_TAB_PREF = "AssemblyTabOnActivate"
+ASSEMBLY_TAB = "Assembly"
 STATE_PATH = PREFS_PATH + "/Workspaces"
 WORKBENCH_PATH = "User parameter:BaseApp/Workbench"
 WORKBENCHES_PATH = "User parameter:BaseApp/Preferences/Workbenches"
@@ -569,9 +575,54 @@ def activate_workspace(name):
     FreeCADGui.activateWorkbench(ws["workbench"])
 
 
+def show_tab(workspace_name, tab_name):
+    """Show a tab of a workspace by name: it becomes the workspace's last tab, and the bar follows.
+    False when the workspace has no such tab."""
+    ws = workspace(definition(), workspace_name)
+    if ws is None or tab(ws, tab_name) is None:
+        return False
+    _save_tab(workspace_name, tab_name)
+    if _alive(_bar):
+        _bar.schedule()
+    return True
+
+
 def bar():
     """The live bar (for tests and scripts)."""
     return _bar if _alive(_bar) else None
+
+
+_tab_before_assembly = {}  # workspace name -> the tab it showed before an assembly became active
+
+
+def _is_assembly(vp):
+    obj = getattr(vp, "Object", None)
+    if obj is not None:
+        return obj.isDerivedFrom("Assembly::AssemblyObject")
+    return "ViewProviderAssembly" in str(getattr(vp, "TypeId", ""))
+
+
+def _follow_assembly(vp, active):
+    """An assembly became the active one (or stopped being it): the Assembly tab shows, then the tab before it."""
+    import FreeCAD
+    import FreeCADGui
+
+    if not enabled() or not FreeCAD.ParamGet(PREFS_PATH).GetBool(ASSEMBLY_TAB_PREF, True) or not _is_assembly(vp):
+        return
+    wb = FreeCADGui.activeWorkbench()
+    ws = workspace_for_workbench(definition(), wb.name() if wb else "")
+    if ws is None or tab(ws, ASSEMBLY_TAB) is None:
+        return
+    name = ws["name"]
+    saved = _saved_tab(name)
+    if active:
+        if saved != ASSEMBLY_TAB:
+            _tab_before_assembly[name] = saved
+            show_tab(name, ASSEMBLY_TAB)
+    else:
+        before = _tab_before_assembly.pop(name, None)
+        if before is not None and saved == ASSEMBLY_TAB and not show_tab(name, before):
+            show_tab(name, ws["tabs"][0]["name"])  # it had no saved tab: the first one
 
 
 def _reload_workbench():
@@ -629,11 +680,19 @@ class _PrefObserver:
 
 
 class _DocObserver:
-    def slotInEdit(self, _vp):
+    def slotInEdit(self, vp):
+        try:
+            _follow_assembly(vp, True)
+        except Exception:
+            pass
         if _alive(_bar):
             _bar.schedule()
 
-    def slotResetEdit(self, _vp):
+    def slotResetEdit(self, vp):
+        try:
+            _follow_assembly(vp, False)
+        except Exception:
+            pass
         if _alive(_bar):
             _bar.schedule()
 

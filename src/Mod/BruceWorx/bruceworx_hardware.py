@@ -1209,7 +1209,7 @@ class _InsertFastenerCommand:
     def Activated(self):
         s = _session()
         if s is None:
-            _message("Insert Fastener", "Open a vault first (Preferences > BruceWorx, or the Start page): each "
+            _message("Insert Fastener", "Open a vault first (Preferences > Vector Labs, or the Start page): each "
                      "fastener is a COTS item of the vault.")
             return
         assembly = _active_assembly()
@@ -1276,7 +1276,7 @@ class _MarkCotsCommand:
         _QtCore, _QtGui, QtWidgets = _qt()
         s = _session()
         if s is None:
-            _message("Mark as COTS", "Open a vault first (Preferences > BruceWorx, or the Start page).")
+            _message("Mark as COTS", "Open a vault first (Preferences > Vector Labs, or the Start page).")
             return
         rows = _hw().cots_candidates(s.vault.items)
         if not rows:
@@ -1319,7 +1319,7 @@ class _MarkCotsCommand:
 
 class _Manipulator:
     """Hole Callouts on TechDraw's annotation toolbar; the Design commands come from
-    workspaces.json (Solid > Create and Assemble, Utilities > Properties)."""
+    workspaces.json (Solid > Create, Assembly > Assemble, Utilities > Properties)."""
 
     def modifyToolBars(self):
         if not enabled():

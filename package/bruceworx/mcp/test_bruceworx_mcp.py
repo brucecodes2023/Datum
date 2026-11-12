@@ -20,6 +20,7 @@ import base64
 import importlib.util
 import io
 import json
+import math
 import os
 import shutil
 import socket
@@ -41,7 +42,10 @@ CHECKLIST = os.path.expanduser("~/Developer/BruceWorx-checklist")
 
 
 def load_bridge():
-    path = os.path.join(REPO, "src", "Mod", "BruceWorx", "bruceworx_bridge.py")
+    folder = os.path.join(REPO, "src", "Mod", "BruceWorx")
+    if folder not in sys.path:
+        sys.path.append(folder)  # the bridge imports bruceworx_slots, its neighbour
+    path = os.path.join(folder, "bruceworx_bridge.py")
     spec = importlib.util.spec_from_file_location("bruceworx_bridge_for_test", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -129,8 +133,9 @@ class TestProtocol(unittest.TestCase):
             self.assertFalse(any(k.startswith("_") for k in tool))
             for req in tool["inputSchema"].get("required", []):
                 self.assertIn(req, tool["inputSchema"]["properties"], tool["name"])
-        for name in ("create_sketch", "pad", "run_python", "vault_checkin", "kicad_export_step",
-                     "kicad_move_footprint", "screenshot"):
+        for name in ("create_sketch", "pad", "run_python", "code_cad", "vault_checkin", "kicad_export_step",
+                     "kicad_move_footprint", "screenshot", "design_summary", "view", "fit_report",
+                     "set_parameters"):
             self.assertIn(name, names)
 
     def test_schemas_match_the_bridge(self):
@@ -393,6 +398,58 @@ class TestHeadlessEndToEnd(unittest.TestCase):
         self.assertEqual(circ["instances"], 3)
         self.assertIn("type must be one of", self.call("add_joint", ok=False, type="Hinge", ref1="a.Face1",
                                                        ref2="b.Face1"))
+
+    def test_2c_agent_design_interface(self):
+        """AUT-06 end to end: summary, a drawing without a window, a fit report, a batch parameter edit."""
+        self.call("new_document", name="Agent")
+        self.call("run_python", code="import Part\nd = App.getDocument('Agent')\n"
+                  "s = d.addObject('Spreadsheet::Sheet', 'Parameters')\ns.set('A1', 'pin_d'); s.set('B1', '3 mm'); "
+                  "s.setAlias('B1', 'pin_d')\nd.recompute()\n"
+                  "p = d.addObject('Part::Feature', 'Plate')\n"
+                  "p.Shape = Part.makeBox(40, 20, 5).cut(Part.makeCylinder(1.7, 5, App.Vector(20, 10, 0)))\n"
+                  "c = d.addObject('Part::Cylinder', 'Pin')\nc.setExpression('Radius', 'Parameters.pin_d / 2')\n"
+                  "c.Height = 12\nc.Placement.Base = App.Vector(20, 10, -3)\nd.recompute()")
+        result = self.send("tools/call", {"name": "design_summary", "arguments": {}})["result"]
+        self.assertFalse(result["isError"])
+        text = result["content"][0]["text"]
+        self.assertIn("Plate | plain solid, no parameters | 40×20×5", text)
+        self.assertIn("parameters (Parameters): pin_d=3.00 mm", text)
+        self.assertEqual(json.loads(result["content"][1]["text"])["parts"], 2)
+        result = self.send("tools/call", {"name": "view", "arguments": {
+            "views": ["iso", "top"], "section": {"axis": "y", "at": 10}, "width": 480, "height": 240}})["result"]
+        self.assertFalse(result["isError"], result["content"][0].get("text"))
+        self.assertEqual(result["content"][0]["type"], "image")
+        self.assertTrue(base64.b64decode(result["content"][0]["data"]).startswith(b"\x89PNG"))
+        self.assertIn("section y = 10", result["content"][1]["text"])
+        result = self.send("tools/call", {"name": "fit_report", "arguments": {"first": "Plate", "second": "Pin"}})
+        self.assertIn("0.4 mm clearance on diameter", result["result"]["content"][0]["text"])
+        out = self.call("set_parameters", values={"pin_d": "3.6 mm"})
+        self.assertEqual(out["parameters"], [{"alias": "pin_d", "from": "3.00 mm", "to": "3.60 mm"}])
+        self.assertEqual([c["part"] for c in out["changed"]], ["Pin"])
+        result = self.send("tools/call", {"name": "fit_report", "arguments": {"first": "Plate", "second": "Pin"}})
+        self.assertIn("0.2 mm interference on diameter", result["result"]["content"][0]["text"])
+        self.assertEqual(self.call("undo")["undone"], ["Claude: set_parameters"])
+        self.assertIn("no part named 'Lid'", self.call("fit_report", ok=False, first="Plate", second="Lid"))
+
+    def test_2b_code_cad(self):
+        self.call("new_document", name="Code")
+        out = self.call("code_cad", name="Flange", code="from build123d import *\nwith BuildPart() as p:\n"
+                        "    Cylinder(20, 6)\n    with PolarLocations(14, 6):\n        Hole(2)\nresult = p")
+        (flange,) = out["objects"]
+        self.assertEqual((flange["label"], flange["solids"], flange["valid"]), ("Flange", 1, True))
+        self.assertAlmostEqual(flange["volume_mm3"], math.pi * 6 * (20 ** 2 - 6 * 2 ** 2), places=4)
+        self.assertAlmostEqual(self.call("measure", object="Flange")["volume_mm3"], flange["volume_mm3"], places=5)
+        step = os.path.join(self.tmp, "flange.step")
+        self.assertEqual(self.call("export_step", path=step, objects=[flange["name"]])["objects"], [flange["name"]])
+        self.assertIn("made no shape", self.call("code_cad", ok=False, code="import cadquery"))
+        bar = self.call("code_cad", name="Bar", code="from build123d import *\n"
+                        "result = Box(param('bar_len', 50, 'Bar length'), 10, 2)")
+        self.assertEqual(bar["parameters"][0]["expression"], "Parameters.bar_len")
+        self.call("set_parameter", alias="bar_len", value="80 mm")
+        self.assertAlmostEqual(self.call("measure", object="Bar")["volume_mm3"], 1600, places=5)
+        self.call("undo")
+        self.call("undo")
+        self.assertEqual(self.call("undo")["undone"], ["Claude: code_cad"])
 
     def test_3_assembly(self):
         part = os.path.join(self.tmp, "Block.FCStd")

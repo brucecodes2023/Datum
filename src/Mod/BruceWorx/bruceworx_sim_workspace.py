@@ -556,10 +556,38 @@ def _tab_index(title):
     left = _left()
     if left is None or title not in _s["tabs"]:
         return -1
-    for i in range(left.count()):
-        if left.tabText(i) == title:
-            return i
-    return -1
+    return _dock_index(left, _s["tabs"][title]["dock"])
+
+
+def _dock_index(left, dock):
+    """The left panel's tab holding ``dock`` (the panel keeps its docks in a splitter, in tab order), or -1."""
+    if not _alive_widget(dock):
+        return -1
+    parent = dock.parentWidget()
+    if parent is None or parent.parentWidget() is not left:
+        return -1
+    return parent.indexOf(dock)
+
+
+def _panel_dock(left, dock_name, widget):
+    """The dock around ``widget``, in the left panel. addDockWindow hands back a dock of that name it already has without
+    putting it in the panel, and one the panel dropped sits in the window's own left dock area: a wide empty strip beside
+    the 3D view (Bruce, 9 Nov 2026). That dock goes and a new one is made in the panel."""
+    import FreeCADGui
+    from PySide import QtCore
+
+    area = int(QtCore.Qt.LeftDockWidgetArea.value)
+    dock = FreeCADGui.addDockWindow(dock_name, widget, area, LEFT)
+    if _dock_index(left, dock) < 0:
+        import shiboken6
+
+        widget.setParent(None)
+        shiboken6.delete(dock)
+        dock = FreeCADGui.addDockWindow(dock_name, widget, area, LEFT)
+    index = _dock_index(left, dock)
+    if index >= 0:
+        left.setTabText(index, widget.windowTitle())
+    return dock
 
 
 def _sidebar_index():
@@ -768,20 +796,15 @@ def _refresh_left():
 def show_tab(title, dock_name, widget, width=SIDEBAR_WIDTH):
     """The left panel gets a sidebar tab ``title`` (the dock is made on first use, around ``widget``) and the horizontal
     strip, and the tab is selected. Shared by the Simulation and Assembly tabs."""
-    import FreeCADGui
-    from PySide import QtCore
-
     left = _left()
     if left is None:
         return False
     tab = _s["tabs"].get(title)
     if tab is not None and _tab_index(title) < 0:
-        _s["tabs"].pop(title)  # the panel dropped the tab (its dock was removed): make it again
+        _s["tabs"].pop(title)  # the panel dropped the tab (its dock was removed or moved out): make it again
         tab = None
     if tab is None:
-        dock = FreeCADGui.addDockWindow(dock_name, widget, int(QtCore.Qt.LeftDockWidgetArea.value), LEFT)
-        left.setTabText(left.count() - 1, title)
-        tab = _s["tabs"][title] = {"dock": dock, "width": None}
+        tab = _s["tabs"][title] = {"dock": _panel_dock(left, dock_name, widget), "width": None}
     dock = tab["dock"]
     dock.show()
     index = _tab_index(title)

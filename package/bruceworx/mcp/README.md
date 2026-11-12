@@ -41,6 +41,8 @@ Start Claude Code in the repository root; it asks once whether to use the projec
 | Documents | `new_document`, `open_document`, `recompute`, `undo`, `save`, `export_step` |
 | Model | `new_body`, `create_sketch` (lines, circles, arcs, rectangles; auto constraints; dimensions), `pad`, `pocket`, `revolve`, `hole`, `fillet`, `chamfer`, `rectangular_pattern`, `circular_pattern`, `set_property`, `set_parameter`, `add_component`, `add_joint` |
 | Python | `run_python` (stdout, stderr, `repr(result)`, traceback) |
+| Design (for agents) | `design_summary` (the whole design as a short text), `view` (shaded views and hatched sections as one PNG, drawn without the window), `fit_report` (clash, contact or gap between two parts; coaxial holes and shafts with clearance on diameter), `set_parameters` (several parameters in one undo step, all or none; answers with what changed part by part) |
+| Code-CAD | `code_cad` (a build123d or CadQuery script as a parametric part; `object` replaces an existing part's script) |
 | Vault | `vault_status`, `vault_my_work`, `vault_next_part_number`, `vault_assign_part_number`, `vault_checkout`, `vault_checkin` (comment required), `vault_undo_checkout`, `vault_get_latest`, `vault_import` (dry run by default), `vault_settings_csv` |
 | KiCad files | `kicad_board_info`, `kicad_export_step`, `kicad_render`, `kicad_drc`, `kicad_bom` |
 | KiCad live | `kicad_live_status`, `kicad_open_board`, `kicad_list_footprints`, `kicad_select_footprints`, `kicad_move_footprint`, `kicad_board_outline`, `kicad_refresh`, `kicad_save_board` |
@@ -66,6 +68,16 @@ the actor pinned for that vault, as the Vault panel does.
   and removed when FreeCAD quits; a call without the token is refused.
 * The first call per FreeCAD session needs your Allow; the chip disconnects at any time.
 * `run_python` can do anything the Python console can; that is why the session prompt exists.
+* `code_cad` runs a build123d or CadQuery script inside FreeCAD (so it can do what `run_python`
+  can) and keeps it as a parametric part (`bruceworx_codecad.py`). The script says what to keep
+  with `result = ...` or `show_object(shape, name)`: one part per shape, exact geometry (BREP),
+  one undo step. It declares dimensions with `param("plate_t", 4, "Plate thickness")` (a length
+  in mm), `param.angle`, `param.count` and `param.number`; new names go into the document's
+  Parameters sheet and the part follows the sheet, so `set_parameter` rebuilds it. A script that
+  fails changes nothing and the error names the line. Scripts written here are recorded
+  (SHA-256) and re-run by themselves; a part whose script came from elsewhere keeps its saved
+  shape until the user approves it in the app. It needs `ocp`, `build123d` and `cadquery` in
+  FreeCAD's Python (`pixi.toml`); `ocp` must match FreeCAD's OCCT, and CadQuery 2.8 needs OCCT 7.9.
 * The headless FreeCAD accepts calls without a prompt because only this server, started by
   your Claude Code, has its token (`BW_BRIDGE_AUTOALLOW=1`, honoured only without a window).
 

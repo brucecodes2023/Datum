@@ -2326,7 +2326,7 @@ def _show(title, make):
     try:
         panel = make(_make_classes())
     except ImportError as exc:
-        _message(title, f"Vaults need the BruceWorx hooks add-on: {exc}")
+        _message(title, f"Vaults need the Vector Labs hooks add-on: {exc}")
         return False
     except Exception as exc:
         _message(title, f"{title} could not open: {exc}")
@@ -2419,7 +2419,7 @@ def show_create_page(folder="", name=""):
     try:
         panel = _make_classes()["CreateVaultPanel"](folder, name)
     except ImportError as exc:
-        _message("Create Vault", f"Vaults need the BruceWorx hooks add-on: {exc}")
+        _message("Create Vault", f"Vaults need the Vector Labs hooks add-on: {exc}")
         return False
     except Exception as exc:
         _message("Create Vault", f"Create Vault could not open: {exc}")
@@ -2554,7 +2554,7 @@ def _offer_import(root, name, tries=20):
     answer = QtWidgets.QMessageBox.question(
         FreeCADGui.getMainWindow(), "Create Vault",
         f"The vault {name} is ready.\n\nImport existing files now? You can also do it later with "
-        "BruceWorx → Import Files into Vault….",
+        "Vector Labs → Import Files into Vault….",
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.Yes)
     if answer == QtWidgets.QMessageBox.Yes:
         show_import(root)

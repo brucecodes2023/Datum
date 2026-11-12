@@ -1598,8 +1598,14 @@ def _make_classes():
                 import FreeCADGui
 
                 FreeCADGui.getDocument(obj.Document.Name).setEdit(obj.Name)
-            except Exception:
-                pass
+            except Exception as exc:
+                try:
+                    import FreeCAD
+
+                    FreeCAD.Console.PrintLog(f"BruceWorx on-canvas: dialog not opened: {exc}\n")
+                except Exception:
+                    pass
+                _status("Could not open this feature's dialog. Double-click it in the Browser instead.", 6000)
 
         def close(self, quiet=False):
             if self.closed:

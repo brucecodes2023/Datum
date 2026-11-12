@@ -122,7 +122,7 @@ def _host_class():
             lay = QtWidgets.QVBoxLayout(self)
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(0)
-            self.placeholder = QtWidgets.QLabel(f"{title}\n\nComing in this build.")
+            self.placeholder = QtWidgets.QLabel(f"{title}\n\nNot available yet.")
             self.placeholder.setObjectName("bwRightPlaceholder")
             self.placeholder.setAlignment(QtCore.Qt.AlignCenter)
             lay.addWidget(self.placeholder)
@@ -776,5 +776,17 @@ def install():
     _observer = _SelectionObserver()
     FreeCADGui.Selection.addObserver(_observer)
     FreeCADGui.addCommand(COMMAND, _ToggleCommand())
+    try:
+        import bruceworx_menu
+        from PySide import QtGui
+
+        action = QtGui.QAction("Right Panel", FreeCADGui.getMainWindow())
+        action.setToolTip(_ToggleCommand().GetResources()["ToolTip"])
+        action.triggered.connect(lambda _checked=False: FreeCADGui.runCommand(COMMAND))
+        bruceworx_menu.add_action(action, "BruceWorxMenu_" + COMMAND)
+    except Exception as exc:  # FreeCAD console only
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(f"BruceWorx: Right Panel menu entry not added: {exc}\n")
     QtWidgets.QApplication.instance().aboutToQuit.connect(_shutdown)
     _installed = True

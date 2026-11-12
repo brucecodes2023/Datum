@@ -25,7 +25,7 @@ object name, so it does not matter which module's ``InitGui.py`` runs first.
 """
 
 MENU_OBJECT_NAME = "BruceWorxMenu"
-MENU_TITLE = "BruceWorx"
+MENU_TITLE = "Vector Labs"
 HELP_MENU_NAME = "&Help"
 
 _state = {"hooked": False, "manipulator": None}
@@ -139,7 +139,7 @@ def get_menu(create=True):
 
 
 def add_action(action, object_name=None):
-    """Add ``action`` to the BruceWorx menu once (matched by object name)."""
+    """Add ``action`` to the BruceWorx menu once (matched by object name), in its section (SECTIONS)."""
     menu = get_menu()
     if menu is None:
         return None
@@ -149,16 +149,71 @@ def add_action(action, object_name=None):
         for existing in menu.actions():
             if existing.objectName() == name:
                 return existing
-    before = _first_named(menu, PREFS_SEPARATOR_NAME)
-    if before is not None:
-        menu.insertAction(before, action)
-    else:
-        menu.addAction(action)
+    rank = _rank(name)
+    section = rank // _SECTION_STEP
+    if section and _first_named(menu, SECTION_SEPARATOR_NAME + str(section)) is None:
+        _QtCore, QtGui, _QtWidgets = _qt()
+        separator = QtGui.QAction(menu)
+        separator.setSeparator(True)
+        separator.setObjectName(SECTION_SEPARATOR_NAME + str(section))
+        _insert_ranked(menu, separator, section * _SECTION_STEP - 1)
+    _insert_ranked(menu, action, rank)
     return action
 
 
 PREFS_SEPARATOR_NAME = "BruceWorxPreferencesSeparator"
 PREFS_ACTION_NAME = "BruceWorxPreferencesAction"
+SECTION_SEPARATOR_NAME = "BruceWorxMenuSection"
+RANK_PROPERTY = "bwMenuRank"
+_SECTION_STEP = 1000
+
+# The menu's sections, top to bottom, each with its entries (action object names) in order. A separator
+# opens every section but the first. An entry no section lists goes to the last one, in the order it came.
+# Preferences stays under its own separator at the bottom (install_preferences_entry).
+SECTIONS = (
+    # File-like
+    ("BruceWorxMenu_BruceWorx_NewProject", "BruceWorxMenu_BruceWorx_NewDrawing", "BruceWorxFastOpenAction"),
+    # Vault
+    ("BruceWorxMenu_Vault", "BruceWorxMenu_BruceWorx_CreateVault", "BruceWorxMenu_BruceWorx_ImportIntoVault",
+     "BruceWorxMenu_BruceWorx_VaultSettings"),
+    # Design
+    ("BruceWorxMenu_Configurations", "BruceWorxPartNumberAction", "BruceWorxMenu_BruceWorx_RectangularPattern",
+     "BruceWorxMenu_BruceWorx_CircularPattern", "BruceWorxMenu_BruceWorx_InsertBoard",
+     "BruceWorxMenu_BruceWorx_ImportKiCadProject", "BruceWorxMenu_BruceWorx_CodePartNew",
+     "BruceWorxMenu_BruceWorx_CodePartEdit"),
+    # View
+    ("BruceWorxMenu_BruceWorx_RightPanel", "HistoryTimelineAction", "BruceWorxStudioShadingAction",
+     "BruceWorxGroundGridAction"),
+    # Agents
+    ("BruceWorxAllowClaude",),
+    # anything else
+    (),
+)
+
+
+def _rank(name):
+    """Where an entry sorts: its section times _SECTION_STEP, plus its place in the section."""
+    for section, names in enumerate(SECTIONS):
+        if name in names:
+            return section * _SECTION_STEP + names.index(name)
+    return (len(SECTIONS) - 1) * _SECTION_STEP + _SECTION_STEP // 2
+
+
+def _insert_ranked(menu, action, rank):
+    """Put ``action`` before the first ranked entry that sorts after it, else above Preferences."""
+    action.setProperty(RANK_PROPERTY, rank)
+    before = _first_named(menu, PREFS_SEPARATOR_NAME)
+    for existing in menu.actions():
+        if existing.objectName() == PREFS_SEPARATOR_NAME:
+            break
+        other = existing.property(RANK_PROPERTY)
+        if other is not None and int(other) > rank:
+            before = existing
+            break
+    if before is not None:
+        menu.insertAction(before, action)
+    else:
+        menu.addAction(action)
 
 
 def _first_named(menu, name):
@@ -169,13 +224,13 @@ def _first_named(menu, name):
 
 
 def install_preferences_entry():
-    """``BruceWorx → BruceWorx Preferences…`` opens the BruceWorx preference page."""
+    """``Vector Labs → Vector Labs Preferences…`` opens the BruceWorx preference page."""
     _QtCore, QtGui, _QtWidgets = _qt()
     window = _window()
     if window is None:
         return None
-    action = QtGui.QAction("BruceWorx Preferences…", window)
-    action.setToolTip("Every BruceWorx default, with its off switch.")
+    action = QtGui.QAction("Vector Labs Preferences…", window)
+    action.setToolTip("Every Vector Labs default, with its off switch.")
 
     def _open(_checked=False):
         import FreeCADGui

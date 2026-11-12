@@ -63,7 +63,8 @@
                 "PartDesign_Hole",
                 "BruceWorx_HolePreset",
                 "BruceWorx_CosmeticThread",
-                "PartDesign_CompPrimitiveAdditive"
+                "PartDesign_CompPrimitiveAdditive",
+                "BruceWorx_CodePartNew"
               ],
               "more": [
                 "PartDesign_Groove",
@@ -107,6 +108,52 @@
               ]
             },
             {
+              "caption": "Construct",
+              "commands": [
+                "PartDesign_Plane",
+                "PartDesign_Line",
+                "PartDesign_Point",
+                "PartDesign_CoordinateSystem",
+                "PartDesign_ShapeBinder"
+              ],
+              "more": [
+                "PartDesign_SubShapeBinder",
+                "PartDesign_Clone"
+              ]
+            },
+            {
+              "caption": "Inspect",
+              "commands": [
+                "Std_Measure",
+                "BruceWorx_OverhangAnalysis",
+                "BruceWorx_ThicknessAnalysis",
+                "BruceWorx_ZebraAnalysis"
+              ],
+              "more": [
+                "BruceWorx_DraftAnalysis",
+                "BruceWorx_CurvatureAnalysis",
+                "Part_CheckGeometry",
+                "Std_ToggleClipPlane",
+                "Part_SectionCut"
+              ]
+            },
+            {
+              "caption": "Insert",
+              "commands": [
+                "Std_Import",
+                "Std_Export",
+                "Spreadsheet_CreateSheet"
+              ],
+              "more": [
+                "Std_LinkMake"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Assembly",
+          "groups": [
+            {
               "caption": "Assemble",
               "commands": [
                 "Assembly_CreateAssembly",
@@ -148,34 +195,10 @@
               ]
             },
             {
-              "caption": "Construct",
-              "commands": [
-                "PartDesign_Plane",
-                "PartDesign_Line",
-                "PartDesign_Point",
-                "PartDesign_CoordinateSystem",
-                "PartDesign_ShapeBinder"
-              ],
-              "more": [
-                "PartDesign_SubShapeBinder",
-                "PartDesign_Clone"
-              ]
-            },
-            {
               "caption": "Inspect",
               "commands": [
                 "Std_Measure",
-                "BruceWorx_Interference",
-                "BruceWorx_OverhangAnalysis",
-                "BruceWorx_ThicknessAnalysis",
-                "BruceWorx_ZebraAnalysis"
-              ],
-              "more": [
-                "BruceWorx_DraftAnalysis",
-                "BruceWorx_CurvatureAnalysis",
-                "Part_CheckGeometry",
-                "Std_ToggleClipPlane",
-                "Part_SectionCut"
+                "BruceWorx_Interference"
               ]
             },
             {
@@ -184,17 +207,6 @@
                 "BruceWorx_MassProperties",
                 "BruceWorx_MassReport",
                 "BruceWorx_DroneBalance"
-              ]
-            },
-            {
-              "caption": "Insert",
-              "commands": [
-                "Std_Import",
-                "Std_Export",
-                "Spreadsheet_CreateSheet"
-              ],
-              "more": [
-                "Std_LinkMake"
               ]
             }
           ]

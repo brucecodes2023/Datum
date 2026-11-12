@@ -283,7 +283,7 @@ def _make_classes():
         def __init__(self, parent, mw):
             super().__init__(parent)
             self.setObjectName(FIELD_NAME)
-            self.setPlaceholderText("Search commands, settings, tree")
+            self.setPlaceholderText("Search commands, settings, Browser")
             self.setClearButtonEnabled(True)
             self.setMinimumWidth(260)
             self.setMaximumWidth(380)

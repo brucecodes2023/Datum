@@ -230,6 +230,22 @@ SET(BruceWorx_SRCS
     BruceWorx_MotionLink.svg
     bruceworx_materials.py
     TestBruceWorxMaterials.py
+    bruceworx_api_save.py
+    bruceworx_agent.py
+    TestBruceWorxAgent.py
+    bruceworx_codecad.py
+    bruceworx_codecad_templates.py
+    bruceworx_codecad_gui.py
+    bruceworx_codecad_dims.py
+    TestBruceWorxCodeCadGui.py
+    BruceWorx_CodePart.svg
+    BruceWorx_CodePartError.svg
+    BruceWorx_CodePartLocked.svg
+    BruceWorx_CodePartRebuild.svg
+    TestBruceWorxCodeCad.py
+    bruceworx_api_docs.py
+    bruceworx_api_asm.py
+    TestBruceWorxApi.py
 )
 
 # [BW] BruceWorx's own material library (KiCad boards, ECD-06), registered with

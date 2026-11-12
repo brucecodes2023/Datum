@@ -106,3 +106,23 @@ section~\ref{sec:ecd-plan}.
 \input{chapters/83-ecd05-built}
 \input{chapters/84-rob0304-plan}
 \InputIfFileExists{chapters/84b-rob0304-built}{}{}
+
+\begin{epic}{ROB-06}{CG of non-uniform parts}{M3}{\stTodo}{Bruce 2 Nov}
+Bruce, 2 Nov: \emph{can we get CG of non-uniform parts better?} Today a part with a typed mass (measured,
+datasheet or override) reports its CG at the shape's centroid, as if it were uniform. That is wrong for bought
+parts whose mass sits off centre (a stepper's rotor and windings, a hotend's heater block, a power supply's
+transformer) and for every 3D-printed part, whose walls are solid and whose core is infill.
+\begin{itemize}
+\item \textbf{Typed CG.} A \code{DatasheetCG} or \code{MeasuredCG} point in the part's frame beside the typed mass;
+the report uses it instead of the centroid (a hang test gives it for a part in hand).
+\item \textbf{Multi-material bodies.} A bought part split into bodies with their own materials gives its CG from
+the geometry when there is no datasheet value.
+\item \textbf{Printed as printed.} Walls and top/bottom skins at full density, the core (the shape offset inward
+by the wall thickness) at the infill fraction: $m=\rho\,(V_{\text{shell}}+f\,V_{\text{core}})$,
+$\mathbf c=(V_{\text{shell}}\mathbf c_{\text{shell}}+f\,V_{\text{core}}\mathbf c_{\text{core}})/(V_{\text{shell}}+f\,V_{\text{core}})$,
+from per-part slicer settings (walls, skins, infill \%) defaulting to the print profile, optionally calibrated
+against the slicer's own mass estimate.
+\end{itemize}
+\textbf{Done when} a printed bracket's mass matches the slicer within 5\,\% and its CG follows its walls, a stepper
+with a datasheet CG reports it, and the TL-P01 printer's mass and CG change accordingly in the mass report.
+\end{epic}

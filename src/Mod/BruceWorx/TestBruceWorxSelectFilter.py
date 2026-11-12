@@ -75,6 +75,8 @@ class TestRewrite(unittest.TestCase):
     def test_auto_is_the_assembly_pick(self):
         self.assertEqual(sf.retarget(sf.AUTO, "Door.Panel.Body.Face3"), "Door.")
         self.assertEqual(sf.retarget(sf.AUTO, "Door.Panel.Body.Face3", "Door."), "Door.Panel.")
+        # with the file flags: the part first (Bruce 9 Nov)
+        self.assertEqual(sf.retarget(sf.AUTO, "Door.Panel.Body.Face3", files=[True, True, False]), "Door.Panel.")
 
     def test_component_is_always_the_top(self):
         self.assertEqual(sf.retarget(sf.COMPONENT, "Door.Panel.Body.Face3"), "Door.")

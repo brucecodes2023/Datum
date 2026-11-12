@@ -4,8 +4,8 @@
 A "Select: <mode>" box in the top bar, a command per mode (so each can get a shortcut) and a readout in the
 status bar. The mode is Preferences/BruceWorx/SelectionFilter (a string) and stays across sessions.
 
-* Auto: unchanged. A pick in an assembly selects the top component first, a pick inside it goes one level
-  deeper, Option-click picks the face (bruceworx_picktrace, pref AssemblyPick).
+* Auto: a pick in an assembly selects the part that was clicked (the deepest file along the path, Bruce 9 Nov),
+  a pick inside it goes one level deeper, Option-click picks the face (bruceworx_picktrace, pref AssemblyPick).
 * Component: always the component directly under the open assembly (the AssemblyPick rule, even when that
   pref is off, and no drilling down).
 * Body: the whole solid that was clicked (its body, else the deepest object), no face, edge or vertex.
@@ -101,16 +101,17 @@ def body_pick(names, types):
     return ".".join(names[:index]) + "." if index else ""
 
 
-def retarget(mode, sub, last=None, types=None):
+def retarget(mode, sub, last=None, types=None, files=None):
     """The subname a 3D pick ``sub`` (path from the selected root, ending in an element) becomes in ``mode``,
     or None to leave it. ``last`` is the component the rule selected before (Auto drills down from it);
-    ``types`` the type ids for body_pick."""
+    ``types`` the type ids for body_pick; ``files`` the file flags for part_pick (Auto without them: the
+    component directly under the assembly)."""
     import bruceworx_picktrace as pt
 
     if not sub or sub.endswith("."):
         return None  # a tree click names no element
     if mode == AUTO:
-        return pt.component_pick(sub, last)
+        return pt.part_pick(sub, files, last) if files is not None else pt.component_pick(sub, last)
     if mode == COMPONENT:
         return pt.component_pick(sub)
     if mode == BODY:
@@ -170,6 +171,23 @@ def chain_types(root, sub):
             obj = None
         types.append(obj.TypeId if obj is not None else "")
     return types
+
+
+def file_flags(root, sub):
+    """For each object along the path in ``sub``: whether it is a link into another document (a part or
+    sub-assembly file of its own), for bruceworx_picktrace.part_pick."""
+    import bruceworx_picktrace as pt
+
+    flags = []
+    path = pt.path_names(sub)
+    for i in range(len(path)):
+        try:
+            obj = root.getSubObject(".".join(path[:i + 1]) + ".", 1)
+            linked = obj.getLinkedObject(True) if obj is not None else None
+            flags.append(linked is not None and linked is not obj and linked.Document is not obj.Document)
+        except Exception:
+            flags.append(False)
+    return flags
 
 
 def apply_gate(new_mode):

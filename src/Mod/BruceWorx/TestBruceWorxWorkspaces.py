@@ -61,7 +61,10 @@ class TestDefinition(unittest.TestCase):
 
     def test_design_tabs(self):
         design = ws.workspace(self.defn, "Design")
-        self.assertEqual([t["name"] for t in design["tabs"]], ["Solid", "Surface", "Mesh", "Sheet Metal", "Routing", "Utilities"])
+        self.assertEqual([t["name"] for t in design["tabs"]], ["Solid", "Assembly", "Surface", "Mesh", "Sheet Metal", "Routing", "Utilities"])
+        self.assertEqual(ws.tab_toolbars(design, "Assembly"),
+                         ["Assembly · Assemble", "Assembly · Motion", "Assembly · Inspect", "Assembly · Mass & Balance"])
+        self.assertNotIn("Solid · Assemble", ws.tab_toolbars(design, "Solid"))
         self.assertIn("Solid · Create", ws.tab_toolbars(design, "Solid"))
         self.assertNotIn("Surface · Create", ws.tab_toolbars(design, "Solid"))
 
@@ -106,7 +109,7 @@ class TestDefinition(unittest.TestCase):
         self.assertIn("PartDesign_Groove", ws.more_commands(self.defn, "Solid · Create"))
         self.assertEqual(ws.more_commands(self.defn, "Not a group"), [])
         self.assertEqual(ws.place_of(self.defn, "PartDesign_Hole"), ("Design", "Solid", "Create"))
-        self.assertEqual(ws.place_of(self.defn, "Assembly_CreateBom"), ("Design", "Solid", "Assemble"))
+        self.assertEqual(ws.place_of(self.defn, "Assembly_CreateBom"), ("Design", "Assembly", "Assemble"))
         self.assertIsNone(ws.place_of(self.defn, "Std_Nothing"))
 
     def test_more_workbenches(self):
@@ -115,7 +118,7 @@ class TestDefinition(unittest.TestCase):
 
     def test_tab_names(self):
         design = ws.workspace(self.defn, "Design")
-        self.assertEqual(ws.tab_names(design, "Mesh"), (["Solid", "Surface", "Mesh", "Sheet Metal", "Routing", "Utilities"], "Mesh"))
+        self.assertEqual(ws.tab_names(design, "Mesh"), (["Solid", "Assembly", "Surface", "Mesh", "Sheet Metal", "Routing", "Utilities"], "Mesh"))
         self.assertEqual(ws.tab_names(design, "Gone")[1], "Solid")
         names, current = ws.tab_names(design, "Mesh", sketch=True)
         self.assertEqual((names[-1], current), ("Sketch", "Sketch"))
@@ -132,10 +135,10 @@ class TestDefinition(unittest.TestCase):
         self.assertIn("SheetMetalUnfoldCmd", self.defn["load"])
         without = ws.without_missing(self.defn, lambda name: False)
         names = [t["name"] for t in ws.workspace(without, "Design")["tabs"]]
-        self.assertEqual(names, ["Solid", "Surface", "Mesh", "Routing", "Utilities"])
+        self.assertEqual(names, ["Solid", "Assembly", "Surface", "Mesh", "Routing", "Utilities"])
         self.assertNotIn("Sheet Metal · Create", [n for _g, n, _c in ws.custom_toolbars(without)["PartDesignWorkbench"]])
         self.assertEqual(ws.without_missing(self.defn, lambda name: name == "SheetMetal"), self.defn)
-        self.assertEqual(len(ws.workspace(self.defn, "Design")["tabs"]), 6)  # the original is not changed
+        self.assertEqual(len(ws.workspace(self.defn, "Design")["tabs"]), 7)  # the original is not changed
 
 
 class TestCustomToolbarParams(unittest.TestCase):

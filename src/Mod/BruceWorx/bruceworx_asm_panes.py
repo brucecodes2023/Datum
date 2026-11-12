@@ -759,7 +759,7 @@ def build_form():
             box.button.setChecked(False)
         col.addWidget(box)
     if not sections:
-        hint = QtWidgets.QLabel("Select a mate to edit it, or use Mate in the ribbon to add one.")
+        hint = QtWidgets.QLabel("Select a mate to edit it, or use Mate on the Assembly tab to add one.")
         hint.setObjectName("BWSimHint")
         hint.setWordWrap(True)
         hint.setContentsMargins(10, 8, 10, 8)

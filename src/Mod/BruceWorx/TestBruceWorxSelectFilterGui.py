@@ -136,6 +136,10 @@ class TestAssemblyPickOtherDocument(unittest.TestCase):
     def test_component_takes_the_link(self):
         self.assertEqual(self.pick(sf.COMPONENT), [("Assembly", "Link.")])
 
+    def test_auto_takes_the_part_file(self):
+        self.assertEqual(sf.file_flags(self.asm_doc.getObject("Assembly"), "Link.Body.Box.Face2"), [True, False, False])
+        self.assertEqual(self.pick(sf.AUTO), [("Assembly", "Link.")])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -66,6 +66,10 @@ yaml-cpp = "*"
 zlib = "*"
 zstd = "*"
 networkx = ">=3.4.2,<3.6"
+# [BW] AUT-05 code-CAD (the code_cad bridge tool). ocp must match occt above; CadQuery 2.8 needs OCCT 7.9.
+ocp = ">=7.8,<7.9"
+build123d = ">=0.9.1,<0.10"
+cadquery = "<2.8"
 
 ## Linux Dependencies (x86-64)
 [target.linux-64.dependencies]

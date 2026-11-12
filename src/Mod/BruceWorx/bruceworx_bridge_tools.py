@@ -519,19 +519,71 @@ def t_undo(args):
 
 
 def t_save(args):
+    """Save through bruceworx_api_save.safe_save: a headless save keeps the display data (GuiDocument.xml,
+    colours, thumbnail), and a moved assembly origin is refused."""
+    import bruceworx_api_save
+
     doc = _doc(args["doc"])
-    path = args["path"]
-    if path:
-        path = os.path.abspath(os.path.expanduser(path))
-        if not path.lower().endswith(".fcstd"):
-            path += ".FCStd"
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        doc.saveAs(path)
-    else:
-        if not doc.FileName:
-            raise ToolError(f"{doc.Name} has never been saved; pass a path")
-        doc.save()
-    return {"doc": doc.Name, "file": doc.FileName}
+    if not args["path"] and not doc.FileName:
+        raise ToolError(f"{doc.Name} has never been saved; pass a path")
+    try:
+        out = bruceworx_api_save.safe_save(doc, args["path"], check_origin=args.get("check_origin", True))
+    except bruceworx_api_save.OriginMoved as exc:
+        raise ToolError(str(exc)) from exc
+    return {"doc": doc.Name, "file": doc.FileName, "mode": out["mode"], "kept_entries": out["kept_entries"],
+            "dropped_entries": out["dropped_entries"][:MAX_LIST], "origin_ok": out["origin_ok"]}
+
+
+def _census_target(doc, ref):
+    """The object named, else the document's assembly, else the whole document."""
+    if ref:
+        return _obj(doc, ref)
+    found = [o for o in doc.Objects if o.TypeId == "Assembly::AssemblyObject" and not o.InList]
+    return found[0] if len(found) == 1 else doc
+
+
+def t_census(args):
+    import bruceworx_api_docs as docs
+
+    doc = _doc(args["doc"])
+    target = _census_target(doc, args["object"])
+    records = docs.census(target)
+    files = {}
+    for rec in records:
+        files[rec["file"]] = files.get(rec["file"], 0) + 1
+    out = {"doc": doc.Name, "of": getattr(target, "Name", doc.Name), "count": len(records), "files": files,
+           "volume_mm3": round(sum(r["volume"] for r in records), 3), "saved": None}
+    if args["path"]:
+        out["saved"] = docs.save_census(records, args["path"], doc.FileName or doc.Name)
+    out["solids"] = records[:MAX_LIST]
+    if len(records) > MAX_LIST:
+        out["note"] = f"{len(records) - MAX_LIST} more; pass a path to save them all"
+    return out
+
+
+def _census_of(ref):
+    """A census from a saved census file, or of an open document (by Name or Label)."""
+    import bruceworx_api_docs as docs
+
+    path = os.path.abspath(os.path.expanduser(ref))
+    if os.path.isfile(path):
+        try:
+            return docs.load_census(path)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+    doc = _doc(ref)
+    return docs.census(_census_target(doc, None))
+
+
+def t_census_diff(args):
+    import bruceworx_api_docs as docs
+
+    out = docs.census_diff(_census_of(args["a"]), _census_of(args["b"]), args["tolerance"])
+    for key in ("added", "removed", "moved", "changed", "renamed"):
+        out[key + "_count"] = len(out[key])
+        out[key] = out[key][:MAX_LIST]
+    out["same"] = not any(out[k + "_count"] for k in ("added", "removed", "moved", "changed"))
+    return out
 
 
 def t_export_step(args):
@@ -1067,21 +1119,78 @@ def t_set_property(args):
 def t_set_parameter(args):
     doc = _doc(args["doc"])
     alias = args["alias"]
-    sheets = [_obj(doc, args["spreadsheet"])] if args["spreadsheet"] else \
-        [o for o in doc.Objects if o.isDerivedFrom("Spreadsheet::Sheet")]
-    for sheet in sheets:
-        cell = sheet.getCellFromAlias(alias)
-        if cell:
-            break
-    else:
-        cell = None
-    if not cell:
-        names = ", ".join(s.Name for s in sheets) or "none"
-        raise ToolError(f"no spreadsheet cell has the alias {alias!r} (spreadsheets: {names})")
+    sheet, cell = _find_alias(doc, alias, args["spreadsheet"])
     value = args["value"]
     sheet.set(cell, str(value))
     _recompute(doc, sheet)
     return {"spreadsheet": sheet.Name, "cell": cell, "alias": alias, "value": jsonable(sheet.get(alias))}
+
+
+def _find_alias(doc, alias, spreadsheet):
+    sheets = [_obj(doc, spreadsheet)] if spreadsheet else \
+        [o for o in doc.Objects if o.isDerivedFrom("Spreadsheet::Sheet")]
+    for sheet in sheets:
+        cell = sheet.getCellFromAlias(alias)
+        if cell:
+            return sheet, cell
+    names = ", ".join(s.Name for s in sheets) or "none"
+    raise ToolError(f"no spreadsheet cell has the alias {alias!r} (spreadsheets: {names})")
+
+
+# ----- the agent design interface (AUT-06): bruceworx_agent has the how ------------------------------
+
+
+def _agent(func, *args, **kwargs):
+    import bruceworx_agent as ba
+
+    try:
+        return func(ba, *args, **kwargs)
+    except ba.AgentError as exc:
+        raise ToolError(str(exc)) from None
+
+
+def t_set_parameters(args):
+    """Several parameters in one undo step; all or none. Says what changed, part by part."""
+    doc = _doc(args["doc"])
+    values = args["values"]
+    if not values:
+        raise ToolError('values is empty; give {"alias": value, ...}')
+    cells = [(alias, value) + _find_alias(doc, alias, args["spreadsheet"]) for alias, value in values.items()]
+    before = _agent(lambda ba: ba.snapshot(doc))
+    was_bad = {o.Name for o in doc.Objects if hasattr(o, "isValid") and not o.isValid()}
+    changed = []
+    for alias, value, sheet, cell in cells:
+        old = jsonable(sheet.get(alias))
+        sheet.set(cell, str(value))
+        changed.append([alias, old, sheet])
+    doc.recompute()
+    bad = [o for o in doc.Objects if hasattr(o, "isValid") and not o.isValid() and o.Name not in was_bad]
+    if bad:
+        raise ToolError("nothing was changed: with these values " + "; ".join(
+            f"{o.Label} ({o.TypeId}) fails: {', '.join(str(s) for s in (getattr(o, 'State', []) or []))}"
+            for o in bad[:8]))
+    return {"parameters": [{"alias": a, "from": old, "to": jsonable(sheet.get(a))} for a, old, sheet in changed],
+            "changed": _agent(lambda ba: ba.diff(before, ba.snapshot(doc)))}
+
+
+def t_design_summary(args):
+    doc = _doc(args["doc"])
+    return _agent(lambda ba: ba.summary(doc))
+
+
+def t_view(args):
+    doc = _doc(args["doc"])
+    out = _agent(lambda ba: ba.render(doc, args["views"], args["section"], args["objects"], args["width"],
+                                      args["height"], args["hidden"]))
+    out["png_base64"] = base64.b64encode(out.pop("png")).decode("ascii")
+    if not out["note"]:
+        del out["note"]
+    return out
+
+
+def t_fit_report(args):
+    doc = _doc(args["doc"])
+    return _agent(lambda ba: ba.fit(doc, args["first"], args["second"], args["gap"]))
 
 
 # ----- assemblies ---------------------------------------------------------------------------------
@@ -1176,39 +1285,110 @@ def t_add_component(args):
             "links_to": f"{source.Name}#{part.Name}", "grounded": grounded}
 
 
+def _joint_ref(asm, ref, vertex):
+    """A tool reference ("Base.Face6", optional vertex) as the joint stores it: [component, [element, point]],
+    rooted at the moving component, as picking in the 3D view writes it (bruceworx_asm_model.pick_ref). A
+    reference rooted at the assembly itself is skipped by the solver without a word."""
+    import UtilsAssembly
+
+    path = ref.strip()
+    if "." not in path:
+        raise ToolError(f"{ref!r}: a reference is Component.ElementN, e.g. Base.Face6 (path inside the assembly)")
+    head = path.split(".", 1)[0]
+    if asm.getObject(head) is None and asm.Document.getObject(head) is None:
+        raise ToolError(f"{ref!r}: {head} is not in {asm.Name}")
+    if vertex:
+        vertex = vertex.strip()
+        if "." not in vertex:
+            vertex = path.rsplit(".", 1)[0] + "." + vertex
+    else:
+        vertex = path
+    comp, sub = UtilsAssembly.getComponentReference(asm, asm, path)
+    comp2, point = UtilsAssembly.getComponentReference(asm, asm, vertex)
+    if comp is None or not sub:
+        raise ToolError(f"{ref!r}: no component of {asm.Name} on that path")
+    if comp2 != comp:
+        raise ToolError(f"{vertex!r} is not on the same component as {ref!r}")
+    return [comp, [sub, point]]
+
+
 def t_add_joint(args):
+    """A joint through the mate model layer (bruceworx_asm_model.create_mate), so it is the same joint the
+    Mates pane makes: component references, the mate key stored, the assembly solved."""
     import JointObject
+
+    import bruceworx_asm_model as am
 
     doc = _doc(args["doc"])
     kind = next((t for t in JointObject.JointTypes if t.lower() == args["type"].strip().lower()), None)
     if kind is None:
         raise ToolError(f"type must be one of {', '.join(JointObject.JointTypes)}")
     asm = _assembly(doc, args["assembly"], create=False)
-    refs = []
-    for ref, vertex in ((args["ref1"], args["vertex1"]), (args["ref2"], args["vertex2"])):
-        path = ref.strip()
-        if "." not in path:
-            raise ToolError(f"{ref!r}: a reference is Component.ElementN, e.g. Base.Face6 (path inside the assembly)")
-        if vertex:
-            vertex = vertex.strip()
-            if "." not in vertex:
-                vertex = path.rsplit(".", 1)[0] + "." + vertex
-        else:
-            vertex = path
-        head = path.split(".", 1)[0]
-        if asm.getObject(head) is None and doc.getObject(head) is None:
-            raise ToolError(f"{ref!r}: {head} is not in {asm.Name}")
-        refs.append([asm, [path, vertex]])
-    joint = _joint_group(asm).newObject("App::FeaturePython", kind)
-    JointObject.Joint(joint, JointObject.JointTypes.index(kind))
-    if hasattr(joint, "KeepPosition"):
-        joint.KeepPosition = bool(args["keep_position"])
-    if _app().GuiUp:
-        JointObject.ViewProviderJoint(joint.ViewObject)
-    joint.Proxy.setJointConnectors(joint, refs)
+    refs = [_joint_ref(asm, args["ref1"], args["vertex1"]), _joint_ref(asm, args["ref2"], args["vertex2"])]
+    if refs[0][0] == refs[1][0]:
+        raise ToolError(f"both references are on {refs[0][0].Name}; a joint joins two components")
+    if args["keep_position"]:
+        # create_mate has no "keep the parts where they are"; the same steps with KeepPosition set first
+        joint = _joint_group(asm).newObject("App::FeaturePython", kind)
+        JointObject.Joint(joint, JointObject.JointTypes.index(kind))
+        if hasattr(joint, "KeepPosition"):
+            joint.KeepPosition = True
+        if _app().GuiUp:
+            JointObject.ViewProviderJoint(joint.ViewObject)
+        joint.Proxy.setJointConnectors(joint, refs)
+        code = am._solve(asm)
+    else:
+        key = "distance" if kind == "Distance" else am._KEY_OF_TYPE[kind]
+        joint = am.create_mate(asm, refs[0], refs[1], key=key)
+        code = am._STATUS.get((doc.Name, asm.Name))
     _recompute(doc, joint)
-    return {"joint": joint.Name, "type": kind, "assembly": asm.Name,
-            "reference1": refs[0][1], "reference2": refs[1][1]}
+    return {"joint": joint.Name, "label": joint.Label, "type": kind, "assembly": asm.Name,
+            "component1": refs[0][0].Name, "component2": refs[1][0].Name,
+            "reference1": refs[0][1], "reference2": refs[1][1], "solve_code": code}
+
+
+def t_asm_joints(args):
+    import bruceworx_api_asm as api
+
+    asm = _assembly(_doc(args["doc"]), args["assembly"], create=False)
+    listed = api.joints(asm)
+    labels = {o.Name: o.Label for o in api.parts(asm)}
+    return {"assembly": asm.Name, "parts": len(labels), "grounded": [o.Name for o in api.grounded(asm)],
+            "count": len(listed), "joints": [api._joint_info(j, asm, labels) for j in listed[:MAX_LIST]]}
+
+
+def t_asm_rule_check(args):
+    import bruceworx_api_asm as api
+
+    asm = _assembly(_doc(args["doc"]), args["assembly"], create=False)
+    out = api.rule_check(asm, solve_too=bool(args["solve"]))
+    for key in ("problems", "warnings"):
+        out[key + "_count"] = len(out[key])
+        out[key] = out[key][:MAX_LIST]
+    return out
+
+
+def t_asm_knock_test(args):
+    """The knock test, a part at a time; max_seconds stops it early (the rest come back as unchecked)."""
+    import time
+
+    import bruceworx_api_asm as api
+
+    asm = _assembly(_doc(args["doc"]), args["assembly"], create=False)
+    parts = [str(p) for p in args["parts"]] if args["parts"] else None
+    try:
+        test = api.KnockTest(asm, args["seed"], parts, args["tol_mm"], args["tol_deg"])
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    limit = args["max_seconds"]
+    started = time.time()
+    try:
+        while not test.step(0.0):
+            if limit is not None and time.time() - started >= limit:
+                test.cancel()
+    finally:
+        test.close()
+    return test.result()
 
 
 # ----- Python ------------------------------------------------------------------------------------------
@@ -1218,6 +1398,23 @@ class _PythonError(Exception):
     def __init__(self, text):
         super().__init__(text)
         self.bridge_text = text
+
+
+def _exec(code, namespace):
+    """Run code in namespace; (stdout, stderr), or _PythonError with the traceback and what was printed."""
+    out, err = io.StringIO(), io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            exec(compile(code, "<claude>", "exec"), namespace)
+    except BaseException:
+        text = traceback.format_exc(limit=8)
+        parts = [text.strip()]
+        if out.getvalue():
+            parts.append("stdout:\n" + out.getvalue()[-4000:])
+        if err.getvalue():
+            parts.append("stderr:\n" + err.getvalue()[-4000:])
+        raise _PythonError("\n".join(parts)) from None
+    return out.getvalue()[-20000:], err.getvalue()[-8000:]
 
 
 def t_run_python(args):
@@ -1231,25 +1428,38 @@ def t_run_python(args):
             _session.update({"Gui": FreeCADGui, "FreeCADGui": FreeCADGui})
     _session["doc"] = App.ActiveDocument
     _session.pop("result", None)
-    out, err = io.StringIO(), io.StringIO()
-    try:
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            exec(compile(args["code"], "<claude>", "exec"), _session)
-    except BaseException:
-        text = traceback.format_exc(limit=8)
-        parts = [text.strip()]
-        if out.getvalue():
-            parts.append("stdout:\n" + out.getvalue()[-4000:])
-        if err.getvalue():
-            parts.append("stderr:\n" + err.getvalue()[-4000:])
-        raise _PythonError("\n".join(parts)) from None
-    result = {"stdout": out.getvalue()[-20000:], "stderr": err.getvalue()[-8000:]}
+    stdout, stderr = _exec(args["code"], _session)
+    result = {"stdout": stdout, "stderr": stderr}
     if "result" in _session:
         try:
             result["result"] = repr(_session["result"])[:20000]
         except Exception as exc:
             result["result"] = f"<repr failed: {exc}>"
     return result
+
+
+# ----- code-CAD (AUT-05) -----------------------------------------------------------------------------
+
+
+def t_code_cad(args):
+    """A build123d or CadQuery script as parametric part(s): bruceworx_codecad has the how and why."""
+    import bruceworx_codecad as cc
+
+    doc = _doc(args["doc"])
+    try:
+        if args["object"]:
+            parts, result, added = cc.set_script(_obj(doc, args["object"]), args["code"], args["name"])
+        else:
+            parts, result, added = cc.make(doc, args["code"], args["name"])
+    except cc.ScriptError as exc:
+        raise _PythonError(exc.text) from None
+    except cc.CodeCadError as exc:
+        raise ToolError(str(exc)) from None
+    _recompute(doc, *parts)
+    return {"objects": [dict(name=o.Name, label=o.Label, valid=o.Shape.isValid(), status=getattr(o, cc.STATUS),
+                             **_shape_summary(o.Shape)) for o in parts],
+            "parameters": cc.dimensions(parts[0]), "parameters_added": added,
+            "seconds": round(result.seconds, 4), "stdout": result.stdout, "stderr": result.stderr}
 
 
 # ----- vault ---------------------------------------------------------------------------------------------

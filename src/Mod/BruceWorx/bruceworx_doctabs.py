@@ -8,13 +8,22 @@ Std_Start reopens it if it is closed some other way (Window > Close all).
 Tab titles drop FreeCAD's view number ("Plate : 1" -> "Plate") unless a
 document has two views, as the title-row tabs do.
 
-Preferences/BruceWorx/PinStartTab (default on).
+Sub-files have no tab (Bruce, 9 Nov 2026): opening the printer assembly loads
+some 370 part and sub-assembly files, each with its own 3D window and tab. A
+file another open file links into keeps its window but its tab is hidden,
+unless that window is the current one (opened from the Browser, say). The
+tabs left are the files opened on their own.
+
+Preferences/BruceWorx/PinStartTab and HideSubFileTabs (both default on).
 """
 
 from __future__ import annotations
 
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF_NAME = "PinStartTab"
+PREF_SUBFILES = "HideSubFileTabs"
+LOCK = "\U0001F512"  # bruceworx_vaultclient.LOCK: the vault's checked-in mark in front of a title
+DEPS_EVERY = 10  # ticks (5 s) between dependency rescans while the open files stay the same
 START_CLASSES = ("StartGui::StartView",)
 START_TITLES = ("Start",)
 
@@ -35,10 +44,36 @@ def clean_title(text, views=1):
     return text
 
 
-def _enabled():
+def sub_files(deps):
+    """Names of the documents another open document links into, from {name: [names it depends on]}."""
+    out = set()
+    for name, needs in deps.items():
+        out.update(n for n in needs if n != name)
+    return out
+
+
+def tab_label(text):
+    """The document label a tab shows: the vault's lock mark and the view number dropped."""
+    text = (text or "").replace("&", "").replace(LOCK, "").strip()
+    base, sep, number = text.rpartition(" : ")
+    return base if sep and number.strip().isdigit() else text
+
+
+def hidden_tabs(labels, by_label, subs, current=-1):
+    """Indices of the tabs to hide: those whose label names only sub-files (by_label: {label: {document names}}), never
+    the current tab. A tab that names no document (Start, a spreadsheet, Fast Open) stays."""
+    out = set()
+    for i, label in enumerate(labels):
+        names = by_label.get(label)
+        if i != current and names and names <= subs:
+            out.add(i)
+    return out
+
+
+def _enabled(name=PREF_NAME):
     import FreeCAD
 
-    return bool(FreeCAD.ParamGet(PREFS_PATH).GetBool(PREF_NAME, True))
+    return bool(FreeCAD.ParamGet(PREFS_PATH).GetBool(name, True))
 
 
 def _alive(obj):
@@ -52,6 +87,7 @@ def _alive(obj):
 
 _mdi = None
 _timer = None
+_deps = {"key": None, "ticks": 0, "subs": set(), "by_label": {}}
 
 
 def _bar():
@@ -60,11 +96,46 @@ def _bar():
     return _mdi.findChild(QtWidgets.QTabBar) if _alive(_mdi) else None
 
 
+def _sub_files():
+    """(sub-file names, {label: document names}), rescanned when the open files change and every DEPS_EVERY ticks."""
+    import FreeCAD
+
+    docs = FreeCAD.listDocuments()
+    key = tuple(sorted(docs))
+    _deps["ticks"] += 1
+    if key != _deps["key"] or _deps["ticks"] >= DEPS_EVERY:
+        deps, by_label = {}, {}
+        for name, doc in docs.items():
+            try:
+                deps[name] = [d.Name for d in doc.getDependentDocuments(False)]
+            except Exception:
+                deps[name] = []
+            by_label.setdefault(doc.Label, set()).add(name)
+        _deps.update(key=key, ticks=0, subs=sub_files(deps), by_label=by_label)
+    return _deps["subs"], _deps["by_label"]
+
+
+def _hide_sub_files(bar):
+    if _enabled(PREF_SUBFILES):
+        subs, by_label = _sub_files()
+        hide = hidden_tabs([tab_label(bar.tabText(i)) for i in range(bar.count())], by_label, subs, bar.currentIndex())
+    else:
+        hide = set()
+    for i in range(bar.count()):
+        if bar.isTabVisible(i) == (i in hide):
+            bar.setTabVisible(i, i not in hide)
+
+
 def pin():
-    """Move the Start tab to the front and take its close button away."""
+    """Move the Start tab to the front and take its close button away; hide the sub-files' tabs."""
     from PySide import QtWidgets
 
-    if not _enabled() or not _alive(_mdi):
+    if not _alive(_mdi):
+        return
+    bar = _bar()
+    if bar is not None:
+        _hide_sub_files(bar)
+    if not _enabled():
         return
     bar = _bar()
     if bar is None:

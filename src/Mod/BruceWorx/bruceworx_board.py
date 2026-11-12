@@ -132,7 +132,7 @@ def bridge():
     try:
         from bruceworx import kicad_bridge
     except ImportError as exc:
-        raise RuntimeError("the BruceWorx hooks add-on is off (Preferences > BruceWorx > Hooks add-on); "
+        raise RuntimeError("the Vector Labs hooks add-on is off (Preferences > Vector Labs > Hooks add-on); "
                            "it holds the KiCad bridge") from exc
     return kicad_bridge
 
@@ -562,7 +562,7 @@ def _ecad():
     try:
         from bruceworx import ecad_vault
     except ImportError as exc:
-        raise RuntimeError("the BruceWorx hooks add-on is off (Preferences > BruceWorx > Hooks add-on); "
+        raise RuntimeError("the Vector Labs hooks add-on is off (Preferences > Vector Labs > Hooks add-on); "
                            "it holds the KiCad vault items") from exc
     return ecad_vault
 

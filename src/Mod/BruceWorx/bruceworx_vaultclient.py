@@ -1593,7 +1593,7 @@ def new_part(kind=None, description=None, program="", open_it=True, category="")
     Returns the part number, or "" when cancelled or refused."""
     s = session()
     if s is None:
-        _message("New Part in Vault", "Open a vault first (Preferences > BruceWorx, or the Start page).")
+        _message("New Part in Vault", "Open a vault first (Preferences > Vector Labs, or the Start page).")
         return ""
     if kind is None or description is None:
         answer = _new_part_dialog(s, program)
@@ -3322,7 +3322,7 @@ def _make_classes():
             elif not total and changes:
                 self.empty.setText("No ECRs or ECOs yet.\nRaise ECR… on a released item starts one.")
             elif not total:
-                self.empty.setText("The vault is empty.\nBruceWorx → Vault → New Part in Vault… makes a part;\n"
+                self.empty.setText("The vault is empty.\nVector Labs → Vault → New Part in Vault… makes a part;\n"
                                    "Import Files into Vault… adds files.")
             else:
                 self.empty.setText("Nothing matches.")

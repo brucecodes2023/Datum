@@ -213,6 +213,17 @@ EPICS = [
       "FCB-P2A-10",
       "Gravity, forces, motor torque and contact over time; plots and video.",
       "Arm under gravity matches analytic pendulum period within 2 %."),
+    E("ASM-11", "Mate inference: from coordinates to face-driven joints", "M5", "To do", ["ASM-03", "ASM-09"],
+      "Bruce 2 Nov (TL-P01 printer)",
+      "Imported assemblies (TL-P01, 340 files, ~1,600 instances) are placed by coordinates: empty joint groups, "
+      "no motion, and screws that float where the source CAD moved a part. Infer SolidWorks-style mates from "
+      "the geometry, one sub-assembly at a time: touching planar faces become coincident joints, a fastener in "
+      "a hole becomes concentric plus coincident under its head (ASM-09's recogniser), parts on rails become "
+      "sliders and pins revolutes. Solve and require every part to stay where it was (a hard check); report "
+      "what could not be mated (a floating screw is one). The motion axes (gantry Z, X and Y, tool docking, "
+      "door and panel hinges) get driving joints, so Drive Joint and Motion Study pose the machine for tests.",
+      "The TL-P01 printer: every part mated or listed as unmated with a reason, solving moves nothing, no "
+      "floating fasteners, and a Motion Study drives Z, X, Y and a tool change."),
     # Drawings ------------------------------------------------------------
     E("DRW-01", "ASME templates & title block", "M2", "Done", [],
       "FCB-P2-06/07/08",
@@ -408,6 +419,17 @@ EPICS = [
       "Link chain from revolute joints, joint table, FK readout, servo sweeps, video. 27 Oct (your decision: kinematic first, dynamics in ASM-10 later): Fusion-style Motion Study (keyframes per joint, play/loop/ping-pong, speed, frame export), Drive Joint (slider over the joint's range), Motion Link (ratio between two joints, made from the stock Gears/RackPinion joints), all 13 joint types on the ribbon. Built on FreeCAD 1.1's kinematic Simulation (Ondsel solver). Plan: chapter 30, 'Motion study plan'. Built 27 Oct (agent motion, chapter 39b): Joint menu with the 13 types and a Motion group on the Design ribbon; Drive Joint (slider over the limits, Animate, one undo step, nothing left on Cancel); Motion Study as a Simulation with keyframes compiled to the solver's piecewise() formula, play/loop/ping-pong at 0.25x-4x, scrub, frames to PNG and MP4; Motion Link making Gears, Belt or RackPinion joints from a ratio. 16 headless + 16 GUI tests; the gearbox copy turns 5:1 in 0.12 s.",
       "2-DOF arm FK matches hand calculation; keyframed arm reaches each pose at its time."),
     # ECAD ----------------------------------------------------------------
+    E("ROB-06", "CG of non-uniform parts", "M3", "To do", ["ROB-03"],
+      "Bruce 2 Nov",
+      "With a typed mass (measured, datasheet, override) the report puts the CG at the shape's centroid, as if the "
+      "part were uniform. Three fixes: (1) a DatasheetCG / MeasuredCG point in the part's frame beside the typed "
+      "mass, for bought parts (motors, hotends, supplies); (2) per-body materials so multi-material bought parts "
+      "(steel shaft, copper windings, aluminium housing) give their CG from geometry; (3) printed parts as printed: "
+      "walls and top/bottom skins at full density, the core (the shape offset inward by the wall thickness) at the "
+      "infill fraction, from per-part slicer settings defaulting to the print profile; optional calibration from "
+      "the slicer's own mass estimate.",
+      "A printed bracket's mass matches the slicer within 5 % and its CG moves as the walls do; a stepper with a "
+      "datasheet CG reports it; the TL-P01 printer's total mass and CG change accordingly in the mass report."),
     E("ECD-01", "ECAD intake & adopt-vs-build", "M1", "Done", [],
       "FCB-P2E-01..04",
       "Requirements intake; StepUp evaluation (AGPL); decision memo. KiCad 10.0.5 and kicad-cli tested on the Mac (23 Oct): STEP export with copper, mask and silk imports in under a second. Decided 23 Oct (your answers, all five as recommended): our own bridge on kicad-cli, StepUp evaluated only for the outline round trip (ECD-03); one PCBA BOM line; component materials guessed by footprint library; KiCad's render as the thumbnail; only you edit boards.",

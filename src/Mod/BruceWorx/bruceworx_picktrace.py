@@ -27,6 +27,10 @@
   again goes one level deeper each time (sub-assembly, part, body), then to the face; a pick elsewhere starts
   at the top again. Option-click picks the face at once. Tree clicks are left alone, and so is every pick
   while a task panel is open (joints and measuring need faces).
+  Part first (Bruce 9 Nov: "when i select a panel it selects an entire assembly. I want it to select that
+  part"): the first pick takes the deepest file along the path (the panel's own part file, not the Panels
+  sub-assembly it sits in, and not the body within), see part_pick; picking it again goes on to its body,
+  then the face. The Component mode of the selection filter still takes the whole sub-assembly.
 
 All four default on.
 """
@@ -129,6 +133,27 @@ def component_pick(sub, last=None):
             if len(path) == len(held):
                 return None  # inside the deepest object already: the face
             level = len(held) + 1
+    return ".".join(path[:level]) + "."
+
+
+def part_pick(sub, files, last=None):
+    """The subname a 3D pick ``sub`` becomes in Auto: the deepest object along its path that is a file of its own
+    (``files[i]``: path object i is a link into another document, i.e. a part or sub-assembly file), so a pick
+    on a panel in "Panels.Panel003.Body.Face3" selects "Panels.Panel003."; the component directly under the
+    assembly when no object is a file. Inside ``last`` (what this rule selected before) it goes one level deeper,
+    as component_pick does. None: leave the pick as it is."""
+    if not sub or sub.endswith("."):
+        return None
+    path = path_names(sub)
+    if not path:
+        return None
+    if last:
+        held = last.rstrip(".").split(".")
+        if path[:len(held)] == held:
+            if len(path) == len(held):
+                return None  # inside the deepest object already: the face
+            return ".".join(path[:len(held) + 1]) + "."
+    level = max((i + 1 for i, is_file in enumerate(list(files or ())[:len(path)]) if is_file), default=1)
     return ".".join(path[:level]) + "."
 
 
@@ -753,7 +778,7 @@ class _AssemblyPick:
         doc = root.Document.Name
         last = self.last if self.last and self.last[:2] == (doc, root.Name) and not cleared_before else None
         if pick_mode == sf.AUTO:
-            new = component_pick(sub, last[2] if last else None)
+            new = part_pick(sub, sf.file_flags(root, sub), last[2] if last else None)
         else:  # Component: always the top; Body: the whole solid, "" for the root itself
             new = sf.retarget(pick_mode, sub, None, sf.chain_types(root, sub) if pick_mode == sf.BODY else None)
         if new is not None:

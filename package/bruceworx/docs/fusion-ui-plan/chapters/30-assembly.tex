@@ -148,3 +148,22 @@ forces, which is what users want plotted to size motors. It is solved by index r
 $\Phi_{\mathbf q}\ddot{\mathbf q}=-(\Phi_{\mathbf q}\dot{\mathbf q})_{\mathbf q}\dot{\mathbf q}-2\Phi_{\mathbf qt}\dot{\mathbf q}-\Phi_{tt}$
 with Baumgarte stabilisation, or with a generalised-$\alpha$ integrator on the index-3 form. Validation uses a
 pendulum, $T=2\pi\sqrt{I_O/(m g\ell)}$.
+
+\begin{epic}{ASM-11}{Mate inference: from coordinates to face-driven joints}{M5}{\stTodo}{Bruce 2 Nov}
+Bruce, 2 Nov, on the TL-P01 printer: \emph{we have floating screws and we don't have motion}, and \emph{real face
+driven assemblies like SolidWorks instead of by coordinates}. The imported printer (340 files, about 1,600
+instances) is placed by coordinates: every joint group is empty. Mate inference turns placements into joints,
+one sub-assembly at a time, from geometry that already touches:
+\begin{itemize}
+\item planar faces in contact $\rightarrow$ coincident (with the parts' normals opposed);
+\item a fastener in a hole $\rightarrow$ concentric on the hole axis plus coincident under the head
+(ASM-09's hole recogniser decides which hole);
+\item a carriage on a rail, a shaft in a bearing $\rightarrow$ slider, revolute;
+\item the machine's motion axes (gantry Z on its four belts, X and Y, a tool on its dock or the shuttle, door
+and bottom-panel hinges) $\rightarrow$ driving joints with limits, so Drive Joint and Motion Study pose it.
+\end{itemize}
+The solver must leave every part where it was: a part that moves when solved is a wrong mate, and the run
+stops. Whatever cannot be mated is listed with a reason, so a floating screw is found and fixed, not hidden.
+\textbf{Done when} the TL-P01 printer is mated or listed, solving moves nothing, no fastener floats, and a
+Motion Study drives Z, X, Y and a tool change.
+\end{epic}

@@ -141,8 +141,22 @@ TOOLS = [
     _tool("recompute", "freecad", "Recompute a document; lists objects that failed.", {"doc": _DOC}),
     _tool("undo", "freecad", "Undo the last change(s); every modelling call is one undo step.",
           {"steps": _p("integer", "How many steps, default 1."), "doc": _DOC}),
-    _tool("save", "freecad", "Save a document, or save it as path.",
-          {"path": _p("string", "Optional .FCStd path (Save As)."), "doc": _DOC}),
+    _tool("save", "freecad", "Save a document, or save it as path. A headless save keeps the file's display data "
+          "(colours, thumbnail). Refused when an assembly's own origin is not where the file has it.",
+          {"path": _p("string", "Optional .FCStd path (Save As)."),
+           "check_origin": _p("boolean", "Default true; false saves a moved assembly origin on purpose."),
+           "doc": _DOC}),
+    _tool("census", "freecad", "Every solid of an assembly, wherever it is nested: the file it is modelled in, "
+          "its path through the links, its bounding box (mm, rounded to 0.001, in the assembly's own frame) and "
+          "volume. Take one before and one after a change and compare them with census_diff.",
+          {"object": _p("string", "Object to take it of; default: the document's assembly, else the document."),
+           "path": _p("string", "Optional .json path to save the census to (needed above 300 solids)."),
+           "doc": _DOC}),
+    _tool("census_diff", "freecad", "What changed between two censuses: solids added, removed, moved, changed "
+          "in volume, or only renamed. Each side is a census .json file or the name of an open document.",
+          {"a": _p("string", "Before: census file or document name."),
+           "b": _p("string", "After: census file or document name."),
+           "tolerance": _p("number", "mm; default 0.001.")}, ["a", "b"], read_only=True),
     _tool("export_step", "freecad", "Export objects (default: the solid parts) to a STEP file.",
           {"path": _p("string", "Output .step/.stp path."), "objects": dict(_STRS, description="Object names."),
            "doc": _DOC}, ["path"]),
@@ -209,6 +223,35 @@ TOOLS = [
           {"alias": _p("string", "Cell alias."), "value": {"description": "Number, or text such as \"12 mm\"."},
            "spreadsheet": _p("string", "Sheet name; default: any sheet with that alias."), "doc": _DOC},
           ["alias", "value"]),
+    _tool("set_parameters", "freecad", "Set several design parameters at once: one undo step, all or none (a "
+          "value that breaks a feature changes nothing). Answers with each parameter's old and new value and, "
+          "part by part, how volume and size changed. The way to edit a design; prefer it to set_property.",
+          {"values": {"type": "object", "description": "{alias: value}; a number, or text such as \"12 mm\"."},
+           "spreadsheet": _p("string", "Sheet name; default: any sheet with that alias."), "doc": _DOC},
+          ["values"]),
+    # --- FreeCAD: the agent design interface (AUT-06)
+    _tool("design_summary", "freecad", "The whole design in one short text: every part with how it is edited "
+          "(code part, body, or a plain solid with no parameters), size, volume and mass; hidden parts; the "
+          "Parameters sheet; assemblies and joints; what is in error. Start here instead of object_tree plus "
+          "measure on each part.", {"doc": _DOC}, read_only=True),
+    _tool("view", "freecad", "A drawing of the model as one PNG: shaded views with edges, a colour per part and "
+          "a legend. Drawn without the window (works headless, never moves the user's camera). With section, "
+          "the model is cut by a plane and the cut faces are hatched.",
+          {"views": dict(_STRS, description="Up to 4 of iso, iso_back, iso_below, front, back, top, bottom, "
+                                            "left, right. Default: iso, or the view facing the section."),
+           "section": {"type": "object", "description": "{\"axis\": \"x\"|\"y\"|\"z\", \"at\": mm, "
+                       "\"keep\": \"+\"|\"-\"}. keep is the side shown; default: the side away from the viewer."},
+           "objects": dict(_STRS, description="Only these parts (labels from design_summary). Default: all visible."),
+           "width": _p("integer", "Pixels of the whole image, default 800."),
+           "height": _p("integer", "Pixels, default 600."),
+           "hidden": _p("boolean", "Also draw hidden parts. Default false."), "doc": _DOC}, read_only=True),
+    _tool("fit_report", "freecad", "How two parts fit: clash (volume, depth), contact or the gap between them, "
+          "and every coaxial hole and shaft pair with its clearance or interference on diameter and the "
+          "engaged length. Also lists holes of either part with nothing in line in the other.",
+          {"first": _p("string", "A part's label (design_summary lists them)."),
+           "second": _p("string", "The other part's label."),
+           "gap": _p("number", "List the pair as a clearance when closer than this, mm. Default 1."),
+           "doc": _DOC}, ["first", "second"], read_only=True),
     _tool("add_component", "freecad", "Insert a part file into the document's assembly as a linked component "
           "(an assembly is created when there is none; the first component is grounded).",
           {"path": _p("string", ".FCStd file of the part."), "assembly": _p("string", "Assembly name."),
@@ -222,11 +265,41 @@ TOOLS = [
            "vertex1": _p("string", "Optional."), "vertex2": _p("string", "Optional."),
            "keep_position": _p("boolean", "Keep the parts where they are."),
            "assembly": _p("string", "Assembly name."), "doc": _DOC}, ["type", "ref1", "ref2"]),
+    _tool("asm_joints", "freecad", "The joints of an assembly: type, mate, the part and element of each "
+          "reference, and which part is grounded.",
+          {"assembly": _p("string", "Assembly name."), "doc": _DOC}, read_only=True),
+    _tool("asm_rule_check", "freecad", "Check an assembly against the mate rules: exactly one grounded part, "
+          "every joint between faces, edges or vertices of two parts, no stored position, no joint doubled, no "
+          "part left unmated, no reference to something that is gone. Changes nothing.",
+          {"solve": _p("boolean", "Also solve where it stands and report what moves (placements are put back)."),
+           "assembly": _p("string", "Assembly name."), "doc": _DOC}, read_only=True),
+    _tool("asm_knock_test", "freecad", "Move each part that is not grounded a few mm and degrees, solve, and see "
+          "that it comes back; a part may turn on its hinge or slide on its slider. Reports the parts that are "
+          "free (not held by their mates), solver failures and parts not reached. Every placement is put back.",
+          {"seed": _p("integer", "Seed of the random knocks, default 0."),
+           "parts": dict(_STRS, description="Only these parts (names or labels); default: all."),
+           "tol_mm": _p("number", "Default 0.0001."), "tol_deg": _p("number", "Default 0.001."),
+           "max_seconds": _p("number", "Stop after this long; the rest are reported as unchecked."),
+           "assembly": _p("string", "Assembly name."), "doc": _DOC}, read_only=True),
     # --- FreeCAD: Python
     _tool("run_python", "freecad", "Run Python inside FreeCAD (App, Gui, doc = active document are defined; "
           "names persist between calls). Returns stdout, stderr and repr(result) if the code sets a variable "
           "named result; the traceback on error. One undo step.",
           {"code": _p("string", "Python source."), "reset": _p("boolean", "Start with fresh names.")}, ["code"]),
+    _tool("code_cad", "freecad", "Model with code: a build123d or CadQuery script (Python; it does its own "
+          "imports and starts with fresh names) becomes a parametric part in the document, an exact solid "
+          "that re-runs when a dimension changes. Declare each dimension with a default: "
+          "t = param(\"plate_t\", 4, \"Plate thickness\") is a length in mm; param.angle(name, deg), "
+          "param.count(name, n) and param.number(name, x) are the other kinds. New names are added to the "
+          "document's Parameters sheet and the part follows it: change one later with set_parameter. Name the "
+          "output with result = <shape or list of shapes> or show_object(shape, name); build123d shapes and "
+          "builders and CadQuery Workplane, Shape and Assembly are taken; one part per shape. Pass object to "
+          "replace the script of an existing code part (its script is the CodeCadScript property). Returns "
+          "each part's solids, volume and bounding box and the dimensions. One undo step.",
+          {"code": _p("string", "The build123d or CadQuery script."),
+           "name": _p("string", "Label of the part (numbered when there are several)."),
+           "object": _p("string", "An existing code part whose script this replaces."), "doc": _DOC},
+          ["code"]),
     # --- vault
     _tool("vault_status", "freecad", "Vault status: every item (or one part number) with lifecycle state, "
           "revision, who has it checked out and the work copy.",
@@ -857,6 +930,10 @@ def _text(result):
     return json.dumps(result, indent=1, ensure_ascii=False, default=str)
 
 
+def _compact(result):
+    return json.dumps(result, separators=(",", ":"), ensure_ascii=False, default=str)
+
+
 class Server:
     def __init__(self, out=None, cfg=None):
         self.cfg = cfg or paths()
@@ -961,10 +1038,14 @@ class Server:
         if not reply.get("ok"):
             return {"content": [{"type": "text", "text": f"FreeCAD ({kind}): {reply.get('error')}"}], "isError": True}
         result = reply.get("result")
-        if name == "screenshot" and isinstance(result, dict) and "png_base64" in result:
+        if isinstance(result, dict) and "png_base64" in result:
             data = result.pop("png_base64")
             return {"content": [{"type": "image", "data": data, "mimeType": "image/png"},
-                                {"type": "text", "text": _text(result)}], "isError": False}
+                                {"type": "text", "text": _compact(result)}], "isError": False}
+        if isinstance(result, dict) and isinstance(result.get("text"), str):  # a report written to be read
+            text = result.pop("text")
+            return {"content": [{"type": "text", "text": text},
+                                {"type": "text", "text": _compact(result)}], "isError": False}
         return _ok(result)
 
     def status(self):
