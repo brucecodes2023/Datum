@@ -862,6 +862,44 @@
        </widget>
       </item>
       <item>
+       <widget class="Gui::PrefCheckBox" name="OffsetPlane">
+        <property name="toolTip">
+         <string>Construct &gt; Plane with a datum plane, an origin plane or a flat face selected makes a plane offset from it and asks for the distance and direction (its normal, or the X, Y or Z axis). Off: the button always opens FreeCAD's attachment panel.</string>
+        </property>
+        <property name="text">
+         <string>Plane makes an offset plane from a selected plane or face</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>OffsetPlane</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="NewDocumentChooser">
+        <property name="toolTip">
+         <string>File &gt; New, its shortcut and the "+" beside the document tabs ask what to start: a part, an assembly, or a hybrid (parts and their assembly in one file). A document's tab then shows which it is. Off: New makes an empty document. Takes effect at the next start.</string>
+        </property>
+        <property name="text">
+         <string>New document asks: part, assembly or hybrid</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>NewDocumentChooser</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Gui::PrefCheckBox" name="CodeCad">
         <property name="toolTip">
          <string>New Code Part, the script editor and the approval prompt for scripts not written on this Mac. Off: code parts in a file still load and keep their shapes. Takes effect at the next start.</string>

@@ -582,7 +582,7 @@ def _icon(names, workbench=""):
         return _icons[key]
     icon = QtGui.QIcon()
     for name in names:
-        path = f":/icons/{name}.svg"
+        path = name if os.path.isabs(name) else f":/icons/{name}.svg"  # a module's own icon file, or a resource
         if QtCore.QFile.exists(path):
             icon = QtGui.QIcon(path)
             break
@@ -701,6 +701,8 @@ def _in_open_document(workbench, command):
 NEW_ITEMS = (
     ("Part", KIND_ICONS["part"], lambda: _new_in("PartDesignWorkbench", "PartDesign_Body")),
     ("Assembly", KIND_ICONS["assembly"], _new_assembly),
+    ("Hybrid", ((os.path.join(os.path.dirname(os.path.abspath(__file__)), "BruceWorx_Hybrid.svg"),), ""),
+     lambda: __import__("bruceworx_newdoc").create("hybrid")),
     ("Drawing", KIND_ICONS["drawing"], lambda: _in_open_document("TechDrawWorkbench", "BruceWorx_NewDrawing")),
     ("Sketch", (("Sketcher_NewSketch", "general/Sketcher_NewSketch", "SketcherWorkbench"), "SketcherWorkbench"),
      lambda: _new_in("SketcherWorkbench", "Sketcher_NewSketch")),

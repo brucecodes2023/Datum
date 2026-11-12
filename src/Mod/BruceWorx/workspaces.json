@@ -110,7 +110,7 @@
             {
               "caption": "Construct",
               "commands": [
-                "PartDesign_Plane",
+                "BruceWorx_Plane",
                 "PartDesign_Line",
                 "PartDesign_Point",
                 "PartDesign_CoordinateSystem",

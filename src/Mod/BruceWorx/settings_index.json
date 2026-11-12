@@ -1170,6 +1170,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "New document asks: part, assembly or hybrid",
+"tip": "File > New, its shortcut and the \"+\" beside the document tabs ask what to start: a part, an assembly, or a hybrid (parts and their assembly in one file). A document's tab then shows which it is. Off: ",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "New sheet-metal parts take the vault's default rule",
 "tip": "On by default. The first sheet-metal wall of a document without a rule gets the vault's default sheet-metal rule (thickness, bend radius, K-factor, relief); change it with Sheet Metal > Rules.",
 "page": "Vector Labs",
@@ -1214,6 +1220,12 @@
 {
 "text": "Pick a face: show the feature that made it",
 "tip": "Picking a face, edge or vertex in the 3D view highlights the feature that made it in the Browser and on the history timeline. The selection is not changed.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Plane makes an offset plane from a selected plane or face",
+"tip": "Construct > Plane with a datum plane, an origin plane or a flat face selected makes a plane offset from it and asks for the distance and direction (its normal, or the X, Y or Z axis). Off: the button ",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },

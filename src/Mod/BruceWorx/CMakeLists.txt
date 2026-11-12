@@ -231,6 +231,12 @@ SET(BruceWorx_SRCS
     bruceworx_materials.py
     TestBruceWorxMaterials.py
     bruceworx_api_save.py
+    bruceworx_plane.py
+    TestBruceWorxPlaneGui.py
+    BruceWorx_Plane.svg
+    bruceworx_newdoc.py
+    TestBruceWorxNewDocGui.py
+    BruceWorx_Hybrid.svg
     bruceworx_agent.py
     TestBruceWorxAgent.py
     bruceworx_codecad.py

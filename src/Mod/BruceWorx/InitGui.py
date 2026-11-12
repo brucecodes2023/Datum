@@ -11,6 +11,8 @@ Preferences → BruceWorx. This file:
 * starts the ground grid, which shows only while the preference pack is applied,
 * shades the faces in the Fusion-like studio look, coloured from their materials (bruceworx_studio),
 * registers the Rectangular / Circular Pattern commands (bruceworx_pattern_gui),
+* registers Construct > Plane: an offset plane from a selected plane or flat face (bruceworx_plane),
+* makes New ask what the document is (part, assembly or hybrid) and shows that on its tab (bruceworx_newdoc),
 * registers code parts: New Code Part, the script editor and the approval prompt (bruceworx_codecad_gui),
 * registers the Inspect maps (Overhang, Draft, Wall Thickness, Curvature, Zebra) and Mass
   Properties (bruceworx_analysis_gui, MOD-11),
@@ -452,6 +454,20 @@ try:
     bruceworx_validation_gui.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx validation command (SIM-05) was not installed: {exc}")
+
+try:
+    import bruceworx_plane
+
+    bruceworx_plane.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx offset plane was not installed: {exc}")
+
+try:
+    import bruceworx_newdoc
+
+    bruceworx_newdoc.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx new document chooser was not installed: {exc}")
 
 try:
     import bruceworx_codecad_gui

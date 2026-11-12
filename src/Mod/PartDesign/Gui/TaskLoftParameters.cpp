@@ -125,6 +125,12 @@ TaskLoftParameters::TaskLoftParameters(ViewProviderLoft* LoftView, bool /*newObj
     }
 
     updateUI();
+
+    // [BW] A loft with no sections yet (a new one: nobody passes newObj) opens with Add Section armed:
+    // click the sections one after another.
+    if (profile && loft->Sections.getValues().empty()) {
+        ui->buttonRefAdd->setChecked(true);
+    }
 }
 
 TaskLoftParameters::~TaskLoftParameters() = default;
@@ -172,8 +178,23 @@ void TaskLoftParameters::onSelectionChanged(const Gui::SelectionChanges& msg)
                 }
             }
 
+            // [BW] Add Section stays armed after a pick, so several sections are one click each;
+            // click the button again (or OK) to stop. Profile and Remove stay one pick, as before.
+            if (selectionMode == refAdd) {
+                recomputeFeature();
+                Gui::Selection().clearSelection();
+                getViewObject<ViewProviderLoft>()->highlightReferences(ViewProviderLoft::Both, true);
+                updateUI();
+                return;
+            }
+
             clearButtons();
             recomputeFeature();
+        }
+        else if (selectionMode == refAdd) {
+            // [BW] not a section (the loft itself, or one already in the list): keep waiting
+            Gui::Selection().clearSelection();
+            return;
         }
 
         clearButtons();

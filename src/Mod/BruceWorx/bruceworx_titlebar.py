@@ -291,7 +291,7 @@ def _make_classes():
             self.new.setObjectName("BruceWorxNewTab")
             self.new.setText("+")
             self.new.setToolTip("New document")
-            self.new.clicked.connect(lambda: FreeCADGui.runCommand("Std_New"))
+            self.new.clicked.connect(lambda: self.new_document())
             self.new_action = self.addWidget(self.new)
 
             self.space = QtWidgets.QWidget(self)
@@ -307,6 +307,15 @@ def _make_classes():
             self.timer.timeout.connect(self.sync)
             if self.mdi is not None:
                 self.mdi.subWindowActivated.connect(lambda _w: QtCore.QTimer.singleShot(0, self.sync))
+
+        def new_document(self):
+            """The "+": the part / assembly / hybrid menu under it (an empty document when that is off)."""
+            try:
+                import bruceworx_newdoc
+
+                bruceworx_newdoc.choose(self.new)
+            except Exception:  # noqa: BLE001 -- never lose the button
+                FreeCADGui.runCommand("Std_New")
 
         def no_safe_area(self):
             """The row sits in the old title strip: none of its widgets may keep it free."""
@@ -354,7 +363,8 @@ def _make_classes():
                 sub = subs[i] if i < len(subs) else None
                 widget = sub.widget() if sub is not None else None
                 modified.append(bool(sub and (sub.isWindowModified() or (widget and widget.isWindowModified()))))
-            snapshot = (tab_state(texts, modified, source.currentIndex()), self.hovered)
+            icons = tuple(source.tabIcon(i).cacheKey() for i in range(source.count()))  # a tab shows its kind
+            snapshot = (tab_state(texts, modified, source.currentIndex()), self.hovered, icons)
             if snapshot == self.snapshot:
                 return
             self.snapshot = snapshot

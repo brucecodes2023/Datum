@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Hybrid document: a part (the large block) and an assembly (two joined blocks) in one file. -->
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M6 20 L24 11 L42 20 L24 29 Z" fill="#8fc0ee"/>
+    <path d="M6 20 L24 29 L24 51 L6 42 Z" fill="#4f8fd0"/>
+    <path d="M24 29 L42 20 L42 42 L24 51 Z" fill="#2f6aa8"/>
+  </g>
+  <g stroke="#7a4a12" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M36 37 L47 31.5 L58 37 L47 42.5 Z" fill="#f7c98a"/>
+    <path d="M36 37 L47 42.5 L47 57 L36 51.5 Z" fill="#e8973a"/>
+    <path d="M47 42.5 L58 37 L58 51.5 L47 57 Z" fill="#c9771f"/>
+  </g>
+</svg>
