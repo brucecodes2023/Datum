@@ -126,6 +126,15 @@ pixi run FreeCADCmd package/bruceworx/step-import-check.py --pass data/tests/Ste
 
 The script prints object, shape, and solid counts and exits non-zero when nothing is imported. CI uses the upstream file `data/tests/Step/as1-ac-214.stp`.
 
+Corpus presence check (BW-FND-05 early slice; no FreeCAD build):
+
+```sh
+python3 package/bruceworx/acceptance_corpus.py
+pixi run acceptance
+```
+
+`package/bruceworx/corpus/manifest.json` lists each file and what it is for. Missing files are reported. A STEP that is present must be non-empty. The command does not import geometry.
+
 ## 5. Install
 
 ```sh

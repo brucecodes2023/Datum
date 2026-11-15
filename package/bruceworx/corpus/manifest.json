@@ -1,0 +1,35 @@
+{
+  "epic": "BW-FND-05",
+  "entries": [
+    {
+      "id": "upstream-as1-ac-214",
+      "path": "data/tests/Step/as1-ac-214.stp",
+      "kind": "step",
+      "purpose": "Upstream AP203 assembly already used by the STEP import smoke. Stand-in until a Leonardo STEP is in the repo."
+    },
+    {
+      "id": "upstream-geometry-out",
+      "path": "data/tests/Step/geometry_out.stp",
+      "kind": "step",
+      "purpose": "Small upstream STEP (axis placement, no solids) so the corpus has a second file that is cheap to stat."
+    },
+    {
+      "id": "upstream-pad-native",
+      "path": "data/tests/PadTest.fcstd",
+      "kind": "native",
+      "purpose": "Native FreeCAD pad document already in data/tests. Stand-in until an LE part FCStd is committed."
+    },
+    {
+      "id": "le-01-01001-native",
+      "path": "package/bruceworx/corpus/le/LE-01-01001.FCStd",
+      "kind": "native",
+      "purpose": "Leonardo sample plate LE-01-01001, native. Not in the repo yet; the runner reports it missing."
+    },
+    {
+      "id": "le-01-01001-step",
+      "path": "package/bruceworx/corpus/le/LE-01-01001.stp",
+      "kind": "step",
+      "purpose": "Leonardo sample plate LE-01-01001, STEP. Not in the repo yet; the runner reports it missing."
+    }
+  ]
+}

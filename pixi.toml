@@ -195,3 +195,5 @@ test-debug = { cmd = ["ctest", "--test-dir", "build/debug"]}
 test-release = { cmd = ["ctest", "--test-dir", "build/release"]}
 freecad-debug = "bash package/bruceworx/run-freecad.sh debug"
 freecad-release = "bash package/bruceworx/run-freecad.sh release"
+# BW-FND-05 early slice: corpus presence check. Does not build or launch FreeCAD.
+acceptance = "python3 package/bruceworx/acceptance_corpus.py"
