@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Rebuild From Top: one top file feeding three part files, with a refresh arrow. -->
+  <rect x="22" y="4" width="20" height="14" rx="2" fill="#c9771f" stroke="#7a4710" stroke-width="2"/>
+  <path d="M32 18 V26 M12 26 H52 M12 26 V34 M32 26 V34 M52 26 V34" fill="none" stroke="#4a5a70" stroke-width="3" stroke-linecap="round"/>
+  <rect x="4" y="34" width="16" height="12" rx="2" fill="#8aa4c4" stroke="#2f3d52" stroke-width="2"/>
+  <rect x="24" y="34" width="16" height="12" rx="2" fill="#8aa4c4" stroke="#2f3d52" stroke-width="2"/>
+  <rect x="44" y="34" width="16" height="12" rx="2" fill="#8aa4c4" stroke="#2f3d52" stroke-width="2"/>
+  <path d="M20 56 A13 7 0 0 0 46 56" fill="none" stroke="#3f9b52" stroke-width="4" stroke-linecap="round"/>
+  <path d="M40 51 L46 56 L39 60" fill="none" stroke="#3f9b52" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -102,6 +102,36 @@ class RopeTests(unittest.TestCase):
         self.assertGreater(float((sd < 2.5).sum()), 3)
         self.assertFalse(r.taut)
 
+    def test_drape_keeps_pinned_points(self):
+        box = rope.Box(center=(50, 0, -10), half=(20, 20, 10))  # top at z = 0
+        r = make(41, 116.0, (0, 0, -5), (100, 0, -5), radius=1.8)
+        x = np.array([[2.5 * k, 0.0, -5.0] for k in range(41)])  # straight through the box
+        r.x[:] = x
+        rope.drape(r.x, [box], (0, 0, -1), 1.8, r.fixed_start, r.fixed_end, pinned=(20,))
+        self.assertTrue(np.array_equal(r.x[20], x[20]))  # a clip inside the box stays where it is
+        self.assertGreater(float(r.x[19, 2]), 0.0)  # its free neighbours are lifted out
+
+    def test_runaway_step_falls_back_to_the_last_good_shape(self):
+        # Near the limit a step can run off into a kink the hard rows then hold (T1X2 I2C lead, 14 Nov 2026):
+        # the solve must not return it when an earlier shape met the limits.
+        r = make(40, 150.0, (0, 0, 0), (100, 0, 0), ((0, 0, 0), (0, 0, 1), 4), ((100, 0, 0), (0, 0, 1), 4), rmin=14.4)
+        real, calls = rope._newton, [0]
+
+        def kinking(x, *a, **k):
+            real(x, *a, **k)
+            calls[0] += 1
+            if calls[0] >= 6:  # from the 6th iteration on, every one kinks the middle of the wire further
+                x[:, 20:22] += np.array([0.0, 3.0, 0.0]) * (calls[0] - 5)
+
+        rope._newton = kinking
+        try:
+            rope.solve([r], max_steps=400, settle=0)
+        finally:
+            rope._newton = real
+        _s, ratio = rope.measure(r.x[None], np.array([r.l0]), np.array([14.4]))
+        self.assertLessEqual(float(ratio[0]), 1.0 + 1e-3)
+        self.assertFalse(r.taut)
+
     def test_oriented_box_distance(self):
         c, s = math.cos(math.radians(30)), math.sin(math.radians(30))
         box = rope.Box((0, 0, 0), (10, 5, 5), ((c, s, 0), (-s, c, 0), (0, 0, 1)))

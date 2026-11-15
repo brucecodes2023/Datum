@@ -115,6 +115,37 @@ class MassReportTests(Fixture):
         self.assertIn("Measured", text)
         self.assertIn("Total", text)
 
+    def test_datasheet_cg_is_used_where_the_part_sits(self):
+        # ROB-06 (1): a stepper's datasheet CG, not its centroid; carried through a rotated, moved link
+        FreeCAD, Part = _app()
+        V = FreeCAD.Vector
+        asm = self.doc.addObject("App::Part", "Asm")
+        motor = self.doc.addObject("App::Part", "Stepper")
+        _body(self.doc, motor, "StepperBody", Part.makeBox(42, 42, 40, V(-21, -21, 0)), 0.1)
+        motor.addProperty("App::PropertyMass", "DatasheetMass", "BruceWorx", "")
+        motor.DatasheetMass = "280 g"
+        link = self.doc.addObject("App::Link", "StepperLink")
+        link.LinkedObject = motor
+        link.Placement = FreeCAD.Placement(V(100, 0, 0), FreeCAD.Rotation(V(0, 0, 1), 90))
+        asm.addObject(link)
+        self.doc.recompute()
+        before = mr.build_report(self.doc, [asm]).cg
+        self.assertAlmostEqual(before[0], 100, places=6)
+        self.assertAlmostEqual(before[2], 20, places=6)  # the centroid
+        motor.addProperty("App::PropertyVector", "DatasheetCG", "BruceWorx", "")
+        motor.DatasheetCG = V(5, 0, 12)  # nearer the rear, along +X of the part
+        self.doc.recompute()
+        cg = mr.build_report(self.doc, [asm]).cg
+        expected = link.Placement.multVec(V(5, 0, 12))
+        for got, want in zip(cg, (expected.x, expected.y, expected.z)):
+            self.assertAlmostEqual(got, want, places=6)
+        # a measured CG belongs to a measured mass: with only a datasheet mass it is not used
+        motor.removeProperty("DatasheetCG")
+        motor.addProperty("App::PropertyVector", "MeasuredCG", "BruceWorx", "")
+        motor.MeasuredCG = V(5, 0, 12)
+        self.doc.recompute()
+        self.assertAlmostEqual(mr.build_report(self.doc, [asm]).cg[2], 20, places=6)
+
     def test_measured_beats_datasheet_beats_density(self):
         asm = xframe(self.doc)
         batt = self.doc.getObject("Battery")

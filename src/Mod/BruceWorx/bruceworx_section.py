@@ -39,7 +39,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ICON = os.path.join(HERE, "BruceWorx_Section.svg")
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 
-_state = {"installed": False, "pending": set(), "observer": None, "editing": None}
+_state = {"installed": False, "pending": set(), "observer": None, "editing": None, "restored": set()}
 
 
 # ----- plane arithmetic (unit tested) -------------------------------------------------------------
@@ -1354,17 +1354,30 @@ class _Manipulator:
                 {"insert": "BruceWorx_SectionsOff", "menuItem": "Std_ToggleClipPlane", "after": ""}]
 
 
-class _Observer:
-    def slotFinishRestoreDocument(self, doc):
-        for obj in sections(doc):
-            if _app().GuiUp and obj.ViewObject is not None and not isinstance(getattr(obj.ViewObject, "Proxy", None), ViewProviderSection):
-                ViewProviderSection(obj.ViewObject)
-        schedule(doc)
+def restored(doc):
+    """Once per opened document: give its sections their view providers back and refresh the views.
+    Returns whether it did the work now."""
+    if doc is None or doc.Name in _state["restored"]:
+        return False
+    _state["restored"].add(doc.Name)
+    for obj in sections(doc):
+        if _app().GuiUp and obj.ViewObject is not None and not isinstance(getattr(obj.ViewObject, "Proxy", None), ViewProviderSection):
+            ViewProviderSection(obj.ViewObject)
+    schedule(doc)
+    return True
 
+
+class _Observer:
+    # FreeCAD does not pass slotFinishRestoreDocument to Python observers (src/App/DocumentObserverPython.cpp
+    # has no entry for it): an opened file is created empty, filled, then activated. So what a restored
+    # document needs is done at its first activation, when its objects are there.
     def slotActivateDocument(self, doc):
-        if sections(doc):
+        if not restored(doc) and sections(doc):
             schedule(doc)
         sync_button(doc)
+
+    def slotDeletedDocument(self, doc):
+        _state["restored"].discard(doc.Name)
 
 
 def install():

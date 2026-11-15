@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Mounting holes for a bought part: a plate with a four-hole pattern and its frame. -->
+  <path d="M4 40 L28 24 L60 34 L36 52 Z" fill="#f2b632" fill-opacity="0.9" stroke="#7a5a08" stroke-width="2.5" stroke-linejoin="round"/>
+  <ellipse cx="24" cy="38" rx="3.5" ry="2.2" fill="#ffffff" stroke="#7a5a08" stroke-width="1.5"/>
+  <ellipse cx="34" cy="32" rx="3.5" ry="2.2" fill="#ffffff" stroke="#7a5a08" stroke-width="1.5"/>
+  <ellipse cx="44" cy="37" rx="3.5" ry="2.2" fill="#ffffff" stroke="#7a5a08" stroke-width="1.5"/>
+  <ellipse cx="34" cy="44" rx="3.5" ry="2.2" fill="#ffffff" stroke="#7a5a08" stroke-width="1.5"/>
+  <path d="M34 38 V14" stroke="#1f3a5f" stroke-width="3" stroke-linecap="round"/>
+  <path d="M28.5 18 L34 9 L39.5 18 Z" fill="#1f3a5f"/>
+</svg>

@@ -286,6 +286,23 @@ TOOLS = [
           "names persist between calls). Returns stdout, stderr and repr(result) if the code sets a variable "
           "named result; the traceback on error. One undo step.",
           {"code": _p("string", "Python source."), "reset": _p("boolean", "Start with fresh names.")}, ["code"]),
+    _tool("worksheet_read", "freecad", "Read a design worksheet (.bwsheet: Markdown text, LaTeX math and "
+          "```calc blocks of 'name = expression [in unit] [=> Parameters] [check|warn cond \"label\"]' in "
+          "FreeCAD's expression grammar) and evaluate it against the model it describes. Returns the text and "
+          "every calc line's value, status, checks and the model Parameters it read. With text, that text is "
+          "evaluated instead of the file's, and nothing is changed: use it to try a calculation.",
+          {"path": _p("string", "The .bwsheet file."),
+           "text": _p("string", "Worksheet text to evaluate instead of the file's (a trial).")},
+          ["path"], read_only=True),
+    _tool("worksheet_apply", "freecad", "Apply a design worksheet to its model: evaluate, write the "
+          "'=> Parameters' lines into the model's Parameters sheet (one undo step there), rebuild the model "
+          "and rewrite the worksheet's output files (its header's outputs: 3MF, STL, STEP, DXF). With text, "
+          "the worksheet's text is replaced first (a new file is made when path does not exist). Nothing is "
+          "written while a line has an error. The open worksheet tab follows.",
+          {"path": _p("string", "The .bwsheet file."),
+           "text": _p("string", "New text for the worksheet."),
+           "save": _p("boolean", "Save the worksheet (with its results in the header). Default true.")},
+          ["path"]),
     _tool("code_cad", "freecad", "Model with code: a build123d or CadQuery script (Python; it does its own "
           "imports and starts with fresh names) becomes a parametric part in the document, an exact solid "
           "that re-runs when a dimension changes. Declare each dimension with a default: "

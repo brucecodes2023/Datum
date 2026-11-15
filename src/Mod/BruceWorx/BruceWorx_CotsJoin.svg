@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Fix bought part on seat: a motor block coming down onto a plate. -->
+  <path d="M4 48 L26 38 L60 44 L38 56 Z" fill="#f2b632" fill-opacity="0.9" stroke="#7a5a08" stroke-width="2.5" stroke-linejoin="round"/>
+  <rect x="20" y="8" width="24" height="18" rx="3" fill="#4f8fd0" stroke="#1f3a5f" stroke-width="2.5"/>
+  <path d="M32 28 V40" stroke="#1f3a5f" stroke-width="3" stroke-linecap="round"/>
+  <path d="M26.5 37 L32 46 L37.5 37 Z" fill="#1f3a5f"/>
+</svg>

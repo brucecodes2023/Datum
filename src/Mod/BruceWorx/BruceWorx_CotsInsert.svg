@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Insert bought part: a motor block with its four mounting holes and a plus. -->
+  <rect x="14" y="26" width="36" height="26" rx="3" fill="#4f8fd0" stroke="#1f3a5f" stroke-width="2.5"/>
+  <rect x="28" y="12" width="8" height="14" fill="#c9d3de" stroke="#1f3a5f" stroke-width="2.5"/>
+  <circle cx="20" cy="32" r="2.5" fill="#1f3a5f"/><circle cx="44" cy="32" r="2.5" fill="#1f3a5f"/>
+  <circle cx="20" cy="46" r="2.5" fill="#1f3a5f"/><circle cx="44" cy="46" r="2.5" fill="#1f3a5f"/>
+  <circle cx="50" cy="14" r="10" fill="#58a65c" stroke="#1f5a2a" stroke-width="2"/>
+  <path d="M50 8 V20 M44 14 H56" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+</svg>

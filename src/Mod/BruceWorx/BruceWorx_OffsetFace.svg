@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Offset face: a block whose top face is pulled up. -->
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M8 36 L30 26 L56 34 L34 46 Z" fill="#8fc0ee"/>
+    <path d="M8 36 L34 46 L34 58 L8 48 Z" fill="#4f8fd0"/>
+    <path d="M34 46 L56 34 L56 46 L34 58 Z" fill="#2f6aa8"/>
+  </g>
+  <path d="M8 22 L30 12 L56 20 L34 32 Z" fill="#f2b632" fill-opacity="0.85" stroke="#7a5a08" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M32 40 L32 26" stroke="#7a5a08" stroke-width="3" stroke-linecap="round"/>
+  <path d="M27 29 L32 20 L37 29 Z" fill="#7a5a08"/>
+</svg>

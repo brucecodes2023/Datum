@@ -54,7 +54,7 @@ _SM_MODULES = ("SheetMetal", "ExtrudedCutout", "SketchOnSheetMetalCmd")
 _SKIP_MODULES = ("SheetMetalFormingCmd",)  # a forming tool's thickness is the tool's, not the sheet's
 _BASE_CLASSES = ("SMBaseBend", "SMBaseShape", "SMFromSolid")
 
-_state = {"observer": None, "pending": set(), "restoring": set()}
+_state = {"observer": None, "pending": set()}
 
 
 def _rules():
@@ -810,20 +810,19 @@ def _settle():
                 _status(f"Sheet-metal rule {rule.name} applied (Sheet Metal tab → Rules to change it).", 12000)
 
 
+def restoring(doc):
+    """Is ``doc`` being loaded from its file right now?"""
+    return bool(getattr(doc, "Restoring", False))
+
+
 class _DocObserver:
-    # Objects made while a file loads are not new features.
-    def slotStartRestoreDocument(self, doc):
-        _state["restoring"].add(doc.Name)
-
-    def slotFinishRestoreDocument(self, doc):
-        _state["restoring"].discard(doc.Name)
-
-    def slotDeletedDocument(self, doc):
-        _state["restoring"].discard(doc.Name)
-
+    # Objects made while a file loads are not new features. The document says so itself (Restoring):
+    # FreeCAD does not pass slotStartRestoreDocument / slotFinishRestoreDocument to Python observers
+    # (src/App/DocumentObserverPython.cpp has no entry for them), so a set kept by those never filled
+    # and an opened sheet-metal file was treated as if every feature in it had just been made.
     def slotCreatedObject(self, obj):
         try:
-            if obj.Document.Name in _state["restoring"]:
+            if restoring(obj.Document):
                 return
             _state["pending"].add((obj.Document.Name, obj.Name))
             from PySide import QtCore

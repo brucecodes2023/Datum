@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Construction axis: a centre line through a faint cylinder, in the colours of BruceWorx_Plane.svg. -->
+  <ellipse cx="40" cy="24" rx="15" ry="9" transform="rotate(-35 40 24)" fill="#f6d98a" fill-opacity="0.55" stroke="#b08a1e" stroke-width="2" stroke-dasharray="4 3"/>
+  <ellipse cx="24" cy="40" rx="15" ry="9" transform="rotate(-35 24 40)" fill="#f2b632" fill-opacity="0.9" stroke="#7a5a08" stroke-width="2.5"/>
+  <path d="M8 56 L56 8" stroke="#1f3a5f" stroke-width="3" stroke-linecap="round" stroke-dasharray="12 4 3 4"/>
+  <circle cx="8" cy="56" r="3.5" fill="#1f3a5f"/>
+  <circle cx="56" cy="8" r="3.5" fill="#1f3a5f"/>
+</svg>

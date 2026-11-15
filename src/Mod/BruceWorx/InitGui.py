@@ -11,9 +11,20 @@ Preferences → BruceWorx. This file:
 * starts the ground grid, which shows only while the preference pack is applied,
 * shades the faces in the Fusion-like studio look, coloured from their materials (bruceworx_studio),
 * registers the Rectangular / Circular Pattern commands (bruceworx_pattern_gui),
-* registers Construct > Plane: an offset plane from a selected plane or flat face (bruceworx_plane),
+* registers Construct > Rib Stations: a sketch repeated on offset planes, scaled, from the Parameters sheet (bruceworx_ribs),
+* registers Construct > Plane, Axis and Point: offset planes, midplanes and datums from the selection (bruceworx_plane),
 * makes New ask what the document is (part, assembly or hybrid) and shows that on its tab (bruceworx_newdoc),
+* registers 3D-print prep: Place on Bed, Print Prep, Export 3MF, Send to Slicer (bruceworx_printprep_gui, MFG-01),
+* registers direct edit on imported solids: Offset Face, Edit Hole, Delete Face (bruceworx_directedit),
+* registers bought parts: insert with a mounting frame, mounting holes, join (bruceworx_cots, ROB-01),
+* registers top-down design, in-context editing, Bolt Up / Infer Mates and the surfacing tools
+  (bruceworx_parameters_topdown MOD-02, bruceworx_incontext ASM-07, bruceworx_mating_gui ASM-09/11,
+  bruceworx_surfacing_gui MOD-08),
+* registers Make External, Repair Links and Flexible Sub-assembly, and repairs moved links on open (bruceworx_partfiles),
+* registers Auto Drawing, Parts List with balloons, Publish Drawings, and callouts that follow their hole (DRW-02/04/06/08),
 * registers code parts: New Code Part, the script editor and the approval prompt (bruceworx_codecad_gui),
+* registers New Worksheet and Open Worksheet: design worksheets whose calculations drive the
+  Parameters sheet, and *.bwsheet in File > Open (bruceworx_worksheet_gui, MOD-15/17),
 * registers the Inspect maps (Overhang, Draft, Wall Thickness, Curvature, Zebra) and Mass
   Properties (bruceworx_analysis_gui, MOD-11),
 * registers Inspect > Interference for assemblies (bruceworx_interference_gui),
@@ -456,6 +467,13 @@ except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx validation command (SIM-05) was not installed: {exc}")
 
 try:
+    import bruceworx_ribs
+
+    bruceworx_ribs.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx rib stations (MOD-02) were not installed: {exc}")
+
+try:
     import bruceworx_plane
 
     bruceworx_plane.install()
@@ -468,6 +486,95 @@ try:
     bruceworx_newdoc.install()
 except Exception as exc:  # pragma: no cover - FreeCAD console only
     _bw_warn(f"BruceWorx new document chooser was not installed: {exc}")
+
+try:
+    import bruceworx_printprep_gui
+
+    bruceworx_printprep_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx 3D-print prep (MFG-01) was not installed: {exc}")
+
+try:
+    import bruceworx_directedit
+
+    bruceworx_directedit.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx direct edit (MOD-04) was not installed: {exc}")
+
+try:
+    import bruceworx_cots
+
+    bruceworx_cots.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx bought parts (ROB-01) were not installed: {exc}")
+
+try:
+    import bruceworx_parameters_topdown
+
+    bruceworx_parameters_topdown.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx top-down design: Link Skeleton, Check References, Rebuild From Top (MOD-02) were not installed: {exc}")
+
+try:
+    import bruceworx_incontext
+
+    bruceworx_incontext.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx in-context editing (ASM-07) was not installed: {exc}")
+
+try:
+    import bruceworx_mating_gui
+
+    bruceworx_mating_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx Bolt Up and Infer Mates (ASM-09, ASM-11) were not installed: {exc}")
+
+try:
+    import bruceworx_surfacing_gui
+
+    bruceworx_surfacing_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx surfacing tools and the continuity check (MOD-08) were not installed: {exc}")
+
+try:
+    import bruceworx_worksheet_gui
+
+    bruceworx_worksheet_gui.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx design worksheets (MOD-15/17) were not installed: {exc}")
+
+try:
+    import bruceworx_partfiles
+
+    bruceworx_partfiles.install()
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx part files and sub-assemblies (ASM-01, ASM-05) were not installed: {exc}")
+
+try:
+    import bruceworx_autodrawing
+    import bruceworx_drawing_callouts
+    import bruceworx_drawing_publish
+    import bruceworx_partslist
+
+    bruceworx_drawing_callouts.install()
+    bruceworx_drawing_publish.install()
+    bruceworx_partslist.install()
+    bruceworx_autodrawing.install()
+
+    class _BwDrawingToolbar:
+        """Auto Drawing, Parts List and Publish Drawings beside Hole Callouts on TechDraw's toolbar."""
+
+        def modifyToolBars(self):
+            import FreeCADGui
+
+            names = ("BruceWorx_AutoDrawing", "BruceWorx_PartsList", "BruceWorx_PublishDrawings")
+            have = set(FreeCADGui.listCommands())
+            return [{"insert": n, "toolItem": "TechDraw_RichTextAnnotation"} for n in names if n in have]
+
+    _bw_drawing_toolbar = _BwDrawingToolbar()
+    FreeCADGui.addWorkbenchManipulator(_bw_drawing_toolbar)
+except Exception as exc:  # pragma: no cover - FreeCAD console only
+    _bw_warn(f"BruceWorx drawing tools (DRW-02/04/06/08) were not installed: {exc}")
 
 try:
     import bruceworx_codecad_gui

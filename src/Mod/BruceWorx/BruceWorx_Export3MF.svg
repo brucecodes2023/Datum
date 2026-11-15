@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Export 3MF: the part on the bed, going out to a file. -->
+  <path d="M4 50 L22 40 L60 46 L42 58 Z" fill="#9aa3ad" stroke="#3b4046" stroke-width="2.5" stroke-linejoin="round"/>
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round"><path d="M18 24 L30 18 L46 22 L34 29 Z" fill="#8fc0ee"/><path d="M18 24 L34 29 L34 47 L18 42 Z" fill="#4f8fd0"/><path d="M34 29 L46 22 L46 40 L34 47 Z" fill="#2f6aa8"/></g>
+  <path d="M40 10 L56 10" stroke="#1b7a3a" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M53 3.5 L62 10 L53 16.5 Z" fill="#1b7a3a"/>
+  <text x="5" y="15" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#1b7a3a">3MF</text>
+</svg>

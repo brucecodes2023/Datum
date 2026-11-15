@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Check Profile: a sketch outline with one corner open; the two red ends get closed. -->
+  <path d="M30 10 L54 10 L54 54 L10 54 L10 26" fill="#8fc0ee" fill-opacity="0.35" stroke="#1f3a5f" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M10 26 L10 18" stroke="#2f6aa8" stroke-width="3" stroke-dasharray="3 3" stroke-linecap="round"/>
+  <path d="M18 10 L30 10" stroke="#2f6aa8" stroke-width="3" stroke-dasharray="3 3" stroke-linecap="round"/>
+  <circle cx="10" cy="26" r="5" fill="#d83b40" stroke="#7a1418" stroke-width="1.5"/>
+  <circle cx="30" cy="10" r="5" fill="#d83b40" stroke="#7a1418" stroke-width="1.5"/>
+  <circle cx="10" cy="10" r="5.5" fill="#f2b632" stroke="#7a5a08" stroke-width="2"/>
+  <path d="M26 38 L33 45 L46 28" fill="none" stroke="#2e8b57" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

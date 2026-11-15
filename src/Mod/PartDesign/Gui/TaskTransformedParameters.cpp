@@ -180,7 +180,17 @@ void TaskTransformedParameters::changeEvent(QEvent* event)
 void TaskTransformedParameters::onSelectionChanged(const Gui::SelectionChanges& msg)
 {
     if (originalSelected(msg)) {
+        // [BW] Add feature stays armed after a pick, so several features are one click each; click the
+        // button again (or OK) to stop. Remove stays one pick, as before.
+        if (selectionMode == SelectionMode::AddFeature) {
+            Gui::Selection().clearSelection();
+            return;
+        }
         exitSelectionMode();
+    }
+    else if (msg.Type == Gui::SelectionChanges::AddSelection && selectionMode == SelectionMode::AddFeature) {
+        // [BW] not a feature to add (already in the list): keep waiting
+        Gui::Selection().clearSelection();
     }
 }
 

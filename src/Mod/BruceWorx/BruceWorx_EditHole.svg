@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Edit hole: a plate with a hole, where it was (dashed) and where it goes. -->
+  <path d="M4 34 L28 20 L60 30 L36 46 Z" fill="#8fc0ee" stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M4 34 L36 46 L36 54 L4 42 Z" fill="#4f8fd0" stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M36 46 L60 30 L60 38 L36 54 Z" fill="#2f6aa8" stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round"/>
+  <ellipse cx="22" cy="33" rx="6" ry="3.5" fill="none" stroke="#1f3a5f" stroke-width="2" stroke-dasharray="3 2"/>
+  <ellipse cx="42" cy="33" rx="7" ry="4" fill="#12263f" stroke="#7a5a08" stroke-width="2.5"/>
+  <path d="M27 24 L36 24" stroke="#7a5a08" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 19 L42 24 L34 29 Z" fill="#7a5a08"/>
+</svg>

@@ -219,6 +219,59 @@ class TestRuleBinding(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_SHEETMETAL and HAVE_NETWORKX, "SheetMetal with networkx is needed")
+class TestOpenedFileIsNotNew(unittest.TestCase):
+    """Objects made while a file loads are not new features (the document's Restoring flag says so;
+    FreeCAD passes no start/finish-restore slots to Python observers)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bw-sm-open-")
+
+    def tearDown(self):
+        for name in list(App.listDocuments()):
+            if name.startswith("SmOpen"):
+                App.closeDocument(name)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_the_observer_skips_a_loading_file_and_takes_a_new_object(self):
+        import bruceworx_sheetmetal as sm
+
+        doc = App.newDocument("SmOpen")
+        doc.addObject("Part::Box", "Box")
+        doc.recompute()
+        path = os.path.join(self.tmp, "SmOpen.FCStd")
+        doc.saveAs(path)
+        App.closeDocument(doc.Name)
+
+        seen = []
+
+        class Watch(sm._DocObserver):
+            def slotCreatedObject(self, obj):
+                seen.append((obj.Name, sm.restoring(obj.Document)))
+
+        kept = set(sm._state["pending"])
+        watch, real = Watch(), sm._DocObserver()
+        App.addDocumentObserver(watch)
+        try:
+            opened = App.openDocument(path)
+            self.assertEqual(seen, [("Box", True)])
+            self.assertFalse(sm.restoring(opened))
+            opened.addObject("Part::Box", "Later")
+            self.assertEqual(seen[-1], ("Later", False))
+        finally:
+            App.removeDocumentObserver(watch)
+        sm._state["pending"].clear()
+
+        class Loading:
+            Name, Restoring = "SmOpen", True
+
+        class Made:
+            Name, Document = "Box", Loading
+
+        real.slotCreatedObject(Made)  # the real handler, on a loading document: nothing is queued
+        self.assertEqual(sm._state["pending"], set())
+        sm._state["pending"].update(kept)
+
+
 class TestVendorPatches(unittest.TestCase):
     def test_k_table_interpolates_in_its_segment(self):
         import SheetMetalNewUnfolder

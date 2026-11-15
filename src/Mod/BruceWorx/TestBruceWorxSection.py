@@ -249,3 +249,45 @@ class TestSaved(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRestored(unittest.TestCase):
+    """What an opened document needs is done at its first activation: FreeCAD passes no
+    slotFinishRestoreDocument to Python observers."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bw-section-")
+        self.kept = set(sec._state["restored"])
+
+    def tearDown(self):
+        for name in list(App.listDocuments()):
+            if name.startswith("SectionRestore"):
+                App.closeDocument(name)
+        sec._state["restored"] = self.kept
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_once_per_document_and_again_after_it_is_closed(self):
+        doc = App.newDocument("SectionRestore")
+        self.assertTrue(sec.restored(doc))
+        self.assertFalse(sec.restored(doc))
+        observer = sec._Observer()
+        observer.slotDeletedDocument(doc)
+        self.assertTrue(sec.restored(doc))
+
+    def test_opening_a_file_reaches_the_observer(self):
+        doc = App.newDocument("SectionRestore")
+        obj = doc.addObject("App::FeaturePython", sec.SECTION_NAME)
+        sec.SectionPlane(obj)
+        doc.recompute()
+        path = os.path.join(self.tmp, "SectionRestore.FCStd")
+        doc.saveAs(path)
+        App.closeDocument(doc.Name)
+        sec._state["restored"].discard("SectionRestore")
+        observer = sec._Observer()
+        App.addDocumentObserver(observer)
+        try:
+            opened = App.openDocument(path)
+        finally:
+            App.removeDocumentObserver(observer)
+        self.assertEqual(len(sec.sections(opened)), 1)
+        self.assertIn(opened.Name, sec._state["restored"])  # done at activation, with its objects there

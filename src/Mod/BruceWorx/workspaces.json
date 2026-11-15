@@ -72,7 +72,9 @@
                 "PartDesign_SubtractivePipe",
                 "PartDesign_SubtractiveHelix",
                 "PartDesign_CompPrimitiveSubtractive",
-                "PartDesign_Body"
+                "PartDesign_Body",
+                "BruceWorx_CotsSeat",
+                "BruceWorx_SketchRepair"
               ]
             },
             {
@@ -96,7 +98,9 @@
                 "PartDesign_Draft",
                 "PartDesign_Thickness",
                 "PartDesign_Boolean",
-                "Std_TransformManip"
+                "Std_TransformManip",
+                "BruceWorx_OffsetFace",
+                "BruceWorx_EditHole"
               ],
               "more": [
                 "Part_Scale",
@@ -104,17 +108,21 @@
                 "PartDesign_MoveFeature",
                 "PartDesign_MoveFeatureInTree",
                 "PartDesign_MoveTip",
-                "BruceWorx_Configurations"
+                "BruceWorx_Configurations",
+                "BruceWorx_NewWorksheet",
+                "BruceWorx_OpenWorksheet",
+                "BruceWorx_DeleteFace"
               ]
             },
             {
               "caption": "Construct",
               "commands": [
                 "BruceWorx_Plane",
-                "PartDesign_Line",
-                "PartDesign_Point",
+                "BruceWorx_Axis",
+                "BruceWorx_Point",
                 "PartDesign_CoordinateSystem",
-                "PartDesign_ShapeBinder"
+                "PartDesign_ShapeBinder",
+                "BruceWorx_RibStations"
               ],
               "more": [
                 "PartDesign_SubShapeBinder",
@@ -159,10 +167,14 @@
                 "Assembly_CreateAssembly",
                 "Assembly_InsertLink",
                 "BruceWorx_InsertFastener",
+                "BruceWorx_BoltUp",
                 "BruceWorx_Joint",
                 "Assembly_CreateJointRevolute",
                 "Assembly_CreateJointSlider",
-                "BruceWorx_Mate"
+                "BruceWorx_Mate",
+                "BruceWorx_CotsInsert",
+                "BruceWorx_EditInContext",
+                "BruceWorx_ReferenceFromAssembly"
               ],
               "more": [
                 "Assembly_InsertNewPart",
@@ -180,7 +192,16 @@
                 "Assembly_CreateJointGearBelt",
                 "Assembly_SolveAssembly",
                 "Assembly_CreateView",
-                "Assembly_CreateBom"
+                "Assembly_CreateBom",
+                "BruceWorx_CotsJoin",
+                "BruceWorx_MakeExternal",
+                "BruceWorx_FlexibleSubAssembly",
+                "BruceWorx_RepairLinks",
+                "BruceWorx_InferMates",
+                "BruceWorx_InContextReferences",
+                "BruceWorx_LinkSkeleton",
+                "BruceWorx_RebuildFromTop",
+                "BruceWorx_CheckReferences"
               ]
             },
             {
@@ -222,7 +243,8 @@
                 "Surface_Sections",
                 "Part_RuledSurface",
                 "Part_Loft",
-                "Part_Sweep"
+                "Part_Sweep",
+                "BruceWorx_SurfacePatch"
               ],
               "more": [
                 "Surface_BlendCurve",
@@ -234,12 +256,18 @@
             {
               "caption": "Modify",
               "commands": [
+                "BruceWorx_SurfaceTrim",
+                "BruceWorx_SurfaceExtend",
+                "BruceWorx_SurfaceStitch",
+                "BruceWorx_SurfaceThicken"
+              ],
+              "more": [
+                "BruceWorx_SurfaceUntrim",
+                "BruceWorx_ReplaceFace",
                 "Surface_ExtendFace",
                 "Part_Offset2D",
                 "Part_Offset",
-                "Part_Thickness"
-              ],
-              "more": [
+                "Part_Thickness",
                 "Part_ProjectionOnSurface",
                 "Part_MakeSolid"
               ]
@@ -247,6 +275,7 @@
             {
               "caption": "Inspect",
               "commands": [
+                "BruceWorx_ContinuityCheck",
                 "BruceWorx_ZebraAnalysis",
                 "BruceWorx_CurvatureAnalysis",
                 "BruceWorx_DraftAnalysis"
@@ -263,6 +292,14 @@
               "more": [
                 "Part_Slice",
                 "Part_XOR"
+              ]
+            },
+            {
+              "caption": "Construct",
+              "commands": [
+                "BruceWorx_Plane",
+                "BruceWorx_Axis",
+                "BruceWorx_Point"
               ]
             }
           ]
@@ -423,6 +460,17 @@
         {
           "name": "Utilities",
           "groups": [
+            {
+              "caption": "Print",
+              "commands": [
+                "BruceWorx_PlaceOnBed",
+                "BruceWorx_PrintPrep",
+                "BruceWorx_SendToSlicer"
+              ],
+              "more": [
+                "BruceWorx_Export3MF"
+              ]
+            },
             {
               "caption": "Organize",
               "commands": [

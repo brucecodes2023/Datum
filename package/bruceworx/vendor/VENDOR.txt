@@ -73,3 +73,78 @@ Updating the Fasteners add-on:
   3. Rebuild, then run
        FreeCADCmd -t TestBruceWorxHardware   (an ISO 4762 M3x40 to the standard, the
                                               vault COTS item, nuts and inserts)
+
+Code-CAD packages (AUT-05) -- from the pixi environment, not vendored here
+=============================================================================
+
+pixi.toml asks for ocp, build123d and cadquery (conda-forge); with their dependencies the solve added 58
+packages to pixi.lock (57 of them on macOS arm64). make-vectorlabs.sh copies site-packages and the libraries they load into Vector Labs.app, so
+the ones below ship in the app. Name, version and licence are the conda package's own metadata
+(.pixi/envs/default/conda-meta/<package>.json, field "license"); each licence text in third-party/ is the
+package's info/licenses file(s) (ptyprocess: its dist-info LICENSE). Written 12 Nov 2026 against the app built
+from commit 43d98dbd; regenerate when pixi.lock changes.
+
+  Package                Version     Licence                      Text in third-party/
+  anytree                2.13.0      Apache-2.0                   anytree-LICENSE.txt
+  asttokens              3.0.2       Apache-2.0                   asttokens-LICENSE.txt
+  build123d              0.9.1       Apache-2.0                   build123d-LICENSE.txt
+  cadquery               2.7.0       Apache-2.0                   cadquery-LICENSE.txt
+  casadi                 3.7.2       LGPL-3.0-or-later            casadi-LICENSE.txt
+  decorator              5.3.1       BSD-2-Clause                 decorator-LICENSE.txt
+  exceptiongroup         1.3.1       MIT and PSF-2.0              exceptiongroup-LICENSE.txt
+  executing              2.3.0       MIT                          executing-LICENSE.txt
+  ezdxf                  1.4.2       MIT                          ezdxf-LICENSE.txt
+  ipython                8.37.0      BSD-3-Clause                 ipython-LICENSE.txt
+  jedi                   0.20.1      Apache-2.0 AND MIT           jedi-LICENSE.txt
+  lib3mf                 2.4.1       BSD-2-Clause                 lib3mf-LICENSE.txt
+  lib3mf-python          2.4.1       BSD-2-Clause                 lib3mf-python-LICENSE.txt
+  matplotlib-inline      0.2.2       BSD-3-Clause                 matplotlib-inline-LICENSE.txt
+  more-itertools         11.2.1      MIT                          more-itertools-LICENSE.txt
+  multimethod            1.12        Apache-2.0                   multimethod-LICENSE.txt
+  nlopt                  2.11.0      LGPL-2.1-or-later            nlopt-LICENSE.txt
+  ocp                    7.8.1.2     Apache-2.0                   ocp-LICENSE.txt
+  ocpsvg                 0.5.0       Apache-2.0                   ocpsvg-LICENSE.txt
+  parso                  0.8.7       MIT                          parso-LICENSE.txt
+  path                   17.1.1      MIT                          path-LICENSE.txt
+  pexpect                4.9.0       ISC                          pexpect-LICENSE.txt
+  pickleshare            0.7.5       MIT                          pickleshare-LICENSE.txt
+  prompt-toolkit         3.0.53      BSD-3-Clause                 prompt-toolkit-LICENSE.txt
+  ptyprocess             0.7.0       ISC                          ptyprocess-LICENSE.txt
+  pure_eval              0.2.4       MIT                          pure_eval-LICENSE.txt
+  pygments               2.21.0      BSD-2-Clause                 pygments-LICENSE.txt
+  runtype                0.5.3       MIT                          runtype-LICENSE.txt
+  stack_data             0.6.3       MIT                          stack_data-LICENSE.txt
+  svgelements            1.9.6       MIT                          svgelements-LICENSE.txt
+  svgpathtools           1.8.0       MIT                          svgpathtools-LICENSE.txt
+  traitlets              5.16.1      BSD-3-Clause                 traitlets-LICENSE.txt
+  trame                  4.0.0       Apache-2.0                   trame-LICENSE.txt
+  trame-client           4.1.4       MIT                          trame-client-LICENSE.txt
+  trame-common           1.2.9       Apache-2.0                   trame-common-LICENSE.txt
+  trame-components       2.5.0       Apache-2.0                   trame-components-LICENSE.txt
+  trame-server           4.1.1       Apache-2.0                   trame-server-LICENSE.txt
+  trame-vtk              2.11.17     BSD-3-Clause                 trame-vtk-LICENSE.txt
+  trame-vuetify          3.3.0       MIT                          trame-vuetify-LICENSE.txt
+  trianglesolver         1.2         MIT                          trianglesolver-LICENSE.txt
+  wcwidth                0.9.4       MIT                          wcwidth-LICENSE.txt
+
+In the environment but with no file in the app (build-time only, or libraries nothing shipped loads):
+
+  _python_abi3_support   1.0         MIT
+  ampl-asl               1.0.0       BSD-3-Clause AND SMLNJ
+  eigen-abi              3.4.0.100   MPL-2.0
+  ipopt                  3.14.19     EPL-1.0
+  libblasfeo             0.1.4.3     BSD-2-Clause
+  libfatrop              0.0.4       LGPL-3.0-or-later
+  libosqp                1.0.0       Apache-2.0
+  libqdldl               0.1.9       Apache-2.0
+  libscotch              7.0.10      CECILL-C
+  metis                  5.1.0       Apache-2.0
+  mumps-include          5.8.2       CECILL-C
+  mumps-seq              5.8.2       CECILL-C
+  pybind11-abi           4           BSD-3-Clause
+  python-abi3            3.11        MIT
+  python-gil             3.11.14     Python-2.0
+  tinyxml2               11.0.0      Zlib
+
+Changed by the same solve: pybind11 and pybind11-global 3.0.1 -> 2.13.6 (BSD-3-Clause, build-time), cpython
+3.11.14 -> 3.11.18 (a metapackage).

@@ -231,12 +231,84 @@ SET(BruceWorx_SRCS
     bruceworx_materials.py
     TestBruceWorxMaterials.py
     bruceworx_api_save.py
+    bruceworx_ribs.py
+    TestBruceWorxRibs.py
+    BruceWorx_RibStations.svg
     bruceworx_plane.py
     TestBruceWorxPlaneGui.py
     BruceWorx_Plane.svg
+    BruceWorx_Axis.svg
+    BruceWorx_Point.svg
     bruceworx_newdoc.py
     TestBruceWorxNewDocGui.py
     BruceWorx_Hybrid.svg
+    bruceworx_printprep.py
+    bruceworx_printprep_gui.py
+    TestBruceWorxPrintPrep.py
+    BruceWorx_PrintPrep.svg
+    BruceWorx_PlaceOnBed.svg
+    BruceWorx_Export3MF.svg
+    BruceWorx_SendToSlicer.svg
+    bruceworx_directedit.py
+    TestBruceWorxDirectEdit.py
+    BruceWorx_OffsetFace.svg
+    BruceWorx_EditHole.svg
+    BruceWorx_DeleteFace.svg
+    bruceworx_cots.py
+    cots_library.json
+    TestBruceWorxCots.py
+    BruceWorx_CotsInsert.svg
+    BruceWorx_CotsSeat.svg
+    BruceWorx_CotsJoin.svg
+    bruceworx_partfiles.py
+    TestBruceWorxPartFiles.py
+    TestBruceWorxPartFilesGui.py
+    BruceWorx_MakeExternal.svg
+    BruceWorx_RepairLinks.svg
+    BruceWorx_FlexibleSubAssembly.svg
+    bruceworx_drawing_publish.py
+    bruceworx_drawing_callouts.py
+    bruceworx_partslist.py
+    bruceworx_autodrawing.py
+    TestBruceWorxDrawingEpics.py
+    BruceWorx_PublishDrawings.svg
+    BruceWorx_PartsList.svg
+    BruceWorx_AutoDrawing.svg
+    bruceworx_revtable.py
+    TestBruceWorxRevTable.py
+    bruceworx_parameters_topdown.py
+    TestBruceWorxTopDown.py
+    BruceWorx_LinkSkeleton.svg
+    BruceWorx_CheckReferences.svg
+    BruceWorx_RebuildFromTop.svg
+    bruceworx_incontext.py
+    TestBruceWorxInContext.py
+    BruceWorx_EditInContext.svg
+    BruceWorx_ReferenceFromAssembly.svg
+    BruceWorx_InContextReferences.svg
+    bruceworx_mating.py
+    bruceworx_mating_gui.py
+    TestBruceWorxMating.py
+    BruceWorx_BoltUp.svg
+    BruceWorx_InferMates.svg
+    bruceworx_surfacing.py
+    bruceworx_surfacing_gui.py
+    TestBruceWorxSurfacing.py
+    BruceWorx_SurfaceTrim.svg
+    BruceWorx_SurfaceUntrim.svg
+    BruceWorx_SurfaceExtend.svg
+    BruceWorx_SurfacePatch.svg
+    BruceWorx_SurfaceStitch.svg
+    BruceWorx_SurfaceThicken.svg
+    BruceWorx_ReplaceFace.svg
+    BruceWorx_Continuity.svg
+    BruceWorx_SketchRepair.svg
+    bruceworx_worksheet.py
+    bruceworx_worksheet_gui.py
+    TestBruceWorxWorksheet.py
+    TestBruceWorxWorksheetGui.py
+    BruceWorx_Worksheet.svg
+    BruceWorx_WorksheetOpen.svg
     bruceworx_agent.py
     TestBruceWorxAgent.py
     bruceworx_codecad.py

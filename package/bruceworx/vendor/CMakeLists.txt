@@ -48,6 +48,13 @@ if(BUILD_BW_SHEETMETAL)
         FILES third-party/networkx-LICENSE.txt
         DESTINATION share/doc/BruceWorx/third-party
     )
+    # [BW] FND-04: the licence texts of the code-CAD packages (build123d, CadQuery, OCP, lib3mf and their
+    # dependencies) that the app bundle ships; VENDOR.txt lists them.
+    INSTALL(
+        DIRECTORY third-party/
+        DESTINATION share/doc/BruceWorx/third-party
+        FILES_MATCHING PATTERN "*-LICENSE.txt"
+    )
 endif()
 
 if(BUILD_BW_FASTENERS)

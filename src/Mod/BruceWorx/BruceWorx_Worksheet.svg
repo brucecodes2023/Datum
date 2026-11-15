@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Design worksheet: a page with a sum sign and a result line. -->
+  <path d="M12 6 L42 6 L52 16 L52 58 L12 58 Z" fill="#8fc0ee" fill-opacity="0.35" stroke="#1f3a5f" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M42 6 L42 16 L52 16" fill="none" stroke="#1f3a5f" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M34 18 L20 18 L28 29 L20 40 L34 40" fill="none" stroke="#2f6aa8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 50 L44 50" stroke="#1f3a5f" stroke-width="3" stroke-linecap="round"/>
+  <path d="M38 32 L44 32 M38 37 L44 37" stroke="#2e8b57" stroke-width="3" stroke-linecap="round"/>
+</svg>

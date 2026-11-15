@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Make External: a body leaves this file for a file of its own. -->
+  <path d="M6 8 H30 L38 16 V56 H6 Z" fill="#eef2f7" stroke="#4a5a70" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M30 8 V16 H38" fill="none" stroke="#4a5a70" stroke-width="2.5" stroke-linejoin="round"/>
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M36 34 L47 28 L58 34 L47 40 Z" fill="#8fc0ee"/>
+    <path d="M36 34 L47 40 L47 54 L36 48 Z" fill="#4f8fd0"/>
+    <path d="M47 40 L58 34 L58 48 L47 54 Z" fill="#2f6aa8"/>
+  </g>
+  <path d="M13 40 H29" stroke="#c9771f" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 33 L32 40 L24 47" fill="none" stroke="#c9771f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

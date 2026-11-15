@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Print prep: a part on the printer's bed under a nozzle. -->
+  <path d="M4 50 L22 40 L60 46 L42 58 Z" fill="#9aa3ad" stroke="#3b4046" stroke-width="2.5" stroke-linejoin="round"/>
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round"><path d="M18 24 L30 18 L46 22 L34 29 Z" fill="#8fc0ee"/><path d="M18 24 L34 29 L34 47 L18 42 Z" fill="#4f8fd0"/><path d="M34 29 L46 22 L46 40 L34 47 Z" fill="#2f6aa8"/></g>
+  <path d="M26 4 L38 4 L38 10 L34 15 L30 15 L26 10 Z" fill="#e8973a" stroke="#7a4a12" stroke-width="2.5" stroke-linejoin="round"/>
+</svg>

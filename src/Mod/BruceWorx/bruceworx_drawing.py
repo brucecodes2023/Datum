@@ -458,7 +458,26 @@ def fill_page(page, root=None):
     if list(getattr(page, TYPED_PROP)) != kept:
         setattr(page, TYPED_PROP, kept)
     written = sorted(k for k in texts if texts[k] != current.get(k))
-    return {"written": written, "kept": kept}
+    revision = _revision_views(page, root)
+    return {"written": written + revision, "kept": kept, "revision": revision}
+
+
+def _revision_views(page, root):
+    """The PRELIMINARY stamp and the revision table (DRW-05, bruceworx_revtable)."""
+    try:
+        import bruceworx_revtable
+
+        part = part_of_page(page)
+        if part is None:
+            return []
+        values = part_values(part, root)
+        values["root"] = root
+        return bruceworx_revtable.apply(page, values)
+    except Exception as exc:  # noqa: BLE001 -- the title block is filled either way
+        import FreeCAD
+
+        FreeCAD.Console.PrintLog(f"BruceWorx drawing: revision table: {exc}\n")
+        return []
 
 
 def our_pages(doc):

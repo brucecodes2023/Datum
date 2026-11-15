@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Edit in Context: one part of the assembly is edited (blue) while the others stay in view (grey). -->
+  <g stroke="#4a5a70" stroke-width="2.5" stroke-linejoin="round" fill="#e3e8ef">
+    <path d="M6 40 L20 33 L34 40 L20 47 Z"/>
+    <path d="M6 40 L20 47 L20 58 L6 51 Z" fill="#c9d1dc"/>
+    <path d="M20 47 L34 40 L34 51 L20 58 Z" fill="#aeb9c8"/>
+  </g>
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M22 18 L36 11 L50 18 L36 25 Z" fill="#8fc0ee"/>
+    <path d="M22 18 L36 25 L36 38 L22 31 Z" fill="#4f8fd0"/>
+    <path d="M36 25 L50 18 L50 31 L36 38 Z" fill="#2f6aa8"/>
+  </g>
+  <path d="M44 56 L58 42" stroke="#c9771f" stroke-width="5" stroke-linecap="round"/>
+  <path d="M41 59 L42 53 L47 58 Z" fill="#c9771f"/>
+</svg>
