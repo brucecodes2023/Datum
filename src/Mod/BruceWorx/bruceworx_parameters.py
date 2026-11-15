@@ -5,12 +5,13 @@ Fusion's Change Parameters as a tab: every dimension of the active document
 in one table (Name, Expression, Value), with a filter.
 
 * User parameters live in a spreadsheet named "Parameters": column A the name,
-  B the value or expression (its alias is the name), C a comment. Every aliased
-  cell is listed. Decided 24 Oct: one sheet for the whole product, at the root of
-  the top-assembly file. A part without a sheet of its own uses the one its
-  expressions read in another file (Root#Parameters.<name>), or that the files
-  its links point at read; only a file with neither gets its own, made by the
-  first "+ Parameter". The tab shows and takes the bare name.
+  B the value or expression (its alias is the name), C a comment, D the part or
+  drawing that value drives (Used in). Every aliased cell is listed. Decided
+  24 Oct: one sheet for the whole product, at the root of the top-assembly file.
+  A part without a sheet of its own uses the one its expressions read in another
+  file (Root#Parameters.<name>), or that the files its links point at read; only
+  a file with neither gets its own, made by the first "+ Parameter". The tab
+  shows and takes the bare name.
 * An edit of the sheet rebuilds the open parts in other files that read it:
   FreeCAD does not recompute them on its own.
 * Model parameters: every dimension of every feature (its length, angle and
@@ -23,6 +24,9 @@ in one table (Name, Expression, Value), with a filter.
 * Fast on big models: built only while visible; feature groups are filled
   when first opened (folded when there are many); a recompute updates the
   texts in place; the filter never touches the document.
+* Headless slice of the same sheet: ensure_parameters finds or creates it,
+  set_alias names a cell, bind_length ties one sketch distance or one pad
+  length to that alias. The caller recomputes; the length follows the cell.
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ import re
 TAB = "BWParameters"
 SHEET_NAME = "Parameters"
 SHEET_TYPE = "Spreadsheet::Sheet"
-SHEET_HEADERS = (("A1", "Name"), ("B1", "Value"), ("C1", "Comment"))
+SHEET_HEADERS = (("A1", "Name"), ("B1", "Value"), ("C1", "Comment"), ("D1", "Used in"))
 COLUMNS = ("Name", "Expression", "Value")
 NAME, EXPRESSION, VALUE = 0, 1, 2
 USER, PROP, CONSTRAINT = "user", "prop", "constraint"
@@ -383,13 +387,200 @@ def make_sheet(doc):
     for cell, text in SHEET_HEADERS:
         sheet.set(cell, text)
     try:
-        sheet.setStyle("A1:C1", "bold")
+        sheet.setStyle("A1:D1", "bold")
         sheet.setColumnWidth("A", 120)
         sheet.setColumnWidth("B", 160)
         sheet.setColumnWidth("C", 220)
+        sheet.setColumnWidth("D", 160)
     except Exception:
         pass
     return sheet
+
+
+def _contents(sheet, addr):
+    try:
+        return sheet.getContents(addr) or ""
+    except Exception:
+        return ""
+
+
+def _plain(content):
+    """Cell text without the quote the sheet stores in front of a string."""
+    content = content or ""
+    return content[1:] if content.startswith("'") else content
+
+
+def _is_sketch(obj):
+    try:
+        return bool(obj.isDerivedFrom("Sketcher::SketchObject"))
+    except Exception:
+        return getattr(obj, "TypeId", "") == "Sketcher::SketchObject"
+
+
+def length_path(obj, target=None):
+    """Expression path of one length: a pad's Length, or a sketch distance.
+
+    A sketch takes a constraint name ("width" -> "Constraints.width"), an index,
+    or a path that already starts with "Constraints".
+    """
+    if target is None:
+        if _is_sketch(obj):
+            raise ValueError("name the sketch constraint to bind (its name or its index)")
+        return "Length"
+    if isinstance(target, int):
+        if target < 0:
+            raise ValueError("a constraint index starts at 0")
+        return f"Constraints[{target}]"
+    text = str(target).strip()
+    if not text:
+        raise ValueError("name the length to bind")
+    if text.startswith("Constraints"):
+        return text
+    if _is_sketch(obj):
+        if not valid_alias(text):
+            raise ValueError(f"{text}: a constraint name is letters, digits and _, starting with a letter.")
+        return f"Constraints.{text}"
+    return text
+
+
+def _driven_label(obj, path):
+    """How Used in names the object: "Pad", or "Plate.width" for a named sketch constraint."""
+    label = getattr(obj, "Label", None) or getattr(obj, "Name", "") or ""
+    if path.startswith("Constraints.") and "[" not in path:
+        return f"{label}.{path.split('.', 1)[1]}"
+    if path != "Length":
+        return f"{label}.{path}"
+    return label
+
+
+def _ensure_used_in_header(sheet):
+    """Column D is "Used in" on sheets made before that header existed. A filled D1 stays."""
+    if sheet is None or _plain(_contents(sheet, "D1")).strip():
+        return
+    sheet.set("D1", "Used in")
+    try:
+        sheet.setStyle("D1", "bold")
+        sheet.setColumnWidth("D", 160)
+    except Exception:
+        pass
+
+
+def _write_used_in(sheet, row, text, append=False):
+    addr = f"D{row}"
+    text = (text or "").strip()
+    if append and text:
+        current = _plain(_contents(sheet, addr)).strip()
+        if current.startswith("="):
+            return
+        parts = [part.strip() for part in current.split(",") if part.strip()]
+        if text not in parts:
+            parts.append(text)
+        text = ", ".join(parts)
+    if not text:
+        try:
+            sheet.clear(addr)
+        except Exception:
+            sheet.set(addr, "")
+        return
+    sheet.set(addr, "'" + text)  # a label, not a number and not an expression
+
+
+def ensure_parameters(doc):
+    """The Parameters sheet at the root of ``doc``.
+
+    The file's own sheet, else the product's sheet this file already reads, else a
+    new one. A sheet copied in for one configuration (MOD-03) is not the file's.
+    """
+    if doc is None:
+        raise ValueError("no document")
+    sheet = find_sheet(doc)
+    if sheet is None:
+        return make_sheet(doc)
+    _ensure_used_in_header(sheet)
+    return sheet
+
+
+def set_alias(sheet, name, value, used_in=None):
+    """Name a cell on the Parameters sheet (column B's alias).
+
+    ``value`` is a quantity ("40 mm") or an expression ("plate_t * 2"). ``used_in``,
+    when given, replaces column D (the part or drawing); None leaves that cell.
+    Returns the value cell. An existing alias is updated in place.
+    """
+    if sheet is None:
+        raise ValueError("no Parameters sheet")
+    name = (name or "").strip()
+    if not valid_alias(name):
+        raise ValueError(f"{name}: a name is letters, digits and _, starting with a letter.")
+    content = cell_content("" if value is None else str(value).strip())
+    if not content:
+        raise ValueError(f"{name} needs a value.")
+    try:
+        cell = sheet.getCellFromAlias(name)
+    except Exception:
+        cell = None
+    if cell:
+        row = cell_rc(cell)[0]
+        sheet.set(cell, content)
+    else:
+        row = next_row(sheet.getUsedCells())
+        sheet.set(f"A{row}", name)
+        cell = f"B{row}"
+        sheet.set(cell, content)
+        sheet.setAlias(cell, name)
+    if used_in is not None:
+        _write_used_in(sheet, row, str(used_in))
+    try:
+        sheet.recompute()  # the alias is a property of the sheet after this
+    except Exception:
+        pass
+    return cell
+
+
+def used_in(sheet, name):
+    """Column D of ``name``, as text, or "" when the alias or the cell is empty."""
+    if sheet is None or not name:
+        return ""
+    try:
+        cell = sheet.getCellFromAlias(name)
+    except Exception:
+        return ""
+    if not cell:
+        return ""
+    return _plain(_contents(sheet, f"D{cell_rc(cell)[0]}")).strip()
+
+
+def bind_length(obj, alias, target=None):
+    """Bind one length on ``obj`` to ``alias`` on the file's Parameters sheet.
+
+    A pad binds Length, or ``target`` when that is another length property. A sketch
+    binds the distance named by ``target`` (its name or its index). Used in gains the
+    object's label. Returns the expression path. Recompute after this and the length
+    follows the cell; changing the cell and recomputing again updates it.
+    """
+    if obj is None:
+        raise ValueError("no object")
+    doc = getattr(obj, "Document", None)
+    if doc is None:
+        raise ValueError("the object is not in a document")
+    name = (alias or "").strip()
+    if not valid_alias(name):
+        raise ValueError(f"{name}: a name is letters, digits and _, starting with a letter.")
+    sheet = ensure_parameters(doc)
+    try:
+        cell = sheet.getCellFromAlias(name)
+    except Exception:
+        cell = None
+    if not cell:
+        raise ValueError(f"{name} is not on {sheet.Label}")
+    path = length_path(obj, target)
+    try:
+        sheet.recompute()
+    except Exception:
+        pass
+    obj.setExpression(path, f"{sheet_ref(sheet, doc)}.{name}")
+    _write_used_in(sheet, cell_rc(cell)[0], _driven_label(obj, path), append=True)
+    return path
 
 
 def sheet_aliases(sheet):

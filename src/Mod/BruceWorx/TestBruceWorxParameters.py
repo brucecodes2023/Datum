@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Parameters tab: edits, expressions with user parameters, sheet cells, which dimensions. No GUI."""
+"""Parameters tab: edits, expressions with user parameters, sheet cells, which dimensions. No GUI.
+
+The drive test opens a document in FreeCAD, binds a sketch distance and a pad length to the
+Parameters sheet, and checks that changing the alias moves both.
+"""
 
 import os
 import sys
@@ -168,6 +172,124 @@ class ModelTests(unittest.TestCase):
         self.assertTrue(bpar.fold_default(10))
         self.assertFalse(bpar.fold_default(bpar.FOLD_LIMIT + 1))
 
+
+class LengthPathTests(unittest.TestCase):
+    def test_pad_and_sketch(self):
+        class Pad:
+            TypeId = "PartDesign::Pad"
+
+            def isDerivedFrom(self, name):
+                return False
+
+        class Sketch:
+            TypeId = "Sketcher::SketchObject"
+
+            def isDerivedFrom(self, name):
+                return name == "Sketcher::SketchObject"
+
+        self.assertEqual(bpar.length_path(Pad()), "Length")
+        self.assertEqual(bpar.length_path(Pad(), "Length2"), "Length2")
+        self.assertEqual(bpar.length_path(Sketch(), "width"), "Constraints.width")
+        self.assertEqual(bpar.length_path(Sketch(), 6), "Constraints[6]")
+        self.assertEqual(bpar.length_path(Sketch(), "Constraints[2]"), "Constraints[2]")
+        with self.assertRaises(ValueError):
+            bpar.length_path(Sketch())
+        with self.assertRaises(ValueError):
+            bpar.length_path(Sketch(), "A1")
+
+
+def _plate(doc, width=20.0, height=10.0, thick=8.0):
+    """A plate on the XY plane: a rectangle sketch (constraint "width") padded to ``thick``."""
+    import FreeCAD as App
+    import Part
+    import Sketcher
+
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Sketch")
+    plane = doc.getObject("XY_Plane")
+    if plane is None:
+        plane = next(feature for feature in body.Origin.OriginFeatures if "XY" in feature.Name)
+    sketch.AttachmentSupport = (plane, [""])
+    sketch.MapMode = "FlatFace"
+    sketch.Label = "Plate"
+    pts = [App.Vector(0, 0, 0), App.Vector(width, 0, 0), App.Vector(width, height, 0), App.Vector(0, height, 0)]
+    for i in range(4):
+        sketch.addGeometry(Part.LineSegment(pts[i], pts[(i + 1) % 4]), False)
+    cons = []
+    for i in range(4):
+        cons.append(Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1))
+    cons += [Sketcher.Constraint("Horizontal", 0), Sketcher.Constraint("Horizontal", 2),
+             Sketcher.Constraint("Vertical", 1), Sketcher.Constraint("Vertical", 3),
+             Sketcher.Constraint("Coincident", 0, 1, -1, 1)]
+    sketch.addConstraint(cons)
+    width_index = sketch.addConstraint(Sketcher.Constraint("Distance", 0, float(width)))
+    sketch.renameConstraint(width_index, "width")
+    sketch.addConstraint(Sketcher.Constraint("Distance", 1, float(height)))
+    doc.recompute()
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Label = "Plate pad"
+    pad.Profile = sketch
+    pad.Length = thick
+    doc.recompute()
+    return sketch, pad, width_index
+
+
+def _bound_expr(obj, path):
+    for stored, expr in getattr(obj, "ExpressionEngine", None) or ():
+        if stored.lstrip(".") == path:
+            return expr
+    return ""
+
+
+class DriveTests(unittest.TestCase):
+    """One alias on the root Parameters sheet drives a sketch distance and a pad length."""
+
+    def test_changing_the_alias_moves_the_sketch_and_the_pad(self):
+        import FreeCAD
+
+        doc = FreeCAD.newDocument("BWBind")
+        self.addCleanup(lambda: FreeCAD.closeDocument(doc.Name) if doc.Name in FreeCAD.listDocuments() else None)
+        sketch, pad, width_index = _plate(doc)
+        sheet = bpar.ensure_parameters(doc)
+        self.assertEqual(sheet.Name, "Parameters")
+        self.assertIsNone(sheet.getParentGeoFeatureGroup())
+        self.assertNotIn(sheet, doc.getObject("Body").Group)
+        self.assertIs(bpar.ensure_parameters(doc), sheet)
+        names = [obj.Name for obj in doc.Objects if obj.TypeId == bpar.SHEET_TYPE]
+        self.assertEqual(names, ["Parameters"])
+        with self.assertRaises(ValueError):
+            bpar.set_alias(sheet, "A1", "1 mm")
+
+        bpar.set_alias(sheet, "width", "20 mm", used_in="plate sketch")
+        bpar.set_alias(sheet, "thick", "8 mm")
+        doc.recompute()
+        self.assertEqual(bpar.bind_length(sketch, "width", "width"), "Constraints.width")
+        self.assertEqual(bpar.bind_length(pad, "thick"), "Length")
+        self.assertEqual(_bound_expr(sketch, "Constraints.width"), "Parameters.width")
+        self.assertEqual(_bound_expr(pad, "Length"), "Parameters.thick")
+        self.assertEqual(bpar.used_in(sheet, "width"), "plate sketch, Plate.width")
+        self.assertEqual(bpar.used_in(sheet, "thick"), "Plate pad")
+        self.assertEqual(_plain_header(sheet), "Used in")
+        doc.recompute()
+
+        bpar.set_alias(sheet, "width", "35 mm")
+        bpar.set_alias(sheet, "thick", "14 mm")
+        self.assertEqual(sheet.getCellFromAlias("width"), "B2")  # updated in place, no second row
+        doc.recompute()
+        self.assertAlmostEqual(sheet.get("width").Value, 35.0, places=4)
+        self.assertAlmostEqual(sheet.get("thick").Value, 14.0, places=4)
+        self.assertAlmostEqual(pad.Length.Value, 14.0, places=4)
+        self.assertAlmostEqual(sketch.Geometry[0].length(), 35.0, delta=0.05)
+        self.assertAlmostEqual(pad.Shape.BoundBox.XLength, 35.0, delta=0.05)
+        self.assertAlmostEqual(pad.Shape.BoundBox.YLength, 10.0, delta=0.05)
+        self.assertAlmostEqual(pad.Shape.BoundBox.ZLength, 14.0, delta=0.05)
+        datum = sketch.getDatum(width_index)
+        datum = datum.Value if hasattr(datum, "Value") else float(datum)
+        self.assertAlmostEqual(datum, 35.0, delta=0.05)
+
+
+def _plain_header(sheet):
+    return bpar._plain(sheet.getContents("D1") or "")
 
 
 class ProductSheetTests(unittest.TestCase):
