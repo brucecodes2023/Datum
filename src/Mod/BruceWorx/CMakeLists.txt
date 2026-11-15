@@ -113,6 +113,8 @@ SET(BruceWorx_SRCS
     TestBruceWorxSheetMetal.py
     bruceworx_hardware.py
     TestBruceWorxHardware.py
+    bruceworx_filemodel.py
+    TestBruceWorxFileModel.py
     BruceWorx_HolePreset.svg
     BruceWorx_CosmeticThread.svg
     BruceWorx_HoleCallouts.svg
