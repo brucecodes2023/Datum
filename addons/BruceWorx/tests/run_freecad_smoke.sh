@@ -13,6 +13,9 @@ export BW_SMOKE_DIR="$outdir"
 echo "BruceWorx smoke: in-process export, STEP import, tree, rename"
 "$cmd" "$root/tests/freecad_smoke.py"
 
+echo "BruceWorx smoke: api padded body, tree summary, STEP"
+"$cmd" "$root/tests/freecad_api_smoke.py"
+
 test -s "$outdir/box.step"
 test -s "$outdir/LE-01-01001-001.FCStd"
 

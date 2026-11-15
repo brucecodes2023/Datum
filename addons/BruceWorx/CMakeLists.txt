@@ -20,6 +20,7 @@ SET(BruceWorxHooks_SRCS
     README.md
     bruceworx/__init__.py
     bruceworx/__main__.py
+    bruceworx/api.py
     bruceworx/cli.py
     bruceworx/config_path.py
     bruceworx/freecad_io.py
@@ -74,6 +75,7 @@ INSTALL(
     FILES
         bruceworx/__init__.py
         bruceworx/__main__.py
+        bruceworx/api.py
         bruceworx/cli.py
         bruceworx/config_path.py
         bruceworx/freecad_io.py
