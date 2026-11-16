@@ -369,8 +369,16 @@ def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step
             for _ in range(3):
                 _newton(x, w, l0, alpha0, lam_b, bool((alpha0 < 1e6).any()), None, lim_t, limit_alpha)
             lam_b[:] = 0.0
+    # Near the limit the set of hard rows can change from one iteration to the next, and a step can then run
+    # away into a kink the hard rows hold (T1X2 motor and I2C leads, 14 Nov 2026: 0.98 of the limit to 2.0 and
+    # more in a few steps). A wire whose step makes it much worse goes back to where the step began, and a wire
+    # that ends past its limits takes the last shape that met them.
+    merit = _merit(x, l0, w, dmax, unlimited)
+    good = merit <= 0.0
+    last_good = x.copy()
     for done in range(1, max_steps + 1):
         before = x.copy()
+        merit_before = merit
         step = scale * l0
         alpha = ei_q / step
         bend_on = bool((alpha < 1e6).any())
@@ -384,13 +392,36 @@ def solve_batch(x, w, l0, ei_q, dmax, g_dir, boxes, radius, max_steps, tol, step
             if not _collide(x, w, boxes, radius - 1e-3, g_dir) and _strain(x, l0, w) < 1e-6:
                 break
             _newton(x, w, l0, alpha, lam_b, bend_on, None, lim, limit_alpha)
+        merit = _merit(x, l0, w, dmax, unlimited)
+        ran_away = merit > np.maximum(10.0 * merit_before, 0.05)
+        if ran_away.any():
+            x[ran_away] = before[ran_away]
+            merit = np.where(ran_away, merit_before, merit)
+            lam_b[:] = 0.0
+            scale = max(scale * 0.5, 0.05)
+            continue
+        ok = merit <= 0.0
+        last_good[ok] = x[ok]
+        good |= ok
         if _strain(x, l0, w) > 1e-5:
             scale = max(scale * 0.5, 0.05)
         else:
             scale = min(scale * 1.25, step_scale)
         if np.linalg.norm(x - before, axis=-1).max() < tol:
             break
+    back = good & (merit > 0.0)
+    x[back] = last_good[back]
     return done
+
+
+def _merit(x, l0, w, dmax, unlimited):
+    """Per wire, how far ``x`` is past the strain tolerance and the bend limit (0 when it meets both)."""
+    err = np.abs(np.linalg.norm(x[:, 1:] - x[:, :-1], axis=-1) / l0[:, None] - 1.0)
+    over = np.maximum(np.where(_free_segments(w), err, 0.0).max(axis=-1) - STRAIN_TOL, 0.0)
+    if not unlimited and x.shape[1] > 2:
+        d = np.linalg.norm(x[:, :-2] - 2 * x[:, 1:-1] + x[:, 2:], axis=-1).max(axis=-1)
+        over = over + np.maximum(d / dmax - (1.0 + 1e-3), 0.0)
+    return over
 
 
 def solve(ropes, boxes=(), max_steps=400, tol=1e-3, settle=6):
@@ -573,15 +604,17 @@ def initial_layout(n, length, guides, start_lead=None, end_lead=None, gravity=(0
     return x, ks, ke, l0
 
 
-def drape(x, boxes, gravity, radius=0.0, fixed_start=1, fixed_end=1):
+def drape(x, boxes, gravity, radius=0.0, fixed_start=1, fixed_end=1, pinned=()):
     """Lift the points of a first layout that lie inside a box up out of it (against ``gravity``), so a
-    rope laid out through an obstacle starts on top of it rather than being pushed out below."""
+    rope laid out through an obstacle starts on top of it rather than being pushed out below. The ends and
+    the ``pinned`` points stay where they are."""
     g = np.asarray(gravity, dtype=float)
     g = g / max(np.linalg.norm(g), 1e-12)
     free = np.ones(len(x), dtype=bool)
     free[:fixed_start] = False
     if fixed_end:
         free[-fixed_end:] = False
+    free[list(pinned)] = False
     for box in boxes:
         sd, _ = box_distance(box, x)
         m = box.matrix()

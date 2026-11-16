@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Trim: a curved sheet with a closed curve cut out. -->
+  <path d="M6 40 C18 28 30 46 42 34 C48 28 54 30 58 32 L58 50 C50 46 44 50 38 54 C26 62 18 48 6 56 Z" fill="#8fc0ee" stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="32" cy="45" rx="10" ry="5" fill="#ffffff" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="4 2"/><path d="M44 14 L52 22 M52 14 L44 22" stroke="#c0392b" stroke-width="3" stroke-linecap="round"/>
+</svg>

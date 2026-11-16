@@ -743,6 +743,8 @@ class _AssemblyPick:
             return  # a tree click names no element
         if slot_armed:
             return  # the assembly Model Builder wants the raw element pick (bruceworx_asm_panes)
+        if _in_context():
+            return  # a part is edited in context: the edges and faces of the parts around it are references
         import bruceworx_selectfilter as sf
 
         if not sf.rewrite_on(_on(ASM_PICK_PREF)):
@@ -796,6 +798,16 @@ class _AssemblyPick:
             pass
         finally:
             self.busy = False
+
+
+def _in_context():
+    """A part is edited in context in the active view (bruceworx_incontext, ASM-07)."""
+    try:
+        import bruceworx_incontext
+
+        return bruceworx_incontext.enabled() and bruceworx_incontext.active() is not None
+    except Exception:  # noqa: BLE001
+        return False
 
 
 slot_armed = False  # set by bruceworx_asm_panes while a mate's pick slot (or the new-mate node) takes picks

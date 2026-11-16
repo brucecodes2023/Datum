@@ -492,9 +492,10 @@ def add_callouts(view, offset=(12.0, 10.0)):
                       None)
         width, height = _text_box(text)
         if leader is None:
-            point = view.projectPoint(anchor)
-            scale = view.getScale() if hasattr(view, "getScale") else view.Scale
-            x, y = point.x * scale, point.y * scale  # page mm from the view's centre
+            import bruceworx_drawing_callouts as follow
+
+            # page mm from the view's centre; a view is drawn centred on its shape, not on the model origin
+            x, y = follow._arrow(view, anchor)
             side = 1 if x >= 0 else -1  # away from the view's centre, up
             leader = doc.addObject("TechDraw::DrawLeaderLine", "Callout")
             leader.LeaderParent = view
@@ -527,10 +528,10 @@ def add_callouts(view, offset=(12.0, 10.0)):
 
 
 def _page_of(view):
-    for parent in view.InList:
-        if parent.isDerivedFrom("TechDraw::DrawPage"):
-            return parent
-    return None
+    """The view's page, also through its projection group (every New Drawing view is in one)."""
+    import bruceworx_drawing_callouts as follow
+
+    return follow.page_of(view)
 
 
 # --- fasteners (the bundled Fasteners add-on) ----------------------------------------------

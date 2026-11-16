@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Delete face: a block with one face crossed out. -->
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M6 24 L28 12 L58 22 L36 36 Z" fill="#8fc0ee"/>
+    <path d="M6 24 L36 36 L36 56 L6 44 Z" fill="#4f8fd0"/>
+    <path d="M36 36 L58 22 L58 42 L36 56 Z" fill="#f6d98a" stroke-dasharray="4 3"/>
+  </g>
+  <path d="M41 33 L54 46 M54 31 L41 48" stroke="#b3261e" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -273,6 +273,10 @@ SPECS = {
     # script of an existing one.
     "code_cad": ("python", {"code": ("string", True, None), "name": ("string", False, None),
                             "object": ("string", False, None), "doc": _DOC}),
+    # Design worksheets (MOD-15/17, bruceworx_worksheet): read and evaluate, or apply to the model.
+    "worksheet_read": ("read", {"path": ("string", True, None), "text": ("string", False, None)}),
+    "worksheet_apply": ("file", {"path": ("string", True, None), "text": ("string", False, None),
+                                 "save": ("boolean", False, True)}),
     "vault_status": ("vault_read", {"part_number": ("string", False, None), "vault": _VAULT}),
     "vault_my_work": ("vault_read", {"vault": _VAULT}),
     "vault_next_part_number": ("vault_read", {"program": ("string", True, None),

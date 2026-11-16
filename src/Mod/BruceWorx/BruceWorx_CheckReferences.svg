@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Check References: a sheet whose rows point out to another file, with a magnifier. -->
+  <rect x="4" y="6" width="34" height="42" rx="3" fill="#ffffff" stroke="#4a5a70" stroke-width="3"/>
+  <path d="M4 18 H38 M4 28 H38 M4 38 H38 M16 6 V48" stroke="#4a5a70" stroke-width="2"/>
+  <path d="M30 23 C42 23 44 12 54 12" fill="none" stroke="#c9771f" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M49 8 L55 12 L49 16" fill="none" stroke="#c9771f" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="42" cy="44" r="11" fill="#e8f0fa" stroke="#2f3d52" stroke-width="4"/>
+  <path d="M50 52 L60 62" stroke="#2f3d52" stroke-width="6" stroke-linecap="round"/>
+</svg>

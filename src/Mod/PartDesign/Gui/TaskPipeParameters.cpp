@@ -229,8 +229,21 @@ void TaskPipeParameters::onSelectionChanged(const Gui::SelectionChanges& msg)
                 }
             }
 
+            // [BW] Add stays armed after a pick, so several are one click each; click the button again
+            // (or OK) to stop. The other buttons stay one pick, as before.
+            if (stateHandler->getSelectionMode() == StateHandlerTaskPipe::SelectionModes::refSpineEdgeAdd) {
+                recomputeFeature();
+                Gui::Selection().clearSelection();
+                return;
+            }
+
             clearButtons();
             recomputeFeature();
+        }
+        else if (stateHandler->getSelectionMode() == StateHandlerTaskPipe::SelectionModes::refSpineEdgeAdd) {
+            // [BW] not something to add (a duplicate, the feature itself): keep waiting
+            Gui::Selection().clearSelection();
+            return;
         }
 
         clearButtons();
@@ -753,10 +766,23 @@ void TaskPipeOrientation::onSelectionChanged(const SelectionChanges& msg)
                 }
             }
 
+            // [BW] Add stays armed after a pick, so several are one click each; click the button again
+            // (or OK) to stop. The other buttons stay one pick, as before.
+            if (stateHandler->getSelectionMode() == StateHandlerTaskPipe::SelectionModes::refAuxSpineEdgeAdd) {
+                recomputeFeature();
+                Gui::Selection().clearSelection();
+                return;
+            }
+
             clearButtons();
             auto view = getViewObject<ViewProviderPipe>();
             view->highlightReferences(ViewProviderPipe::AuxiliarySpine, false);
             recomputeFeature();
+        }
+        else if (stateHandler->getSelectionMode() == StateHandlerTaskPipe::SelectionModes::refAuxSpineEdgeAdd) {
+            // [BW] not something to add (a duplicate, the feature itself): keep waiting
+            Gui::Selection().clearSelection();
+            return;
         }
 
         clearButtons();
@@ -1012,8 +1038,21 @@ void TaskPipeScaling::onSelectionChanged(const SelectionChanges& msg)
                 }
             }
 
+            // [BW] Add stays armed after a pick, so several are one click each; click the button again
+            // (or OK) to stop. The other buttons stay one pick, as before.
+            if (stateHandler->getSelectionMode() == StateHandlerTaskPipe::SelectionModes::refSectionAdd) {
+                recomputeFeature();
+                Gui::Selection().clearSelection();
+                return;
+            }
+
             clearButtons();
             recomputeFeature();
+        }
+        else if (stateHandler->getSelectionMode() == StateHandlerTaskPipe::SelectionModes::refSectionAdd) {
+            // [BW] not something to add (a duplicate, the feature itself): keep waiting
+            Gui::Selection().clearSelection();
+            return;
         }
         clearButtons();
         exitSelectionMode();

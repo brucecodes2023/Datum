@@ -473,10 +473,20 @@ EPICS = [
       "Try-out on real CAD work signed off."),
     E("AUT-05", "Command line", "M5", "To do", [],
       "(new, UI plan)",
-      "AutoCAD-style aliases, inline Python, CadQuery/build123d (pinned), OpenSCAD; CodeFeature with trust prompt.",
+      "AutoCAD-style aliases, inline Python, CadQuery/build123d (pinned), OpenSCAD; CodeFeature with trust prompt. "
+      "Built 11-12 Nov (commits 92ae0e20, 43d98dbd), the CodeFeature part only: a build123d 0.9.1 or CadQuery "
+      "script is a parametric code part (bruceworx_codecad) whose param() dimensions join the Parameters sheet, "
+      "with a trust prompt for scripts from elsewhere, a script editor dock, templates, dimensions on the model "
+      "and the code_cad MCP tool. Not built: the command line itself, the aliases, inline Python, OpenSCAD.",
       "CPATTERN @Bolt Q 8 reproduces the component pattern; build123d box lands in the timeline."),
     E("AUT-06", "Agent-efficient design interface", "M1", "To do", ["AUT-02", "AUT-03", "MOD-05"],
       "Bruce 7 Nov (front end; to discuss)",
+      "Built 12 Nov (commit 92ae0e20) after Bruce approved a four-tool plan, in bruceworx_agent and the MCP "
+      "server: design_summary, view (shaded views and hatched sections drawn without a window), fit_report "
+      "(clash, contact or gap; coaxial holes and shafts with clearance on diameter) and set_parameters (one "
+      "undo step, all or none, with what changed). Not built: the sourced datasheet rules for bought parts "
+      "(insert knurl OD, hole, depth, minimum wall) checked against each hole, and carrying a change through "
+      "to drawings and print files; the Fanny Pack acceptance case has not been run. The original note: "
       "To discuss with Bruce before planning. How agents view designs (renders, sections, joint frames, fit "
       "reports; today the Vector Labs session renders through a hidden GUI), make edits (parametric, through "
       "the API or MCP, not booleans on plain solids), know how parts work (a bought part carries its sourced "

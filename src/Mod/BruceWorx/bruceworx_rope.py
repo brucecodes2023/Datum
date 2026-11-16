@@ -10,11 +10,14 @@ gets a Browser badge and a ``Problems`` text; only an Assembly drag can be stopp
 
 * **Ends** are the lead straights of the pin frames (clamped points along the frame's +Z).
 * **Clips**: a path point attached to geometry (not an end) is a node the wire passes through, free
-  to turn; a free-space path point is only a guide for the first layout.
+  to turn; a free-space path point is only a guide for the first layout. The node is pinned at its own
+  station on the route (within half a segment of the clip), so the rope between two clips has the
+  route's length there, its share of the slack included.
 * **Gravity** is along an axis of the top assembly (property ``BWGravity``, +-X/Y/Z, default -Z),
   else the preference ``Mod/BruceWorx/Routing/Gravity``.
 * **Collision proxies**: the oriented bounding box of each part near the wire (not the parts the
-  wire's ends are on). TODO: convex hull / mesh per part when the box is too coarse.
+  wire's ends are on, nor those whose box holds the wire's route). TODO: convex hull / mesh per part
+  when the box is too coarse.
 """
 
 import math
@@ -24,6 +27,7 @@ import FreeCAD as App
 GRAVITY_AXES = ["-Z", "+Z", "-X", "+X", "-Y", "+Y"]
 _VECTORS = {"-Z": (0, 0, -1), "+Z": (0, 0, 1), "-X": (-1, 0, 0), "+X": (1, 0, 0), "-Y": (0, -1, 0), "+Y": (0, 1, 0)}
 CLEARANCE = 0.1  # mm between the wire surface and a proxy
+MIN_CLIP_GAP = 3  # rope segments from a clip's node to the clip or end before it, and to the end after it
 ASSEMBLY = "Assembly::AssemblyObject"
 INSULATIONS = ["Auto", "PVC", "Silicone"]
 
@@ -244,6 +248,19 @@ def guide_points(path, lead_start, lead_end):
     return pts[0], pts[-1], keep, pts, s
 
 
+def _along(pts, s, point):
+    """Distance along the sampled route ``pts`` (cumulative lengths ``s``) of the foot of ``point`` on it."""
+    np = _np()
+    p = np.asarray(point, dtype=float)
+    a, b = pts[:-1], pts[1:]
+    d = b - a
+    L2 = np.maximum((d * d).sum(axis=-1), 1e-18)
+    t = np.clip(((p - a) * d).sum(axis=-1) / L2, 0.0, 1.0)
+    dist = np.linalg.norm(a + t[:, None] * d - p, axis=-1)
+    k = int(dist.argmin())
+    return float(s[k] + t[k] * math.sqrt(L2[k]))
+
+
 class End:
     """One end of a rope: a lead on a pin frame, or a bare point."""
 
@@ -314,6 +331,11 @@ def _local_box(child):
                 return None
         if not shape.Solids and not shape.Faces:
             return None
+        if linked is child and not shape.Placement.isIdentity():
+            # a plain feature (not a link): its Shape already carries its Placement, which box_records applies
+            # again; the box was off by the placement (a Part::Box at x 20 boxed at x 40)
+            shape = shape.copy()
+            shape.Placement = App.Placement()
         bb = shape.BoundBox
         box = ((bb.Center.x, bb.Center.y, bb.Center.z), (bb.XLength / 2, bb.YLength / 2, bb.ZLength / 2))
         _BOX_CACHE[key] = (sig, box)
@@ -430,6 +452,7 @@ class RopeItem:
         self.gravity = gravity_vector(obj)
         self.weight_on = gravity_on(obj)
         self.x = None
+        self.on_route = False
         self.exclude = {e.owner.Name for e in self.ends if e.owner is not None}
         self.records = None
 
@@ -484,19 +507,61 @@ class RopeItem:
     def l0(self):
         return self.plan()[2]
 
-    def clip_nodes(self, ks, ke, pts_dense):
-        """Rope node of each clip: kept in ``ClipNodes`` once assigned (the clip's place along the guides)."""
+    def _stations(self, s):
+        """``(ka, la, step)``: rope node ``k`` (past the start lead's ``ka`` segments) lies ``la + (k - ka) * step``
+        along the route when the rope follows it: the lead straights at their own length, the free nodes evenly
+        over the rest (``s`` is the cumulative length of the dense route samples)."""
+        ka, kb, _l0 = self.plan()
+        la = self.ends[0].lead[2] if self.ends[0].lead else 0.0
+        lb = self.ends[1].lead[2] if self.ends[1].lead else 0.0
+        free = max(self.n - 1 - ka - kb, 1)
+        return ka, la, max(float(s[-1]) - la - lb, 0.0) / free
+
+    def clip_nodes(self, ks, ke, pts_dense, s):
+        """Rope node of each clip, by its distance along the route, or -1 for a clip that holds no node: kept in
+        ``ClipNodes`` once assigned. A clip needs two free nodes to the clip or end before it and to the end after
+        it; one closer holds no node. A single free node between two held ones has its bend set by the two
+        lengths alone, and on a route at the minimum radius that comes out past the limit (T1X2 motor leads and
+        pigtails, 14 Nov 2026: 1.02 to 1.12 of it with nothing the solver can move)."""
         np = _np()
         have = list(self.obj.ClipNodes)
-        if len(have) == len(self.clips) and all(ks <= h < self.n - ke for h in have):
+        if len(have) == len(self.clips) and all(h == -1 or ks <= h < self.n - ke for h in have):
             return have
-        nodes = []
-        for _index, point, _target in self.clips:
-            d = np.linalg.norm(np.array(pts_dense) - point, axis=-1)
-            frac = float(d.argmin()) / max(len(pts_dense) - 1, 1)
-            node = int(round(frac * (self.n - 1)))
-            nodes.append(min(max(node, ks), self.n - 1 - ke))
+        ka, la, step = self._stations(s)
+        pts = np.asarray(pts_dense, dtype=float)
+        last, end = ks - 1, self.n - ke
+        order = sorted(range(len(self.clips)), key=lambda i: _along(pts, s, self.clips[i][1]))
+        nodes = [-1] * len(self.clips)
+        for i in order:
+            node = ka + int(round((_along(pts, s, self.clips[i][1]) - la) / max(step, 1e-9)))
+            node = min(max(node, ks), end - 1)
+            if node - last >= MIN_CLIP_GAP and end - node >= MIN_CLIP_GAP:
+                nodes[i] = last = node
         return nodes
+
+    def route_layout(self, x, dense, s):
+        """``x`` with every node past the start lead and before the end lead moved to its station on the route
+        (see :meth:`clip_station`)."""
+        np = _np()
+        ka, la, step = self._stations(s)
+        kb = self.plan()[1]
+        pts = np.asarray(dense, dtype=float)
+        k = np.arange(ka + 1, self.n - 1 - kb)
+        stations = la + (k - ka) * step
+        x[k] = np.stack([np.interp(stations, s, pts[:, c]) for c in range(3)], axis=-1)
+        return x
+
+    def clip_station(self, node, dense, s):
+        """The point on the route where rope node ``node`` lies when the rope follows the route. A clip pins its
+        node here, not at the picked point: rounded to the nearest node, the picked point left the rope between
+        two clips up to one segment longer or shorter than the route there (17 % on an 8 mm span), far past the
+        strain tolerance, so every clipped wire came out taut and kinked (T1X2 harness, 14 Nov 2026). The
+        station is within half a segment of the picked point, along the wire."""
+        np = _np()
+        ka, la, step = self._stations(s)
+        station = la + (node - ka) * step
+        pts = np.asarray(dense, dtype=float)
+        return np.array([np.interp(station, s, pts[:, k]) for k in range(3)])
 
     def build(self, drag_deltas=None, state=None):
         """The :class:`rope.Rope` at the current pin positions, warm-started from ``state`` (an array),
@@ -513,21 +578,33 @@ class RopeItem:
         x = state if state is not None else self.stored()
         pinned = ()
         nodes = []
-        if x is None or len(x) != self.n:
+        fresh = x is None or len(x) != self.n
+        self.on_route = False
+        if fresh:
             tip0, tip1, inner, dense, _s = guide_points(self.path, self.ends[0].lead, self.ends[1].lead)
             guides = [head[0] if not self.ends[0].lead else _arr(self.ends[0].lead[0])] + inner + [tail[0]]
             x, _a, _b, _l0 = rp.initial_layout(self.n, self.length, guides, start[0], end[0], self.gravity)
         if self.clips:
             if dense is None:
                 _t0, _t1, _inner, dense, _s = guide_points(self.path, self.ends[0].lead, self.ends[1].lead)
-            nodes = self.clip_nodes(ks, ke, dense)
+            nodes = self.clip_nodes(ks, ke, dense, _s)
         x = np.array(x, dtype=float)
+        held = [(node, clip) for node, clip in zip(nodes, self.clips) if node >= 0]
+        if held:
+            spots = {node: self.moved_point(self.clip_station(node, dense, _s), target, drag_deltas)
+                     for node, (_index, _point, target) in held}
+            # A clipped wire starts on its route when it has no shape yet or its clips moved away from the one it
+            # has: the clips pulled out of a free first layout or an old shape leave kinks of many times the bend
+            # limit, which the solve does not always undo (T1X2 I2C leads, 14 Nov 2026).
+            if fresh or any(np.linalg.norm(x[node] - p) > l0 for node, p in spots.items()):
+                if drag_deltas is None:
+                    x = self.route_layout(x, dense, _s)
+                    self.on_route = True
+            for node, p in spots.items():
+                x[node] = p
+            pinned = tuple(sorted(spots))
         x[:ks] = np.array(head)
         x[self.n - ke :] = np.array(tail)[::-1]
-        if nodes:
-            for node, (_index, point, target) in zip(nodes, self.clips):
-                x[node] = self.moved_point(point, target, drag_deltas)
-            pinned = tuple(nodes)
         self.clip_node_list = nodes
         rope = rp.Rope(x, l0 * (self.n - 1), self.ei, self.q, rmin=self.rmin, radius=self.od / 2 + CLEARANCE,
                        fixed_start=ks, fixed_end=ke, gravity=self.gravity, pinned=pinned,
@@ -553,12 +630,20 @@ class RopeItem:
         return None, _arr(d.multVec(_vec(end.point)))
 
     def neighbour_records(self):
+        """Proxies of the parts near the wire, less those whose box holds an end of the wire or its route: a
+        route laid in a groove or under a cover is inside that part's box, which is too coarse to say anything
+        there (the box would push the wire off its route, out of the groove)."""
         pts = []
         for e in self.ends:
             if e.lead is not None:
                 pts += [tuple(e.lead[0]), tuple(e.lead[0] + e.lead[1] * e.lead[2])]
             else:
                 pts.append(tuple(e.point))
+        try:
+            _t0, _t1, inner, _dense, _s = guide_points(self.path, self.ends[0].lead, self.ends[1].lead)
+            pts += [tuple(p) for p in inner[::4]]
+        except Exception:
+            pass  # no drawn route: the ends alone
         return box_records(self.obj, self.exclude, pts)
 
     def boxes(self, deltas=None, rope=None):
@@ -585,8 +670,8 @@ class RopeItem:
             return Result(rope.x, True, f"taut: the ends are {gap - free:.1f} mm further apart than the cut length allows",
                           gap / free - 1.0, 0.0, 0.0)
         boxes = self.boxes(drag_deltas, rope)
-        if boxes and state is None and self.stored() is None:
-            rp.drape(rope.x, boxes, self.gravity, rope.radius, rope.fixed_start, rope.fixed_end)
+        if boxes and state is None and self.stored() is None and not self.on_route:
+            rp.drape(rope.x, boxes, self.gravity, rope.radius, rope.fixed_start, rope.fixed_end, rope.pinned)
         SOLVER_CALLS[0] += 1
         rp.solve([rope], boxes, max_steps=max_steps, tol=tol)
         message = ""

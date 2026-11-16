@@ -181,6 +181,15 @@ def editable(obj, doc=None):
         return f"body, {len(features)} features"
     if obj.TypeId == "Part::Feature":
         return "plain solid, no parameters"
+    try:
+        import bruceworx_cots as bc
+
+        info = bc.info_of(obj)
+        if info:
+            loose = len(info.get("unchecked", []))
+            return f"bought part {info['key']}" + (f", {loose} numbers not checked" if loose else "")
+    except Exception:  # noqa: BLE001
+        pass
     if obj.isDerivedFrom("App::Part"):
         return "part container" if doc is None or obj.Document is doc else f"linked file {obj.Document.Label}"
     return obj.TypeId.split("::")[-1].lower() + " feature"

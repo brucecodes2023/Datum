@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Repair Links: two chain links joined again, with a tick. -->
+  <g fill="none" stroke="#4a5a70" stroke-width="6" stroke-linecap="round">
+    <path d="M27 37 L16 48 a8 8 0 0 1 -11 -11 L16 26 a8 8 0 0 1 11 0"/>
+    <path d="M37 27 L48 16 a8 8 0 0 1 11 11 L48 38 a8 8 0 0 1 -11 0"/>
+  </g>
+  <path d="M24 40 L40 24" stroke="#c9771f" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 8"/>
+  <circle cx="48" cy="50" r="12" fill="#3f9b52" stroke="#1f5c2d" stroke-width="2"/>
+  <path d="M42 50 L46.5 55 L54.5 45" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

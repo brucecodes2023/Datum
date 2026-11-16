@@ -942,6 +942,12 @@
 "area": "BIM"
 },
 {
+"text": "3D-print prep (print orientation, 3MF plate, send to slicer)",
+"tip": "Place on Bed, Print Prep, Export 3MF and Send to Slicer: a part keeps the way it prints (which face is on the bed), and goes to the slicer as a 3MF plate in that orientation. Off: those commands are i",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "Activate the assembly or body when a file opens",
 "tip": "On by default. When a file becomes the active document and nothing is being edited, its assembly is activated (as a double-click in the tree would), so the joint and assemble tools are ready, and the ",
 "page": "Vector Labs",
@@ -960,14 +966,32 @@
 "area": "BruceWorx"
 },
 {
+"text": "Auto Drawing command (first-pass drawing in one step)",
+"tip": "Three views and an isometric, overall dimensions, hole callouts and, for an assembly, a parts list with balloons; then edit by hand.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "Auto-hide",
 "tip": "OverlayLeft AutoHide. The panel hides when the pointer leaves and shows on hover.",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
+"text": "Bolt Up and Infer Mates",
+"tip": "Bolt Up puts a screw of the right size and length in every free hole of a part and joints it. Infer Mates turns parts placed by coordinates into joints and lists what it could not mate. Off: the comma",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "Bottom inset",
 "tip": "",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Bought parts library (insert with mounting frame, mounting holes)",
+"tip": "Insert a bought part (motor, stepper) from the library with its mounting frame, make the matching holes on a face, and join the two. Every number in the library names its source. Off: the commands are",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1022,6 +1046,18 @@
 {
 "text": "Dependency lines on hover",
 "tip": "Hovering a Browser row draws thin lines to the rows it uses (Sketch to Pad) and the rows that use it.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Design worksheets (New Worksheet, Open Worksheet)",
+"tip": "Design worksheets (.bwsheet): text, LaTeX math and calculations with units that read the model's Parameters sheet and write results back (=> Parameters), with output files that follow the model. Takes",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Direct edit on imported solids (offset face, edit hole, delete face)",
+"tip": "Modify > Offset Face, Edit Hole and Delete Face change an imported solid that has no features: each edit is a step in the tree on top of the solid. Off: the three commands are greyed out.",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1110,6 +1146,12 @@
 "area": "BruceWorx"
 },
 {
+"text": "Hole callouts follow the hole when it changes",
+"tip": "A hole callout on a drawing rewrites its text when its hole or thread changes, and its arrow follows the hole unless you moved it.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "Hole presets, cosmetic threads and the fastener library",
 "tip": "On by default. Hole Preset (heat-set insert, tapped, clearance, counterbore and countersink holes), Cosmetic Thread, Hole Callouts on drawings, Insert Fastener and Mark as COTS. Takes effect at once f",
 "page": "Vector Labs",
@@ -1124,6 +1166,12 @@
 {
 "text": "Icon plates in the Browser (dark mode)",
 "tip": "On by default. In dark mode, a faint light plate behind each tree icon keeps dark-outlined icons readable.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "In-context editing (Edit in Context, Reference from Assembly)",
+"tip": "Edit a part in place inside the assembly and reference other parts' edges and faces; the References window updates, locks or breaks them. Off: the commands are inactive.",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1183,7 +1231,7 @@
 },
 {
 "text": "Offer to close the gaps of an open sketch profile",
-"tip": "When a Pad, Pocket, Revolution or Groove fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing changes without a click",
+"tip": "When a Pad, Pocket, Revolution, Groove, Loft, Pipe or Helix fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing chan",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1212,8 +1260,26 @@
 "area": "BruceWorx"
 },
 {
+"text": "Parameters sheet: keep the Used in column up to date",
+"tip": "Column D of the Parameters sheet lists what reads each value, across open files, and follows edits. Off: Check References still fills it.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Part files: Make External, Repair Links, Flexible Sub-assembly",
+"tip": "Make External turns a body modelled inside an assembly or a multi-body file into its own part file, linked in place. Repair Links finds moved part files by name. Flexible Sub-assembly switches a sub-a",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
 "text": "Part number and state badges in the Browser",
 "tip": "On by default. A part with the BruceWorx part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Parts list and balloons on assembly drawings",
+"tip": "A parts list above the title block driven by the assembly, with balloons that keep their item numbers when parts are added.",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1224,14 +1290,20 @@
 "area": "BruceWorx"
 },
 {
-"text": "Plane makes an offset plane from a selected plane or face",
-"tip": "Construct > Plane with a datum plane, an origin plane or a flat face selected makes a plane offset from it and asks for the distance and direction (its normal, or the X, Y or Z axis). Off: the button ",
+"text": "Plane, Axis and Point make a datum from the selection",
+"tip": "Construct > Plane with a plane or a flat face selected makes a plane offset from it and asks for the distance, direction and count; with two parallel ones selected it makes the plane halfway between. ",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
 {
 "text": "Preview while dragging when a recompute takes over",
 "tip": "",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Publish Drawings command (PDF and DXF for a document and the parts it links)",
+"tip": "One command writes a PDF and a DXF of every drawing of the document and of the part files it links, named by part number and revision.",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1244,6 +1316,24 @@
 {
 "text": "Rectangular and Circular Pattern commands",
 "tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Vector Labs menu. They pattern features (through PartDesign), bodies and assembly compon",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Repair moved links when a file opens",
+"tip": "When a file opens with links whose part files are not where the link says, look for each file by name under the file's folder, point the link at it, and say what was changed. Nothing is saved until yo",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Revision table and PRELIMINARY stamp on drawings",
+"tip": "A drawing of a part not yet released shows PRELIMINARY with its part number and WIP revision; once released, a revision table in the top-right corner lists each released revision from the vault (note,",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Rib stations (a sketch repeated on offset planes, from the Parameters sheet)",
+"tip": "Construct > Rib Stations repeats the selected sketch along its normal as scaled rib sections on their own planes, with a loft through them. Span, rib count and taper are rows of the Parameters sheet, ",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },
@@ -1304,6 +1394,12 @@
 {
 "text": "Studio shading (soft lights, reflections, colours from materials)",
 "tip": "On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ",
+"page": "Vector Labs",
+"area": "BruceWorx"
+},
+{
+"text": "Surfacing tools (Trim, Extend, Stitch, Thicken, Patch, Continuity)",
+"tip": "Parametric surface features and the G0/G1/G2 continuity check. Off: the commands are inactive.",
 "page": "Vector Labs",
 "area": "BruceWorx"
 },

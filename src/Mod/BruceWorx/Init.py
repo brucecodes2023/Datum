@@ -36,6 +36,18 @@ FreeCAD.__unit_test__.append("TestBruceWorxConfigs")
 FreeCAD.__unit_test__.append("TestBruceWorxBridge")
 FreeCAD.__unit_test__.append("TestBruceWorxCodeCad")
 FreeCAD.__unit_test__.append("TestBruceWorxAgent")
+FreeCAD.__unit_test__.append("TestBruceWorxPrintPrep")
+FreeCAD.__unit_test__.append("TestBruceWorxDirectEdit")
+FreeCAD.__unit_test__.append("TestBruceWorxCots")
+FreeCAD.__unit_test__.append("TestBruceWorxRevTable")
+FreeCAD.__unit_test__.append("TestBruceWorxTopDown")
+FreeCAD.__unit_test__.append("TestBruceWorxInContext")
+FreeCAD.__unit_test__.append("TestBruceWorxMating")
+FreeCAD.__unit_test__.append("TestBruceWorxSurfacing")
+FreeCAD.__unit_test__.append("TestBruceWorxWorksheet")
+FreeCAD.__unit_test__.append("TestBruceWorxPartFiles")
+FreeCAD.__unit_test__.append("TestBruceWorxDrawingEpics")
+FreeCAD.__unit_test__.append("TestBruceWorxRibs")
 FreeCAD.__unit_test__.append("TestBruceWorxApi")
 FreeCAD.__unit_test__.append("TestBruceWorxDrawing")
 FreeCAD.__unit_test__.append("TestBruceWorxUnits")
@@ -87,3 +99,12 @@ try:
     bruceworx_sim.ensure_ccx_pref()
 except Exception as exc:
     FreeCAD.Console.PrintWarning(f"BruceWorx could not look for CalculiX: {exc}\n")
+
+# Rib stations (MOD-02): a changed rib count adds or removes stations right after a recompute, also
+# headless (the MCP's set_parameter).
+try:
+    import bruceworx_ribs
+
+    bruceworx_ribs.install_observer()
+except Exception as exc:
+    FreeCAD.Console.PrintWarning(f"BruceWorx rib stations were not registered: {exc}\n")

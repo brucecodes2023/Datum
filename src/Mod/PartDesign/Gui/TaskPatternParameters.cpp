@@ -315,7 +315,17 @@ void TaskPatternParameters::onSelectionChanged(const Gui::SelectionChanges& msg)
     }
 
     if (originalSelected(msg)) {
+        // [BW] Add feature stays armed after a pick (see TaskTransformedParameters::onSelectionChanged)
+        if (selectionMode == SelectionMode::AddFeature) {
+            Gui::Selection().clearSelection();
+            return;
+        }
         exitSelectionMode();
+        return;
+    }
+    if (selectionMode == SelectionMode::AddFeature) {
+        // [BW] not a feature to add (already in the list): keep waiting
+        Gui::Selection().clearSelection();
         return;
     }
 

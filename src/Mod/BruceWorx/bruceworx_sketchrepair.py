@@ -1,17 +1,25 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Sketch profile repair (roadmap MOD-13, from the Nxt add-on review).
 
-When a PartDesign Pad, Pocket, Revolution or Groove fails on a sketch whose
-profile is open, a small card at the top of the 3D view says where: the open
-ends (red dots in the view), the gaps between them and the coincidences the
-sketch is missing. It offers:
+When a PartDesign Pad, Pocket, Revolution, Groove, Loft, Pipe or Helix fails on
+a sketch whose profile is open (its profile or one of its loft or sweep
+sections), a small card at the top of the 3D view says where: the open ends
+(red dots in the view), the gaps between them, the coincidences the sketch is
+missing, edges drawn twice and lines that overlap. Check Profile
+(BruceWorx_SketchRepair) shows the same card for a selected sketch or feature,
+or the sketch being edited, before anything fails. It offers:
 
 * Close gaps: a coincident constraint for two ends closer than the snap
   distance (Preferences/BruceWorx/SketchRepairSnap, 0.1 mm), a short line plus
   two coincidences for ends further apart but within the largest gap
   (SketchRepairMaxGap, 1 mm). Ends further apart are only reported. One undo
   step ("Close sketch gaps"); while the feature's own dialog is open the fix
-  joins that dialog's transaction, so Cancel takes it back too.
+  joins that dialog's transaction, so Cancel takes it back too. The same step
+  deletes an edge drawn twice (the copy with fewer constraints goes) and
+  Sketcher's degenerated (zero-length) edges, found as Sketcher > Validate
+  sketch finds them: a parameter range under Precision::Confusion().
+  Overlapping lines that are not exact copies are only reported: which part
+  to keep is the user's call.
 * Open sketch: edits the sketch.
 
 Nothing changes without a click. The card goes when the feature recomputes
@@ -36,7 +44,12 @@ SNAP_DEFAULT = 0.1  # mm: closer ends get a coincident constraint
 MAX_DEFAULT = 1.0  # mm: ends up to this far apart get a short line
 EPS = 1e-6  # mm: ends this close already touch (the wire builder joins them)
 
-FEATURE_TYPES = ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolution", "PartDesign::Groove")
+FEATURE_TYPES = ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolution", "PartDesign::Groove",
+                 "PartDesign::AdditiveLoft", "PartDesign::SubtractiveLoft",
+                 "PartDesign::AdditivePipe", "PartDesign::SubtractivePipe",
+                 "PartDesign::AdditiveHelix", "PartDesign::SubtractiveHelix")
+COMMAND = "BruceWorx_SketchRepair"
+ICON = "BruceWorx_SketchRepair.svg"
 OBJECT_NAME = "BruceWorxRepairCard"
 TRANSACTION = "Close sketch gaps"
 TOP_MARGIN = 12
@@ -47,7 +60,11 @@ JOINING = ("Coincident", "Tangent", "Perpendicular")
 
 End = namedtuple("End", "geo pos xy")  # one end of an edge, sketch coordinates
 Fix = namedtuple("Fix", "kind a b distance")  # kind "coincident" | "line"; a, b are End
-Report = namedtuple("Report", "open_ends fixes unresolved branches")
+# duplicates: (keep geo, drop geo); overlaps: Overlap; degenerate: geo indices (Sketcher's degenerated geometry)
+Report = namedtuple("Report", "open_ends fixes unresolved branches duplicates overlaps degenerate",
+                    defaults=((), (), ()))
+Curve = namedtuple("Curve", "geo kind points")  # points: open curves (start, end, mid); circles (centre, (r, 0))
+Overlap = namedtuple("Overlap", "a b xy length")  # two collinear lines sharing ``length`` mm around ``xy``
 
 
 # ----- pure logic (unit tested) -----------------------------------------------------------
@@ -180,15 +197,85 @@ def analyse(edges, links=(), snap=SNAP_DEFAULT, max_gap=MAX_DEFAULT):
     return Report(open_ends, fixes, unresolved, branches)
 
 
+def _same(p, q, eps=EPS):
+    return _dist(p, q) <= eps
+
+
+def duplicates(curves, weight=None, eps=EPS):
+    """(keep, drop) geo pairs for curves drawn twice: same kind, same ends (either way round) and the
+    same middle point; circles with the same centre and radius. Of each set the one with the
+    highest ``weight`` (constraints on it) stays, then the lowest index."""
+    weight = weight or {}
+    out, groups = [], []
+    for curve in curves:
+        for group in groups:
+            first = group[0]
+            if first.kind != curve.kind or len(first.points) != len(curve.points):
+                continue
+            a, b = first.points, curve.points
+            if len(a) == 3:
+                same = _same(a[2], b[2], eps) and (
+                    (_same(a[0], b[0], eps) and _same(a[1], b[1], eps))
+                    or (_same(a[0], b[1], eps) and _same(a[1], b[0], eps)))
+            else:
+                same = all(_same(p, q, eps) for p, q in zip(a, b))
+            if same:
+                group.append(curve)
+                break
+        else:
+            groups.append([curve])
+    for group in groups:
+        if len(group) < 2:
+            continue
+        keep = max(group, key=lambda c: (weight.get(c.geo, 0), -c.geo))
+        out += [(keep.geo, c.geo) for c in group if c.geo != keep.geo]
+    return sorted(out, key=lambda pair: pair[1])
+
+
+def overlaps(lines, eps=EPS):
+    """Overlap for collinear lines (geo, start, end) that share more than ``eps`` of their length
+    and are not exact copies (duplicates() finds those)."""
+    out = []
+    for i in range(len(lines)):
+        ga, a0, a1 = lines[i]
+        length = _dist(a0, a1)
+        if length <= eps:
+            continue
+        ux, uy = (a1[0] - a0[0]) / length, (a1[1] - a0[1]) / length
+        for j in range(i + 1, len(lines)):
+            gb, b0, b1 = lines[j]
+            if (_same(a0, b0, eps) and _same(a1, b1, eps)) or (_same(a0, b1, eps) and _same(a1, b0, eps)):
+                continue
+            off = [abs((p[0] - a0[0]) * uy - (p[1] - a0[1]) * ux) for p in (b0, b1)]
+            if max(off) > eps:
+                continue  # not on a's line
+            t = sorted(((p[0] - a0[0]) * ux + (p[1] - a0[1]) * uy) for p in (b0, b1))
+            lo, hi = max(0.0, t[0]), min(length, t[1])
+            if hi - lo > eps:
+                mid = (lo + hi) / 2
+                out.append(Overlap(ga, gb, (a0[0] + ux * mid, a0[1] + uy * mid), hi - lo))
+    return out
+
+
 def has_problem(report):
-    """True when the profile has open ends (missing coincidences alone do not count)."""
-    return bool(report.open_ends)
+    """True when the profile has open ends, an edge drawn twice or overlapping lines (missing
+    coincidences and degenerated edges alone do not count: the wire still closes)."""
+    return bool(report.open_ends or report.duplicates or report.overlaps)
+
+
+def fixable(report):
+    """True when Close Gaps has something to do."""
+    return bool(report.fixes or report.duplicates or report.degenerate)
 
 
 def mm(value):
     """0.05 -> "0.05 mm", 1 -> "1 mm"."""
     text = f"{value:.3f}".rstrip("0").rstrip(".")
     return (text if text not in ("", "-0") else "0") + " mm"
+
+
+def _edge(geo, names=None):
+    return (names or {}).get(geo) or f"Edge {geo + 1}"
 
 
 def end_name(end, names=None):
@@ -206,6 +293,8 @@ def describe(report, names=None):
         if gaps:
             widest = max(f.distance for f in gaps)
             head += f", gap up to {mm(widest)}"
+    elif report.duplicates or report.overlaps:
+        head = "Edges on top of each other"
     else:
         head = "Profile is closed"
     lines = []
@@ -215,7 +304,16 @@ def describe(report, names=None):
     more = len(report.fixes) - MAX_LINES
     if more > 0:
         lines.append(f"… and {more} more")
+    for keep, drop in report.duplicates[:MAX_LINES]:
+        lines.append(f"{_edge(drop, names)} is a copy of {_edge(keep, names)}: delete it")
+    if len(report.duplicates) > MAX_LINES:
+        lines.append(f"… and {len(report.duplicates) - MAX_LINES} more copies")
+    if report.degenerate:
+        n = len(report.degenerate)
+        lines.append(f"{n} zero-length edge{'s' if n != 1 else ''}: delete")
     notes = []
+    for ov in report.overlaps[:MAX_LINES]:
+        notes.append(f"{_edge(ov.a, names)} and {_edge(ov.b, names)} overlap by {mm(ov.length)}")
     if report.unresolved:
         n = len(report.unresolved)
         notes.append(f"{n} end{'s' if n != 1 else ''} too far from any other to close")
@@ -225,10 +323,10 @@ def describe(report, names=None):
     return head, lines, "; ".join(notes)
 
 
-def signature(edges, links):
+def signature(edges, links, extra=()):
     """A key that changes when the sketch's geometry or joins change (for dismissals)."""
     rounded = tuple((g, round(s[0], 6), round(s[1], 6), round(e[0], 6), round(e[1], 6)) for g, s, e in edges)
-    return hash((rounded, tuple(sorted(tuple(map(tuple, link)) for link in links))))
+    return hash((rounded, tuple(sorted(tuple(map(tuple, link)) for link in links)), tuple(extra)))
 
 
 # ----- FreeCAD side ------------------------------------------------------------------------
@@ -275,13 +373,94 @@ def sketch_edges(sketch):
     return edges, links, names
 
 
-def profile_sketch(feature):
+def degenerate_geos(sketch):
+    """Geo indices Sketcher counts as degenerated (detectDegeneratedGeometries): a curve whose
+    parameter range is under the tolerance Sketcher's Validate sketch uses, Precision::Confusion()."""
+    tol = _confusion()
+    out = []
+    for i, geo in enumerate(sketch.Geometry):
+        first, last = getattr(geo, "FirstParameter", None), getattr(geo, "LastParameter", None)
+        if first is None or last is None:
+            continue
+        if abs(last - first) < tol:
+            out.append(i)
+    return out
+
+
+def _confusion():
+    import Part
+
+    return Part.Precision.confusion()
+
+
+def _curve(i, geo):
+    """Curve for duplicates(), or None (points, ellipses and closed B-splines are not compared)."""
+    kind = type(geo).__name__
+    if hasattr(geo, "StartPoint") and not (getattr(geo, "isPeriodic", None) and geo.isPeriodic()):
+        a, b = geo.StartPoint, geo.EndPoint
+        mid = geo.value((geo.FirstParameter + geo.LastParameter) / 2)
+        return Curve(i, kind, ((a.x, a.y), (b.x, b.y), (mid.x, mid.y)))
+    if kind == "Circle":
+        return Curve(i, kind, ((geo.Center.x, geo.Center.y), (geo.Radius, 0.0)))
+    return None
+
+
+def inspect(sketch, snap=None, max_gap=None):
+    """(report, names, signature) of a sketch: open ends and gap fixes, edges drawn twice, overlapping
+    lines and degenerated edges. Copies to drop and degenerated edges are left out of the gap analysis,
+    so its fixes still hold once they are deleted."""
+    if snap is None:
+        snap, max_gap = tolerances()
+    edges, links, names = sketch_edges(sketch)
+    degenerate = degenerate_geos(sketch)
+    weight = {}
+    for c in sketch.Constraints:
+        for geo in (c.First, c.Second, getattr(c, "Third", -2000)):
+            if geo is not None and geo >= 0:
+                weight[geo] = weight.get(geo, 0) + 1
+    construction = set()
+    for i in range(len(sketch.Geometry)):
+        try:
+            if sketch.getConstruction(i):
+                construction.add(i)
+        except Exception:
+            pass
+    curves = [c for c in (_curve(i, g) for i, g in enumerate(sketch.Geometry)
+                          if i not in construction and i not in degenerate) if c is not None]
+    dups = duplicates(curves, weight)
+    gone = set(degenerate) | {drop for _keep, drop in dups}
+    kept = [e for e in edges if e[0] not in gone]
+    report = analyse(kept, links, snap, max_gap)
+    lines = [(i, (g.StartPoint.x, g.StartPoint.y), (g.EndPoint.x, g.EndPoint.y))
+             for i, g in enumerate(sketch.Geometry)
+             if type(g).__name__ == "LineSegment" and i not in construction and i not in gone]
+    for i, g in enumerate(sketch.Geometry):
+        if i not in names and type(g).__name__ == "Circle":
+            names[i] = f"Circle {i + 1}"
+    report = report._replace(duplicates=tuple(dups), overlaps=tuple(overlaps(lines)), degenerate=tuple(degenerate))
+    return report, names, signature(edges, links, (tuple(dups), tuple(degenerate)))
+
+
+def profile_sketches(feature):
+    """The sketches a feature's profile is made of: its Profile, then its loft or sweep Sections."""
+    out = []
+
+    def add(obj):
+        if obj is not None and getattr(obj, "TypeId", "") == "Sketcher::SketchObject" and obj not in out:
+            out.append(obj)
+
     profile = getattr(feature, "Profile", None)
     if isinstance(profile, (tuple, list)):
         profile = profile[0] if profile else None
-    if profile is not None and getattr(profile, "TypeId", "") == "Sketcher::SketchObject":
-        return profile
-    return None
+    add(profile)
+    for section in list(getattr(feature, "Sections", None) or []):
+        add(section[0] if isinstance(section, (tuple, list)) else section)
+    return out
+
+
+def profile_sketch(feature):
+    sketches = profile_sketches(feature)
+    return sketches[0] if sketches else None
 
 
 def in_error(obj):
@@ -294,20 +473,31 @@ def in_error(obj):
         return False
 
 
-def check_feature(feature, snap=None, max_gap=None):
-    """(sketch, report, names, signature) when ``feature`` fails on an open profile, else None."""
-    if getattr(feature, "TypeId", "") not in FEATURE_TYPES or not in_error(feature):
-        return None
-    sketch = profile_sketch(feature)
-    if sketch is None:
-        return None
+def problem_sketches(feature, snap=None, max_gap=None):
+    """[(sketch, report, names, signature)] of the feature's profile sketches that have a problem."""
     if snap is None:
         snap, max_gap = tolerances()
-    edges, links, names = sketch_edges(sketch)
-    report = analyse(edges, links, snap, max_gap)
-    if not has_problem(report):
+    out = []
+    for sketch in profile_sketches(feature):
+        report, names, sig = inspect(sketch, snap, max_gap)
+        if has_problem(report):
+            out.append((sketch, report, names, sig))
+    return out
+
+
+def check_feature(feature, snap=None, max_gap=None):
+    """(sketch, report, names, signature) when ``feature`` fails on an open profile, else None.
+    With several bad sketches (a loft's sections) the first is given."""
+    if getattr(feature, "TypeId", "") not in FEATURE_TYPES or not in_error(feature):
         return None
-    return sketch, report, names, signature(edges, links)
+    found = problem_sketches(feature, snap, max_gap)
+    return found[0] if found else None
+
+
+def check_sketch(sketch, snap=None, max_gap=None):
+    """(sketch, report, names, signature) when ``sketch`` has a problem, else None (Check Profile)."""
+    report, names, sig = inspect(sketch, snap, max_gap)
+    return (sketch, report, names, sig) if has_problem(report) else None
 
 
 def apply_fixes(sketch, fixes):
@@ -332,33 +522,67 @@ def apply_fixes(sketch, fixes):
     return sketch.solve()
 
 
-def close_gaps(feature):
-    """Fix ``feature``'s profile in one undo step. Returns (ok, message)."""
-    found = check_feature(feature)
-    if found is None:
-        return True, "Nothing to close"
-    sketch, report, _names, _sig = found
-    if not report.fixes:
+def repair(sketch, report):
+    """Apply a report to a sketch: the gap fixes (their indices are from before any deletion), then delete
+    the copies and Sketcher's degenerated edges. Returns the solver's result (0 = solved)."""
+    result = apply_fixes(sketch, report.fixes) if report.fixes else 0
+    drops = sorted({drop for _keep, drop in report.duplicates})
+    if drops:
+        sketch.delGeometries(drops)
+    if report.degenerate:
+        sketch.removeDegeneratedGeometries(_confusion())
+    if drops or report.degenerate:
+        result = sketch.solve()
+    return result
+
+
+def _repair_all(doc, found):
+    """Repair each (sketch, report, ...) in one undo step. Returns (ok, message)."""
+    todo = [(sketch, report) for sketch, report, *_rest in found if fixable(report)]
+    if not todo:
         return False, "No gap is small enough to close"
-    doc = feature.Document
     own = not doc.HasPendingTransaction
     if own:
         doc.openTransaction(TRANSACTION)
     try:
-        result = apply_fixes(sketch, report.fixes)
+        results = [repair(sketch, report) for sketch, report in todo]
     except Exception as exc:
         if own:
             doc.abortTransaction()
         return False, f"Could not close the gaps: {exc}"
-    if result != 0 and own:
+    if any(r != 0 for r in results) and own:
         doc.abortTransaction()
         doc.recompute()
         return False, "The sketch's constraints do not allow it; open the sketch to fix it"
     doc.recompute()
     if own:
         doc.commitTransaction()
-    n = len(report.fixes)
-    return True, f"Closed {n} gap{'s' if n != 1 else ''}"
+    n = sum(len(r.fixes) for _s, r in todo)
+    copies = sum(len(r.duplicates) + len(r.degenerate) for _s, r in todo)
+    parts = []
+    if n:
+        parts.append(f"closed {n} gap{'s' if n != 1 else ''}")
+    if copies:
+        parts.append(f"deleted {copies} extra edge{'s' if copies != 1 else ''}")
+    return True, (" and ".join(parts) or "repaired").capitalize()
+
+
+def close_gaps(feature):
+    """Fix every bad sketch of ``feature``'s profile in one undo step. Returns (ok, message)."""
+    if getattr(feature, "TypeId", "") not in FEATURE_TYPES or not in_error(feature):
+        return True, "Nothing to close"
+    found = problem_sketches(feature)
+    if not found:
+        return True, "Nothing to close"
+    return _repair_all(feature.Document, found)
+
+
+def close_sketch(sketch):
+    """Fix ``sketch`` (Check Profile) in one undo step. Returns (ok, message)."""
+    found = check_sketch(sketch)
+    if found is None:
+        return True, "Nothing to close"
+    return _repair_all(sketch.Document, [found])
 
 
 # ----- the card ---------------------------------------------------------------------------
@@ -462,26 +686,34 @@ def _make_card_class():
             return False
 
         def show_problem(self, feature, sketch, report, names, sig):
+            """``feature`` None: Check Profile on the sketch itself (keyed by the sketch)."""
             import FreeCADGui
 
-            self.key = (feature.Document.Name, feature.Name)
+            owner = feature if feature is not None else sketch
+            self.key = (owner.Document.Name, owner.Name)
+            self.sketch_name = sketch.Name
             self.sig = sig
-            self.feature_label = feature.Label
+            self.feature_label = owner.Label
             head, lines, note = describe(report, names)
-            self.title.setText(f"{feature.Label} fails: {sketch.Label} is open")
+            if feature is None:
+                self.title.setText(f"{sketch.Label}: the profile will not close")
+            elif report.open_ends:
+                self.title.setText(f"{feature.Label} fails: {sketch.Label} is open")
+            else:
+                self.title.setText(f"{feature.Label} fails: {sketch.Label} has edges on top of each other")
             self.body.setText(head + ("\n" + "\n".join("• " + line for line in lines) if lines else ""))
             self.note.setText(note)
             self.note.setVisible(bool(note))
-            self.fix_button.setEnabled(bool(report.fixes))
+            self.fix_button.setEnabled(fixable(report))
             self.fix_button.setToolTip(
-                "Adds the constraints and lines listed, as one undo step"
-                if report.fixes
+                "Adds the constraints and lines and deletes the copies listed, as one undo step"
+                if fixable(report)
                 else "No two ends are close enough; open the sketch to fix it"
             )
             busy = FreeCADGui.Control.activeDialog()
             self.open_button.setEnabled(not busy)
             self.open_button.setToolTip(
-                f"Finish or cancel the {feature.Label} dialog first" if busy else f"Edit {sketch.Label}"
+                f"Finish or cancel the {owner.Label} dialog first" if busy else f"Edit {sketch.Label}"
             )
             self.adjustSize()
             self.place()
@@ -507,7 +739,16 @@ def _make_card_class():
                 from pivy import coin
 
                 placement = sketch.getGlobalPlacement()
-                points = [placement.multVec(FreeCAD.Vector(e.xy[0], e.xy[1], 0)) for e in report.open_ends]
+                spots = [e.xy for e in report.open_ends] + [ov.xy for ov in report.overlaps]
+                for _keep, drop in report.duplicates:
+                    geo = sketch.Geometry[drop]
+                    mid = geo.value((geo.FirstParameter + geo.LastParameter) / 2) if hasattr(geo, "FirstParameter") \
+                        else getattr(geo, "Center", None)
+                    if mid is not None:
+                        spots.append((mid.x, mid.y))
+                points = [placement.multVec(FreeCAD.Vector(x, y, 0)) for x, y in spots]
+                if not points:
+                    return
                 root = coin.SoSeparator()
                 pick = coin.SoPickStyle()
                 pick.style = coin.SoPickStyle.UNPICKABLE
@@ -542,11 +783,20 @@ def _make_card_class():
                 return None
             return FreeCAD.getDocument(self.key[0]).getObject(self.key[1])
 
+        def sketch(self):
+            obj = self.feature()
+            if obj is None:
+                return None
+            return obj.Document.getObject(getattr(self, "sketch_name", "")) or profile_sketch(obj)
+
         def close_gaps(self):
             feature = self.feature()
             if feature is None:
                 return self.hide_card()
-            ok, message = close_gaps(feature)
+            if feature.TypeId == "Sketcher::SketchObject":
+                ok, message = close_sketch(feature)
+            else:
+                ok, message = close_gaps(feature)
             _status(message)
             if ok:
                 self.hide_card()
@@ -558,8 +808,7 @@ def _make_card_class():
         def open_sketch(self):
             import FreeCADGui
 
-            feature = self.feature()
-            sketch = profile_sketch(feature) if feature is not None else None
+            sketch = self.sketch()
             if sketch is None:
                 return self.hide_card()
             try:
@@ -602,7 +851,6 @@ def card():
 
 def _check():
     """After a recompute: show, update or hide the card."""
-    global _card, _card_class
     import FreeCAD
 
     keys = list(_pending)
@@ -630,10 +878,16 @@ def _check():
         shown = (feature, found)
     if shown is None:
         return
-    feature, (sketch, report, names, sig) = shown
-    view = _view_widget(feature.Document.Name)
+    _show(*shown)
+
+
+def _show(feature, found):
+    """Put the card on the active 3D view of the document. Returns the card, or None (no 3D view)."""
+    global _card, _card_class
+    sketch, report, names, sig = found
+    view = _view_widget(sketch.Document.Name)
     if view is None:
-        return
+        return None
     if _card_class is None:
         _card_class = _make_card_class()
     if not _alive(_card) or _card.parentWidget() is not view:
@@ -642,6 +896,61 @@ def _check():
             _card.deleteLater()
         _card = _card_class(view)
     _card.show_problem(feature, sketch, report, names, sig)
+    return _card
+
+
+def chosen_sketches():
+    """The sketches Check Profile looks at: selected sketches, the profile sketches of selected features,
+    else the sketch being edited."""
+    import FreeCADGui
+
+    out = []
+    for obj in FreeCADGui.Selection.getSelection():
+        for sketch in ([obj] if obj.TypeId == "Sketcher::SketchObject" else profile_sketches(obj)):
+            if sketch not in out:
+                out.append(sketch)
+    if not out:
+        gui_doc = FreeCADGui.ActiveDocument
+        vp = gui_doc.getInEdit() if gui_doc is not None else None
+        obj = getattr(vp, "Object", None)
+        if obj is not None and obj.TypeId == "Sketcher::SketchObject":
+            out.append(obj)
+    return out
+
+
+def check_profile(sketches=None):
+    """Check Profile: the card for the first chosen sketch with a problem. Returns that
+    (sketch, report, names, signature), or None when every profile closes (said in the status bar)."""
+    sketches = chosen_sketches() if sketches is None else list(sketches)
+    if not sketches:
+        _status("Select a sketch or a feature made from one, or edit a sketch")
+        return None
+    for sketch in sketches:
+        found = check_sketch(sketch)
+        if found is not None:
+            _show(None, found)
+            return found
+    names = ", ".join(s.Label for s in sketches)
+    _status(f"{names}: the profile closes (no open ends, copies or overlaps)")
+    return None
+
+
+class _CheckCommand:
+    def GetResources(self):
+        import os
+
+        return {"Pixmap": os.path.join(os.path.dirname(os.path.abspath(__file__)), ICON),
+                "MenuText": "Check Profile",
+                "ToolTip": "Find the open ends, gaps, edges drawn twice and overlapping lines of the selected "
+                           "sketch (or the one being edited) and offer to close them. Nothing changes without a click."}
+
+    def IsActive(self):
+        import FreeCAD
+
+        return FreeCAD.ActiveDocument is not None
+
+    def Activated(self):
+        check_profile()
 
 
 def _queue(obj):
@@ -666,6 +975,8 @@ class _DocObserver:
             _card.hide_card()
 
     def slotDeletedDocument(self, doc):
+        for key in [k for k in _dismissed if k[0] == doc.Name]:
+            del _dismissed[key]  # a file opened again under the same name starts fresh
         if _alive(_card) and _card.key and _card.key[0] == doc.Name:
             _card.hide_card()
 
@@ -708,3 +1019,11 @@ def install():
     _group = FreeCAD.ParamGet(PREFS_PATH)  # keep the handle: a collected wrapper detaches
     _prefs_observer = _PrefObserver()
     _group.Attach(_prefs_observer)
+    _add_command()
+
+
+def _add_command():
+    import FreeCADGui
+
+    if COMMAND not in FreeCADGui.listCommands():
+        FreeCADGui.addCommand(COMMAND, _CheckCommand())

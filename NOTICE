@@ -38,6 +38,21 @@ share/doc/BruceWorx/third-party/ (details in package/bruceworx/vendor/VENDOR.txt
     headers. Installed as Mod/SheetMetal.
   * networkx 3.5, BSD-3-Clause (for SheetMetal's unfolder).
 
+Code parts (build123d and CadQuery scripts as parametric parts) use packages
+from the build environment that are copied into the application. Their
+licence texts are in package/bruceworx/vendor/third-party/, and the full list
+of the 41 packages with versions is in package/bruceworx/vendor/VENDOR.txt:
+
+  * build123d 0.9.1, CadQuery 2.7.0, OCP 7.8.1.2 (the Python binding of
+    Open CASCADE they model with) and ocpsvg 0.5.0: Apache-2.0.
+  * lib3mf 2.4.1 and its Python package: BSD-2-Clause.
+  * CasADi 3.7.2 (used by CadQuery): LGPL-3.0-or-later.
+  * NLopt 2.11.0 (used by CadQuery): LGPL-2.1-or-later.
+  * ezdxf 1.4.2, svgpathtools 1.8.0, svgelements 1.9.6, trianglesolver 1.2,
+    runtype 0.5.3, path 17.1.1 and others: MIT.
+  * IPython 8.37.0 with its dependencies, and the trame packages: BSD-3-Clause,
+    BSD-2-Clause, MIT, ISC and Apache-2.0, package by package as listed.
+
 Source code
 -----------
 The complete corresponding source code, including all modifications, is

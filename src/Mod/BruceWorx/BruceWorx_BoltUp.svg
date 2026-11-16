@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- a plate bolted to a block: two screws through it -->
+  <rect x="4" y="40" width="56" height="20" rx="2" fill="#8f9bab" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="4" y="28" width="56" height="12" rx="2" fill="#c2cad5" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="11" y="18" width="14" height="10" rx="2" fill="#4a90d9" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="15" y="28" width="6" height="22" fill="#4a90d9" stroke="#2b2f36" stroke-width="1.6"/>
+  <rect x="39" y="18" width="14" height="10" rx="2" fill="#4a90d9" stroke="#2b2f36" stroke-width="2"/>
+  <rect x="43" y="28" width="6" height="22" fill="#4a90d9" stroke="#2b2f36" stroke-width="1.6"/>
+  <path d="M32 3 L32 14 M27 9 L32 14 L37 9" fill="none" stroke="#2e8b57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

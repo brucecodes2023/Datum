@@ -5,7 +5,8 @@ Mass report: walks an assembly (links, sub-assemblies, link arrays, routed wires
 quantity, where its mass comes from, its mass and share, then the totals, the centre of gravity and the inertia
 about the CG and about the origin. A part's mass comes, in this order, from MeasuredMass, DatasheetMass, a body's
 MassOverride, then volume times density (bruceworx/partprops.py). With a typed mass the centre of mass is the
-shape's centroid and the inertia is the shape's scaled to that mass. A routed wire brings its own mass (ROU-02).
+part's MeasuredCG / DatasheetCG when it has one (ROB-06: a point in the part's frame, beside the mass it goes with),
+else the shape's centroid; the inertia is the shape's scaled to that mass. A routed wire brings its own mass (ROU-02).
 
 Drone balance: a motor part carries ``ThrustAxis`` (direction of thrust in the part's frame) and ``ThrustTable``
 (path of a CSV: throttle %, thrust g, current A, voltage V); a battery part may carry ``CapacitymAh``. The motor's
@@ -114,8 +115,54 @@ def _part_instance(top, names, c, target):
     mass = result.mass if result.has_mass else 0.0
     centre = result.centre if result.centre is not None else (0.0, 0.0, 0.0)
     tensor = result.tensor if result.tensor is not None else bp.ZERO
-    return Instance(target, target.Label, mass, centre, tensor, _source_of(owners, typed), missing,
-                    _rotation(top, names, c))
+    rotation = _rotation(top, names, c)
+    if typed and result.centre is not None:
+        centre = _typed_centre(target, typed[1], centre, rotation)
+    return Instance(target, target.Label, mass, centre, tensor, _source_of(owners, typed), missing, rotation)
+
+
+TYPED_CG = {"measured": "MeasuredCG", "datasheet": "DatasheetCG"}  # beside MeasuredMass / DatasheetMass (ROB-06)
+
+
+def typed_cg(target, source):
+    """The part's own centre of gravity for its typed mass (mm, in the part's frame), or None: MeasuredCG goes with
+    MeasuredMass, DatasheetCG with DatasheetMass. A CG of the other kind is not used (it belongs to the other mass)."""
+    name = TYPED_CG.get(source)
+    if not name or name not in getattr(target, "PropertiesList", ()):
+        return None
+    v = getattr(target, name)
+    return (v.x, v.y, v.z)
+
+
+def _typed_centre(target, source, centre, rotation):
+    """Where the typed mass sits: the part's typed CG carried into the assembly, else the shape's centroid
+    (``centre``). The typed CG is moved by how far it lies from the shape's own centroid in the part's frame, so the
+    occurrence's placement (links, sub-assemblies) applies to it as it does to the shape. The inertia stays the
+    shape's, scaled to the mass, about the new centre."""
+    cg = typed_cg(target, source)
+    if cg is None:
+        return centre
+    try:
+        import FreeCAD
+        import Part
+
+        local = Part.getShape(target, transform=False)
+        solids = local.Solids
+        volume = sum(s.Volume for s in solids)
+        if volume <= 0:
+            return centre
+        mid = FreeCAD.Vector()
+        for s in solids:
+            mid += s.CenterOfMass * (s.Volume / volume)
+        shift = FreeCAD.Vector(*cg) - mid
+        if rotation is not None:
+            shift = rotation.multVec(shift)
+        return (centre[0] + shift.x, centre[1] + shift.y, centre[2] + shift.z)
+    except Exception as exc:  # noqa: BLE001 -- the centroid then, as before
+        import FreeCAD
+
+        FreeCAD.Console.PrintLog(f"BruceWorx mass report: {target.Label}: typed CG not used: {exc}\n")
+        return centre
 
 
 def _wire_instance(top, names, c):

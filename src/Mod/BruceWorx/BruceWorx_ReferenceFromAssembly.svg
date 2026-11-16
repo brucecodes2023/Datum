@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Reference from Assembly: a hole edge of the neighbouring part (grey) is brought into the edited part (blue). -->
+  <g stroke="#4a5a70" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M4 16 L22 7 L40 16 L22 25 Z" fill="#e3e8ef"/>
+    <ellipse cx="22" cy="16" rx="6" ry="3" fill="#ffffff"/>
+  </g>
+  <g stroke="#1f3a5f" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M14 44 L36 33 L58 44 L36 55 Z" fill="#8fc0ee"/>
+  </g>
+  <ellipse cx="36" cy="44" rx="6" ry="3" fill="none" stroke="#c9771f" stroke-width="3"/>
+  <path d="M27 21 L33 38" stroke="#c9771f" stroke-width="3" stroke-dasharray="4 3" stroke-linecap="round"/>
+  <path d="M28.5 35 L34 41 L36 33" fill="none" stroke="#c9771f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

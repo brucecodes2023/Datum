@@ -169,6 +169,104 @@ class GravitySwitchTests(unittest.TestCase):
             App.closeDocument(doc.Name)
 
 
+def along(path, point, samples=4000):
+    """Distance along ``path``'s drawn route to the sample nearest ``point``."""
+    pts = path.Shape.Wires[0].discretize(Number=samples)
+    s, best, at = 0.0, None, 0.0
+    for k, p in enumerate(pts):
+        if k:
+            s += (p - pts[k - 1]).Length
+        d = (p - point).Length
+        if best is None or d < best:
+            best, at = d, s
+    return at, best
+
+
+class ClipAndProxyTests(unittest.TestCase):
+    """Clips hold a wire on its route (T1X2 harness, 14 Nov 2026: clipped wires all came out taut), and a
+    part whose box holds the route is no obstacle to it (leads laid in arm grooves were pushed out of them)."""
+
+    def setUp(self):
+        self.doc = App.newDocument("BWRopeClips")
+        br.reset_prefs()  # gravity off: only length, bend limit and contacts
+
+    def tearDown(self):
+        App.closeDocument(self.doc.Name)
+
+    def clipped(self, at):
+        """A 22 AWG wire (0, 0, 0) -> (100, 0, 0) -> (100, 100, 0), no slack, with a clip on each x position in ``at``:
+        a 1 mm tie whose corner is on the route."""
+        attachments, pts = [], [(0, 0, 0)]
+        for k, x in enumerate(at, start=1):
+            tie = self.doc.addObject("Part::Box", f"Tie{k}")
+            tie.Length = tie.Width = tie.Height = 1.0
+            tie.Placement.Base = V(x, -1, -1)
+            self.doc.recompute()
+            pts.append((x, 0, 0))
+            attachments.append((k, tie, vertex_named(tie, V(0, 1, 1))))
+        pts += [(100, 0, 0), (100, 100, 0)]
+        path = br.make_path(pts, self.doc, mode="Polyline", radius=20.0, attachments=attachments)
+        self.doc.recompute()
+        wire = br.make_wire(path, gauge="22 AWG", slack=0)
+        self.doc.recompute()
+        return path, wire
+
+    def test_clips_keep_the_route_length_between_them(self):
+        """A clip is pinned at its node's own station on the route, so each span keeps the route's length."""
+        path, wire = self.clipped([23.0, 61.0])
+        item = brope.RopeItem(wire)
+        x = [V(*p) for p in wire.RopePoints]
+        nodes = list(wire.ClipNodes)
+        self.assertEqual(len(nodes), 2)
+        l0 = item.l0()
+        for node in nodes:
+            s, off = along(path, x[node])
+            self.assertLess(off, 0.05)  # the pinned node is on the route
+        s0, _ = along(path, x[nodes[0]])
+        s1, _ = along(path, x[nodes[1]])
+        self.assertAlmostEqual(s1 - s0, (nodes[1] - nodes[0]) * l0, delta=0.02 * l0)
+        for node, clip in zip(nodes, (23.0, 61.0)):
+            self.assertLess(abs(x[node].x - clip), l0 / 2 + 1e-6)  # within half a segment of the clip
+        self.assertFalse(wire.Taut, wire.Problems)
+        self.assertTrue(wire.BendOK)
+
+    def test_clip_next_to_another_holds_no_node(self):
+        """Two clips a millimetre apart: the second would leave one free node between two held ones, whose bend
+        the lengths alone set, so it holds no node (-1) and the wire still solves."""
+        _path, wire = self.clipped([23.0, 24.0])
+        nodes = list(wire.ClipNodes)
+        self.assertEqual(len(nodes), 2)
+        self.assertGreaterEqual(nodes[0], 0)
+        self.assertEqual(nodes[1], -1)
+        self.assertFalse(wire.Taut, wire.Problems)
+        self.assertTrue(wire.BendOK)
+
+    def obstacles(self):
+        path = br.make_path([(0, 0, 0), (100, 0, 0)], self.doc, mode="Polyline", radius=20.0)
+        groove = self.doc.addObject("Part::Box", "Groove")  # the route runs through it, as a lead in an arm groove
+        groove.Length, groove.Width, groove.Height = 40.0, 10.0, 6.0
+        groove.Placement.Base = V(20, -5, -3)
+        wall = self.doc.addObject("Part::Box", "Wall")  # beside the route: a real obstacle
+        wall.Length, wall.Width, wall.Height = 20.0, 4.0, 6.0
+        wall.Placement.Base = V(40, 3, -3)
+        self.doc.recompute()
+        wire = br.make_wire(path, gauge="22 AWG", slack=0)
+        self.doc.recompute()
+        return {r[0].Name: r for r in brope.RopeItem(wire).neighbour_records()}
+
+    def test_proxy_box_is_where_the_part_is(self):
+        """A plain feature's Shape already carries its Placement: the box must not apply it twice."""
+        records = self.obstacles()
+        _child, center, _axes, half, _g = records["Wall"]
+        self.assertEqual([round(float(c), 6) for c in center], [50.0, 5.0, 0.0])
+        self.assertEqual([round(float(h), 6) for h in half], [10.0, 2.0, 3.0])
+
+    def test_box_holding_the_route_is_no_obstacle(self):
+        records = self.obstacles()
+        self.assertNotIn("Groove", records)
+        self.assertIn("Wall", records)
+
+
 class RopeDragTests(unittest.TestCase):
     """A base, an arm swung on a revolute joint, a wire from the base to the arm tip."""
 

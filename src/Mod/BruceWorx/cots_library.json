@@ -1,0 +1,101 @@
+{
+ "schema": "bruceworx.cots-library",
+ "version": 1,
+ "note": "Bought parts (roadmap ROB-01). Every number names the source it was read from. checked is true only when the number was read from the maker's own drawing or datasheet; false means it came from a listing, a general guide or a search excerpt and must be confirmed (or measured) before it is relied on. A number nobody could source is left out, never guessed. Lengths mm, masses g. Frame: the origin is the centre of the hole pattern on the mounting face, +Z points into the part, X and Y along the pattern.",
+ "sources": {
+  "pololu-2267": {
+   "title": "Pololu, Stepper Motor: Bipolar, 200 Steps/Rev, 42x38mm, 2.8V, 1.7 A/Phase (item 2267), product page text",
+   "url": "https://www.pololu.com/product/2267",
+   "read": "2026-11-12",
+   "how": "search excerpt of the seller's page; the dimension drawing on that page is an image and was not read"
+  },
+  "designparams-nema17": {
+   "title": "designparams.com, NEMA 17 frame table (42.3 x 42.3, bolt spacing 31.0, pilot 22.0, shaft 5.0, M3)",
+   "url": "https://designparams.com/parts/motors/nema-17/",
+   "read": "2026-11-12",
+   "how": "search excerpt of a general reference, not NEMA ICS 16 itself and not a maker's drawing"
+  },
+  "mosaic-nema17": {
+   "title": "Mosaic Industries, NEMA 17 stepper motor specifications (mounting holes take 3 mm, 0.5 mm pitch screws)",
+   "url": "http://www.mosaic-industries.com/embedded-systems/microcontroller-projects/stepper-motors/specifications",
+   "read": "2026-11-12",
+   "how": "search excerpt"
+  },
+  "emax-eco2-2207-listings": {
+   "title": "EMAX ECO II 2207 brushless motor: retailer listings (ReadyMadeRC, AMain Hobbies) and the maker's page",
+   "url": "https://www.emax-usa.com/motor-detail-dark.html?motor=eco-ii-2207",
+   "also": ["https://www.readymaderc.com/products/details/EMAX-ECO-II-2207-Brushless-Motor-2400KV",
+            "https://www.amainhobbies.com/emax-eco-ii-brushless-2207-motor-2400kv-emx-eco222072400/p1340327"],
+   "read": "2026-11-12",
+   "how": "search excerpts of listings; no maker's drawing was read. Listings disagree on length (33.2 and 33.1) and mass (33.5 and 33.4 g)"
+  },
+  "sp01-1404": {
+   "title": "SP-01 mapping drone repository, cad/generator/sp01_parts.py motor_1404: 'Holybro Ripper 1404 listing: D18.2 x 17.7 mm, 9 g with wires, M2 9x9, 1.5 mm shaft'",
+   "url": "",
+   "read": "2026-11-12",
+   "how": "copied from the project's own note of a listing; the listing itself was not re-read. The note warns that some 1404 motors use a 12 mm or 6.6 mm pattern and a 1.2 mm shaft"
+  }
+ },
+ "parts": [
+  {
+   "key": "nema17-42x38",
+   "name": "Stepper motor NEMA 17, 42 x 38 mm",
+   "category": "motor",
+   "manufacturer": "Pololu (SOYO SY42STH38-1684A class)",
+   "mpn": "Pololu 2267",
+   "mass_g": {"value": 285, "source": "pololu-2267", "checked": false},
+   "geometry": {
+    "shape": "box",
+    "size": {"value": [42.3, 42.3, 38.0], "source": "pololu-2267", "checked": false},
+    "note": "Frame only: the shaft length, the pilot boss height and the hole depth were not found in a source, so they are not drawn."
+   },
+   "mount": {
+    "pattern": "square",
+    "pitch": {"value": [31.0, 31.0], "source": "designparams-nema17", "checked": false},
+    "thread": {"value": "M3", "source": "mosaic-nema17", "checked": false},
+    "holes_are": "tapped in the part",
+    "pilot_diameter": {"value": 22.0, "source": "designparams-nema17", "checked": false},
+    "shaft_diameter": {"value": 5.0, "source": "pololu-2267", "checked": false}
+   }
+  },
+  {
+   "key": "emax-eco2-2207",
+   "name": "Brushless motor EMAX ECO II 2207",
+   "category": "motor",
+   "manufacturer": "EMAX",
+   "mpn": "ECO II 2207",
+   "mass_g": {"value": 33.5, "source": "emax-eco2-2207-listings", "checked": false, "note": "without wires"},
+   "geometry": {
+    "shape": "cylinder",
+    "size": {"value": [27.5, 33.2], "source": "emax-eco2-2207-listings", "checked": false},
+    "note": "Envelope only (diameter x length as listed). Whether the 33.2 mm includes the prop shaft is not stated."
+   },
+   "mount": {
+    "pattern": "square",
+    "pitch": {"value": [16.0, 16.0], "source": "emax-eco2-2207-listings", "checked": false},
+    "thread": {"value": "M3", "source": "emax-eco2-2207-listings", "checked": false},
+    "holes_are": "tapped in the part"
+   }
+  },
+  {
+   "key": "motor-1404-9x9",
+   "name": "Brushless motor 1404 (Holybro Ripper class), 9 x 9 M2",
+   "category": "motor",
+   "manufacturer": "",
+   "mpn": "1404-3800KV",
+   "mass_g": {"value": 9.0, "source": "sp01-1404", "checked": false, "note": "with wires"},
+   "geometry": {
+    "shape": "cylinder",
+    "size": {"value": [18.2, 17.7], "source": "sp01-1404", "checked": false},
+    "note": "Envelope only."
+   },
+   "mount": {
+    "pattern": "square",
+    "pitch": {"value": [9.0, 9.0], "source": "sp01-1404", "checked": false},
+    "thread": {"value": "M2", "source": "sp01-1404", "checked": false},
+    "holes_are": "tapped in the part",
+    "shaft_diameter": {"value": 1.5, "source": "sp01-1404", "checked": false}
+   }
+  }
+ ]
+}

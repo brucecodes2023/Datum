@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Construction point: a point on a sheet, with cross hairs, in the colours of BruceWorx_Plane.svg. -->
+  <path d="M4 38 L26 22 L60 30 L38 48 Z" fill="#f6d98a" fill-opacity="0.55" stroke="#b08a1e" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4 3"/>
+  <path d="M32 12 L32 56 M12 35 L52 35" stroke="#1f3a5f" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="32" cy="35" r="8" fill="#f2b632" stroke="#7a5a08" stroke-width="2.5"/>
+  <circle cx="32" cy="35" r="2.5" fill="#1f3a5f"/>
+</svg>

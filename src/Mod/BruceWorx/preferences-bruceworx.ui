@@ -638,7 +638,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="SketchRepair">
         <property name="toolTip">
-         <string>When a Pad, Pocket, Revolution or Groove fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing changes without a click.</string>
+         <string>When a Pad, Pocket, Revolution, Groove, Loft, Pipe or Helix fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing changes without a click.</string>
         </property>
         <property name="text">
          <string>Offer to close the gaps of an open sketch profile</string>
@@ -862,12 +862,31 @@
        </widget>
       </item>
       <item>
-       <widget class="Gui::PrefCheckBox" name="OffsetPlane">
+       <widget class="Gui::PrefCheckBox" name="RibStations">
         <property name="toolTip">
-         <string>Construct &gt; Plane with a datum plane, an origin plane or a flat face selected makes a plane offset from it and asks for the distance and direction (its normal, or the X, Y or Z axis). Off: the button always opens FreeCAD's attachment panel.</string>
+         <string>Construct &gt; Rib Stations repeats the selected sketch along its normal as scaled rib sections on their own planes, with a loft through them. Span, rib count and taper are rows of the Parameters sheet, and the ribs follow the root sketch. Off: the command is greyed and a changed rib count no longer adds or removes stations. Takes effect at the next start.</string>
         </property>
         <property name="text">
-         <string>Plane makes an offset plane from a selected plane or face</string>
+         <string>Rib stations (a sketch repeated on offset planes, from the Parameters sheet)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>RibStations</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="OffsetPlane">
+        <property name="toolTip">
+         <string>Construct &gt; Plane with a plane or a flat face selected makes a plane offset from it and asks for the distance, direction and count; with two parallel ones selected it makes the plane halfway between. Axis and Point make the datum the selection best gives (a cylinder's axis, the line through two points, a circle's centre) at once. Off: the buttons always open FreeCAD's attachment panel.</string>
+        </property>
+        <property name="text">
+         <string>Plane, Axis and Point make a datum from the selection</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -893,6 +912,291 @@
         </property>
         <property name="prefEntry" stdset="0">
          <cstring>NewDocumentChooser</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="PrintPrep">
+        <property name="toolTip">
+         <string>Place on Bed, Print Prep, Export 3MF and Send to Slicer: a part keeps the way it prints (which face is on the bed), and goes to the slicer as a 3MF plate in that orientation. Off: those commands are inactive.</string>
+        </property>
+        <property name="text">
+         <string>3D-print prep (print orientation, 3MF plate, send to slicer)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>PrintPrep</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="DirectEdit">
+        <property name="toolTip">
+         <string>Modify &gt; Offset Face, Edit Hole and Delete Face change an imported solid that has no features: each edit is a step in the tree on top of the solid. Off: the three commands are greyed out.</string>
+        </property>
+        <property name="text">
+         <string>Direct edit on imported solids (offset face, edit hole, delete face)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>DirectEdit</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="CotsLibrary">
+        <property name="toolTip">
+         <string>Insert a bought part (motor, stepper) from the library with its mounting frame, make the matching holes on a face, and join the two. Every number in the library names its source. Off: the commands are inactive.</string>
+        </property>
+        <property name="text">
+         <string>Bought parts library (insert with mounting frame, mounting holes)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>CotsLibrary</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="TopDownUsedIn">
+        <property name="toolTip">
+         <string>Column D of the Parameters sheet lists what reads each value, across open files, and follows edits. Off: Check References still fills it.</string>
+        </property>
+        <property name="text">
+         <string>Parameters sheet: keep the Used in column up to date</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>TopDownUsedIn</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="InContext">
+        <property name="toolTip">
+         <string>Edit a part in place inside the assembly and reference other parts' edges and faces; the References window updates, locks or breaks them. Off: the commands are inactive.</string>
+        </property>
+        <property name="text">
+         <string>In-context editing (Edit in Context, Reference from Assembly)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>InContext</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="MatingCommands">
+        <property name="toolTip">
+         <string>Bolt Up puts a screw of the right size and length in every free hole of a part and joints it. Infer Mates turns parts placed by coordinates into joints and lists what it could not mate. Off: the commands are inactive.</string>
+        </property>
+        <property name="text">
+         <string>Bolt Up and Infer Mates</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>MatingCommands</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="Surfacing">
+        <property name="toolTip">
+         <string>Parametric surface features and the G0/G1/G2 continuity check. Off: the commands are inactive.</string>
+        </property>
+        <property name="text">
+         <string>Surfacing tools (Trim, Extend, Stitch, Thicken, Patch, Continuity)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>Surfacing</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="Worksheet">
+        <property name="toolTip">
+         <string>Design worksheets (.bwsheet): text, LaTeX math and calculations with units that read the model's Parameters sheet and write results back (=&gt; Parameters), with output files that follow the model. Takes effect at the next start.</string>
+        </property>
+        <property name="text">
+         <string>Design worksheets (New Worksheet, Open Worksheet)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>Worksheet</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="PartFiles">
+        <property name="toolTip">
+         <string>Make External turns a body modelled inside an assembly or a multi-body file into its own part file, linked in place. Repair Links finds moved part files by name. Flexible Sub-assembly switches a sub-assembly between rigid and flexible. Takes effect at the next start.</string>
+        </property>
+        <property name="text">
+         <string>Part files: Make External, Repair Links, Flexible Sub-assembly</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>PartFiles</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="RepairLinksOnOpen">
+        <property name="toolTip">
+         <string>When a file opens with links whose part files are not where the link says, look for each file by name under the file's folder, point the link at it, and say what was changed. Nothing is saved until you save.</string>
+        </property>
+        <property name="text">
+         <string>Repair moved links when a file opens</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>RepairLinksOnOpen</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="PublishDrawings">
+        <property name="toolTip">
+         <string>One command writes a PDF and a DXF of every drawing of the document and of the part files it links, named by part number and revision.</string>
+        </property>
+        <property name="text">
+         <string>Publish Drawings command (PDF and DXF for a document and the parts it links)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>PublishDrawings</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="DrawingCalloutsFollow">
+        <property name="toolTip">
+         <string>A hole callout on a drawing rewrites its text when its hole or thread changes, and its arrow follows the hole unless you moved it.</string>
+        </property>
+        <property name="text">
+         <string>Hole callouts follow the hole when it changes</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>DrawingCalloutsFollow</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="DrawingPartsList">
+        <property name="toolTip">
+         <string>A parts list above the title block driven by the assembly, with balloons that keep their item numbers when parts are added.</string>
+        </property>
+        <property name="text">
+         <string>Parts list and balloons on assembly drawings</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>DrawingPartsList</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="DrawingRevisionTable">
+        <property name="toolTip">
+         <string>A drawing of a part not yet released shows PRELIMINARY with its part number and WIP revision; once released, a revision table in the top-right corner lists each released revision from the vault (note, ECO, date, who released it).</string>
+        </property>
+        <property name="text">
+         <string>Revision table and PRELIMINARY stamp on drawings</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>DrawingRevisionTable</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>BruceWorx</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="AutoDrawing">
+        <property name="toolTip">
+         <string>Three views and an isometric, overall dimensions, hole callouts and, for an assembly, a parts list with balloons; then edit by hand.</string>
+        </property>
+        <property name="text">
+         <string>Auto Drawing command (first-pass drawing in one step)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>AutoDrawing</cstring>
         </property>
         <property name="prefPath" stdset="0">
          <cstring>BruceWorx</cstring>

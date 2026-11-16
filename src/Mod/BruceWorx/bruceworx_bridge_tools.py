@@ -1462,6 +1462,82 @@ def t_code_cad(args):
             "seconds": round(result.seconds, 4), "stdout": result.stdout, "stderr": result.stderr}
 
 
+# ----- design worksheets (MOD-15/17) ------------------------------------------------------------------
+
+
+def _worksheet(path, text=None):
+    """(worksheet, page): the open tab's worksheet for ``path`` when there is one, else loaded from the file
+    (or a new one when the file does not exist yet and ``text`` is given)."""
+    import os
+
+    import bruceworx_worksheet as bw
+
+    real = os.path.realpath(path)
+    if _app().GuiUp:
+        try:
+            import bruceworx_worksheet_gui as wg
+
+            for page in wg._state["pages"].values():
+                if page.ws.path and os.path.realpath(page.ws.path) == real:
+                    return page.ws, page
+        except Exception:  # noqa: BLE001
+            pass
+    if os.path.isfile(path):
+        return bw.Worksheet.load(path), None
+    if text is None:
+        raise ToolError(f"no worksheet at {path}")
+    return bw.Worksheet(text, path=os.path.abspath(path)), None
+
+
+def _worksheet_report(ws):
+    model = ws.model()
+    return {
+        "path": ws.path, "title": ws.title, "model": model.Name if model is not None else None,
+        "lines": [{"line": r.line.number, "name": r.line.name, "expression": r.line.expr, "value": r.shown,
+                   "status": r.status, "message": r.message, "to_parameters": r.line.export,
+                   "checks": [{"kind": k, "label": label, "passed": passed, "message": msg}
+                              for k, label, passed, msg in r.checks],
+                   "model_inputs": {n: jsonable(v) for n, v in r.inputs.items()}} for r in ws.results],
+        "outputs": [{"object": name, "file": p} for _o, p, name in ws.outputs()],
+    }
+
+
+def t_worksheet_read(args):
+    ws, _page = _worksheet(args["path"], args["text"])
+    if args["text"] is not None:
+        import bruceworx_worksheet as bw
+
+        ws = bw.Worksheet(args["text"], path=ws.path, model=ws.model())  # a trial: nothing is changed
+    ws.evaluate()
+    out = _worksheet_report(ws)
+    out["text"] = ws.text
+    return out
+
+
+def t_worksheet_apply(args):
+    import bruceworx_worksheet as bw
+
+    ws, page = _worksheet(args["path"], args["text"])
+    if args["text"] is not None:
+        if page is not None:
+            page.editor.setPlainText(args["text"])
+        ws.set_text(args["text"])
+    try:
+        report = ws.apply()
+    except bw.WorksheetError as exc:
+        raise ToolError(str(exc)) from None
+    if args["save"]:
+        if page is not None:
+            page.save()
+        else:
+            ws.save()
+    elif page is not None:
+        page.render()
+    out = _worksheet_report(ws)
+    out.update(written=report["written"], files=report["outputs"], saved=bool(args["save"]))
+    return out
+
+
 # ----- vault ---------------------------------------------------------------------------------------------
 
 
