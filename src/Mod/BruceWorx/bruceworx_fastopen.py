@@ -3,7 +3,7 @@
 
 Bruce: "for assemblies, can we make them open faster and be able to look through them when they are larger
 like the printer? Fast open or something?" The TL-P01 printer (364 files, 4983 objects) took 25.8 s to open in
-Vector Labs: 9.6 s reading the files, the rest building the exact display. Fast Open reads no FreeCAD document:
+Heuretes FreeCAD: 9.6 s reading the files, the rest building the exact display. Fast Open reads no FreeCAD document:
 it draws the light preview mesh every vault file already carries (PDM-13; in the file, or in this Mac's cache
 for versions made before), each part's triangles once and placed as often as the assembly uses it.
 

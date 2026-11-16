@@ -34,7 +34,7 @@ class TestMaterials(unittest.TestCase):
         with_yield = [c for c in cards if c["yield"]]
         self.assertTrue(with_yield)
         self.assertTrue(all(c["library"] for c in cards))
-        # S1 (30 Oct): the Vector Labs library (yield strengths on every card) first, the stock cards after it
+        # S1 (30 Oct): the Heuretes FreeCAD library (yield strengths on every card) first, the stock cards after it
         ranks = [sim.library_rank(c["library"]) for c in cards]
         self.assertEqual(ranks, sorted(ranks))
         keystone = [c for c in cards if c["library"] == sim.LIBRARY]
@@ -183,7 +183,7 @@ class TestStudy(unittest.TestCase):
                 self.assertEqual(handle.read(5), b"%PDF-")
 
     def test_tectonic_seed_covers_the_reports(self):
-        """Follow-up 3 (30 Oct): Vector Labs' Tectonic cache seed loads every package a report uses, and the run-time
+        """Follow-up 3 (30 Oct): Heuretes FreeCAD' Tectonic cache seed loads every package a report uses, and the run-time
         copy of a bundled seed into a writable cache."""
         seed = os.path.normpath(os.path.join(App.getHomePath(), "..", "..", "package", "bruceworx", "tectonic-seed", "seed.tex"))
         if not os.path.isfile(seed):
@@ -954,7 +954,7 @@ class TestThermalParts(unittest.TestCase):
         close_all()
         self.addCleanup(close_all)
 
-    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Vector Labs PETG printed: heat deflection temperature 65 C
+    PETG = "b4e991ce-42af-48ad-acbc-40e7f1de3a52"  # Heuretes FreeCAD PETG printed: heat deflection temperature 65 C
 
     def study(self, kind="thermal", options=None, material=None, uuid=""):
         doc = App.newDocument("Th")

@@ -20,7 +20,7 @@ import bwmodel  # noqa: E402
 doc = App.newDocument("Plate")
 part = bwmodel.build(doc)[0]
 try:
-    from bruceworx.partprops import load_schema
+    from heuretes_freecad.partprops import load_schema
 
     load_schema().apply(part)
     part.PartNumber = "LE-01-01001"
@@ -43,7 +43,7 @@ App.closeDocument(doc.Name)
 vault = os.path.join(out, "ChromeVault")
 if not os.path.isdir(vault) or not any(n.endswith(".bwvault") or "vault" in n for n in os.listdir(vault)):
     try:
-        from bruceworx.pdm_folder import FolderVault
+        from heuretes_freecad.pdm_folder import FolderVault
 
         FolderVault.init(vault, "ChromeVault", actor="tester")
     except Exception as exc:

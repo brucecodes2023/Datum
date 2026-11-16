@@ -944,560 +944,560 @@
 {
 "text": "3D-print prep (print orientation, 3MF plate, send to slicer)",
 "tip": "Place on Bed, Print Prep, Export 3MF and Send to Slicer: a part keeps the way it prints (which face is on the bed), and goes to the slicer as a 3MF plate in that orientation. Off: those commands are i",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Activate the assembly or body when a file opens",
 "tip": "On by default. When a file becomes the active document and nothing is being edited, its assembly is activated (as a double-click in the tree would), so the joint and assemble tools are ready, and the ",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Allow Claude Code without asking (remembered)",
-"tip": "Set by the Allow prompt's \"Don't ask again on this Mac\" box (or Vector Labs > Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the \"Claude connected\" chip showin",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "Set by the Allow prompt's \"Don't ask again on this Mac\" box (or Heuretes FreeCAD > Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the \"Claude connected\" chip showin",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Assembly pick: select the component first",
 "tip": "On by default. In an assembly, a pick in the 3D view selects the component directly under the open assembly (its vault file), not the body inside it. Pick inside it again to go one level deeper each t",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Auto Drawing command (first-pass drawing in one step)",
 "tip": "Three views and an isometric, overall dimensions, hole callouts and, for an assembly, a parts list with balloons; then edit by hand.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Auto-hide",
 "tip": "OverlayLeft AutoHide. The panel hides when the pointer leaves and shows on hover.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Bolt Up and Infer Mates",
 "tip": "Bolt Up puts a screw of the right size and length in every free hole of a part and joints it. Infer Mates turns parts placed by coordinates into joints and lists what it could not mate. Off: the comma",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Bottom inset",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Bought parts library (insert with mounting frame, mounting holes)",
 "tip": "Insert a bought part (motor, stepper) from the library with its mounting frame, make the matching holes on a face, and join the two. Every number in the library names its source. Off: the commands are",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Browser header in small caps",
 "tip": "On by default. The model tree card is titled BROWSER in small capitals instead of Model.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
-"text": "BruceWorx preference pack",
-"tip": "On by default. Applied once on first start (theme, millimetres, Fusion-like navigation, PartDesign startup). Your previous values are saved first. Uncheck to restore them (same as the BruceWorx Off pa",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"text": "Heuretes FreeCAD preference pack",
+"tip": "On by default. Applied once on first start (theme, millimetres, Fusion-like navigation, PartDesign startup). Your previous values are saved first. Uncheck to restore them (same as the Heuretes FreeCAD Off pa",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Captioned tool groups",
 "tip": "On by default. Each workbench toolbar gets a small caption under it (CREATE, PATTERN, ...). Click a caption for a menu with every command of the group, named.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Claude Code bridge",
-"tip": "On by default. Lets Claude Code (the Vector Labs MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick \"Don't ask again\" to b",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Lets Claude Code (the Heuretes FreeCAD MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick \"Don't ask again\" to b",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Code part dimensions on the model (double-click one to change it)",
 "tip": "Selecting a code part shows its dimensions in the 3D view, on dimension lines where the geometry they measure was found. Takes effect at the next start.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Code parts (build123d / CadQuery scripts as parametric parts)",
 "tip": "New Code Part, the script editor and the approval prompt for scripts not written on this Mac. Off: code parts in a file still load and keep their shapes. Takes effect at the next start.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Constraint up to",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Create Vault in a full-window tab",
 "tip": "On by default. Create Vault opens as a full-window tab of its own, with numbered sections and Cancel / Create at the bottom. Off runs it in the task panel on the right.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Dependency lines on hover",
 "tip": "Hovering a Browser row draws thin lines to the rows it uses (Sketch to Pad) and the rows that use it.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Design worksheets (New Worksheet, Open Worksheet)",
 "tip": "Design worksheets (.bwsheet): text, LaTeX math and calculations with units that read the model's Parameters sheet and write results back (=> Parameters), with output files that follow the model. Takes",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Direct edit on imported solids (offset face, edit hole, delete face)",
 "tip": "Modify > Offset Face, Edit Hole and Delete Face change an imported solid that has no features: each edit is a step in the tree on top of the solid. Off: the three commands are greyed out.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Document tabs",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Document tabs and status bar",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Document tabs in the title bar (macOS)",
 "tip": "On by default (macOS). The title bar becomes the first toolbar row: traffic lights, save, undo, redo, the document tabs and the search field. Off brings back the title bar and the tab row under the to",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Dot on modified document tabs",
 "tip": "On by default. A modified document shows a dot on its tab instead of the close button; the close button appears on hover. Unmodified tabs show it on the current tab only.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Error chip on failed features",
 "tip": "A feature whose recompute failed gets a red ERROR chip in the Browser; click it to open the feature.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
-"text": "Everything Vector Labs adds is on by default. Uncheck a box to turn that feature off.",
+"text": "Everything Heuretes FreeCAD adds is on by default. Uncheck a box to turn that feature off.",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Fasteners add-on (Insert Fastener)",
 "tip": "On by default. Loads the bundled Fasteners add-on (Mod/fasteners: ISO / DIN screws, nuts, washers, inserts) that Insert Fastener uses. Off skips any Fasteners add-on, a copy from the Addon Manager too",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Feature summary in the Browser",
 "tip": "On by default. Quiet text after a feature's name with its main dimension: Pad 8 mm, R5, Ø9 × 4.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Fill drawing title blocks from the part and the vault",
-"tip": "On by default. Drawings on the Vector Labs sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standar",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Drawings on the Heuretes FreeCAD sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standar",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Float the task panel (command dialog)",
 "tip": "On by default. While the model tree floats, the task panel floats on the right as a card that shows while a command is open. Uncheck to dock it again.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Floating model tree",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Follow the macOS light/dark setting",
-"tip": "On by default. Switches between the BruceWorx and BruceWorx Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences > General.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Switches between the Heuretes FreeCAD and Heuretes FreeCAD Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences > General.",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Hide the history timeline when there is no history",
 "tip": "On by default. The timeline hides while the active document has no history (no body with features, no assembly) and comes back when it has. Uncheck to keep it visible with a short message.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "History timeline (bottom bar: PartDesign history, assembly order)",
-"tip": "On by default. Same switch as Vector Labs > History Timeline. Closing the dock also turns it off.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Same switch as Heuretes FreeCAD > History Timeline. Closing the dock also turns it off.",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Hole callouts follow the hole when it changes",
 "tip": "A hole callout on a drawing rewrites its text when its hole or thread changes, and its arrow follows the hole unless you moved it.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Hole presets, cosmetic threads and the fastener library",
 "tip": "On by default. Hole Preset (heat-set insert, tapped, clearance, counterbore and countersink holes), Cosmetic Thread, Hole Callouts on drawings, Insert Fastener and Mark as COTS. Takes effect at once f",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
-"text": "Hooks add-on (part numbers: Vector Labs > Assign Part Number…)",
-"tip": "On by default. Loads the Vector Labs hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"text": "Hooks add-on (part numbers: Heuretes FreeCAD > Assign Part Number…)",
+"tip": "On by default. Loads the Heuretes FreeCAD hooks add-on (Mod/HeuretesHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Icon plates in the Browser (dark mode)",
 "tip": "On by default. In dark mode, a faint light plate behind each tree icon keeps dark-outlined icons readable.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "In-context editing (Edit in Context, Reference from Assembly)",
 "tip": "Edit a part in place inside the assembly and reference other parts' edges and faces; the References window updates, locks or breaks them. Off: the commands are inactive.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Keep the Start page as the first tab",
 "tip": "On by default. The Start page, where the vault is, stays the first document tab and has no close button, so one click goes back to it.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "KiCad boards (Insert Board command)",
-"tip": "On by default. Adds Insert Board… (Assemble group and Vector Labs menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate syste",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Adds Insert Board… (Assemble group and Heuretes FreeCAD menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate syste",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Left inset",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Lifecycle state of parts follows the vault",
-"tip": "On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by BruceWorx/Vau",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by Heuretes FreeCAD/Vau",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Model tree: active document only",
 "tip": "On by default. The model tree lists only the active document. Documents open because something links to them are not listed on their own; their objects still show under the links that use them. Also i",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Navigation pill at the bottom of the 3D view",
 "tip": "A small bar at the bottom of each 3D view: orbit, pan, zoom (click, then drag in the view; Esc stops), fit all, display style, orthographic/perspective, clipping planes, measure.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Navigation pill orbits about",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "New document asks: part, assembly or hybrid",
 "tip": "File > New, its shortcut and the \"+\" beside the document tabs ask what to start: a part, an assembly, or a hybrid (parts and their assembly in one file). A document's tab then shows which it is. Off: ",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "New sheet-metal parts take the vault's default rule",
 "tip": "On by default. The first sheet-metal wall of a document without a rule gets the vault's default sheet-metal rule (thickness, bend radius, K-factor, relief); change it with Sheet Metal > Rules.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Offer to close the gaps of an open sketch profile",
 "tip": "When a Pad, Pocket, Revolution, Groove, Loft, Pipe or Helix fails on an open sketch, a card at the top of the 3D view shows the open ends (red dots) and offers Close Gaps and Open Sketch. Nothing chan",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "On by default. Puts the model tree on the existing left overlay panel (auto-hide, transparency, width, and insets below)",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "On by default. Unified title bar and toolbar, with the native close, minimize, and zoom buttons in that bar. Uncheck to ",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "On-canvas editing (double-click a face: drag arrow and value field)",
 "tip": "Double-click a face of a Pad, Pocket, Fillet or Hole in the 3D view (or Alt-double-click its Browser row): a drag arrow, a value field and a command bar appear. Drag or type; one drag is one undo step",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Overlay the model tree",
 "tip": "On by default. Overlay the Model dock (or Tree view, if the panels are split). Uncheck to restore the stock docks.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Parameters sheet: keep the Used in column up to date",
 "tip": "Column D of the Parameters sheet lists what reads each value, across open files, and follows edits. Off: Check References still fills it.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Part files: Make External, Repair Links, Flexible Sub-assembly",
 "tip": "Make External turns a body modelled inside an assembly or a multi-body file into its own part file, linked in place. Repair Links finds moved part files by name. Flexible Sub-assembly switches a sub-a",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Part number and state badges in the Browser",
-"tip": "On by default. A part with the BruceWorx part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. A part with the Heuretes FreeCAD part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Parts list and balloons on assembly drawings",
 "tip": "A parts list above the title block driven by the assembly, with balloons that keep their item numbers when parts are added.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Pick a face: show the feature that made it",
 "tip": "Picking a face, edge or vertex in the 3D view highlights the feature that made it in the Browser and on the history timeline. The selection is not changed.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Plane, Axis and Point make a datum from the selection",
 "tip": "Construct > Plane with a plane or a flat face selected makes a plane offset from it and asks for the distance, direction and count; with two parallel ones selected it makes the plane halfway between. ",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Preview while dragging when a recompute takes over",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Publish Drawings command (PDF and DXF for a document and the parts it links)",
 "tip": "One command writes a PDF and a DXF of every drawing of the document and of the part files it links, named by part number and revision.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Quiet property group captions",
-"tip": "On by default. Property groups are small-caps captions instead of grey bars (BruceWorx theme).",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Property groups are small-caps captions instead of grey bars (Heuretes FreeCAD theme).",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Rectangular and Circular Pattern commands",
-"tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Vector Labs menu. They pattern features (through PartDesign), bodies and assembly compon",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Heuretes FreeCAD menu. They pattern features (through PartDesign), bodies and assembly compon",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Repair moved links when a file opens",
 "tip": "When a file opens with links whose part files are not where the link says, look for each file by name under the file's folder, point the link at it, and say what was changed. Nothing is saved until yo",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Revision table and PRELIMINARY stamp on drawings",
 "tip": "A drawing of a part not yet released shows PRELIMINARY with its part number and WIP revision; once released, a revision table in the top-right corner lists each released revision from the vault (note,",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Rib stations (a sketch repeated on offset planes, from the Parameters sheet)",
 "tip": "Construct > Rib Stations repeats the selected sketch along its normal as scaled rib sections on their own planes, with a loft through them. Span, rib count and taper are rows of the Parameters sheet, ",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Right panel tabs: Properties, Vault, Parameters, Physical",
 "tip": "Properties, Vault, Parameters and Physical as tabs of the right panel; a command opens as a tab of its own. Cmd-I hides and shows the panel. Takes effect after a restart.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Save shapes in binary (faster open and save)",
 "tip": "On by default (PRF-01). Shapes are saved in OpenCascade's binary form instead of text: about 40 % faster to open and twice as fast to save on large assemblies, lossless. FreeCAD opens both forms, so o",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Search field (Cmd-K)",
 "tip": "On by default. A search field on the first toolbar row (Cmd-K) finds commands, objects in the document and settings. The SearchBar add-on's toolbar is hidden while it is on.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Sheet metal add-on (Design > Sheet Metal tab)",
-"tip": "On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design > Sheet Metal tab: base wall, flanges, relief, unfold, and Vector Labs's sheet-metal rules and Export Flat (sho",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design > Sheet Metal tab: base wall, flanges, relief, unfold, and Heuretes FreeCAD's sheet-metal rules and Export Flat (sho",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Show the Assembly tab when an assembly is being edited",
 "tip": "On by default. While an assembly is the active one, the Design workspace shows its Assembly tab; when it stops being active, the tab you had comes back. Needs Workspaces and tabs.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Show the grid when a sketch opens",
 "tip": "FreeCAD saves the grid setting in each sketch. On: every sketch shows the grid when it opens for editing, including sketches made before. The sketch panel can still hide it.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Show workbench command lists in the task panel",
-"tip": "The BruceWorx pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "The Heuretes FreeCAD pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Sketch grid strength",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Status bar as text readouts",
-"tip": "On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by BruceWorx/VaultPath.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"tip": "On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by Heuretes FreeCAD/VaultPath.",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Studio shading (soft lights, reflections, colours from materials)",
 "tip": "On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Surfacing tools (Trim, Extend, Stitch, Thicken, Patch, Continuity)",
 "tip": "Parametric surface features and the G0/G1/G2 continuity check. Off: the commands are inactive.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Top offset",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Trackpad: swipe pans, Shift + swipe zooms, Cmd + swipe orbits",
 "tip": "Two-finger swipe on a trackpad: a plain swipe pans in any direction (the model follows the fingers), Shift + swipe zooms at the pointer, Cmd + swipe orbits. A mouse wheel and pinch are not affected. O",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Transparent background",
 "tip": "On by default. OverlayLeft Transparent: the model shows through the Browser; the text keeps a halo so it stays readable. Uncheck for an opaque card.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Two toolbar rows",
 "tip": "On by default. After each workbench switch, File, the workbench tabs and View share the first toolbar row and the workbench's tools follow on the second.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Undo toast after each command",
 "tip": "A small card above the navigation pill after each command (Pad created, Deleted) with an Undo button; it fades after four seconds. Not shown for property edits or while a sketch is open.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Unified title bar and toolbar on macOS",
 "tip": "On by default. Calls QMainWindow.setUnifiedTitleAndToolBarOnMac. Uncheck to set that property false, which is Qt stock. Known risk: Qt 6.8 documents painting problems when the window contains an OpenG",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Use the macOS accent colour",
 "tip": "On by default. The accent from System Settings > Appearance colours buttons, checkboxes, selection and the view cube highlight. Text on it turns dark when white would be hard to read.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Vault client: check out, check in, Vault panel",
 "tip": "On by default. Check out and check in from FreeCAD: the Vault panel, vault status in the Browser and the status bar, a check-out offer when you save or edit a vault file that is not checked out to you",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Vault dashboard on the Start page",
 "tip": "On by default. With a vault open, the Start page has two tabs: the vault's dashboard (counts by type and state, top assemblies, your work, changes, activity and vault health; every tile opens the filt",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
-"text": "Vector Labs Start page",
-"tip": "On by default. The Start tab shows the Vector Labs page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. O",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"text": "Heuretes FreeCAD Start page",
+"tip": "On by default. The Start tab shows the Heuretes FreeCAD page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. O",
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
-"text": "Vector Labs features",
+"text": "Heuretes FreeCAD features",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
-"text": "Vector Labs top bar (turns the FreeCAD-Ribbon add-on off)",
+"text": "Heuretes FreeCAD top bar (turns the FreeCAD-Ribbon add-on off)",
 "tip": "On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Width",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Workspaces and tabs",
 "tip": "On by default. A workspace menu (Design, Simulation, Manufacture, Drawing; Ctrl+1 to Ctrl+4) and tabs (Solid, Surface, Mesh, Utilities) replace the workbench selector. Opening a sketch adds a SKETCH t",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "macOS window",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "short line up to",
 "tip": "",
-"page": "Vector Labs",
-"area": "BruceWorx"
+"page": "Heuretes FreeCAD",
+"area": "Heuretes FreeCAD"
 },
 {
 "text": "Enable OCL dependent features",

@@ -30,7 +30,7 @@ GROUP = bruceworx_pack.APPLIED_GROUP  # BaseApp/Preferences/BruceWorx
 SWITCH = "PreferencePack"
 FIRST_RUN_DONE = "FirstRunPackDone"
 # FreeCAD 1.1's Start page opens on a first-start page with a theme picker; dismissing it puts a stock
-# theme over a pack applied before it (Vector Labs' new profile, 25 Oct). BruceWorx brings its own theme,
+# theme over a pack applied before it (Heuretes FreeCAD' new profile, 25 Oct). BruceWorx brings its own theme,
 # so a first run marks that page done; a profile it already overwrote is healed once.
 START_GROUP = "BaseApp/Preferences/Mod/Start"
 FIRST_START = "FirstStart2024"
@@ -45,7 +45,7 @@ TREE_DONE = "TreeActiveOnlyDefaulted"
 
 
 def default_tree_active_only(store) -> bool:
-    """First start: the model tree lists only the active document (Vector Labs), unless the user already
+    """First start: the model tree lists only the active document (Heuretes FreeCAD), unless the user already
     set "Active document only". Linked documents open for an assembly would otherwise bury it. Returns
     True when the default was written."""
     if not switch_on(store) or store.get(GROUP, TREE_DONE, "bool", False):

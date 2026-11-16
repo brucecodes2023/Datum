@@ -76,13 +76,13 @@ try:
 except Exception as exc:
     FreeCAD.Console.PrintWarning(f"BruceWorx materials were not registered: {exc}\n")
 
-# The Vector Labs material library (SIM-01: cards with yield strengths), also used headless.
+# The Heuretes FreeCAD material library (SIM-01: cards with yield strengths), also used headless.
 try:
     import bruceworx_materials
 
     bruceworx_materials.register_library()
 except Exception as exc:
-    FreeCAD.Console.PrintWarning(f"The Vector Labs material library was not registered: {exc}\n")
+    FreeCAD.Console.PrintWarning(f"The Heuretes FreeCAD material library was not registered: {exc}\n")
 
 # Simulation files (PDM-14): File > Open, Open Recent and Finder open *.vlsim as normal documents.
 try:
@@ -92,7 +92,7 @@ try:
 except Exception as exc:
     FreeCAD.Console.PrintWarning(f"The .vlsim file type was not registered: {exc}\n")
 
-# Simulation (SIM-01): a fresh profile finds the bundled CalculiX (Vector Labs: Contents/bin/ccx).
+# Simulation (SIM-01): a fresh profile finds the bundled CalculiX (Heuretes FreeCAD: Contents/bin/ccx).
 try:
     import bruceworx_sim
 

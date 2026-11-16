@@ -234,7 +234,7 @@ class FixtureTests(unittest.TestCase):
 
     def test_reading_the_mass_leaves_the_part_untouched(self):
         # FreeCAD 1.1's getPhysicalValue writes the material back and touches the object (regression, MOD-11)
-        from bruceworx import partprops as pp
+        from heuretes_freecad import partprops as pp
 
         self.assertNotIn("Touched", self.obj.State)
         mass = pp.computed_mass(self.obj)

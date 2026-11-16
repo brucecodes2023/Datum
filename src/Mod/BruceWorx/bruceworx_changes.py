@@ -181,7 +181,7 @@ def eco_plan(vault, ecr_numbers):
 
     A row is {part_number, item_type, description, current, next, reason}; the same walk as
     pdm.Vault.open_eco (the ECRs' items, then each one's drawings, once each)."""
-    from bruceworx import pdm
+    from heuretes_freecad import pdm
 
     rows, problems, seen = [], [], set()
     for number in ecr_numbers:
@@ -228,7 +228,7 @@ def retire_plan(work, pn):
     {"users": where-used rows (release_check.where_used), "blockers": [sentence], "drawings": the
     released drawings that can retire with it, "kept": [(drawing, state)] that cannot,
     "confirm": users still in work (you confirm you know)}."""
-    from bruceworx import release_check as rc
+    from heuretes_freecad import release_check as rc
 
     vault = work.vault
     item = vault.items[pn]
@@ -323,7 +323,7 @@ def _display(s, pn):
     item = s.vault.items.get(pn)
     if item is None:
         return pn
-    from bruceworx import pdm
+    from heuretes_freecad import pdm
 
     return pdm.display_part_number(pn, item.latest.code)
 
@@ -772,7 +772,7 @@ def _html(text):
 def _reports(s, pns):
     """The study reports beside the items' work copies (bruceworx.sim_reports); [] when it cannot look."""
     try:
-        from bruceworx import sim_reports
+        from heuretes_freecad import sim_reports
 
         return sim_reports.offered(s.work, pns)
     except Exception:  # noqa: BLE001 -- an attachment offer is never a reason not to release
@@ -782,7 +782,7 @@ def _reports(s, pns):
 def _make_classes():
     from PySide import QtCore, QtGui, QtWidgets
 
-    from bruceworx import release_check as rc
+    from heuretes_freecad import release_check as rc
 
     vc = _vc()
 
@@ -830,7 +830,7 @@ def _make_classes():
     def report_box(paths):
         """(box, list) of release attachments: the items' simulation study reports, ticked (SIM-01 / PDM-05,
         30 Oct: bruceworx.sim_reports), and Add… for any other file. ticked_files(list) reads it."""
-        from bruceworx import sim_reports
+        from heuretes_freecad import sim_reports
 
         files = box("Attachments")
         fl = QtWidgets.QVBoxLayout(files)
@@ -1047,7 +1047,7 @@ def _make_classes():
 
         def __init__(self, s, pn):
             super().__init__()
-            from bruceworx import pdm
+            from heuretes_freecad import pdm
 
             self.s, self.pn = s, pn
             item = s.vault.items[pn]
@@ -1112,7 +1112,7 @@ def _make_classes():
 
         def __init__(self, s, pn):
             super().__init__()
-            from bruceworx import pdm
+            from heuretes_freecad import pdm
 
             self.s, self.pn = s, pn
             item = s.vault.items[pn]

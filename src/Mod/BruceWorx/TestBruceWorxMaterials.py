@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""The Vector Labs material library, headless (SIM-01).
+"""The Heuretes FreeCAD material library, headless (SIM-01).
 
 Every card loads through FreeCAD's Materials API from the library named
-"Vector Labs" (registered by Init.py), has density, E, nu, yield and UTS with
+"Heuretes FreeCAD" (registered by Init.py), has density, E, nu, yield and UTS with
 yield <= UTS and 0 < nu < 0.5, a colour and thermal values; the folder and the
-permanent UUID table agree; no Vector Labs UUID is used by any other card.
+permanent UUID table agree; no Heuretes FreeCAD UUID is used by any other card.
 """
 
 import glob
@@ -25,9 +25,9 @@ class TestVectorLabsLibrary(unittest.TestCase):
 
     def test_library_registered_as_vectorlabs(self):
         libraries = {lib[0]: lib[1] for lib in self.mm.MaterialLibraries}
-        self.assertIn("Vector Labs", libraries)
-        self.assertEqual(os.path.realpath(libraries["Vector Labs"]), os.path.realpath(km.LIBRARY_DIR))
-        group = App.ParamGet(f"{km.MODULES_PARAM}/Vector Labs")
+        self.assertIn("Heuretes FreeCAD", libraries)
+        self.assertEqual(os.path.realpath(libraries["Heuretes FreeCAD"]), os.path.realpath(km.LIBRARY_DIR))
+        group = App.ParamGet(f"{km.MODULES_PARAM}/Heuretes FreeCAD")
         self.assertTrue(group.GetBool("ModuleReadOnly", False))
 
     def test_old_keystone_registration_is_replaced(self):
@@ -37,7 +37,7 @@ class TestVectorLabsLibrary(unittest.TestCase):
         try:
             self.assertTrue(km.register_library())
             self.assertNotIn("Keystone", modules.GetGroups())
-            self.assertIn("Vector Labs", modules.GetGroups())
+            self.assertIn("Heuretes FreeCAD", modules.GetGroups())
         finally:
             if "Keystone" in modules.GetGroups():
                 modules.RemGroup("Keystone")
@@ -46,7 +46,7 @@ class TestVectorLabsLibrary(unittest.TestCase):
         # A document stores the card's UUID, not the library name or folder (PETG printed, 30 Oct).
         mat = km.material("b4e991ce-42af-48ad-acbc-40e7f1de3a52")
         self.assertIsNotNone(mat)
-        self.assertEqual(mat.LibraryName, "Vector Labs")
+        self.assertEqual(mat.LibraryName, "Heuretes FreeCAD")
         self.assertEqual(mat.UUID, "b4e991ce-42af-48ad-acbc-40e7f1de3a52")
 
     def test_folder_matches_uuid_table(self):
@@ -57,11 +57,11 @@ class TestVectorLabsLibrary(unittest.TestCase):
         self.assertEqual(len(km.CARDS), 33)  # 28 (30 Oct) + PETG-CF, ASA-CF, Ti-6Al-4V, 17-4PH, A36
 
     def test_every_card_loads_from_the_vectorlabs_library(self):
-        in_library = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName == "Vector Labs"}
+        in_library = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName == "Heuretes FreeCAD"}
         self.assertEqual(in_library, set(km.CARDS))
         self.assertEqual(len(self.cards), len(km.CARDS))
         for card in self.cards:
-            self.assertEqual(card["library"], "Vector Labs", card["name"])
+            self.assertEqual(card["library"], "Heuretes FreeCAD", card["name"])
             mat = self.mm.getMaterial(card["uuid"])
             self.assertEqual(mat.Name + ".FCMat", os.path.basename(km.CARDS[card["uuid"]]))
 
@@ -76,8 +76,8 @@ class TestVectorLabsLibrary(unittest.TestCase):
                         names[uuid] = path
                         break
         self.assertEqual(set(names), set(km.CARDS))
-        others = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName != "Vector Labs"}
-        self.assertFalse(others & set(km.CARDS), "a Vector Labs UUID is used by another library's card")
+        others = {uuid for uuid, mat in self.mm.Materials.items() if mat.LibraryName != "Heuretes FreeCAD"}
+        self.assertFalse(others & set(km.CARDS), "a Heuretes FreeCAD UUID is used by another library's card")
 
     def test_engineering_values(self):
         for c in self.cards:
@@ -149,7 +149,7 @@ class TestVectorLabsLibrary(unittest.TestCase):
     def test_a_body_with_a_vectorlabs_material_has_mass(self):
         import Part
 
-        doc = App.newDocument("Vector LabsMass")
+        doc = App.newDocument("Heuretes FreeCADMass")
         try:
             body = doc.addObject("Part::Feature", "Block")
             body.Shape = Part.makeBox(100, 50, 10)

@@ -31,10 +31,10 @@ FILTER = "Design worksheet (*.bwsheet)"
 EVAL_DELAY_MS = 300
 
 COMMANDS = {
-    "new": ("BruceWorx_NewWorksheet", "New Worksheet", "BruceWorx_Worksheet.svg",
+    "new": ("BruceWorx_NewWorksheet", "New Worksheet", "Heuretes_Worksheet.svg",
             "A design worksheet for the active document: calculations with units that read its Parameters "
             "and write results back (=> Parameters)"),
-    "open": ("BruceWorx_OpenWorksheet", "Open Worksheet…", "BruceWorx_WorksheetOpen.svg",
+    "open": ("BruceWorx_OpenWorksheet", "Open Worksheet…", "Heuretes_WorksheetOpen.svg",
              "Open a design worksheet (.bwsheet)"),
 }
 

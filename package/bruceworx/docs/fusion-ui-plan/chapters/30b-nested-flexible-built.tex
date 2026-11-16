@@ -3,7 +3,7 @@
 %======================================================================
 
 A flexible sub-assembly (an \code{AssemblyLink} with \code{Rigid} off) that itself holds a flexible sub-assembly
-(printer $\rightarrow$ Gantry $\rightarrow$ X Axis) did not work in the solver. The Vector Labs session reported
+(printer $\rightarrow$ Gantry $\rightarrow$ X Axis) did not work in the solver. The Heuretes FreeCAD session reported
 three faults and carried Python workarounds (\code{seat\_nested}, \code{remap\_nested\_refs}); all three are now fixed
 in the C++ of the Assembly module, in three commits (\code{AssemblyLink.cpp}, \code{AssemblyObject.cpp}).
 

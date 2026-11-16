@@ -363,7 +363,7 @@ def read_vault(path: str, actor: str = "", vault=None, options=None, read_ms=Non
     go to the dashboard's activity feed (vault_dashboard.snapshot: days, show_all, mine_only, limit).
     The workspace is opened read-only: the worker never writes state.json (PDM-10).
     """
-    from bruceworx.pdm_folder import FolderVault  # the hooks add-on
+    from heuretes_freecad.pdm_folder import FolderVault  # the hooks add-on
 
     if vault is None:
         started = time.perf_counter()
@@ -387,7 +387,7 @@ def read_vault(path: str, actor: str = "", vault=None, options=None, read_ms=Non
         "my_work": _my_work(vault, work),
     }
     try:
-        from bruceworx import vault_dashboard
+        from heuretes_freecad import vault_dashboard
     except ImportError:  # an older hooks add-on: the page as before
         return out
     out["dashboard"] = vault_dashboard.snapshot(vault, work, read_ms=read_ms, **(options or {}))
@@ -397,7 +397,7 @@ def read_vault(path: str, actor: str = "", vault=None, options=None, read_ms=Non
 def _workspace(vault):
     """The pinned actor's work folder, read-only (None with an older hooks add-on)."""
     try:
-        from bruceworx.pdm_workspace import Workspace
+        from heuretes_freecad.pdm_workspace import Workspace
     except ImportError:
         return None
     try:
@@ -701,7 +701,7 @@ def _in_open_document(workbench, command):
 NEW_ITEMS = (
     ("Part", KIND_ICONS["part"], lambda: _new_in("PartDesignWorkbench", "PartDesign_Body")),
     ("Assembly", KIND_ICONS["assembly"], _new_assembly),
-    ("Hybrid", ((os.path.join(os.path.dirname(os.path.abspath(__file__)), "BruceWorx_Hybrid.svg"),), ""),
+    ("Hybrid", ((os.path.join(os.path.dirname(os.path.abspath(__file__)), "Heuretes_Hybrid.svg"),), ""),
      lambda: __import__("bruceworx_newdoc").create("hybrid")),
     ("Drawing", KIND_ICONS["drawing"], lambda: _in_open_document("TechDrawWorkbench", "BruceWorx_NewDrawing")),
     ("Sketch", (("Sketcher_NewSketch", "general/Sketcher_NewSketch", "SketcherWorkbench"), "SketcherWorkbench"),
@@ -757,8 +757,8 @@ def open_vault_item(pn: str, path: str = "") -> None:
         return
     vault_path = FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
     try:
-        from bruceworx.pdm_folder import FolderVault
-        from bruceworx.pdm_workspace import Workspace
+        from heuretes_freecad.pdm_folder import FolderVault
+        from heuretes_freecad.pdm_workspace import Workspace
 
         vault = FolderVault(os.path.expanduser(vault_path), actor=_actor_for(vault_path) or None)
         path = Workspace(vault).get_latest(pn)
@@ -829,13 +829,13 @@ def open_vault(parent=None) -> None:
             return
         answer = QtWidgets.QMessageBox.question(
             parent, "Open vault",
-            f"{folder} is not a Vector Labs vault: it has no {REF_SUFFIX} file.\n\n"
+            f"{folder} is not a Heuretes FreeCAD vault: it has no {REF_SUFFIX} file.\n\n"
             "Make it a new vault? Its files, journal and ref file are written into this folder.",
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Cancel)
         if answer != QtWidgets.QMessageBox.Yes:
             return
         try:
-            from bruceworx.pdm_folder import FolderVault
+            from heuretes_freecad.pdm_folder import FolderVault
 
             FolderVault.init(folder, os.path.basename(folder.rstrip(os.sep)) or "Vault")
         except Exception as exc:
@@ -921,7 +921,7 @@ class _Loader:
             return hit[1]
         actor = self.actors.get(path, "")
         try:
-            from bruceworx.pdm_folder import FolderVault
+            from heuretes_freecad.pdm_folder import FolderVault
 
             started = time.perf_counter()
             kept = self.vaults.get(path)
@@ -934,7 +934,7 @@ class _Loader:
             read_ms = (time.perf_counter() - started) * 1000
             snap = read_vault(path, actor, vault=vault, options=options, read_ms=read_ms)
         except ImportError:
-            snap = {"error": "The vault needs the Vector Labs hooks add-on"}
+            snap = {"error": "The vault needs the Heuretes FreeCAD hooks add-on"}
         except Exception as exc:
             self.vaults.pop(path, None)
             snap = {"error": f"Vault unreadable: {exc}"}
@@ -1637,7 +1637,7 @@ def _make_classes():
                 elif self.vault.get("loading"):
                     self.dash_wait.setText("Reading the vault…")
                 else:
-                    self.dash_wait.setText("The dashboard needs a newer Vector Labs hooks add-on.")
+                    self.dash_wait.setText("The dashboard needs a newer Heuretes FreeCAD hooks add-on.")
                 return
             if snap is None:
                 return

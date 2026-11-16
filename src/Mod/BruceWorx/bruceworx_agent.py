@@ -200,7 +200,7 @@ def _mass_text(obj):
     if obj is None:
         return ""
     try:
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         text = partprops.computed_mass(obj)
         kg = float(str(text).split()[0]) if text else 0.0

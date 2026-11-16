@@ -260,7 +260,7 @@ def read_bom(vault, path_or_doc, imported=None):
     """(lines, missing) of an assembly: an open document, or a file opened hidden for the read."""
     import FreeCAD
 
-    from bruceworx import bom
+    from heuretes_freecad import bom
 
     doc, opened = path_or_doc, []
     if isinstance(path_or_doc, str):
@@ -289,7 +289,7 @@ class CheckinBom:
     def prepare(self, s, pn, notes):
         """(lines, missing) for an assembly, None for anything else. Raises when the BOM would
         contain itself, so nothing is checked in."""
-        from bruceworx.pdm import LifecycleError
+        from heuretes_freecad.pdm import LifecycleError
 
         item = s.vault.items.get(pn)
         if item is None or item.item_type != "assembly":
@@ -349,7 +349,7 @@ def _session():
 def _save_csv(parent, name, text):
     from PySide import QtWidgets
 
-    from bruceworx import bom
+    from heuretes_freecad import bom
 
     start = os.path.join(os.path.expanduser("~/Desktop"), name)
     path, _f = QtWidgets.QFileDialog.getSaveFileName(parent, "Export CSV", start, "CSV (*.csv)")
@@ -369,8 +369,8 @@ def _classes():
 def _make_classes():
     from PySide import QtCore, QtWidgets
 
-    from bruceworx import bom, pdm
-    from bruceworx import release_check as rc
+    from heuretes_freecad import bom, pdm
+    from heuretes_freecad import release_check as rc
 
     def tree(columns):
         t = QtWidgets.QTreeWidget()
@@ -499,7 +499,7 @@ def _make_classes():
                 return
             flat = self.flat.isChecked()
             if self.buy.isChecked():  # [BW] ROU-06
-                from bruceworx import stock
+                from heuretes_freecad import stock
 
                 self.list.setHeaderLabels(list(stock.PURCHASING_COLUMNS))
                 for cells in stock.purchasing_cells(bom.purchasing_rows(self.s.vault, self.pn, code)):
@@ -571,7 +571,7 @@ def bill_of_materials(pn=None):
 
 
 def export_released_boms():
-    from bruceworx import bom
+    from heuretes_freecad import bom
 
     s = _session()
     if s is None:

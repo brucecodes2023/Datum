@@ -37,7 +37,7 @@ MAX_ARRAY = 2000
 
 
 def _pp():
-    from bruceworx import partprops
+    from heuretes_freecad import partprops
 
     return partprops
 
@@ -427,7 +427,7 @@ def battery_capacity(report):
 
 
 def read_table(path):
-    from bruceworx import balance
+    from heuretes_freecad import balance
 
     with open(path, encoding="utf-8-sig") as fh:
         return balance.parse_thrust_csv(fh.read())
@@ -435,7 +435,7 @@ def read_table(path):
 
 def thresholds():
     """The balance thresholds, from the preferences (User parameter ... BruceWorx), else the defaults."""
-    from bruceworx import balance
+    from heuretes_freecad import balance
 
     out = dict(balance.DEFAULTS)
     try:
@@ -451,7 +451,7 @@ def thresholds():
 
 def balance_of(report, capacity_mah=None, limits=None, tables=None):
     """(Balance, notes): the drone balance of a Report. ``tables`` {path: ThrustTable} overrides reading files."""
-    from bruceworx import balance
+    from heuretes_freecad import balance
 
     notes, motors = [], []
     for inst, axis, path in motors_of(report):

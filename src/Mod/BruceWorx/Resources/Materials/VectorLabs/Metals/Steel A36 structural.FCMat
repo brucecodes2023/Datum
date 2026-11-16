@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "cd8cd9f3-25a1-43fa-880a-e49821b97b0e"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Steel A36 structural"
   Description: "Carbon structural steel (UNS K02600; EN S235 is the nearest equivalent): plate, flat bar, angle and channel for frames and welded bases. Strengths are ASTM A36 minimums, 36 ksi yield and 58 ksi UTS, elongation 20 % in 200 mm. Mill certificates usually show more, and much angle and channel is dual-certified A36/A572-50 (yield 345 MPa); use that only with the certificate."
   ReferenceSource: "ASTM A36 minimums (UTS 400-550 MPa range, lower end used); ASM/MatWeb elastic and thermal values"
   SourceURL: "https://www.astm.org/a0036_a0036m-19.html"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Metals"
 Models:
   LinearElastic:

@@ -288,7 +288,7 @@ def _number(value):
     return "0" if text in ("", "-0") else text
 
 
-def model_xml(items, application="Vector Labs"):
+def model_xml(items, application="Heuretes FreeCAD"):
     """The 3D/3dmodel.model text for plate items (points already where they print)."""
     lines = ['<?xml version="1.0" encoding="UTF-8"?>',
              f'<model unit="millimeter" xml:lang="en-US" xmlns="{NS_CORE}">',

@@ -5,7 +5,7 @@
 \textbf{Method.} The Assembly workbench in this repository (FreeCAD 1.1.4) was read command by command
 (\file{src/Mod/Assembly}), and compared with a SolidWorks/Fusion checklist and with the 97 upstream commits
 to \file{src/Mod/Assembly} since the 1.1 release (24 Mar -- 10 Oct 2026, GitHub API). The ``upstream'' column
-is what the rebase to main (\eref{FND-03}) brings without any Vector Labs work. Items marked \verify{} need the
+is what the rebase to main (\eref{FND-03}) brings without any Heuretes FreeCAD work. Items marked \verify{} need the
 GUI and are in the next test session. \textbf{Gate:} the mechanical reviewer approves this list; it then
 re-scopes \eref{ASM-03}--\eref{ASM-10}.
 
@@ -38,7 +38,7 @@ Insert existing part & \pfull & \pfull & \pfull{} \code{Assembly\_InsertLink} & 
 New part in context & \pfull & \pfull & \pfull{} \code{Assembly\_InsertNewPart} creates \emph{and saves a separate document} --- matches one-file-per-part & joint creation fix & ASM-01 builds on it\\
 Sub-assemblies, rigid vs flexible & \pfull & \pfull & \pfull{} \code{AssemblyLink.Rigid} & parent refresh; rigid-change fix & ASM-05 shrinks to verification\\
 Grounding & \pfull & \pfull & \pfull & \textbf{grounded parts unmovable} & rebase\\
-Component patterns & \pfull & \pfull & \pfull{} Vector Labs link arrays (MOD-01, today) & \textbf{generated arrays + suppressed elements} & align on rebase\\
+Component patterns & \pfull & \pfull & \pfull{} Heuretes FreeCAD link arrays (MOD-01, today) & \textbf{generated arrays + suppressed elements} & align on rebase\\
 Mirror components & \pfull & \pfull & \pnone & --- & new, small (ASM-03)\\
 Position snapshots / configurations & \pfull & \pfull & \pnone & \textbf{snapshots (\#25384)} & rebase\\
 \midrule

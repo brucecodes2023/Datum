@@ -36,7 +36,7 @@ CAPS = ["Part colour", "One colour", "None"]
 FILL = {"Part colour": "part", "One colour": "single", "None": "none"}
 NOT_CUT = ["Nothing", "Purchased (COTS) parts", "Chosen parts"]
 HERE = os.path.dirname(os.path.abspath(__file__))
-ICON = os.path.join(HERE, "BruceWorx_Section.svg")
+ICON = os.path.join(HERE, "Heuretes_Section.svg")
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 
 _state = {"installed": False, "pending": set(), "observer": None, "editing": None, "restored": set()}

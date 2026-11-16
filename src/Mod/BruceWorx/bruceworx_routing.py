@@ -74,7 +74,7 @@ PREFS_PATH = "User parameter:BaseApp/Preferences/Mod/BruceWorx/Routing"
 
 
 def _rt():
-    from bruceworx import routing
+    from heuretes_freecad import routing
 
     return routing
 
@@ -459,7 +459,7 @@ class ViewProviderRoutePath:
         self.Object = vobj.Object
 
     def getIcon(self):
-        return os.path.join(HERE, "BruceWorx_RoutePath.svg")
+        return os.path.join(HERE, "Heuretes_RoutePath.svg")
 
     def dumps(self):
         return None
@@ -1090,8 +1090,8 @@ class Bundle(_Routed):
 class ViewProviderRouted:
     """Colour from the wire's Colour property; a translucent bundle; the kind's icon."""
 
-    ICONS = {WIRE: "BruceWorx_RouteWire.svg", PIPE: "BruceWorx_RoutePipe.svg", HOSE: "BruceWorx_RouteHose.svg",
-             BUNDLE: "BruceWorx_RouteBundle.svg"}
+    ICONS = {WIRE: "Heuretes_RouteWire.svg", PIPE: "Heuretes_RoutePipe.svg", HOSE: "Heuretes_RouteHose.svg",
+             BUNDLE: "Heuretes_RouteBundle.svg"}
     COLOURS = {PIPE: (0.75, 0.76, 0.78), HOSE: (0.15, 0.15, 0.17), BUNDLE: (0.3, 0.3, 0.32)}
 
     def __init__(self, vobj):
@@ -1127,7 +1127,7 @@ class ViewProviderRouted:
             self.apply(obj.ViewObject)
 
     def getIcon(self):
-        return os.path.join(HERE, self.ICONS.get(getattr(self, "kind", ""), "BruceWorx_RouteWire.svg"))
+        return os.path.join(HERE, self.ICONS.get(getattr(self, "kind", ""), "Heuretes_RouteWire.svg"))
 
     def dumps(self):
         return None

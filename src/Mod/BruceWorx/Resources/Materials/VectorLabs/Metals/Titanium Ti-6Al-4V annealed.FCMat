@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "68fc1d8d-0c01-42ec-bd1c-7759270cb76d"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Titanium Ti-6Al-4V annealed"
   Description: "Titanium Grade 5 (Ti-6Al-4V, UNS R56400), mill annealed: light, strong CNC parts. Strengths are AMS 4911 minimums, 130 ksi UTS and 120 ksi yield, elongation 10 % (typical: yield 880 MPa, UTS 950 MPa, elongation 14 %). Poor heat conductor; galls against itself."
   ReferenceSource: "AMS 4911 minimum strengths (annealed sheet, strip, plate); ASM/MatWeb typical elastic and thermal values"
   SourceURL: "https://titanium.com/ams-4911/"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Metals"
 Models:
   LinearElastic:

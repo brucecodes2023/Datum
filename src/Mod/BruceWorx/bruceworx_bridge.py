@@ -43,6 +43,7 @@ import datetime as _dt
 import hmac
 import json
 import os
+from heuretes_env import getenv
 import secrets
 import time
 
@@ -412,7 +413,7 @@ def remove_state(folder: str, token: str) -> None:
 
 
 def env_port(default=DEFAULT_PORT) -> int:
-    text = os.environ.get("BW_BRIDGE_PORT", "").strip()
+    text = getenv("BRIDGE_PORT", "").strip()
     try:
         return int(text) if text else default
     except ValueError:
@@ -421,14 +422,14 @@ def env_port(default=DEFAULT_PORT) -> int:
 
 def env_autoallow(gui_up: bool) -> bool:
     """BW_BRIDGE_AUTOALLOW=1, honoured only without the GUI."""
-    return (not gui_up) and os.environ.get("BW_BRIDGE_AUTOALLOW", "") == "1"
+    return (not gui_up) and getenv("BRIDGE_AUTOALLOW", "") == "1"
 
 
 # ----- the dispatcher (FreeCAD side, shared by both transports) ----------------------
 
 
 def state_dir() -> str:
-    explicit = os.environ.get("BW_BRIDGE_DIR", "").strip()
+    explicit = getenv("BRIDGE_DIR", "").strip()
     if explicit:
         return os.path.abspath(os.path.expanduser(explicit))
     import FreeCAD
@@ -551,7 +552,7 @@ def serve_headless(folder=None, port=None, stop=None) -> None:
     port = server.getsockname()[1]
     write_state(folder, _state_data(port, token, True))
     FreeCAD.Console.PrintMessage(f"Claude bridge (headless) on 127.0.0.1:{port}\n")
-    parent = int(os.environ.get("BW_BRIDGE_PARENT_PID", "0") or 0)
+    parent = int(getenv("BRIDGE_PARENT_PID", "0") or 0)
     sel = selectors.DefaultSelector()
     sel.register(server, selectors.EVENT_READ, None)
     buffers = {}

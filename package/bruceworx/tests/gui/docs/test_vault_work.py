@@ -72,7 +72,7 @@ def browser():
 
 
 def another_mac_checks_in(pn, note):
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     dana = FolderVault(s().vault.ref_path, actor="dana@imac")
     dana.checkout(pn)
@@ -349,7 +349,7 @@ def get_revision():
 
 @C.step(800)
 def locked_by_someone_else():
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     pin = V["pin"]
     FolderVault(s().vault.ref_path, actor="dana@imac").checkout(pin)
@@ -377,7 +377,7 @@ def locked_by_someone_else():
 
 @C.step(800)
 def assembly_check_out():
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     FolderVault(s().vault.ref_path, actor="dana@imac").undo_checkout(V["pin"], force=True)
     vc().changed(refresh=True)

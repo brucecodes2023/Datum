@@ -17,7 +17,7 @@ import FreeCAD as App
 import Part  # Part::FeaturePython; Part.Vertex in the fitting test
 
 import bruceworx_routing as br
-from bruceworx import routing as rt
+from heuretes_freecad import routing as rt
 
 V = App.Vector
 THREE_BEND = [(0, 0, 0), (100, 0, 0), (100, 100, 0), (100, 100, 100), (100, 0, 100)]
@@ -399,7 +399,7 @@ class RoutingCoreTests(unittest.TestCase):
         self.assertAlmostEqual(metered["qty"], (160.0 + 10.0 * math.pi) / 1000.0, places=9)
         self.assertNotIn("unit", rows[f"{bolt.Label} (in this file)"])
         self.assertEqual(rows[f"{bolt.Label} (in this file)"]["qty"], 1)
-        from bruceworx import bom
+        from heuretes_freecad import bom
 
         lines, missing = bom.lines_from_walk(bb.walk(self.doc), set())
         self.assertEqual(lines, [])
@@ -702,7 +702,7 @@ class ConnectorFittingTests(unittest.TestCase):
 
     def test_terminals_are_counted_in_the_bom(self):
         import bruceworx_bom as bb
-        from bruceworx import bom
+        from heuretes_freecad import bom
 
         part, asm, j1, j2, path = self.harness()
         pin1 = self.bp.pin(part, "1")
@@ -796,7 +796,7 @@ class ConnectorFittingTests(unittest.TestCase):
         self.assertTrue(body.Shape.isValid())
 
     def test_every_fitting_builds(self):
-        from bruceworx import fittings as ft
+        from heuretes_freecad import fittings as ft
 
         for family, style, size, thread in ft.all_fittings():
             shape = self.bf.layout_shape(ft.layout(family, style, size, thread or None))

@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "6f3c6c6f-6af1-4f66-a59f-6190e2c25cb1"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Aluminium 5052-H32"
   Description: "Al-Mg sheet for bending and laser cutting (UNS A95052, H32 strain-hardened and stabilised). Strengths are ASTM B209 minimums (typical: yield 193 MPa, UTS 228 MPa)."
   ReferenceSource: "ASTM B209 minimum strengths; ASM/MatWeb typical elastic and thermal values"
   SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=MA5052H32"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Metals"
 Models:
   LinearElastic:

@@ -111,7 +111,7 @@ def press_task_ok(what):
 
 @C.step(2500)
 def setup():
-    from bruceworx import drawing_standards as ds
+    from heuretes_freecad import drawing_standards as ds
 
     C.setup_window()
     vault = C.new_vault("Drawing Test")
@@ -486,7 +486,7 @@ def page_with_views_looks():
 
 @C.step(600)
 def new_drawing_iso():
-    from bruceworx import drawing_standards as ds
+    from heuretes_freecad import drawing_standards as ds
 
     s = ds.load(V["root"])
     ds.set_text(s, "standard", "ISO GPS")
@@ -535,7 +535,7 @@ def iso_page_looks():
 @C.step(500)
 def all_templates_load():
     """Every sheet New Drawing can pick loads and has the title-block fields."""
-    from bruceworx import drawing_standards as ds
+    from heuretes_freecad import drawing_standards as ds
 
     doc = FreeCAD.newDocument("Sheets")
     bad = []

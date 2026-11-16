@@ -49,7 +49,7 @@ FEATURE_TYPES = ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolutio
                  "PartDesign::AdditivePipe", "PartDesign::SubtractivePipe",
                  "PartDesign::AdditiveHelix", "PartDesign::SubtractiveHelix")
 COMMAND = "BruceWorx_SketchRepair"
-ICON = "BruceWorx_SketchRepair.svg"
+ICON = "Heuretes_SketchRepair.svg"
 OBJECT_NAME = "BruceWorxRepairCard"
 TRANSACTION = "Close sketch gaps"
 TOP_MARGIN = 12

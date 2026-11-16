@@ -7,7 +7,7 @@ Gui/MainWindow.cpp ([BW]); this module adds the rest:
 
 * the navigation indicator (Tux) reads "Navigation Revit", without its icon;
 * the vault readout reads "Vault <name>" from the folder vault's ref file
-  (``<name>.bwvault``, see addons/BruceWorx/bruceworx/pdm_folder.py). It is
+  (``<name>.bwvault``, see addons/Heuretes/bruceworx/pdm_folder.py). It is
   hidden until Preferences/BruceWorx/VaultPath names a vault folder or ref
   file. The check-out state of the open part is not shown yet: that needs
   the journal replayed, which is not cheap enough for the status bar.

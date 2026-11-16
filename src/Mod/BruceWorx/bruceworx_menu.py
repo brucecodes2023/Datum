@@ -25,7 +25,7 @@ object name, so it does not matter which module's ``InitGui.py`` runs first.
 """
 
 MENU_OBJECT_NAME = "BruceWorxMenu"
-MENU_TITLE = "Vector Labs"
+MENU_TITLE = "Heuretes FreeCAD"
 HELP_MENU_NAME = "&Help"
 
 _state = {"hooked": False, "manipulator": None}
@@ -224,18 +224,18 @@ def _first_named(menu, name):
 
 
 def install_preferences_entry():
-    """``Vector Labs → Vector Labs Preferences…`` opens the BruceWorx preference page."""
+    """``Heuretes FreeCAD → Heuretes FreeCAD Preferences…`` opens the BruceWorx preference page."""
     _QtCore, QtGui, _QtWidgets = _qt()
     window = _window()
     if window is None:
         return None
-    action = QtGui.QAction("Vector Labs Preferences…", window)
-    action.setToolTip("Every Vector Labs default, with its off switch.")
+    action = QtGui.QAction("Heuretes FreeCAD Preferences…", window)
+    action.setToolTip("Every Heuretes FreeCAD default, with its off switch.")
 
     def _open(_checked=False):
         import FreeCADGui
 
-        FreeCADGui.showPreferences("BruceWorx")
+        FreeCADGui.showPreferences("Heuretes FreeCAD")
 
     action.triggered.connect(_open)
     menu = get_menu()

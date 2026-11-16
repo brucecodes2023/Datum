@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "59c6600a-84f6-411c-9803-d0f317c75d9f"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "TPU 95A printed"
   Description: "Printed TPU 95A (Bambu TPU 95A HF): an elastomer; a linear-elastic study is only a rough guide at small strain. Elongation at break over 650 %. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 22.3 MPa, modulus 7.4 MPa, elongation 480 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (TPU 95A HF)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_TPU_95A_HF_Technical_Data_Sheet.pdf"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Printed"
 Models:
   LinearElastic:

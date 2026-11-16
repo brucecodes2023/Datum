@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "6707b2ec-c050-4f03-acf2-856f4453f018"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Stainless 17-4PH H1150"
   Description: "Precipitation-hardening stainless (UNS S17400, EN 1.4542), aged H1150 (28-37 HRC): shafts, pins, brackets and gears machined from stock bought in this condition. Strengths are ASTM A564 minimums, 135 ksi UTS and 105 ksi yield, elongation 16 % (typical: yield 860 MPa, UTS 1000 MPa). H900 is much stronger (minimum yield 1170 MPa, UTS 1310 MPa) but brittle, with 10 % elongation."
   ReferenceSource: "ASTM A564 (Type 630, H1150) bar minimums, also AMS 5643; AK Steel 17-4 PH typical elastic and thermal values"
   SourceURL: "https://aircraftmaterials.com/data/alstst/ams5643.html"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Metals"
 Models:
   LinearElastic:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""SIM-05: the validation cases of Vector Labs, headless.
+"""SIM-05: the validation cases of Heuretes FreeCAD, headless.
 
 The fast set (every case on a coarse mesh) runs once and is checked case by case: a case passes when every marked
 quantity is within its tolerance of the published reference; a case marked known_gap in cases.json must stay within

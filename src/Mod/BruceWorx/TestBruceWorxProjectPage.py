@@ -11,7 +11,7 @@ import bruceworx_projectpage as pp
 
 
 def make_vault(folder):
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     v = FolderVault.init(os.path.join(folder, "Workshop"), "Workshop", actor="bruce@mac")
     src = os.path.join(folder, "src")
@@ -87,7 +87,7 @@ class WidgetTests(unittest.TestCase):
 
     def dashboard(self):
         import bruceworx_dashboard as dash
-        from bruceworx import vault_dashboard
+        from heuretes_freecad import vault_dashboard
 
         QtWidgets = self.QtWidgets
         outer = self
@@ -160,7 +160,7 @@ class WidgetTests(unittest.TestCase):
 
     def test_simulation_rows_from_a_fake_list(self):
         d, snap = self.dashboard()
-        from bruceworx import project_pages
+        from heuretes_freecad import project_pages
 
         rows = project_pages.simulation_rows(
             self.structure(), "DM", lambda s, scope=None: [
@@ -176,7 +176,7 @@ class WidgetTests(unittest.TestCase):
         self.assertEqual(d.project_page.tab_buttons["simulations"].text(), "Simulations 1")
 
     def structure(self):
-        from bruceworx import project_pages
+        from heuretes_freecad import project_pages
 
         return project_pages.structure_of(self.vault)
 

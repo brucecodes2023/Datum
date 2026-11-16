@@ -25,7 +25,7 @@ import zipfile
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF = "PublishDrawings"
 COMMAND = "BruceWorx_PublishDrawings"
-ICON = "BruceWorx_PublishDrawings.svg"
+ICON = "Heuretes_PublishDrawings.svg"
 FORMATS = ("pdf", "dxf")
 FOLDER_NAME = "published"
 
@@ -81,7 +81,7 @@ def export_page(page, folder, formats=FORMATS, name=None):
         path = os.path.join(folder, f"{name}.{fmt}")
         if fmt == "pdf":
             if not FreeCAD.GuiUp:
-                raise PublishError("PDF needs the Vector Labs window (TechDraw draws the page there)")
+                raise PublishError("PDF needs the Heuretes FreeCAD window (TechDraw draws the page there)")
             import TechDrawGui
 
             TechDrawGui.exportPageAsPdf(page, path)

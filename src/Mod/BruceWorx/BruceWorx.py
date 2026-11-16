@@ -359,9 +359,9 @@ def install():
         import FreeCADGui
 
         here = os.path.dirname(os.path.abspath(__file__))
-        FreeCADGui.addIconPath(here)  # preferences-bruceworx.svg, the page icon
+        FreeCADGui.addIconPath(here)  # preferences-heuretes.svg, the page icon
         ui = os.path.join(here, "preferences-bruceworx.ui")
-        FreeCADGui.addPreferencePage(ui, "BruceWorx")
+        FreeCADGui.addPreferencePage(ui, "Heuretes FreeCAD")
         _observer = _PrefObserver()
         # Keep the group handle: ParamGet returns a new Python wrapper each
         # time, and the wrapper detaches its observers when it is collected.

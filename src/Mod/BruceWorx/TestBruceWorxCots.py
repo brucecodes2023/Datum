@@ -164,7 +164,7 @@ class TestPartAndSeat(Base):
         self.assertEqual(len(part.MountHoles), 4)
         self.assertTrue(bc.is_cots(part))
         self.assertIn("mass_g", part.CotsUnchecked)
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         kg, source = partprops.typed_mass(part)
         self.assertAlmostEqual(kg, 0.285, places=9)
@@ -260,8 +260,8 @@ class _VaultSession:
     """What the vault client's Session gives bruceworx_cots: .vault, .root, .work, refresh()."""
 
     def __init__(self, folder):
-        from bruceworx import pdm_workspace as ws
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import pdm_workspace as ws
+        from heuretes_freecad import vault_setup as vs
 
         setup = vs.VaultSetup(name="Bought", folder=folder,
                               numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("LE")]))
@@ -295,7 +295,7 @@ class TestVaultItem(Base):
         super().tearDown()
 
     def test_insert_makes_one_vault_item_with_the_makers_number(self):
-        from bruceworx import hardware as hw
+        from heuretes_freecad import hardware as hw
 
         item = self.table["emax-eco2-2207"]
         first = bc.insert(self.asm, item, session=self.s)

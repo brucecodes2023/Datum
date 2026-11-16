@@ -3,6 +3,7 @@ SET(Stylesheets_Files
     "FreeCAD.qss"
     "defaults.qss"
     "BruceWorx.qss"
+    "Heuretes FreeCAD.qss"
 )
 
 SET(Parameters_Files
@@ -10,6 +11,8 @@ SET(Parameters_Files
     "parameters/FreeCAD Light.yaml"
     "parameters/BruceWorx.yaml"
     "parameters/BruceWorx Dark.yaml"
+    "parameters/Heuretes FreeCAD.yaml"
+    "parameters/Heuretes FreeCAD Dark.yaml"
 )
 
 SET(Overlay_Stylesheets_Files

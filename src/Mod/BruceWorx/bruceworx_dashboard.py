@@ -13,7 +13,7 @@ open). The dashboard shows vault items only, never local files:
   Changes (open ECRs and ECOs), Activity (folded, 7/14/30 days), Vault health
 * Recent in this vault: the recent-file cards kept to the vault folder (bruceworx_start)
 
-The data is one snapshot dict from bruceworx/vault_dashboard.py, read on the Start page's worker
+The data is one snapshot dict from heuretes_freecad/vault_dashboard.py, read on the Start page's worker
 thread; this module only draws it. Every tile, row and health line opens the matching filtered
 list in the Vault panel (bruceworx_vaultclient.show_filtered). Check Vault... lists each problem
 with its fix. An empty vault shows "Get started" instead of tiles.

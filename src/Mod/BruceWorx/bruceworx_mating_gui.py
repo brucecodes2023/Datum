@@ -85,7 +85,7 @@ def _selected_component(assembly):
 
 class _BoltUpCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_BoltUp.svg"), "MenuText": "Bolt Up",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_BoltUp.svg"), "MenuText": "Bolt Up",
                 "ToolTip": "Select a part in the assembly: every free hole through it gets a screw of the size the "
                            "clearance hole is for (ISO 273), as long as the thread allows (and a nut where there is "
                            "no thread), each jointed on its seat. One undo step."}
@@ -128,7 +128,7 @@ class _BoltUpCommand:
 
 class _InferMatesCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_InferMates.svg"), "MenuText": "Infer Mates",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_InferMates.svg"), "MenuText": "Infer Mates",
                 "ToolTip": "Joints for the active assembly from its geometry: touching faces coincident, shafts and "
                            "pins concentric, screws and nuts on their seats. Nothing moves (each joint is checked); "
                            "parts left unmated are listed with the reason. One undo step."}

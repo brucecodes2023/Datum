@@ -403,7 +403,7 @@ def model_doc(name="Plate"):
     doc = App.newDocument(name)
     part, body, pad, boss, hole, fil = bwmodel.build(doc)
     try:
-        from bruceworx.partprops import load_schema
+        from heuretes_freecad.partprops import load_schema
 
         load_schema().apply(part)
         part.PartNumber = "LE-01-01001"

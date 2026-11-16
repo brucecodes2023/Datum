@@ -42,7 +42,7 @@ def _vc():
 
 
 def _pt():
-    from bruceworx import product_tree
+    from heuretes_freecad import product_tree
 
     return product_tree
 
@@ -273,7 +273,7 @@ def _make_classes():
                 self.root.clear()
                 self.show_empty("Open a vault on the Start page to see a project's structure here.", False)
                 return
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             self.name.setText(s.name)
             self.structure = vault_trees.structure(s.vault, links=self._links)
@@ -302,7 +302,7 @@ def _make_classes():
         def _links(self, pn):
             s = self.session()
             path = s.work.path(pn) if s is not None else ""
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             if path and os.path.exists(path):
                 return vault_trees.file_links(path)
@@ -504,7 +504,7 @@ def _make_classes():
                 pn = ""
             if not pn:
                 return
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             code = vault_trees.program_code(pn)
             program = next((r for r in self._roots() if r.get("kind") == "program" and r.get("project") == code), None)

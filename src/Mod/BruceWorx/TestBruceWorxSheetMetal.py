@@ -30,7 +30,7 @@ try:
 except ImportError:
     HAVE_NETWORKX = False
 
-from bruceworx import flat_dxf, flat_export as fe, sheetmetal_rules as smr
+from heuretes_freecad import flat_dxf, flat_export as fe, sheetmetal_rules as smr
 
 T, R, K = 1.5, 2.0, 0.44
 A, B, D = 40.0, 30.0, 30.0  # outside flange lengths and depth (plan figure)

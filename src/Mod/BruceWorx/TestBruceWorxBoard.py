@@ -18,7 +18,7 @@ import FreeCAD as App
 import bruceworx_board as bb
 
 try:
-    from bruceworx import kicad_bridge as kb
+    from heuretes_freecad import kicad_bridge as kb
 except ImportError:  # hooks add-on off
     kb = None
 
@@ -256,9 +256,9 @@ class TestVaultItem(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from bruceworx import ecad_vault as ev
-        from bruceworx import pdm_workspace as ws
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import ecad_vault as ev
+        from heuretes_freecad import pdm_workspace as ws
+        from heuretes_freecad import vault_setup as vs
 
         cls.ev = ev
         cls.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-board-item-"))

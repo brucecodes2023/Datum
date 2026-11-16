@@ -60,11 +60,11 @@ class RestoreTest(unittest.TestCase):
             )
             self.assertEqual(
                 store.get("BaseApp/Preferences/MainWindow", "StyleSheet", "text", ""),
-                "BruceWorx.qss",
+                "Heuretes FreeCAD.qss",
             )
             self.assertEqual(
                 store.get("BaseApp/Preferences/MainWindow", "Theme", "text", ""),
-                "BruceWorx",
+                "Heuretes FreeCAD",
             )
             self.assertTrue(store.get(pack.APPLIED_GROUP, "ShowGroundGrid", "bool", False))
             self.assertEqual(pack.disable(store, snap), "snapshot")
@@ -92,7 +92,7 @@ class RestoreTest(unittest.TestCase):
             pack.enable(store, snap, "dark")
             self.assertEqual(
                 store.get("BaseApp/Preferences/MainWindow", "Theme", "text", ""),
-                "BruceWorx Dark",
+                "Heuretes FreeCAD Dark",
             )
             pack.disable(store, snap)
             self.assertEqual(store.get("BaseApp/Preferences/Units", "UserSchema", "int", -1), 2)
@@ -169,7 +169,7 @@ class PackContentsTest(unittest.TestCase):
             light[("BaseApp/Preferences/View", "BackgroundColor2")],
             dark[("BaseApp/Preferences/View", "BackgroundColor2")],
         )
-        self.assertEqual(dark[("BaseApp/Preferences/MainWindow", "Theme")], "BruceWorx Dark")
+        self.assertEqual(dark[("BaseApp/Preferences/MainWindow", "Theme")], "Heuretes FreeCAD Dark")
         self.assertEqual(light[("BaseApp/Preferences/MainWindow", "StyleSheet")], dark[("BaseApp/Preferences/MainWindow", "StyleSheet")])
 
     def test_committed_cfg_matches_inventory(self):
@@ -182,7 +182,7 @@ class PackContentsTest(unittest.TestCase):
             self.assertEqual(root.tag, "FCParameters")
 
     def test_off_pack_has_no_cfg(self):
-        folder = os.path.join(ROOT, "src", "Gui", "PreferencePacks", "BruceWorx Off")
+        folder = os.path.join(ROOT, "src", "Gui", "PreferencePacks", "Heuretes FreeCAD Off")
         self.assertTrue(os.path.isfile(os.path.join(folder, "pre.FCMacro")))
         self.assertTrue(os.path.isfile(os.path.join(folder, "post.FCMacro")))
         self.assertFalse(any(name.endswith(".cfg") for name in os.listdir(folder)))
@@ -249,18 +249,18 @@ class PackagingTest(unittest.TestCase):
         path = os.path.join(ROOT, "src", "Gui", "PreferencePacks", "package.xml")
         tree = ET.parse(path)
         names = [node.findtext("name") for node in tree.findall(".//preferencepack")]
-        self.assertIn("BruceWorx", names)
-        self.assertIn("BruceWorx Dark", names)
-        self.assertIn("BruceWorx Off", names)
-        off = [node for node in tree.findall(".//preferencepack") if node.findtext("name") == "BruceWorx Off"][0]
+        self.assertIn("Heuretes FreeCAD", names)
+        self.assertIn("Heuretes FreeCAD Dark", names)
+        self.assertIn("Heuretes FreeCAD Off", names)
+        off = [node for node in tree.findall(".//preferencepack") if node.findtext("name") == "Heuretes FreeCAD Off"][0]
         self.assertNotEqual(off.findtext("type"), "Theme")
 
     def test_cmake_installs_pack_stylesheet_and_mod(self):
         packs = _read(os.path.join(ROOT, "src", "Gui", "PreferencePacks", "CMakeLists.txt"))
-        for folder in ("BruceWorx", "BruceWorx Dark", "BruceWorx Off"):
+        for folder in ("Heuretes FreeCAD", "Heuretes FreeCAD Dark", "Heuretes FreeCAD Off"):
             self.assertIn(f'"{folder}"', packs)
         sheets = _read(os.path.join(ROOT, "src", "Gui", "Stylesheets", "CMakeLists.txt"))
-        self.assertIn("BruceWorx.qss", sheets)
+        self.assertIn("Heuretes FreeCAD.qss", sheets)
         self.assertIn("parameters/BruceWorx.yaml", sheets)
         self.assertIn("parameters/BruceWorx Dark.yaml", sheets)
         mods = _read(os.path.join(ROOT, "src", "Mod", "CMakeLists.txt"))
@@ -313,7 +313,7 @@ class DefaultsOnTest(unittest.TestCase):
         self.assertTrue(os.path.exists(self.snap))
         self.assertEqual(self.store.get("BaseApp/Preferences/Units", "UserSchema", "int", -1), 0)
         self.assertEqual(
-            self.store.get("BaseApp/Preferences/MainWindow", "Theme", "text", ""), "BruceWorx"
+            self.store.get("BaseApp/Preferences/MainWindow", "Theme", "text", ""), "Heuretes FreeCAD"
         )
         # Second start: nothing changes.
         self.assertEqual(defaults.apply_first_run(self.store, self.snap), "already")
@@ -323,14 +323,14 @@ class DefaultsOnTest(unittest.TestCase):
         self.assertIs(self.store.get(defaults.START_GROUP, defaults.FIRST_START, "bool", True), False)
 
     def test_a_profile_freecads_first_start_overwrote_is_healed_once(self):
-        # Vector Labs' new profile: pack applied, then the first-start page put FreeCAD Light over it.
+        # Heuretes FreeCAD' new profile: pack applied, then the first-start page put FreeCAD Light over it.
         self.store.set(defaults.GROUP, pack.APPLIED_NAME, "bool", True)
         self.store.set(defaults.GROUP, defaults.FIRST_RUN_DONE, "bool", True)
         self.store.set(defaults.START_GROUP, defaults.FIRST_START, "bool", False)
         self.store.set(defaults.MAIN_GROUP, "Theme", "text", "FreeCAD Light")
         self.store.set(defaults.MAIN_GROUP, "StyleSheet", "text", "FreeCAD.qss")
         self.assertEqual(defaults.apply_first_run(self.store, self.snap), "healed")
-        self.assertEqual(self.store.get(defaults.MAIN_GROUP, "Theme", "text", ""), "BruceWorx")
+        self.assertEqual(self.store.get(defaults.MAIN_GROUP, "Theme", "text", ""), "Heuretes FreeCAD")
         # A stock theme chosen afterwards is the user's choice.
         self.store.set(defaults.MAIN_GROUP, "Theme", "text", "FreeCAD Light")
         self.assertEqual(defaults.apply_first_run(self.store, self.snap), "already")
@@ -428,20 +428,21 @@ class DefaultsOnTest(unittest.TestCase):
 
     def test_build_installs_history_timeline_and_hooks(self):
         mods = _read(os.path.join(ROOT, "src", "Mod", "CMakeLists.txt"))
-        self.assertIn('option(BUILD_BW_HISTORY_TIMELINE', mods)
-        self.assertIn('option(BUILD_BW_HOOKS', mods)
-        self.assertRegex(mods, r'option\(BUILD_BW_HISTORY_TIMELINE "[^"]*" ON\)')
-        self.assertRegex(mods, r'option\(BUILD_BW_HOOKS "[^"]*" ON\)')
+        self.assertIn('option(BUILD_HEU_HISTORY_TIMELINE', mods)
+        self.assertIn('option(BUILD_HEU_HOOKS', mods)
+        self.assertRegex(mods, r'option\(BUILD_HEU_HISTORY_TIMELINE "[^"]*" ON\)')
+        self.assertRegex(mods, r'option\(BUILD_HEU_HOOKS "[^"]*" ON\)')
+        self.assertIn("BUILD_BW_", mods)
         timeline_dir = os.path.join(ROOT, "package", "bruceworx", "mods", "HistoryTimeline")
         timeline = _read(os.path.join(timeline_dir, "CMakeLists.txt"))
         self.assertIn('"${CMAKE_BINARY_DIR}/Mod/HistoryTimeline"', timeline)
         self.assertIn("DESTINATION Mod/HistoryTimeline", timeline)
         for rel in re.findall(r"^\s+((?:history_timeline/)?[\w]+\.(?:py|md))$", timeline, re.M):
             self.assertTrue(os.path.isfile(os.path.join(timeline_dir, rel)), rel)
-        hooks_dir = os.path.join(ROOT, "addons", "BruceWorx")
+        hooks_dir = os.path.join(ROOT, "addons", "Heuretes")
         hooks = _read(os.path.join(hooks_dir, "CMakeLists.txt"))
-        self.assertIn('"${CMAKE_BINARY_DIR}/Mod/BruceWorxHooks"', hooks)
-        self.assertIn("DESTINATION Mod/BruceWorxHooks", hooks)
+        self.assertIn('"${CMAKE_BINARY_DIR}/Mod/HeuretesHooks"', hooks)
+        self.assertIn("DESTINATION Mod/HeuretesHooks", hooks)
         self.assertNotIn("package.xml", hooks.split("SET(BruceWorxHooks_SRCS")[1].split(")")[0])
         for rel in re.findall(r"^\s+([\w/]+\.(?:py|json|FCMacro|md))$", hooks, re.M):
             self.assertTrue(os.path.isfile(os.path.join(hooks_dir, rel)), rel)

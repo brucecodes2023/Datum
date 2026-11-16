@@ -23,7 +23,7 @@ SET(BruceWorx_SRCS
     TestBruceWorxGaps.py
     TestBruceWorxBridge.py
     preferences-bruceworx.ui
-    preferences-bruceworx.svg
+    preferences-heuretes.svg
     BruceWorxModelTree.qss
     bruceworx_pack.py
     bruceworx_defaults.py
@@ -48,21 +48,21 @@ SET(BruceWorx_SRCS
     TestBruceWorxRouting.py
     TestBruceWorxHarness.py
     TestBruceWorxConnectorLibrary.py
-    BruceWorx_RoutePath.svg
-    BruceWorx_RouteFrame.svg
-    BruceWorx_RouteFitting.svg
-    BruceWorx_RouteTerminals.svg
-    BruceWorx_RouteAddPoint.svg
-    BruceWorx_RouteClip.svg
-    BruceWorx_RouteWire.svg
-    BruceWorx_RoutePipe.svg
-    BruceWorx_RouteHose.svg
-    BruceWorx_RouteBundle.svg
-    BruceWorx_RouteHarness.svg
-    BruceWorx_RouteMakeVaultItem.svg
-    BruceWorx_RouteFromTo.svg
-    BruceWorx_RouteCutList.svg
-    BruceWorx_RouteBendRules.svg
+    Heuretes_RoutePath.svg
+    Heuretes_RouteFrame.svg
+    Heuretes_RouteFitting.svg
+    Heuretes_RouteTerminals.svg
+    Heuretes_RouteAddPoint.svg
+    Heuretes_RouteClip.svg
+    Heuretes_RouteWire.svg
+    Heuretes_RoutePipe.svg
+    Heuretes_RouteHose.svg
+    Heuretes_RouteBundle.svg
+    Heuretes_RouteHarness.svg
+    Heuretes_RouteMakeVaultItem.svg
+    Heuretes_RouteFromTo.svg
+    Heuretes_RouteCutList.svg
+    Heuretes_RouteBendRules.svg
     bruceworx_studio.py
     bruceworx_toolbars.py
     bruceworx_groups.py
@@ -133,7 +133,7 @@ SET(BruceWorx_SRCS
     bruceworx_massreport.py
     TestBruceWorxBalance.py
     bruceworx_massreport_gui.py
-    BruceWorx_DroneBalance.svg
+    Heuretes_DroneBalance.svg
     bruceworx_parameters.py
     TestBruceWorxParameters.py
     bruceworx_toasts.py
@@ -142,7 +142,7 @@ SET(BruceWorx_SRCS
     bruceworx_interference.py
     TestBruceWorxInterference.py
     bruceworx_interference_gui.py
-    BruceWorx_Interference.svg
+    Heuretes_Interference.svg
     TestBruceWorxStudio.py
     bruceworx_oncanvas.py
     TestBruceWorxOnCanvas.py
@@ -154,34 +154,34 @@ SET(BruceWorx_SRCS
     TestBruceWorxDrawingGui.py
     bruceworx_units.py
     TestBruceWorxUnits.py
-    BruceWorx_RectangularPattern.svg
-    BruceWorx_CircularPattern.svg
-    BruceWorx_Section.svg
+    Heuretes_RectangularPattern.svg
+    Heuretes_CircularPattern.svg
+    Heuretes_Section.svg
     bruceworx_analysis.py
     TestBruceWorxAnalysis.py
     bruceworx_analysis_gui.py
     TestBruceWorxInspect.py
-    BruceWorx_Overhang.svg
-    BruceWorx_Draft.svg
-    BruceWorx_Thickness.svg
-    BruceWorx_Curvature.svg
-    BruceWorx_Zebra.svg
-    BruceWorx_MassProperties.svg
+    Heuretes_Overhang.svg
+    Heuretes_Draft.svg
+    Heuretes_Thickness.svg
+    Heuretes_Curvature.svg
+    Heuretes_Zebra.svg
+    Heuretes_MassProperties.svg
     bruceworx_board.py
     bruceworx_board_gui.py
-    BruceWorx_InsertBoard.svg
+    Heuretes_InsertBoard.svg
     TestBruceWorxBoard.py
     bruceworx_sheetmetal.py
-    BruceWorx_ExportFlat.svg
-    BruceWorx_SheetMetalRule.svg
+    Heuretes_ExportFlat.svg
+    Heuretes_SheetMetalRule.svg
     TestBruceWorxSheetMetal.py
     bruceworx_hardware.py
     TestBruceWorxHardware.py
-    BruceWorx_HolePreset.svg
-    BruceWorx_CosmeticThread.svg
-    BruceWorx_HoleCallouts.svg
-    BruceWorx_InsertFastener.svg
-    BruceWorx_MarkCots.svg
+    Heuretes_HolePreset.svg
+    Heuretes_CosmeticThread.svg
+    Heuretes_HoleCallouts.svg
+    Heuretes_InsertFastener.svg
+    Heuretes_MarkCots.svg
     bruceworx_sim.py
     bruceworx_sim_eigen.py
     bruceworx_sim_thermal.py
@@ -214,101 +214,101 @@ SET(BruceWorx_SRCS
     bruceworx_validation.py
     bruceworx_validation_cases.py
     bruceworx_validation_gui.py
-    BruceWorx_Validation.svg
+    Heuretes_Validation.svg
     TestBruceWorxValidation.py
     TestBruceWorxValidationGui.py
-    BruceWorx_NewStudy.svg
-    BruceWorx_SafetyFactor.svg
-    BruceWorx_Probe.svg
-    BruceWorx_StudyReport.svg
-    BruceWorx_PreCheck.svg
+    Heuretes_NewStudy.svg
+    Heuretes_SafetyFactor.svg
+    Heuretes_Probe.svg
+    Heuretes_StudyReport.svg
+    Heuretes_PreCheck.svg
     bruceworx_motion.py
     TestBruceWorxMotion.py
-    BruceWorx_Joint.svg
-    BruceWorx_DriveJoint.svg
-    BruceWorx_MotionStudy.svg
-    BruceWorx_MotionLink.svg
+    Heuretes_Joint.svg
+    Heuretes_DriveJoint.svg
+    Heuretes_MotionStudy.svg
+    Heuretes_MotionLink.svg
     bruceworx_materials.py
     TestBruceWorxMaterials.py
     bruceworx_api_save.py
     bruceworx_ribs.py
     TestBruceWorxRibs.py
-    BruceWorx_RibStations.svg
+    Heuretes_RibStations.svg
     bruceworx_plane.py
     TestBruceWorxPlaneGui.py
-    BruceWorx_Plane.svg
-    BruceWorx_Axis.svg
-    BruceWorx_Point.svg
+    Heuretes_Plane.svg
+    Heuretes_Axis.svg
+    Heuretes_Point.svg
     bruceworx_newdoc.py
     TestBruceWorxNewDocGui.py
-    BruceWorx_Hybrid.svg
+    Heuretes_Hybrid.svg
     bruceworx_printprep.py
     bruceworx_printprep_gui.py
     TestBruceWorxPrintPrep.py
-    BruceWorx_PrintPrep.svg
-    BruceWorx_PlaceOnBed.svg
-    BruceWorx_Export3MF.svg
-    BruceWorx_SendToSlicer.svg
+    Heuretes_PrintPrep.svg
+    Heuretes_PlaceOnBed.svg
+    Heuretes_Export3MF.svg
+    Heuretes_SendToSlicer.svg
     bruceworx_directedit.py
     TestBruceWorxDirectEdit.py
-    BruceWorx_OffsetFace.svg
-    BruceWorx_EditHole.svg
-    BruceWorx_DeleteFace.svg
+    Heuretes_OffsetFace.svg
+    Heuretes_EditHole.svg
+    Heuretes_DeleteFace.svg
     bruceworx_cots.py
     cots_library.json
     TestBruceWorxCots.py
-    BruceWorx_CotsInsert.svg
-    BruceWorx_CotsSeat.svg
-    BruceWorx_CotsJoin.svg
+    Heuretes_CotsInsert.svg
+    Heuretes_CotsSeat.svg
+    Heuretes_CotsJoin.svg
     bruceworx_partfiles.py
     TestBruceWorxPartFiles.py
     TestBruceWorxPartFilesGui.py
-    BruceWorx_MakeExternal.svg
-    BruceWorx_RepairLinks.svg
-    BruceWorx_FlexibleSubAssembly.svg
+    Heuretes_MakeExternal.svg
+    Heuretes_RepairLinks.svg
+    Heuretes_FlexibleSubAssembly.svg
     bruceworx_drawing_publish.py
     bruceworx_drawing_callouts.py
     bruceworx_partslist.py
     bruceworx_autodrawing.py
     TestBruceWorxDrawingEpics.py
-    BruceWorx_PublishDrawings.svg
-    BruceWorx_PartsList.svg
-    BruceWorx_AutoDrawing.svg
+    Heuretes_PublishDrawings.svg
+    Heuretes_PartsList.svg
+    Heuretes_AutoDrawing.svg
     bruceworx_revtable.py
     TestBruceWorxRevTable.py
     bruceworx_parameters_topdown.py
     TestBruceWorxTopDown.py
-    BruceWorx_LinkSkeleton.svg
-    BruceWorx_CheckReferences.svg
-    BruceWorx_RebuildFromTop.svg
+    Heuretes_LinkSkeleton.svg
+    Heuretes_CheckReferences.svg
+    Heuretes_RebuildFromTop.svg
     bruceworx_incontext.py
     TestBruceWorxInContext.py
-    BruceWorx_EditInContext.svg
-    BruceWorx_ReferenceFromAssembly.svg
-    BruceWorx_InContextReferences.svg
+    Heuretes_EditInContext.svg
+    Heuretes_ReferenceFromAssembly.svg
+    Heuretes_InContextReferences.svg
     bruceworx_mating.py
     bruceworx_mating_gui.py
     TestBruceWorxMating.py
-    BruceWorx_BoltUp.svg
-    BruceWorx_InferMates.svg
+    Heuretes_BoltUp.svg
+    Heuretes_InferMates.svg
     bruceworx_surfacing.py
     bruceworx_surfacing_gui.py
     TestBruceWorxSurfacing.py
-    BruceWorx_SurfaceTrim.svg
-    BruceWorx_SurfaceUntrim.svg
-    BruceWorx_SurfaceExtend.svg
-    BruceWorx_SurfacePatch.svg
-    BruceWorx_SurfaceStitch.svg
-    BruceWorx_SurfaceThicken.svg
-    BruceWorx_ReplaceFace.svg
-    BruceWorx_Continuity.svg
-    BruceWorx_SketchRepair.svg
+    Heuretes_SurfaceTrim.svg
+    Heuretes_SurfaceUntrim.svg
+    Heuretes_SurfaceExtend.svg
+    Heuretes_SurfacePatch.svg
+    Heuretes_SurfaceStitch.svg
+    Heuretes_SurfaceThicken.svg
+    Heuretes_ReplaceFace.svg
+    Heuretes_Continuity.svg
+    Heuretes_SketchRepair.svg
     bruceworx_worksheet.py
     bruceworx_worksheet_gui.py
     TestBruceWorxWorksheet.py
     TestBruceWorxWorksheetGui.py
-    BruceWorx_Worksheet.svg
-    BruceWorx_WorksheetOpen.svg
+    Heuretes_Worksheet.svg
+    Heuretes_WorksheetOpen.svg
     bruceworx_agent.py
     TestBruceWorxAgent.py
     bruceworx_codecad.py
@@ -316,10 +316,10 @@ SET(BruceWorx_SRCS
     bruceworx_codecad_gui.py
     bruceworx_codecad_dims.py
     TestBruceWorxCodeCadGui.py
-    BruceWorx_CodePart.svg
-    BruceWorx_CodePartError.svg
-    BruceWorx_CodePartLocked.svg
-    BruceWorx_CodePartRebuild.svg
+    Heuretes_CodePart.svg
+    Heuretes_CodePartError.svg
+    Heuretes_CodePartLocked.svg
+    Heuretes_CodePartRebuild.svg
     TestBruceWorxCodeCad.py
     bruceworx_api_docs.py
     bruceworx_api_asm.py

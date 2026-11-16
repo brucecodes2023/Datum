@@ -1719,7 +1719,7 @@ class _Command:
 
 class _JointCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_Joint.svg"), "MenuText": "Joint",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_Joint.svg"), "MenuText": "Joint",
                 "ToolTip": "A joint between two parts: fixed, revolute, cylindrical, slider, ball, distance, "
                            "parallel, perpendicular, angle, rack and pinion, screw, gears, belt"}
 

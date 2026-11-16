@@ -10,7 +10,7 @@ A simulation file is a FreeCAD document zip saved as ``<name>.vlsim``: the same 
   a normal document (an already open one is brought forward, as for an .FCStd).
 * Save keeps the extension because ``Document::save`` writes to the name the document has; Save As keeps it
   because ``Document::saveAs`` accepts ``.vlsim`` next to ``.FCStd`` (src/App/Document.cpp, checkFileName).
-* Finder opens it with Vector Labs: make-vectorlabs.sh lists the extension in CFBundleDocumentTypes and
+* Finder opens it with Heuretes FreeCAD: make-vectorlabs.sh lists the extension in CFBundleDocumentTypes and
   Gui/GuiApplication.cpp hands the QFileOpenEvent to ``open()``.
 
 The study inside is untouched by any of this.
@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 
 SUFFIX = ".vlsim"
-FILTER = "Vector Labs simulation (*.vlsim)"
+FILTER = "Heuretes FreeCAD simulation (*.vlsim)"
 
 
 def is_vlsim(path) -> bool:

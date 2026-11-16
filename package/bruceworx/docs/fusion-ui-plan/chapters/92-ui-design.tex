@@ -8,7 +8,7 @@
   \item Light and dark, following the macOS appearance setting; the accent follows the macOS accent colour.
   \item ``Clean but feature dense.''
   \item Keep FreeCAD's icons, but at one size with consistent captions.
-  \item Vector Labs' own top bar (workspace menu, tabs, captioned groups) replaces the FreeCAD-Ribbon add-on.
+  \item Heuretes FreeCAD' own top bar (workspace menu, tabs, captioned groups) replaces the FreeCAD-Ribbon add-on.
   \item Screens: part modelling, assembly with the joint panel, sketch, and the Start page.
 \end{itemize}
 
@@ -38,7 +38,7 @@ code. Every element is mapped below to how it would be built. The source is in
 \toprule
 \# & What you see & Cause and fix\\
 \midrule
-\marker{1} & ``Menu'' button, 13 workbench tabs, a large icon grid & The \textbf{FreeCAD-Ribbon} add-on (v1.12.0dev) in your FreeCAD profile, not Vector Labs. It is replaced by the Vector Labs bar; see question~3.\\
+\marker{1} & ``Menu'' button, 13 workbench tabs, a large icon grid & The \textbf{FreeCAD-Ribbon} add-on (v1.12.0dev) in your FreeCAD profile, not Heuretes FreeCAD. It is replaced by the Heuretes FreeCAD bar; see question~3.\\
 \marker{2} & Title shows ``FreeCAD 1.1.4 -- Hinge : 1*'' & Window title: the document name only, with the unsaved mark on its tab.\\
 \marker{3} & Windows-style $-\,\square\,\times$ at the top right & Probably drawn by Ribbon. \verify{} Native macOS buttons (\eref{UIX-02}) come back once it is off.\\
 \marker{4} & Model tree names cut short and faded (``Ass\ldots bly'', ``F\ldots e'') & The faded names have about 1.1:1 contrast. Suspected: the floating-tree sheet's white text (\file{BruceWorxModelTree.qss}) applied to a light panel, and a narrow first column. \verify\\
@@ -139,7 +139,7 @@ showing a PartDesign message.}
 \paragraph{How following the system works.} FreeCAD 1.1 has no setting for this. It applies one theme
 (\file{BruceWorx.yaml} or \file{BruceWorx Dark.yaml}) and one stylesheet at start-up. This build's Qt is 6.8.3,
 and Qt reports the system appearance as \code{QStyleHints::colorScheme()}, with a \code{colorSchemeChanged} signal
-when you switch. Vector Labs listens for that signal. It loads the matching yaml colour tokens, re-applies
+when you switch. Heuretes FreeCAD listens for that signal. It loads the matching yaml colour tokens, re-applies
 \file{BruceWorx.qss} (already written once for both themes), and sets the two viewport background colours and the
 NaviCube colours. No restart is needed. The accent comes from \code{QPalette::Accent} (Qt~6.6 and later), which
 on macOS is the System Settings accent. It is written into the \code{@AccentColor} token, and the derived tokens
@@ -214,7 +214,7 @@ Step & Work & Size\\
 \midrule
 \textbf{A. Stylesheet and settings} & Colour tokens and sizes above in \file{BruceWorx.qss} and the two yaml files.
   Cards for Browser and dialog. NaviCube settings. Fix \marker{2}\marker{4}\marker{5}\marker{7}\marker{8}\marker{9}\marker{10}
-  of figure~\ref{fig:ui-before}. Ribbon off in the Vector Labs profile. No C++.
+  of figure~\ref{fig:ui-before}. Ribbon off in the Heuretes FreeCAD profile. No C++.
   & small\\
 \textbf{B. Small code} & Follow appearance and accent (signal + token reload). Document tabs on top. Dialog
   buttons at the bottom. Navigation pill. One-row timeline, hidden without history. Status-bar readouts.
@@ -231,8 +231,8 @@ Step & Work & Size\\
   \item \textbf{Dark-mode icons:} a faint light plate behind each icon in dark mode only, shown first
         (figure~\ref{fig:ui-plates}). The dark figures above already use it at 10\,\%.
   \item \textbf{Search:} ``yes''. Read as the built-in \texttt{Cmd-K} field; to be confirmed.
-  \item \textbf{Ribbon add-on:} my call. Vector Labs turns FreeCAD-Ribbon off in its own profile while the
-        Vector Labs bar is on and leaves it installed, so turning the bar off brings Ribbon back.
+  \item \textbf{Ribbon add-on:} my call. Heuretes FreeCAD turns FreeCAD-Ribbon off in its own profile while the
+        Heuretes FreeCAD bar is on and leaves it installed, so turning the bar off brings Ribbon back.
   \item \textbf{Properties:} stay in the Browser card, which grows down to fit them.
   \item \textbf{Assembly timeline:} components and joints in the order they were added. FreeCAD numbers every
         object as it is created (\code{obj.ID}), so the order needs no new data. No playback buttons:

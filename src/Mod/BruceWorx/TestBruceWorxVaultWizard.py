@@ -180,7 +180,7 @@ class TestPartNumberBuilder(unittest.TestCase):
 
     def test_selection_flows_into_the_example(self):
         try:
-            from bruceworx import vault_setup as vs
+            from heuretes_freecad import vault_setup as vs
         except ImportError:
             self.skipTest("BruceWorx hooks add-on not installed")
         setup = vs.NumberingSetup(programs=[vs.ProgramSetup("BW"), vs.ProgramSetup("AC")],
@@ -229,8 +229,8 @@ class TestImportJob(unittest.TestCase):
         import shutil
         import zipfile
 
-        from bruceworx import pdm_workspace as ws
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import pdm_workspace as ws
+        from heuretes_freecad import vault_setup as vs
 
         tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-wiz-job-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
@@ -281,7 +281,7 @@ class TestAssembliesAsPartsBox(unittest.TestCase):
     def test_the_box_shows_toggles_and_saves_the_setting(self):
         import shutil
 
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-wiz-aap-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)

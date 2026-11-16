@@ -46,7 +46,7 @@ def enabled():
 
 
 def _ds():
-    from bruceworx import drawing_standards
+    from heuretes_freecad import drawing_standards
 
     return drawing_standards
 
@@ -57,7 +57,7 @@ def _ds():
 def rows_of(item, ecos=None) -> list:
     """[{rev, description, eco, date, by}] of an item's released revisions, oldest first, from the
     release records the vault keeps (approve for A, release_eco for later letters)."""
-    from bruceworx import pdm
+    from heuretes_freecad import pdm
 
     ds = _ds()
     ecos = ecos or {}
@@ -81,8 +81,8 @@ def history(root, part_number):
     if not root or not part_number:
         return None
     try:
-        from bruceworx import pdm
-        from bruceworx.pdm_folder import FolderVault
+        from heuretes_freecad import pdm
+        from heuretes_freecad.pdm_folder import FolderVault
 
         vault = FolderVault(root)
         item = vault.items.get(part_number)
@@ -337,7 +337,7 @@ def apply(page, part_values) -> list:
     if found is not None:
         rows, code, prerelease = found
     else:  # no vault item: the part's own Revision property
-        from bruceworx import pdm
+        from heuretes_freecad import pdm
 
         code = part_values.get("revision", "") or ""
         rows, prerelease = [], (not code) or pdm.is_prerelease(code)

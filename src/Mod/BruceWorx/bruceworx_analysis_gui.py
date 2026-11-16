@@ -43,17 +43,17 @@ MODES = (
     ("zebra", "Zebra stripes"),
 )
 COMMANDS = {
-    "overhang": ("BruceWorx_OverhangAnalysis", "Overhang", "BruceWorx_Overhang.svg",
+    "overhang": ("BruceWorx_OverhangAnalysis", "Overhang", "Heuretes_Overhang.svg",
                  "Colour the faces a 3D print needs support under: angle from vertical against the build "
                  "direction (45 degrees by default), and the faces on the bed."),
-    "draft": ("BruceWorx_DraftAnalysis", "Draft Analysis", "BruceWorx_Draft.svg",
+    "draft": ("BruceWorx_DraftAnalysis", "Draft Analysis", "Heuretes_Draft.svg",
               "Colour positive, missing and negative draft against a pull direction (1 degree by default)."),
-    "thickness": ("BruceWorx_ThicknessAnalysis", "Wall Thickness", "BruceWorx_Thickness.svg",
+    "thickness": ("BruceWorx_ThicknessAnalysis", "Wall Thickness", "Heuretes_Thickness.svg",
                   "Colour walls thinner than the minimum (0.8 mm) and the target (1.2 mm) for a 0.4 mm FDM "
                   "nozzle; presets for CNC."),
-    "curvature": ("BruceWorx_CurvatureAnalysis", "Curvature Map", "BruceWorx_Curvature.svg",
+    "curvature": ("BruceWorx_CurvatureAnalysis", "Curvature Map", "Heuretes_Curvature.svg",
                   "Colour the mean, Gaussian or largest curvature of the faces."),
-    "zebra": ("BruceWorx_ZebraAnalysis", "Zebra", "BruceWorx_Zebra.svg",
+    "zebra": ("BruceWorx_ZebraAnalysis", "Zebra", "Heuretes_Zebra.svg",
               "Reflect stripes on the faces: a kink at an edge is a tangency break, a jump a gap."),
 }
 DIRECTIONS = ("+Z", "-Z", "+X", "-X", "+Y", "-Y")
@@ -936,7 +936,7 @@ def show_mass_properties():
     import bruceworx_rightpanel as rp
 
     if not rp.show_tab(bp.TAB):
-        _message("Turn the right panel on (Vector Labs > Right Panel) to see mass properties.")
+        _message("Turn the right panel on (Heuretes FreeCAD > Right Panel) to see mass properties.")
         return False
     return True
 
@@ -960,7 +960,7 @@ class _AnalysisCommand:
 
 class _MassCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_MassProperties.svg"), "MenuText": "Mass Properties",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_MassProperties.svg"), "MenuText": "Mass Properties",
                 "ToolTip": "Mass, volume, area, centre of mass and inertia of the selection, in the right "
                            "panel's Physical tab."}
 

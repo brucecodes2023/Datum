@@ -57,7 +57,7 @@ EPICS = [
       "Fresh clone builds on both platforms using documented commands only; CI green on both."),
     E("FND-02", "Packaging, branding & releases", "M0", "In progress", ["FND-01"],
       "FCB-P0-02, P0-03, P0-09, P0-11, P0-17, P0-18",
-      "Branding 1.1.4-bw.1 and the unsigned .dmg (#3) exist. 31 Oct (your decision): rebranded Vector Labs (app, menu bar, Dock: 'Vector Labs'; splash, About, Get Info: 'Vector Labs, powered by FreeCAD'), bundle id com.vectorlabs.app, new arrow icon and splash, settings copied from the Keystone folders on first launch, material library renamed 'Vector Labs'; make-vectorlabs.sh (make-keystone.sh is a shim); Keystone.app kept as a link until other sessions' scripts repoint. Keystone.app (25 Oct, your choice: fully renamed, own settings folders, built from the working tree): package/bruceworx/make-keystone.sh builds a self-contained bundle into /Applications; rebuilt through the 25 Oct UAT (Coin 4.0.10 bundled; the check run uses a throwaway profile). Still to do: release tagging with dmg + source, signing and notarising.",
+      "Branding 1.1.4-bw.1 and the unsigned .dmg (#3) exist. 31 Oct (your decision): rebranded Heuretes FreeCAD (app, menu bar, Dock: 'Heuretes FreeCAD'; splash, About, Get Info: 'Heuretes FreeCAD, powered by FreeCAD'), bundle id com.heuretes.freecad, new arrow icon and splash, settings copied from the Keystone folders on first launch, material library renamed 'Heuretes FreeCAD'; make-vectorlabs.sh (make-keystone.sh is a shim); Keystone.app kept as a link until other sessions' scripts repoint. Keystone.app (25 Oct, your choice: fully renamed, own settings folders, built from the working tree): package/bruceworx/make-keystone.sh builds a self-contained bundle into /Applications; rebuilt through the 25 Oct UAT (Coin 4.0.10 bundled; the check run uses a throwaway profile). Still to do: release tagging with dmg + source, signing and notarising.",
       "Tagged release installs on a clean Mac and opens a Fusion STEP file within envelope."),
     E("FND-03", "Track upstream FreeCAD main", "M0", "To do", ["FND-01"],
       "FCB-P1-16..21, P0-12 (replaced: rebase-at-26.3 policy), P2-01/02 (add-on vs fork)",
@@ -110,7 +110,7 @@ EPICS = [
       "Bracket flat length matches the bend-allowance formula to 0.01 mm."),
     E("MOD-07", "Frames & weldments", "M3", "To do", [],
       "(new)",
-      "Structural members along sketch edges, profile library (2020 extrusion, tube, dimensional lumber), end treatments, cut list. Reference: LumberCAD (beta) component catalogue. Plan (FrameForge plus a Vector Labs layer) approved 24 Oct; not started.",
+      "Structural members along sketch edges, profile library (2020 extrusion, tube, dimensional lumber), end treatments, cut list. Reference: LumberCAD (beta) component catalogue. Plan (FrameForge plus a Heuretes FreeCAD layer) approved 24 Oct; not started.",
       "Frame example produces a cut list with lengths and mitre angles."),
     E("MOD-08", "Surfacing parity", "M5", "To do", [],
       "(new)",
@@ -341,7 +341,7 @@ EPICS = [
       "All benchmarks within stated tolerance in CI."),
     E("SIM-06", "CFD / airflow", "M5", "In progress", ["SIM-01", "ROB-04"],
       "(new)",
-      "Prop wash and enclosure cooling with OpenFOAM. 31 Oct: started at your request; OpenFOAM (openfoam-app, native Apple silicon) driven directly by the study frame instead of CfdOF (macOS untested, needs Docker). External flow, prop wash with actuator disks from the ROB-04 thrust tables, cooling with a convection map for the thermal study. Plan: chapter 'SIM-06 plan'. 31 Oct answers: O1-O9 as recommended (detect an installed OpenFOAM-v2606.app with an Install button, not bundled; prop wash + external flow first, then cooling with a convection map; actuator disks from the thrust tables; k-omega SST; snappyHexMesh presets; results in-app + ParaView; cases in ~/Library/Caches/Vector Labs/cfd; four benchmarks). Phase 1 built 31 Oct (chapter 'SIM-06 Built'): case writer, runner, external flow study, forces table, report; pipe +0.12 %, sphere Cd +1.6 %. Open: parallel runs (Open MPI PMIx fails on this Mac, runs fall back to one core) and the in-app result view (FEM post pipeline crash in the GUI).",
+      "Prop wash and enclosure cooling with OpenFOAM. 31 Oct: started at your request; OpenFOAM (openfoam-app, native Apple silicon) driven directly by the study frame instead of CfdOF (macOS untested, needs Docker). External flow, prop wash with actuator disks from the ROB-04 thrust tables, cooling with a convection map for the thermal study. Plan: chapter 'SIM-06 plan'. 31 Oct answers: O1-O9 as recommended (detect an installed OpenFOAM-v2606.app with an Install button, not bundled; prop wash + external flow first, then cooling with a convection map; actuator disks from the thrust tables; k-omega SST; snappyHexMesh presets; results in-app + ParaView; cases in ~/Library/Caches/Heuretes FreeCAD/cfd; four benchmarks). Phase 1 built 31 Oct (chapter 'SIM-06 Built'): case writer, runner, external flow study, forces table, report; pipe +0.12 %, sphere Cd +1.6 %. Open: parallel runs (Open MPI PMIx fails on this Mac, runs fall back to one core) and the in-app result view (FEM post pipeline crash in the GUI).",
       "Pipe, sphere, actuator-disk and flat-plate benchmarks within tolerance in CI."),
     # Manufacturing -------------------------------------------------------
     E("SIM-07", "Simulation workspace (model builder & project schematic)", "M4", "In progress", ["SIM-01", "SIM-04"],
@@ -488,11 +488,11 @@ EPICS = [
       "(insert knurl OD, hole, depth, minimum wall) checked against each hole, and carrying a change through "
       "to drawings and print files; the Fanny Pack acceptance case has not been run. The original note: "
       "To discuss with Bruce before planning. How agents view designs (renders, sections, joint frames, fit "
-      "reports; today the Vector Labs session renders through a hidden GUI), make edits (parametric, through "
+      "reports; today the Heuretes FreeCAD session renders through a hidden GUI), make edits (parametric, through "
       "the API or MCP, not booleans on plain solids), know how parts work (a bought part carries its sourced "
       "datasheet rules: a heat-set insert its knurl OD, length, recommended hole and depth, tied to MOD-05's "
       "'checked' flag) and carry a change from spec to drawings and print and fabrication files. Bruce must "
-      "still be able to tweak by hand. Evidence from the TL-P01 mating work (7 Nov, Vector Labs session): the "
+      "still be able to tweak by hand. Evidence from the TL-P01 mating work (7 Nov, Heuretes FreeCAD session): the "
       "Fanny Pack (TL-02-01109) plates are imported Part::Feature solids, so their insert holes cannot change by "
       "parameter; its 12 insert holes are 4.7 mm with 4.5-5.2 mm of material, while the modelled insert is the "
       "generic IUTHeatInsert M3 (4.55 x 5.74), and nothing checked the fit until it was measured; 71 part links "
@@ -577,7 +577,7 @@ EPICS = [
       "BruceWorx pack (stock off), a checkbox on the BruceWorx preference page, and a pack top-up so profiles "
       "that applied the pack earlier get it (Off still restores). Measured on the Voron 2.4 350 (TL-P01, 4582 "
       "objects): open 2.35 -> 1.35 s, save 7.9 -> 3.7 s, 51.8 -> 47.5 MB, volume identical. Reading handles both forms.",
-      "A saved document holds .bin shapes; it opens in Vector Labs and stock FreeCAD 1.1 with the same volume; "
+      "A saved document holds .bin shapes; it opens in Heuretes FreeCAD and stock FreeCAD 1.1 with the same volume; "
       "Off in Preferences saves text again."),
     E("PRF-02", "Where the GUI time goes", "M5", "To do", ["PRF-01"],
       "Bruce 2 Nov",
@@ -590,7 +590,7 @@ EPICS = [
       "From PRF-02's findings: tessellate hidden objects only when shown; one tessellation per linked part, "
       "not per link; open large assemblies on the vault's preview meshes (PDM-13) and load the exact shape of "
       "a part when it is edited or measured.",
-      "TL-P01 opens in Vector Labs at least 3x faster than with stock settings, and orbits smoothly."),
+      "TL-P01 opens in Heuretes FreeCAD at least 3x faster than with stock settings, and orbits smoothly."),
     E("PRF-04", "Vault storage migration", "M5", "In progress", ["PRF-01"],
       "Bruce 2 Nov",
       "Bruce asked for every vault file in binary without check-outs or a version per item. Stored files are "
@@ -601,13 +601,13 @@ EPICS = [
       "MB, 37 of 37 files open with identical shapes.",
       "The real vault migrated with one journal event; every item keeps its numbers, revisions and status; "
       "drawings are not out of date; reopening replays with no problems."),
-    E("PRF-05", "Vector Labs worker: headless background jobs", "M5", "To do", [],
+    E("PRF-05", "Heuretes FreeCAD worker: headless background jobs", "M5", "To do", [],
       "Bruce 2 Nov (tonight's session)",
       "Background jobs (vault imports and check-ins with their BOMs, interference checks, previews, renders, "
       "KiCad board inserts) start the whole GUI app today with its window made invisible, because Qt's offscreen "
       "platform crashes on macOS (no OpenGL). It shows in the Dock as FreeCAD, loads every workbench, and while a "
       "long boolean runs macOS marks it Not Responding; on 2 Nov three runs were force-quit that way. A light "
-      "worker instead: an App-only process (FreeCADCmd underneath, named Vector Labs worker, no Dock icon) at "
+      "worker instead: an App-only process (FreeCADCmd underneath, named Heuretes FreeCAD worker, no Dock icon) at "
       "macOS background priority, loading only what a job needs; the vault session, check-in hooks (BOM), board "
       "insert and interference work split from their GUI modules so they run there; renders without a window "
       "(offscreen GL, or the vault's preview meshes from PDM-13/PRF-03); jobs as files in a queue folder, one at a "

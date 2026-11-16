@@ -37,9 +37,9 @@ PREF_ON_OPEN = "RepairLinksOnOpen"
 CMD_EXTERNAL = "BruceWorx_MakeExternal"
 CMD_REPAIR = "BruceWorx_RepairLinks"
 CMD_FLEXIBLE = "BruceWorx_FlexibleSubAssembly"
-ICON_EXTERNAL = "BruceWorx_MakeExternal.svg"
-ICON_REPAIR = "BruceWorx_RepairLinks.svg"
-ICON_FLEXIBLE = "BruceWorx_FlexibleSubAssembly.svg"
+ICON_EXTERNAL = "Heuretes_MakeExternal.svg"
+ICON_REPAIR = "Heuretes_RepairLinks.svg"
+ICON_FLEXIBLE = "Heuretes_FlexibleSubAssembly.svg"
 MAX_SEARCHED = 20000  # files looked at for one repair
 SKIPPED_DIRS = {".git", ".pixi", "__pycache__", "node_modules"}
 EXTERNAL_KINDS = ("PartDesign::Body", "App::Part", "Part::Feature")
@@ -178,7 +178,7 @@ def _target(doc, name):
     obj = doc.getObject(name) if name else None
     if obj is None:
         try:
-            from bruceworx.freecad_io import main_object
+            from heuretes_freecad.freecad_io import main_object
 
             obj = main_object(doc)
         except Exception:  # noqa: BLE001

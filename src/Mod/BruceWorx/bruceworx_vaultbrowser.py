@@ -41,7 +41,7 @@ WRITABLE = ("modified", "checked_out")  # bruceworx_vaultclient.WRITABLE
 
 def in_scope(scope, pn, row, structure, contents_of=None) -> bool:
     """Whether the list row ``pn`` belongs to the navigation's ``scope``."""
-    from bruceworx import vault_trees
+    from heuretes_freecad import vault_trees
 
     if scope in (ALL, "", None):
         return True
@@ -71,7 +71,7 @@ def in_scope(scope, pn, row, structure, contents_of=None) -> bool:
 def nav_entries(structure, rows, programs) -> list:
     """The navigation's rows: [(key, label, count, depth, kind)]. ``kind``: "section" (a heading),
     "program", "assembly", "view" or "category". ``programs``: {code: description}."""
-    from bruceworx import vault_trees
+    from heuretes_freecad import vault_trees
 
     files = {pn: r for pn, r in rows.items() if r.get("item_type") != "change"}
     out = [("", "Projects", None, 0, "section")]
@@ -100,7 +100,7 @@ def nav_entries(structure, rows, programs) -> list:
 
 def scope_title(scope, rows, programs) -> list:
     """The breadcrumb for ``scope``: [vault-relative labels]."""
-    from bruceworx import vault_trees
+    from heuretes_freecad import vault_trees
 
     if scope in (ALL, "", None):
         return ["Everything"]
@@ -124,7 +124,7 @@ def used_in_text(lines) -> str:
 
 def drawing_cell(structure, pn, row) -> tuple:
     """(text, colour role) of the list's Drawing cell."""
-    from bruceworx import vault_trees
+    from heuretes_freecad import vault_trees
 
     kind = row.get("item_type")
     if kind not in ("part", "assembly", "cots"):
@@ -802,7 +802,7 @@ def make_classes(vc):
 
         def _update_counts(self):
             pn, s = self.pn, self._structure()
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             counts = {"drawings": len(self._drawings()), "simulations": len(self._sims()), "uses": len(s["bom"].get(pn, ())),
                       "used": len(vault_trees.used_in(s).get(pn, ())), "history": len(self._versions())}
@@ -816,7 +816,7 @@ def make_classes(vc):
             return list(session.vault.versions.get(self.pn, []))
 
         def _drawings(self):
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             s, pn = self._structure(), self.pn
             if self._row(pn).get("item_type") == "drawing":
@@ -913,7 +913,7 @@ def make_classes(vc):
                 self._fact(self.facts, "Drawing", text or "—")
 
         def _fill_props(self):
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             pn, row = self.pn, self._row(self.pn)
             self._clear_form(self.props)
@@ -963,7 +963,7 @@ def make_classes(vc):
             session = self.panel.session()
             if session is None:
                 return ""
-            from bruceworx import sim_reports
+            from heuretes_freecad import sim_reports
 
             found = sim_reports.reports_beside(session.work.path(sim_pn))
             return found[0] if found else ""
@@ -1093,7 +1093,7 @@ def make_classes(vc):
                                                  else "Only an assembly uses other files."))
 
         def _fill_used(self):
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             lst, note = self.lists["used"]
             lst.clear()
@@ -1113,7 +1113,7 @@ def make_classes(vc):
             results = None
             session = self.panel.session()
             if session is not None and self._row(self.pn).get("item_type") == "simulation":
-                from bruceworx import vault_simulations as vsim
+                from heuretes_freecad import vault_simulations as vsim
 
                 results = {v.sha256: flag for v, flag in vsim.results_by_version(session.vault, self.pn)}
             for label, comment, when, size in history_rows(self._versions(), results):

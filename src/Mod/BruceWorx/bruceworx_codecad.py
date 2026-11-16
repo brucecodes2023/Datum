@@ -24,7 +24,7 @@ under a millisecond for a small part.
 Trust. A script is Python and runs again on recompute, so only scripts written on this Mac run
 by themselves: make() and set_script() record the script's SHA-256 in a private file in the user's
 application data. A part whose script is not on record (a file from someone else, or a script
-changed outside Vector Labs) keeps the shape saved in the file and says "Not trusted" until the user
+changed outside Heuretes FreeCAD) keeps the shape saved in the file and says "Not trusted" until the user
 approves it (trust_document). Dimension values are numbers, so they never need approval.
 
 Speed. Results are cached by script and dimension values, so parts that share a script run it
@@ -39,6 +39,7 @@ import hashlib
 import io
 import json
 import os
+from heuretes_env import getenv
 import re
 import threading
 import time
@@ -330,7 +331,7 @@ def preload():
 
 
 def _trust_file():
-    override = os.environ.get("BW_CODECAD_TRUST_FILE")
+    override = getenv("CODECAD_TRUST_FILE")
     if override:
         return override
     import FreeCAD

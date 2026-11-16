@@ -169,9 +169,9 @@ class TestWhereUsedAcceptance(_Base):
     """Acceptance (plan 56-pdm06): where-used of a bolt lists every assembly revision that uses it."""
 
     def test_where_used_of_a_bolt(self):
-        from bruceworx import pdm_workspace as pw
-        from bruceworx import release_check as rc
-        from bruceworx import vault_setup
+        from heuretes_freecad import pdm_workspace as pw
+        from heuretes_freecad import release_check as rc
+        from heuretes_freecad import vault_setup
 
         close_all()
         folder = os.path.join(self.tmp, "vault")

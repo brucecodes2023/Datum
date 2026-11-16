@@ -24,7 +24,7 @@ import os
 
 import FreeCAD as App
 
-from bruceworx import stock as st
+from heuretes_freecad import stock as st
 
 HARNESS_TYPES = ["Cable assembly", "Tube assembly"]
 HARNESS_PROP = "HarnessType"
@@ -167,7 +167,7 @@ def _build(path, pn, container, description, vault_root):
     """Write the harness file: a copy of ``container`` with the vault's part properties. Returns the plan for the
     second step: {"paths": [(copy name, [(index, parent object name, sub)])], "links": [(copy name, target doc path,
     target object name)]}. Saved and closed."""
-    from bruceworx import partprops, pdm
+    from heuretes_freecad import partprops, pdm
 
     br, flex = _br(), _flex()
     doc = App.newDocument(pn.replace("-", "_"), hidden=True)
@@ -272,7 +272,7 @@ def make_vault_item(container, s, description="", program="", category=CATEGORY,
     """Save the Harness container out as a vault item and link it into its document. ``s``: the vault client's
     Session (or anything with .vault, .work and .root). The document must be saved: the cross-document links are
     stored relative to its file. Returns (part number, link in the parent)."""
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     br = _br()
     doc = container.Document

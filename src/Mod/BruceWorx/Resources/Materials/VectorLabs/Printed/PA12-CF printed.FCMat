@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "a58fcf89-3829-4817-bae6-94401d6f7160"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "PA12-CF printed"
   Description: "Printed carbon-fibre PA12 (Bambu PAHT-CF; Polymaker Fiberon PA12-CF10: 72 MPa X-Y, 43 MPa Z), dry. PA12 absorbs little moisture, so it keeps most of this in service. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 64 MPa, modulus 2180 MPa, elongation 5.2 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (PAHT-CF, dry)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PAHT-CF_Technical_Data_Sheet.pdf"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Printed"
 Models:
   LinearElastic:

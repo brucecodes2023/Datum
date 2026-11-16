@@ -122,7 +122,7 @@ class TestPublish(Tmp):
         doc, part = self.part_file("solo", Part.makeBox(5, 5, 5))
         drawing.new_drawing(part, "ANSI_A_Landscape", root="")
         report = publish.publish(doc, os.path.join(self.tmp, "o"))
-        self.assertIn("pdf: PDF needs the Vector Labs window", report[0]["error"])
+        self.assertIn("pdf: PDF needs the Heuretes FreeCAD window", report[0]["error"])
         self.assertTrue(os.path.isfile(report[0]["dxf"]))
 
     def test_unsaved_document_needs_a_folder(self):

@@ -17,6 +17,7 @@ import datetime
 import json
 import math
 import os
+from heuretes_env import getenv
 import shutil
 import tempfile
 import time
@@ -303,7 +304,7 @@ def report_source(run):
     cases = run.get("cases", {})
     lines = [
         r"\documentclass[10pt,a4paper]{article}",
-        "% Vector Labs validation report (BruceWorx SIM-05). Compile with tectonic, latexmk -pdf or pdflatex.",
+        "% Heuretes FreeCAD validation report (BruceWorx SIM-05). Compile with tectonic, latexmk -pdf or pdflatex.",
         r"\usepackage{iftex}",
         r"\ifXeTeX\usepackage{fontspec}\else\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\fi",
         r"\usepackage[margin=20mm]{geometry}",
@@ -313,7 +314,7 @@ def report_source(run):
         r"\setlength{\parindent}{0pt}\setlength{\parskip}{4pt}\sloppy\emergencystretch=3em",
         r"\begin{document}",
         rf"{{\Large\bfseries Validation report: {e(run['set'])} set}}\\[2pt]",
-        rf"{{\small\color{{black!60}} Vector Labs, {e(run['date'])}; {e(run.get('ccx') or 'CalculiX')}; "
+        rf"{{\small\color{{black!60}} Heuretes FreeCAD, {e(run['date'])}; {e(run.get('ccx') or 'CalculiX')}; "
         rf"{run.get('seconds', 0):.0f}\,s}}",
         "",
         r"\section*{Summary}",
@@ -395,9 +396,9 @@ def main():
     """The entry of the headless child the Validation command starts (FreeCADCmd -c): BW_VALIDATION_SET, BW_VALIDATION_IDS
     (comma-separated, empty for all) and BW_VALIDATION_OUT (the results JSON). Progress goes to stdout as
     'BWVAL<TAB>fraction<TAB>text'."""
-    set_name = os.environ.get("BW_VALIDATION_SET", "fast")
-    ids = [i for i in os.environ.get("BW_VALIDATION_IDS", "").split(",") if i]
-    out = os.environ.get("BW_VALIDATION_OUT")
+    set_name = getenv("VALIDATION_SET", "fast")
+    ids = [i for i in getenv("VALIDATION_IDS", "").split(",") if i]
+    out = getenv("VALIDATION_OUT")
 
     def progress(text, fraction):
         print(f"BWVAL\t{fraction:.4f}\t{text}", flush=True)

@@ -82,7 +82,7 @@ Several planes & OpenGL keeps a point only if it is on the kept side of \emph{ev
   question~1).\\
 A section in the file & An \code{App::FeaturePython} \emph{Section} in a \emph{Sections} group keeps its plane, offset
   and on/off through save and reopen.\\
-Without Vector Labs & With its Python module missing, the same file opens and the object keeps its values; the Proxy is
+Without Heuretes FreeCAD & With its Python module missing, the same file opens and the object keeps its values; the Proxy is
   \code{None}, the recompute is clean and nothing is invalid. Stock FreeCAD just ignores it.\\
 Upstream PR~\#33186 & ``Gui: hatched cross-sections for clipping planes'', open, review status \emph{changes
   requested}, last updated 18 Oct. 1\,145 lines in 14 files, all in \file{src/Gui}. It applies to our tree except one
@@ -235,7 +235,7 @@ as \code{view.setSectionPlanes(planes, caps)}, and \code{view.sectionReport()} r
 not cut, open mesh, transparent) for the panel and the tests. The Clipping dock keeps its own planes and works as
 before (question~10).
 
-\paragraph{In Vector Labs (Python).} \file{bruceworx\_section.py}: the object and its view provider. Turning the eye on
+\paragraph{In Heuretes FreeCAD (Python).} \file{bruceworx\_section.py}: the object and its view provider. Turning the eye on
 sends the plane to every 3D view of the file, and turning it off takes it away. Recomputes, new views and switching
 documents keep the views in step. Also in it: the commands \emph{New Section} (the navigation pill's section
 button), \emph{Edit Section} (double-click) and \emph{Sections Off} (all at once), and the \emph{Section} tab in the
@@ -337,7 +337,7 @@ Viewer & \code{View3DInventorViewer::setSectionPasses} puts one separator per pa
 A Coin bug & Coin 4.0.3, our build's, crashes when a \code{SoCallbackAction} with per-type callbacks is destroyed
   (\code{deleteAll()} on empty slots, fixed in coin3d 4.0.4). PR~\#33186 crashed on it at once. Worked around by a no-op
   callback for every node type.\\
-Vector Labs & \file{bruceworx\_section.py}: the Section object and the Sections folder, the three-plane limit with an Undo
+Heuretes FreeCAD & \file{bruceworx\_section.py}: the Section object and the Sections folder, the three-plane limit with an Undo
   toast, the Section tab (expressions, Flip, quarter, caps, the clash list with \emph{Mark as fit} and \emph{Measure},
   the saved camera), the handles (blue arrow out of the cut, orange and green tilt rings, drawn over the model), the
   commands \emph{Section View} (the navigation pill's button and the View menu) and \emph{Sections Off}.\\

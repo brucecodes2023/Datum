@@ -29,7 +29,7 @@ unchanged; the fallbacks of commit \code{6d41badd} (repaired copy, first order) 
         fallback (a BREP round trip), so the separate repaired-copy try would repeat try 1 and is not run.
   \item When second order was asked: first order in a worker; the existing step upgrades the linear tetrahedra to Tet10.
   \item Gmsh, when a \code{gmsh} binary is found (FEM preference, next to the application, \code{PATH}). \textbf{Neither
-        the build nor the packaged \file{Vector Labs.app} has one}, so today this try does not exist; the code is written
+        the build nor the packaged \file{Heuretes FreeCAD.app} has one}, so today this try does not exist; the code is written
         (\code{gmsh -3 -order N -clmax MaxSize}, .unv back) but untested.
 \end{enumerate}
 Each try reports in the report view, the run log and the Progress tab (\code{bruceworx\_sim\_events} message at its end,
@@ -68,7 +68,7 @@ libraries and its own \file{libgmsh.4.15.dylib} through \code{@executable\_path/
 nothing was added to the conda/pixi environment (no package changed). \file{make-vectorlabs.sh} downloads it once into
 \file{\~{}/Library/Caches/VectorLabs}, verifies the checksum, copies it to \file{Contents/gmsh/\{bin,lib,share/doc\}} (with Gmsh's
 LICENSE and CREDITS) and checks that it starts; a dev build finds it in \file{build/release/gmsh/}. \textbf{Licence.} Gmsh is GPL v2 or
-later (OpenCASCADE and its other parts under their own terms, in CREDITS.txt). Vector Labs runs it as a separate program, a
+later (OpenCASCADE and its other parts under their own terms, in CREDITS.txt). Heuretes FreeCAD runs it as a separate program, a
 child process that reads a BREP and writes a mesh file, like OpenFOAM and CalculiX; nothing links to it. The licence text
 ships in the bundle; the source offer is the gmsh.info site.
 \textbf{How it is used.} Called directly (FEM's \code{gmshtools} builds a document-bound .geo and needs a FEM mesh object, which the

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- [BW] Vector Labs branding for the DEVELOPMENT build (build/release), read by App::Application from
-     <home>/bin/branding.xml at start. Only the splash screen is branded here; the application and
-     executable names stay FreeCAD's so the development build keeps its own settings. make-vectorlabs.sh
-     writes the full branding (names, settings folders) for Vector Labs.app. The splash images live in
-     <home>/icons (vectorlabs_splash.png, vectorlabs_splash_2x.png for Retina); the version is drawn into
-     the image by render_splash.sh, so FreeCAD's own name/version overlay is drawn fully transparent. -->
+<!-- Heuretes FreeCAD splash for the development build (build/release).
+     App::Application reads <home>/bin/branding.xml at start. Only the splash is
+     branded here; the executable name stays FreeCAD so this build keeps its own
+     settings. make-heuretes.sh writes the full name for Heuretes FreeCAD.app.
+     Images: <home>/icons/heuretes_splash.png and heuretes_splash_2x.png.
+     The version is already drawn into the image, so FreeCAD's overlay is transparent. -->
 <Branding>
-  <SplashScreen>vectorlabs_splash</SplashScreen>
+  <SplashScreen>heuretes_splash</SplashScreen>
   <SplashInfoColor>#00000000</SplashInfoColor>
   <SplashAlignment>Bottom|Left</SplashAlignment>
-  <SplashTextColor>#8a97a8</SplashTextColor>
+  <SplashTextColor>#5a6068</SplashTextColor>
 </Branding>

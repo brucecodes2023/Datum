@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Heuretes FreeCAD</title>
+  <rect width="1024" height="1024" rx="226" fill="#F4F1EA"/>
+  <g fill="none" stroke="#111111" stroke-width="84" stroke-linecap="round">
+    <circle cx="478" cy="536" r="176"/>
+    <line x1="478" y1="360" x2="478" y2="232"/>
+    <line x1="654" y1="536" x2="782" y2="536"/>
+  </g>
+  <g fill="none" stroke="#418FDE" stroke-width="22" stroke-linecap="round">
+    <line x1="148" y1="790" x2="256" y2="790"/>
+    <line x1="148" y1="790" x2="148" y2="682"/>
+  </g>
+</svg>

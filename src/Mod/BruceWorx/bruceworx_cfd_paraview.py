@@ -257,7 +257,7 @@ def speed_range(info):
 
 # ----- the ParaView script ---------------------------------------------------------------------------------------
 
-SCRIPT = r'''# Vector Labs airflow view for ParaView (written by bruceworx_cfd_paraview; edit freely, it is rewritten on each open).
+SCRIPT = r'''# Heuretes FreeCAD airflow view for ParaView (written by bruceworx_cfd_paraview; edit freely, it is rewritten on each open).
 # Run: paraview --script=view.py    or    pvbatch render.py   (the second one saves pictures and exits).
 import math
 import os

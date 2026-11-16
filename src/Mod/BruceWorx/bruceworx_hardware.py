@@ -42,7 +42,7 @@ _state = {"installed": False}
 
 
 def _hw():
-    from bruceworx import hardware
+    from heuretes_freecad import hardware
 
     return hardware
 
@@ -346,7 +346,7 @@ class ViewProviderCosmeticThread:
             pass
 
     def getIcon(self):
-        return os.path.join(HERE, "BruceWorx_CosmeticThread.svg")
+        return os.path.join(HERE, "Heuretes_CosmeticThread.svg")
 
     def dumps(self):
         return None
@@ -682,7 +682,7 @@ def make_fastener_file(path, pn, ftype, diameter, length, description, vault_roo
     """Write the COTS part file of a fastener: an App::Part holding the add-on's object, with
     the vault's part properties (ItemType cots, the description, revision 01) and the
     hardware key; Type, size and length read-only (one item, one size). Saved and closed."""
-    from bruceworx import partprops, pdm
+    from heuretes_freecad import partprops, pdm
 
     doc = App.newDocument(pn.replace("-", "_"), hidden=True)
     try:
@@ -722,7 +722,7 @@ def ensure_cots_item(s, ftype, diameter, length=None, program=""):
     """The vault part number of this fastener, made (numbered, its file checked in as WIP 01)
     when the vault has none; recorded in the vault's hardware.json. ``s``: the vault client's
     Session (or anything with .vault and .root). Returns (part number, made)."""
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     hw = _hw()
     key = hw.fastener_key(ftype, diameter, length)
@@ -822,7 +822,7 @@ def mark_cots(s, pns, documents=None):
         if key and key not in catalogue:
             hw.record(catalogue, key, pn, item.description, source="vault")
     hw.save_catalogue(s.root, catalogue)
-    from bruceworx import partprops
+    from heuretes_freecad import partprops
 
     types = {pn: "cots" for pn in pns}
     for doc in documents if documents is not None else App.listDocuments().values():
@@ -968,7 +968,7 @@ class PresetDialog:
 
 class _HolePresetCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_HolePreset.svg"), "MenuText": "Hole Preset",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_HolePreset.svg"), "MenuText": "Hole Preset",
                 "ToolTip": "A hole from a preset: heat-set insert holes for 3D-printed parts (CNC Kitchen, "
                            "ruthex, M2-M5), tapped, clearance, counterbore and countersink holes. Select a Hole "
                            "to change it, or a sketch of circles to make one."}
@@ -1015,7 +1015,7 @@ class _HolePresetCommand:
 
 class _CosmeticThreadCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_CosmeticThread.svg"), "MenuText": "Cosmetic Thread",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_CosmeticThread.svg"), "MenuText": "Cosmetic Thread",
                 "ToolTip": "Record an ISO metric thread on a cylindrical face (a shaft, a stud, a hole that is not "
                            "a PartDesign Hole). Shown dashed, as on a drawing; the solid does not change, and the "
                            "drawing callout comes from it."}
@@ -1076,7 +1076,7 @@ class _CosmeticThreadCommand:
 
 class _HoleCalloutsCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_HoleCallouts.svg"), "MenuText": "Hole Callouts",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_HoleCallouts.svg"), "MenuText": "Hole Callouts",
                 "ToolTip": "Callouts for every hole and cosmetic thread of the selected drawing view, written from "
                            "the model (thread, depth, counterbore, heat-set insert). Run again to update them."}
 
@@ -1199,7 +1199,7 @@ def _active_assembly():
 
 class _InsertFastenerCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_InsertFastener.svg"), "MenuText": "Insert Fastener",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_InsertFastener.svg"), "MenuText": "Insert Fastener",
                 "ToolTip": "A standard screw, nut, washer or insert (ISO / DIN, from the bundled Fasteners add-on) "
                            "into the active assembly, as the vault's COTS item for that size: the same size is the "
                            "same part number everywhere. Select a hole's rim to place it there."}
@@ -1210,7 +1210,7 @@ class _InsertFastenerCommand:
     def Activated(self):
         s = _session()
         if s is None:
-            _message("Insert Fastener", "Open a vault first (Preferences > Vector Labs, or the Start page): each "
+            _message("Insert Fastener", "Open a vault first (Preferences > Heuretes FreeCAD, or the Start page): each "
                      "fastener is a COTS item of the vault.")
             return
         assembly = _active_assembly()
@@ -1265,7 +1265,7 @@ def _edge_placement_in(assembly, sel):
 
 class _MarkCotsCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_MarkCots.svg"), "MenuText": "Mark as COTS…",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_MarkCots.svg"), "MenuText": "Mark as COTS…",
                 "ToolTip": "The vault's parts whose description says they are bought (screws, bearings, pins, "
                            "'(COTS)'): tick them to make them COTS items, so BOMs mark them bought and the section "
                            "view leaves them uncut."}
@@ -1277,7 +1277,7 @@ class _MarkCotsCommand:
         _QtCore, _QtGui, QtWidgets = _qt()
         s = _session()
         if s is None:
-            _message("Mark as COTS", "Open a vault first (Preferences > Vector Labs, or the Start page).")
+            _message("Mark as COTS", "Open a vault first (Preferences > Heuretes FreeCAD, or the Start page).")
             return
         rows = _hw().cots_candidates(s.vault.items)
         if not rows:

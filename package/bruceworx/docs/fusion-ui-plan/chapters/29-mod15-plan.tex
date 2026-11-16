@@ -298,7 +298,7 @@ blocks are \code{QTextBrowser}s fed with Markdown, inline math as image resource
 paint their SVG formulas with \code{QSvgRenderer} (vector, any zoom). A calc line becomes LaTeX through a small printer
 over FreeCAD's expression tree that keeps your order of terms (sympy's \code{latex} reorders: \code{1 + Zr/Zs} came
 out as \code{\textbackslash frac\{Zr\}\{Zs\} + 1}). Formula SVGs are cached by the hash of their LaTeX. Click a block to
-edit its source (figure~\ref{fig:mod15-sheet}, \marker{8}); Esc renders it. Light and dark follow the Vector Labs tokens.
+edit its source (figure~\ref{fig:mod15-sheet}, \marker{8}); Esc renders it. Light and dark follow the Heuretes FreeCAD tokens.
 \emph{Math beyond mathtext} (\code{cases}, \code{align}, matrices): when \code{latex} and \code{dvisvgm} are found, the
 block is rendered by TeX (about 1.7\,s, cached); otherwise it shows its source with ``needs a TeX installation''.
 

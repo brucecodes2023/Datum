@@ -34,7 +34,7 @@ SHEET_WIDTH = 1400  # px: sharp in the preview pane on a Retina screen
 def package_drawings(structure, pns) -> list:
     """The drawings a package of ``pns`` holds, each once, in P/N order: a selected drawing itself, a
     part's drawings, and for an assembly the drawings of the assembly and of everything it uses."""
-    from bruceworx import vault_trees
+    from heuretes_freecad import vault_trees
 
     out = set()
     for pn in pns:

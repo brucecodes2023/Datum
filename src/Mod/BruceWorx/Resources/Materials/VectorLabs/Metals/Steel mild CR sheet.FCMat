@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "f4544451-88ee-4470-9735-814a0d89f589"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Steel mild CR sheet"
   Description: "Cold-rolled low-carbon sheet for bending and laser cutting (ASTM A1008 CS, EN DC01/CR4). Commercial steel has no specified yield: the lower end of the typical range is 140 MPa."
   ReferenceSource: "ASTM A1008 CS Type B typical ranges (EN DC01 equivalent); ASM/MatWeb elastic and thermal values"
   SourceURL: "https://steelwarehouse.com/a1008/"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Metals"
 Models:
   LinearElastic:

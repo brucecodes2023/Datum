@@ -37,7 +37,7 @@ streamlines coloured by speed; right: the mid cut plane coloured by $|U|$ with t
         tooltip, a render that was asked for anyway ends as ``unavailable'' with that text, a hung \code{pvbatch} is
         killed after 300\,s (``stopped''), a failed one reports the tail of \file{render.log}, and a case with no
         results yet says so. None of these raise.
-  \item \textbf{Streamlines in Vector Labs.} The results panel has a \textbf{Streamlines} tick and a seed count
+  \item \textbf{Streamlines in Heuretes FreeCAD.} The results panel has a \textbf{Streamlines} tick and a seed count
         (default 200). It traces with \code{vtkStreamTracer} (RK4/5, both ways, at most one cell per step) on the
         millimetre copy of the volume, writes \file{streamlines.vtp} beside it (point arrays \code{U} and \code{speed}),
         and adds it to the study as a \code{Fem::FemPostPipeline} coloured by \code{speed}. FEM's own pipeline does
@@ -66,7 +66,7 @@ tracing runs on the GUI thread behind a wait cursor; nothing is cached across se
   \item \textbf{pvbatch needs a window server on macOS} (it renders on a hidden window); it works from a logged-in
         session, which is the app's case. Headless over ssh would need an off-screen build of ParaView.
   \item Report pictures are copied beside \file{report.tex} as \file{fig\_pv\_*.png} (a path with a space, like
-        \file{Vector Labs}, would break \verb|\includegraphics|), and a stale picture is removed when a case has none.
+        \file{Heuretes FreeCAD}, would break \verb|\includegraphics|), and a stale picture is removed when a case has none.
 \end{itemize}
 
 \paragraph{Tests.} \file{TestBruceWorxCfdParaView.py}, 21 tests in the GUI run (0 failures, 1 skipped:

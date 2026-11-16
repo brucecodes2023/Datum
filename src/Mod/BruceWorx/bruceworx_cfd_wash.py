@@ -976,7 +976,7 @@ def disks_from_model(model, parts, diameter_mm, offset_mm=0.0, typed_thrust=0.0,
     ``HubDiameter``, mm) and fall back to ``diameter_mm`` / ``hub_mm`` of the study; a hub of 0 is HUB_FRACTION of the
     diameter (the disk is a ring: the propeller moves no air inside its hub)."""
     import bruceworx_massreport as mr
-    from bruceworx import balance
+    from heuretes_freecad import balance
 
     report = report or mr.build_report(model.Document, [model])
     try:

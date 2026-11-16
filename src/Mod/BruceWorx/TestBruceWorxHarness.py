@@ -25,9 +25,9 @@ import bruceworx_harness as bh
 import bruceworx_routing as br
 import bruceworx_routing_ports as bp
 import bruceworx_stock as bs
-from bruceworx import bom, stock
-from bruceworx import pdm_workspace as pw
-from bruceworx import vault_setup as vs
+from heuretes_freecad import bom, stock
+from heuretes_freecad import pdm_workspace as pw
+from heuretes_freecad import vault_setup as vs
 
 V = App.Vector
 

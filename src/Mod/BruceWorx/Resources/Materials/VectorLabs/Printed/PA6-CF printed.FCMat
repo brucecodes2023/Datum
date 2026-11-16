@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "3e80c57d-cc7d-4110-b63e-d8e4df8053b3"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "PA6-CF printed"
   Description: "Printed carbon-fibre PA6 (Bambu PA6-CF), dry state: strength drops markedly once it absorbs moisture. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 48 MPa, modulus 2170 MPa, elongation 3.7 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (PA6-CF, dry)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PA6-CF_Technical_Data_Sheet.pdf"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Printed"
 Models:
   LinearElastic:

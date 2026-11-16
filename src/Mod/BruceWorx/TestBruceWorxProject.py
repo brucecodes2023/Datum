@@ -33,7 +33,7 @@ def _unit_index(doc):
 
 class _Vault(unittest.TestCase):
     def setUp(self):
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         keep = os.environ.get("BW_PROJECT_DIR")
         self.tmp = os.path.realpath(keep or tempfile.mkdtemp(prefix="bw-project-"))  # FreeCAD writes links by real path
@@ -49,14 +49,14 @@ class _Vault(unittest.TestCase):
         setup.numbering.programs = [vs.ProgramSetup("DM", "Demo")]
         setup.standards = {"units": "in", "default_sheet": "ANSI_B_Landscape"}
         self.vault = vs.create_vault(setup, actor="accept@mac")
-        from bruceworx.pdm_workspace import Workspace
+        from heuretes_freecad.pdm_workspace import Workspace
 
         self.work = Workspace(self.vault)
         self.s = SimpleNamespace(vault=self.vault, work=self.work, root=self.vault.root)
 
     def create(self, text=CART, **kw):
         import bruceworx_project as bp
-        from bruceworx import project_setup as ps
+        from heuretes_freecad import project_setup as ps
 
         plan = ps.parse_structure(text)
         ps.plan_numbers(plan, self.vault.root, "DM")
@@ -69,9 +69,9 @@ class _Vault(unittest.TestCase):
 class TestAcceptance(_Vault):
     def test_six_lines_become_numbered_files_in_inch(self):
         import bruceworx_bom as bb
-        from bruceworx import product_tree as pt
-        from bruceworx import vault_trees as vt
-        from bruceworx.pdm_workspace import linked_files
+        from heuretes_freecad import product_tree as pt
+        from heuretes_freecad import vault_trees as vt
+        from heuretes_freecad.pdm_workspace import linked_files
 
         plan, report = self.create()
         self.assertEqual(report.failed, [], report.failed)
@@ -150,8 +150,8 @@ class TestAcceptance(_Vault):
         import Part
 
         import bruceworx_project as bp
-        from bruceworx import product_tree as pt
-        from bruceworx import vault_trees as vt
+        from heuretes_freecad import product_tree as pt
+        from heuretes_freecad import vault_trees as vt
 
         _plan, report = self.create()
         self.assertTrue(report.ok, report.text())
@@ -205,7 +205,7 @@ class TestAcceptance(_Vault):
         self.assertEqual(tree.cell(pn["Side rail"])["state"], pt.CURRENT)
         self.assertEqual(tree.cell(pn["Frame"])["state"], pt.OUT_OF_DATE)
         # the release checklist warns, and only warns
-        from bruceworx import release_check as rc
+        from heuretes_freecad import release_check as rc
 
         lines = {line.key: line for line in rc.check_item(work, pn["Frame"])}
         self.assertTrue(lines[rc.DRAWING_CURRENT].warning)
@@ -213,8 +213,8 @@ class TestAcceptance(_Vault):
 
     def test_reused_item_duplicate_and_create_drawing(self):
         import bruceworx_project as bp
-        from bruceworx import product_tree as pt
-        from bruceworx import vault_trees as vt
+        from heuretes_freecad import product_tree as pt
+        from heuretes_freecad import vault_trees as vt
 
         _plan, first = self.create("Base\n  Leg x4\n", name="Base")
         self.assertTrue(first.ok, first.text())
@@ -238,13 +238,13 @@ class TestAcceptance(_Vault):
         self.assertEqual(v.items[number].drawing_of, leg)
         self.assertEqual(v.latest_version(number).made_from, {leg: v.latest_version(leg).sha256})
         self.assertEqual(len(v.drawings_of(leg)), 2)
-        from bruceworx.pdm_workspace import linked_files
+        from heuretes_freecad.pdm_workspace import linked_files
 
         self.assertEqual(linked_files(self.work.path(number)), [leg + ".FCStd"])  # by name: resolves in the work folder
 
     def test_a_structure_that_fails_to_verify_puts_nothing_in_the_vault(self):
         import bruceworx_project as bp
-        from bruceworx import project_setup as ps
+        from heuretes_freecad import project_setup as ps
 
         plan = ps.parse_structure("Top\n  Rail x2\n")
         ps.plan_numbers(plan, self.vault.root, "DM")
@@ -258,8 +258,8 @@ class TestAcceptance(_Vault):
         self.assertEqual(self.vault.items, {})
         self.assertEqual(self.vault.projects, {})
         self.assertFalse(os.path.exists(os.path.join(self.vault.root, ".import")))
-        from bruceworx.sources import JsonNumberSource
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad.sources import JsonNumberSource
+        from heuretes_freecad import vault_setup as vs
 
         self.assertEqual(JsonNumberSource(vs.numbering_path(self.vault.root)).preview("DM", "01"), "DM-01-01001-001")
 
@@ -296,8 +296,8 @@ class TestStructureTab(_Vault):
     def test_tab_shows_the_project(self):
         import bruceworx_structure as bs
         import bruceworx_vaultclient as vc
-        from bruceworx import product_tree as pt
-        from bruceworx import vault_trees as vt
+        from heuretes_freecad import product_tree as pt
+        from heuretes_freecad import vault_trees as vt
 
         _plan, report = self.create()
         pn = {name: number for name, number, _kind in report.items}

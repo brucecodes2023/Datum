@@ -584,7 +584,7 @@ class ItemPanel:
 
     def _fill_stock(self):
         import bruceworx_stock as bs
-        from bruceworx import stock
+        from heuretes_freecad import stock
 
         building, self._building = getattr(self, "_building", False), True
         try:
@@ -622,7 +622,7 @@ class ItemPanel:
     def _stock_make(self):
         """New stock material from the item's properties: ask for what the properties do not say."""
         import bruceworx_stock as bs
-        from bruceworx import stock
+        from heuretes_freecad import stock
 
         s = self._stock_session()
         if s is None:
@@ -1709,7 +1709,7 @@ class MakeVaultItemCommand(_Command):
         container = found[0]
         s = vc.session()
         if s is None:
-            _message("Open a vault first (Preferences > Vector Labs, or the Start page).")
+            _message("Open a vault first (Preferences > Heuretes FreeCAD, or the Start page).")
             return
         _QtCore, _QtGui, QtWidgets = _qt()
         text, ok = QtWidgets.QInputDialog.getText(_gui().getMainWindow(), "Make vault item", "Harness description:",

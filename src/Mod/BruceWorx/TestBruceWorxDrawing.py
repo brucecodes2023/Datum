@@ -11,7 +11,7 @@ import unittest
 import FreeCAD
 
 import bruceworx_drawing as drawing
-from bruceworx import drawing_standards as ds
+from heuretes_freecad import drawing_standards as ds
 
 
 class TestTemplates(unittest.TestCase):
@@ -241,7 +241,7 @@ class TestAcceptance(unittest.TestCase):
         import tempfile
 
         import bruceworx_vaultclient as vc
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         self.vc = vc
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-drw01-"))

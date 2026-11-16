@@ -27,7 +27,7 @@ import os
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF = "DrawingPartsList"
 COMMAND = "BruceWorx_PartsList"
-ICON = "BruceWorx_PartsList.svg"
+ICON = "Heuretes_PartsList.svg"
 GROUP = "BruceWorx"
 LIST_PROP = "BW_PartsListOf"  # on the list: the assembly (an XLink)
 ITEMS_PROP = "BW_Items"  # on the list: part key -> item number

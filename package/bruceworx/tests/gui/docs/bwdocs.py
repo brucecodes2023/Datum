@@ -97,7 +97,7 @@ def _inside_out(path):
 
 def _install_guards():
     try:
-        from bruceworx import pdm_folder, vault_move, vault_setup
+        from heuretes_freecad import pdm_folder, vault_move, vault_setup
     except ImportError:
         return
     real_create = vault_setup.create_vault
@@ -605,7 +605,7 @@ def make_part(path, label, description="", length=60, width=40, height=6, hole=T
     doc.recompute()
     if props:
         try:
-            from bruceworx.partprops import load_schema
+            from heuretes_freecad.partprops import load_schema
 
             load_schema(extra_layers=[], user_layer=False).apply(part)
             if description:
@@ -649,7 +649,7 @@ def close_all():
 
 def new_vault(name, sub="vaults", **numbering):
     """A vault made with the engine (no wizard) under RUN; made the open vault."""
-    from bruceworx import vault_setup as vs
+    from heuretes_freecad import vault_setup as vs
 
     folder = os.path.join(RUN, sub, name)
     vault = vs.create_vault(vs.VaultSetup(name, folder))
@@ -659,11 +659,11 @@ def new_vault(name, sub="vaults", **numbering):
 
 def import_folder(root, src, program="BW"):
     """Import every .FCStd under src into the vault at root (the engine, with FreeCAD's writer)."""
-    from bruceworx import freecad_io, vault_setup as vs
+    from heuretes_freecad import freecad_io, vault_setup as vs
 
     cands = vs.scan_for_import(src)
     vs.plan_numbers(cands, root, program)
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     report = vs.run_import(FolderVault(root), cands, program, writer=freecad_io.write_part_number)
     return {os.path.basename(p): pn for p, pn in report.imported}, report

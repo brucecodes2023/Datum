@@ -256,7 +256,7 @@ def query_word_matches(row, key, value):
         return row.get("item_type") == "change" and value in (str(row.get("state", "")).lower(),
                                                               str(row.get("kind", "")).lower())
     if key == "program":
-        from bruceworx import vault_trees
+        from heuretes_freecad import vault_trees
 
         return vault_trees.program_code(row.get("part_number")) == value.upper()
     return None
@@ -269,7 +269,7 @@ CATEGORY_PREF = "VaultCategories"  # JSON in Preferences/BruceWorx: {vault root:
 
 def category_prefs(root, group=None):
     """(hidden, collapsed): the category names hidden and the category groups folded in this vault
-    (by its folder), as remembered in the Vector Labs preferences. "" stands for Uncategorized."""
+    (by its folder), as remembered in the Heuretes FreeCAD preferences. "" stands for Uncategorized."""
     try:
         group = group if group is not None else _prefs()
         saved = json.loads(group.GetString(CATEGORY_PREF, "{}") or "{}").get(str(root), {})
@@ -704,8 +704,8 @@ class Session:
     def __init__(self, path, actors=None):
         import json
 
-        from bruceworx import pdm_workspace as ws
-        from bruceworx.pdm_folder import FolderVault, default_actor, find_ref_file
+        from heuretes_freecad import pdm_workspace as ws
+        from heuretes_freecad.pdm_folder import FolderVault, default_actor, find_ref_file
 
         self.path = path
         ref = find_ref_file(os.path.expanduser(path))
@@ -774,7 +774,7 @@ def neighbour_places(root):
     if not str(root or "").strip():
         return []
     try:
-        from bruceworx import vault_setup
+        from heuretes_freecad import vault_setup
 
         return vault_setup.neighbour_vaults(root)
     except Exception:
@@ -1006,7 +1006,7 @@ def _reload(doc):
 
 def _replaced_files(before):
     """Open documents whose file content changed since before ({path: hash})."""
-    from bruceworx.pdm_folder import sha256_of
+    from heuretes_freecad.pdm_folder import sha256_of
 
     out = []
     for doc in _open_documents():
@@ -1022,7 +1022,7 @@ def _replaced_files(before):
 
 
 def _hash_open(s):
-    from bruceworx.pdm_folder import sha256_of
+    from heuretes_freecad.pdm_folder import sha256_of
 
     out = {}
     for doc in _open_documents():
@@ -1248,7 +1248,7 @@ def break_lock(pn=None, parent=None):
     ok, _r = _run("Break Lock", s.work.break_lock, pn)
     if ok and holder == s.me and os.path.exists(s.work.path(pn)):
         try:  # your own work copy goes back to read-only, as after Undo Check-Out
-            from bruceworx.pdm_workspace import _set_writable
+            from heuretes_freecad.pdm_workspace import _set_writable
 
             _set_writable(s.work.path(pn), False)
         except Exception:
@@ -1291,7 +1291,7 @@ def _renumber_dialog(s, pn, plan, documents, answers=None):
     ``answers`` {"new", "reason"} stand in for the typing so a script can run it without showing it)."""
     from PySide import QtWidgets
 
-    from bruceworx import renumber
+    from heuretes_freecad import renumber
 
     dialog = QtWidgets.QDialog(_window())
     dialog.setWindowTitle("Renumber")
@@ -1345,7 +1345,7 @@ def renumber_item(pn=None, new=None, reason=None, answers=None):
     without dialogs. Returns the new part number, or "" when nothing was renumbered."""
     import FreeCAD
 
-    from bruceworx import renumber
+    from heuretes_freecad import renumber
 
     s = session()
     pn = pn or current_target()
@@ -1439,7 +1439,7 @@ def open_from_vault(pn=None, ask=True):
         except Exception:
             _load(path)
         return True
-    from bruceworx.pdm_workspace import icloud_placeholder
+    from heuretes_freecad.pdm_workspace import icloud_placeholder
 
     if not os.path.exists(path) and not icloud_placeholder(path):  # an evicted copy is downloaded, not replaced
         if not s.vault.versions.get(pn):
@@ -1491,7 +1491,7 @@ def make_new_file(path, pn, kind, description, vault_root):
     the vault's part properties, its number, revision 01 and description; saved and closed."""
     import FreeCAD
 
-    from bruceworx import partprops, pdm
+    from heuretes_freecad import partprops, pdm
 
     doc = FreeCAD.newDocument(pn.replace("-", "_"), hidden=True)
     try:
@@ -1527,8 +1527,8 @@ def _new_part_dialog(s, default_program=""):
     """(kind, description, program, category) from a small dialog, or None when cancelled."""
     from PySide import QtWidgets
 
-    from bruceworx import vault_setup
-    from bruceworx.sources import JsonNumberSource
+    from heuretes_freecad import vault_setup
+    from heuretes_freecad.sources import JsonNumberSource
 
     source = JsonNumberSource(vault_setup.numbering_path(s.root))
     programs = source.programs()
@@ -1565,7 +1565,7 @@ def _new_part_dialog(s, default_program=""):
         try:
             data = source._load()
             code = vault_setup.document_type_for_item(word, vault_setup._vault_document_types(source, data), data)
-            from bruceworx import pdm
+            from heuretes_freecad import pdm
 
             number.setText(f"{pdm.strip_revision(source.preview(program.currentText(), code))}  ·  WIP 01")
         except Exception as exc:
@@ -1593,14 +1593,14 @@ def new_part(kind=None, description=None, program="", open_it=True, category="")
     Returns the part number, or "" when cancelled or refused."""
     s = session()
     if s is None:
-        _message("New Part in Vault", "Open a vault first (Preferences > Vector Labs, or the Start page).")
+        _message("New Part in Vault", "Open a vault first (Preferences > Heuretes FreeCAD, or the Start page).")
         return ""
     if kind is None or description is None:
         answer = _new_part_dialog(s, program)
         if answer is None:
             return ""
         kind, description, program, category = answer
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     def make(path, pn):
         make_new_file(path, pn, kind, description, s.root)
@@ -1667,7 +1667,7 @@ def checkin_rows(s, pn):
     A row is ticked when it is checked out to you and changed (on disk or unsaved in
     FreeCAD); files you have not checked out are listed greyed (not checkable).
     """
-    from bruceworx.pdm_workspace import linked_files
+    from heuretes_freecad.pdm_workspace import linked_files
 
     order, seen, outside = [pn], {pn}, []
     todo = [pn]
@@ -1735,7 +1735,7 @@ def link_summary(fixes):
 def _writer():
     """freecad_io.write_part_number (gives imported files their part number), or None."""
     try:
-        from bruceworx import freecad_io
+        from heuretes_freecad import freecad_io
 
         return getattr(freecad_io, "write_part_number", None)
     except Exception:
@@ -1747,7 +1747,7 @@ def checkin_links(s, pns, import_outside=True):
 
     Returns (links changed, [LinkFix] left as written, [ImportReport]).
     """
-    from bruceworx import vault_setup as vs
+    from heuretes_freecad import vault_setup as vs
 
     reports = []
 
@@ -1877,7 +1877,7 @@ def _offer_save_checkout(s, pn, filename):
     st = s.status(pn)
     if st.code in WRITABLE:
         if not os.access(filename, os.W_OK):
-            from bruceworx.pdm_workspace import _set_writable
+            from heuretes_freecad.pdm_workspace import _set_writable
 
             _set_writable(filename, True)
         return True
@@ -3108,7 +3108,7 @@ def _make_classes():
             return bruceworx_vaultbrowser.drawing_cell(self.structure, row["part_number"], row)
 
         def _contents(self, pn):
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             if pn not in self._contents_cache:
                 self._contents_cache[pn] = vault_trees.contents(self.structure, pn)
@@ -3153,7 +3153,7 @@ def _make_classes():
             except Exception:
                 pass
             if s is not None:
-                from bruceworx import vault_trees
+                from heuretes_freecad import vault_trees
 
                 now = _dt.datetime.now(_dt.timezone.utc)
                 for pn, st in s.statuses().items():
@@ -3180,7 +3180,7 @@ def _make_classes():
                 except ImportError:
                     pass
             self.nodes = self.file_tree(s)
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             self.used = vault_trees.used_in(self.structure)
             self.programs = vault_trees.program_names(s.root) if s is not None else {}
@@ -3200,7 +3200,7 @@ def _make_classes():
             item's drawings. An assembly's file links are read once per version."""
             if s is None:
                 return []
-            from bruceworx import vault_trees
+            from heuretes_freecad import vault_trees
 
             def links(pn):
                 row = self.rows.get(pn) or {}
@@ -3322,7 +3322,7 @@ def _make_classes():
             elif not total and changes:
                 self.empty.setText("No ECRs or ECOs yet.\nRaise ECR… on a released item starts one.")
             elif not total:
-                self.empty.setText("The vault is empty.\nVector Labs → Vault → New Part in Vault… makes a part;\n"
+                self.empty.setText("The vault is empty.\nHeuretes FreeCAD → Vault → New Part in Vault… makes a part;\n"
                                    "Import Files into Vault… adds files.")
             else:
                 self.empty.setText("Nothing matches.")
@@ -4420,7 +4420,7 @@ def ensure_downloaded(paths, title="iCloud", stall=None):
     import threading
     import time
 
-    from bruceworx import pdm_workspace as ws
+    from heuretes_freecad import pdm_workspace as ws
 
     pending = ws.pending_downloads(paths)
     if not pending:
@@ -4495,7 +4495,7 @@ def move_vault_dialog(root=None, destination=None, answers=None):
     import FreeCADGui
     from PySide import QtCore, QtWidgets
 
-    from bruceworx import vault_move
+    from heuretes_freecad import vault_move
 
     answers = answers or {}
     s = session()

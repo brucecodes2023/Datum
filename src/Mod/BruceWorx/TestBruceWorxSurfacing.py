@@ -354,7 +354,7 @@ class TestGui(unittest.TestCase):
         self.assertAlmostEqual(obj.Shape.Area, 1200 + 5 * sheet.Shape.Edges[0].Length, places=4)
         self.assertEqual(self.doc.UndoNames[0], "Extend")
         self.assertEqual(len(self.doc.UndoNames), before + 1)
-        self.assertTrue(obj.ViewObject.Proxy.getIcon().endswith("BruceWorx_SurfaceExtend.svg"))
+        self.assertTrue(obj.ViewObject.Proxy.getIcon().endswith("Heuretes_SurfaceExtend.svg"))
         self.assertIn(sheet, obj.ViewObject.claimChildren())
 
     def test_patch_from_an_edge(self):

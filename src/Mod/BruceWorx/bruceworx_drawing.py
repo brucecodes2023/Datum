@@ -59,7 +59,7 @@ _state = {"installed": False, "observer": None, "pending": set(), "scheduled": F
 
 
 def _standards_module():
-    from bruceworx import drawing_standards
+    from heuretes_freecad import drawing_standards
 
     return drawing_standards
 
@@ -187,7 +187,7 @@ def _vault_record(root, part_number):
     if not root or not part_number:
         return None
     try:
-        from bruceworx.pdm_folder import FolderVault
+        from heuretes_freecad.pdm_folder import FolderVault
 
         vault = FolderVault(root)
         item = vault.items.get(part_number)
@@ -300,7 +300,7 @@ def part_values(obj, root=""):
     }
     if not values["material"]:
         try:
-            from bruceworx import partprops
+            from heuretes_freecad import partprops
 
             values["material"] = partprops.computed_material(obj) or ""
         except Exception:  # noqa: BLE001

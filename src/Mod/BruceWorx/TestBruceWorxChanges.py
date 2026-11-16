@@ -18,7 +18,7 @@ BOLT = "BW-01-01002-001"
 
 
 def _vault(tmp):
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     vault = FolderVault.init(os.path.join(tmp, "v"), "Changes", actor="bruce@mac")
     vault.create_item(PART, "part", "Bracket")
@@ -36,7 +36,7 @@ class TestHelpers(unittest.TestCase):
 
     def test_line_states(self):
         try:
-            from bruceworx.release_check import Line
+            from heuretes_freecad.release_check import Line
         except ImportError:
             self.skipTest("hooks add-on not installed")
         self.assertEqual(ch.line_state(Line("a", "A", ok=True)), "ok")
@@ -98,7 +98,7 @@ class TestHelpers(unittest.TestCase):
 class TestWithVault(unittest.TestCase):
     def setUp(self):
         try:
-            import bruceworx.pdm_folder  # noqa: F401
+            import heuretes_freecad.pdm_folder  # noqa: F401
         except ImportError:
             self.skipTest("hooks add-on not installed")
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-changes-"))
@@ -146,7 +146,7 @@ class TestWithVault(unittest.TestCase):
                          f"{PART} rev B is in work under ECO-0001. Release ECO-0001 first.")
 
     def test_retire_plan_shows_users_and_drawings(self):
-        from bruceworx import pdm_workspace
+        from heuretes_freecad import pdm_workspace
 
         work = pdm_workspace.Workspace(self.vault)
         assy = "BW-02-01001-001"

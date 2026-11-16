@@ -252,7 +252,7 @@ def _install_menu() -> None:
     action.setText("Ground Grid")
     action.setObjectName("BruceWorxGroundGridAction")
     action.setCheckable(True)
-    action.setToolTip("Show or hide the Vector Labs 3D ground grid")
+    action.setToolTip("Show or hide the Heuretes FreeCAD 3D ground grid")
     action.triggered.connect(lambda _checked=False: toggle())
     try:
         import bruceworx_menu

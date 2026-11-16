@@ -944,7 +944,7 @@ def write_file(obj, path):
 
             TechDraw.writeDXFPage(obj, path)
         else:
-            from bruceworx import flat_export
+            from heuretes_freecad import flat_export
 
             flat_export.export_dxf(obj, path)
     else:

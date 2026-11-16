@@ -58,13 +58,13 @@ _state = {"observer": None, "pending": set()}
 
 
 def _rules():
-    from bruceworx import sheetmetal_rules
+    from heuretes_freecad import sheetmetal_rules
 
     return sheetmetal_rules
 
 
 def _export():
-    from bruceworx import flat_export
+    from heuretes_freecad import flat_export
 
     return flat_export
 
@@ -150,7 +150,7 @@ def vault_units(root=None) -> str:
     if not root:
         return document_units()
     try:
-        from bruceworx import vault_setup
+        from heuretes_freecad import vault_setup
 
         hook = getattr(vault_setup, "vault_units", None)
         if hook is not None:
@@ -158,7 +158,7 @@ def vault_units(root=None) -> str:
     except Exception:
         pass
     try:
-        from bruceworx import drawing_standards
+        from heuretes_freecad import drawing_standards
 
         return _rules().norm_units(drawing_standards.load(root).units)
     except Exception:
@@ -734,7 +734,7 @@ def export_flat_dialog():
 
 class _RuleCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_SheetMetalRule.svg"), "MenuText": "Sheet-Metal Rule…",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_SheetMetalRule.svg"), "MenuText": "Sheet-Metal Rule…",
                 "ToolTip": "Pick the vault's sheet-metal rule (material, thickness, bend radius, K-factor, relief) "
                            "for this part; every wall and the unfold follow it."}
 
@@ -749,7 +749,7 @@ class _RuleCommand:
 
 class _RulesCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_SheetMetalRule.svg"), "MenuText": "Sheet-Metal Rules…",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_SheetMetalRule.svg"), "MenuText": "Sheet-Metal Rules…",
                 "ToolTip": "Edit the vault's sheet-metal rules and its shop-DXF settings."}
 
     def IsActive(self):
@@ -761,7 +761,7 @@ class _RulesCommand:
 
 class _ExportCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_ExportFlat.svg"), "MenuText": "Export Flat…",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_ExportFlat.svg"), "MenuText": "Export Flat…",
                 "ToolTip": "Write the flat pattern as a shop DXF (CUT, BEND_UP/BEND_DOWN, ETCH) named "
                            "P/N-REV.dxf, and the bend table."}
 

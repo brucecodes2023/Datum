@@ -152,25 +152,31 @@ add_subdirectory(BruceWorx)
 # Preferences -> BruceWorx. These two Python add-ons live outside src/Mod and
 # are copied into <build>/Mod (used by build/<preset>/bin/FreeCAD) and
 # installed to Mod/ by the normal build.
-option(BUILD_BW_HISTORY_TIMELINE "BruceWorx: install the History Timeline add-on (Mod/HistoryTimeline)" ON)
-option(BUILD_BW_HOOKS "BruceWorx: install the hooks / part-number add-on (Mod/BruceWorxHooks)" ON)
+# -DBUILD_HEU_* is the switch (default ON). -DBUILD_BW_* still works when HEU was not passed.
+foreach(_heu HISTORY_TIMELINE HOOKS SHEETMETAL FASTENERS)
+    if(DEFINED BUILD_BW_${_heu} AND NOT DEFINED BUILD_HEU_${_heu})
+        set(BUILD_HEU_${_heu} "${BUILD_BW_${_heu}}" CACHE BOOL "legacy BUILD_BW_${_heu}" FORCE)
+    endif()
+endforeach()
+option(BUILD_HEU_HISTORY_TIMELINE "Heuretes FreeCAD: install the History Timeline add-on (Mod/HistoryTimeline)" ON)
+option(BUILD_HEU_HOOKS "Heuretes FreeCAD: install the hooks / part-number add-on (Mod/HeuretesHooks)" ON)
 # MOD-06 (resumed 25 Oct 2026; networkx is in pixi.toml for its new unfolder).
-option(BUILD_BW_SHEETMETAL "BruceWorx: install the vendored SheetMetal add-on (Mod/SheetMetal, MOD-06)" ON)
+option(BUILD_HEU_SHEETMETAL "Heuretes FreeCAD: install the vendored SheetMetal add-on (Mod/SheetMetal, MOD-06)" ON)
 # MOD-05: the Fasteners add-on, folder "fasteners" (the Addon Manager's name, so a user copy wins).
-option(BUILD_BW_FASTENERS "BruceWorx: install the vendored Fasteners add-on (Mod/fasteners, MOD-05)" ON)
-if(BUILD_BW_HISTORY_TIMELINE)
+option(BUILD_HEU_FASTENERS "Heuretes FreeCAD: install the vendored Fasteners add-on (Mod/fasteners, MOD-05)" ON)
+if(BUILD_HEU_HISTORY_TIMELINE)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/package/bruceworx/mods/HistoryTimeline
         ${CMAKE_BINARY_DIR}/bruceworx/HistoryTimeline
     )
 endif()
-if(BUILD_BW_HOOKS)
+if(BUILD_HEU_HOOKS)
     add_subdirectory(
-        ${CMAKE_SOURCE_DIR}/addons/BruceWorx
+        ${CMAKE_SOURCE_DIR}/addons/Heuretes
         ${CMAKE_BINARY_DIR}/bruceworx/BruceWorxHooks
     )
 endif()
-if(BUILD_BW_SHEETMETAL OR BUILD_BW_FASTENERS)
+if(BUILD_HEU_SHEETMETAL OR BUILD_HEU_FASTENERS)
     add_subdirectory(
         ${CMAKE_SOURCE_DIR}/package/bruceworx/vendor
         ${CMAKE_BINARY_DIR}/bruceworx/vendor
@@ -179,16 +185,19 @@ endif()
 
 # [BW] Vector Labs splash screen (24 Oct 2026): App::Application reads <home>/bin/branding.xml at
 # start; the images go to <home>/icons, which BitmapFactory searches (the _2x one on Retina).
-option(BUILD_BW_BRANDING "BruceWorx: Vector Labs splash screen (bin/branding.xml, icons/vectorlabs_splash*.png)" ON)
-if(BUILD_BW_BRANDING)
-    set(BW_BRANDING_DIR ${CMAKE_SOURCE_DIR}/package/bruceworx/branding)
-    configure_file(${BW_BRANDING_DIR}/branding.xml ${CMAKE_BINARY_DIR}/bin/branding.xml COPYONLY)
-    foreach(BW_SPLASH vectorlabs_splash.png vectorlabs_splash_2x.png)
-        configure_file(${BW_BRANDING_DIR}/${BW_SPLASH} ${CMAKE_BINARY_DIR}/icons/${BW_SPLASH} COPYONLY)
+if(DEFINED BUILD_BW_BRANDING AND NOT DEFINED BUILD_HEU_BRANDING)
+    set(BUILD_HEU_BRANDING "${BUILD_BW_BRANDING}" CACHE BOOL "legacy BUILD_BW_BRANDING" FORCE)
+endif()
+option(BUILD_HEU_BRANDING "Heuretes FreeCAD splash (bin/branding.xml, icons/heuretes_splash*.png)" ON)
+if(BUILD_HEU_BRANDING)
+    set(HEU_BRANDING_DIR ${CMAKE_SOURCE_DIR}/package/bruceworx/branding)
+    configure_file(${HEU_BRANDING_DIR}/branding.xml ${CMAKE_BINARY_DIR}/bin/branding.xml COPYONLY)
+    foreach(HEU_SPLASH heuretes_splash.png heuretes_splash_2x.png)
+        configure_file(${HEU_BRANDING_DIR}/${HEU_SPLASH} ${CMAKE_BINARY_DIR}/icons/${HEU_SPLASH} COPYONLY)
     endforeach()
-    install(FILES ${BW_BRANDING_DIR}/branding.xml DESTINATION bin)
+    install(FILES ${HEU_BRANDING_DIR}/branding.xml DESTINATION bin)
     install(
-        FILES ${BW_BRANDING_DIR}/vectorlabs_splash.png ${BW_BRANDING_DIR}/vectorlabs_splash_2x.png
+        FILES ${HEU_BRANDING_DIR}/heuretes_splash.png ${HEU_BRANDING_DIR}/heuretes_splash_2x.png
         DESTINATION icons
     )
 endif()

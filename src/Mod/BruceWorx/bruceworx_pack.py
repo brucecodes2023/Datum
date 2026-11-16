@@ -45,7 +45,15 @@ APPLIED_NAME = "Applied"
 
 # Theme strings the preferences dialog writes *before* a pack's pre.FCMacro
 # runs. They are not the user's previous theme.
-PACK_THEME_NAMES = ("BruceWorx", "BruceWorx Dark", "BruceWorx Off")
+PACK_THEME_NAMES = (
+    "Heuretes FreeCAD",
+    "Heuretes FreeCAD Dark",
+    "Heuretes FreeCAD Off",
+    # Names saved profiles and the old theme combo still write.
+    "BruceWorx",
+    "BruceWorx Dark",
+    "BruceWorx Off",
+)
 
 REQUIRED_WORKBENCHES = (
     "PartDesignWorkbench",
@@ -267,7 +275,7 @@ INVENTORY = [
         "StyleSheet",
         "text",
         "",
-        "BruceWorx.qss",
+        "Heuretes FreeCAD.qss",
         note="Token stylesheet. Light and dark share it.",
     ),
     _e(
@@ -275,8 +283,8 @@ INVENTORY = [
         "Theme",
         "text",
         "",
-        "BruceWorx",
-        "BruceWorx Dark",
+        "Heuretes FreeCAD",
+        "Heuretes FreeCAD Dark",
         note="Selects Gui/Stylesheets/parameters/<Theme>.yaml.",
     ),
     _e(
@@ -1154,7 +1162,7 @@ def repo_root() -> str:
 
 
 def cfg_path(mode: str) -> str:
-    folder = "BruceWorx" if mode == "light" else "BruceWorx Dark"
+    folder = "Heuretes FreeCAD" if mode == "light" else "Heuretes FreeCAD Dark"
     filename = folder + ".cfg"
     return os.path.join(repo_root(), "src", "Gui", "PreferencePacks", folder, filename)
 

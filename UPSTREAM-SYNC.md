@@ -1,11 +1,11 @@
-# Upstream sync policy (BruceWorx)
+# Upstream sync policy (Heuretes FreeCAD)
 
 ## Branches
 
 | Branch | Meaning |
 |---|---|
 | `upstream-main` | A pure mirror of `FreeCAD/FreeCAD` `main`. Never commit to it. Update it only by fast-forward. |
-| `main` | The BruceWorx product branch: an upstream release tag (currently **1.1.4**) plus our `[BW]` commits on top. |
+| `main` | The Heuretes FreeCAD product branch: an upstream release tag (currently **1.1.4**) plus our `[BW]` commits on top. |
 | `bw/*` | Feature branches. They are merged into `main` through PRs. |
 
 All of our commits are prefixed with `[BW]`. That's how we find our delta:

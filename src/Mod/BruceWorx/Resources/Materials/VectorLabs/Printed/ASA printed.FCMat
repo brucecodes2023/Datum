@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "24bfcb39-147f-4350-b5a6-eb4efeb70ee8"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "ASA printed"
   Description: "Printed ASA (Bambu ASA): UV- and weather-resistant ABS alternative for outdoor parts. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 35 MPa, modulus 2120 MPa, elongation 4.6 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (ASA)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_ASA_Technical_Data_Sheet.pdf"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Printed"
 Models:
   LinearElastic:

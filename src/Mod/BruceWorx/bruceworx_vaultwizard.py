@@ -375,7 +375,7 @@ def fit_size(available, values, captions, ref=100.0, pad=0, dash=0.0, gaps=0, lo
 
 
 def _engine():
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     return vault_setup
 
@@ -384,7 +384,7 @@ def _writer(root=""):
     """freecad_io.write_part_number (imported files take the vault's units, PDM-09), or None if the
     add-on has none yet."""
     try:
-        from bruceworx import freecad_io
+        from heuretes_freecad import freecad_io
 
         write = getattr(freecad_io, "write_part_number", None)
     except Exception:
@@ -442,7 +442,7 @@ def previously_imported(vs, vault):
         return {}
     found = {os.path.realpath(k): v for k, v in done.items() if isinstance(k, str) and os.path.isabs(k)}
     try:
-        from bruceworx.pdm_workspace import Workspace  # noqa: PLC0415
+        from heuretes_freecad.pdm_workspace import Workspace  # noqa: PLC0415
 
         found.update(Workspace(vault, read_only=True).known_files())
     except Exception:  # noqa: BLE001 -- no work folder yet: the originals are enough
@@ -460,9 +460,9 @@ class ImportJob:
     """
 
     def __init__(self, vs, vault, candidates, program, writer=None):
-        from bruceworx import numbering  # noqa: PLC0415
-        from bruceworx.pdm_folder import FolderVault  # noqa: PLC0415
-        from bruceworx.sources import JsonNumberSource  # noqa: PLC0415
+        from heuretes_freecad import numbering  # noqa: PLC0415
+        from heuretes_freecad.pdm_folder import FolderVault  # noqa: PLC0415
+        from heuretes_freecad.sources import JsonNumberSource  # noqa: PLC0415
 
         self.vs = vs
         if not hasattr(vault, "create_item"):
@@ -2285,7 +2285,7 @@ def _alive(obj):
 
 def _vault_name(root):
     try:
-        from bruceworx.pdm_folder import FolderVault
+        from heuretes_freecad.pdm_folder import FolderVault
 
         return FolderVault(root).ref.get("name") or os.path.basename(root.rstrip(os.sep))
     except Exception:
@@ -2326,7 +2326,7 @@ def _show(title, make):
     try:
         panel = make(_make_classes())
     except ImportError as exc:
-        _message(title, f"Vaults need the Vector Labs hooks add-on: {exc}")
+        _message(title, f"Vaults need the Heuretes FreeCAD hooks add-on: {exc}")
         return False
     except Exception as exc:
         _message(title, f"{title} could not open: {exc}")
@@ -2419,7 +2419,7 @@ def show_create_page(folder="", name=""):
     try:
         panel = _make_classes()["CreateVaultPanel"](folder, name)
     except ImportError as exc:
-        _message("Create Vault", f"Vaults need the Vector Labs hooks add-on: {exc}")
+        _message("Create Vault", f"Vaults need the Heuretes FreeCAD hooks add-on: {exc}")
         return False
     except Exception as exc:
         _message("Create Vault", f"Create Vault could not open: {exc}")
@@ -2554,7 +2554,7 @@ def _offer_import(root, name, tries=20):
     answer = QtWidgets.QMessageBox.question(
         FreeCADGui.getMainWindow(), "Create Vault",
         f"The vault {name} is ready.\n\nImport existing files now? You can also do it later with "
-        "Vector Labs → Import Files into Vault….",
+        "Heuretes FreeCAD → Import Files into Vault….",
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.Yes)
     if answer == QtWidgets.QMessageBox.Yes:
         show_import(root)

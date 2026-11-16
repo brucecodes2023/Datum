@@ -989,8 +989,8 @@ def next_configuration_number(vault, file_pn, taken=()):
     """The next number for a configuration of the file ``file_pn``: the next sub-number under the
     same parent drawing (LE-01-01001-001 -> LE-01-01001-002), as a family of dash numbers. Reserved in
     the vault's numbering; numbers already in the vault or in ``taken`` are skipped."""
-    from bruceworx import numbering, pdm, vault_setup
-    from bruceworx.sources import JsonNumberSource
+    from heuretes_freecad import numbering, pdm, vault_setup
+    from heuretes_freecad.sources import JsonNumberSource
 
     fields = numbering.parse_part_number(file_pn)
     source = JsonNumberSource(vault_setup.numbering_path(vault.root))

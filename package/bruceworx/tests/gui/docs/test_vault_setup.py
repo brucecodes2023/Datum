@@ -278,7 +278,7 @@ def create_vault():
     vp = C.PREFS.GetString("VaultPath", "")
     C.check("the new vault is the open vault", os.path.realpath(vp).startswith(os.path.realpath(root)), vp)
     C.check("no vault went to iCloud Drive", "Mobile Documents" not in vp)
-    from bruceworx import vault_setup as vs
+    from heuretes_freecad import vault_setup as vs
 
     st = vs.load_settings(root)
     codes = [getattr(x, "code", x) for x in st.programs]
@@ -478,7 +478,7 @@ def vault_settings_edit():
     C.task_button("ok").click()
     C.pump(600)
     C.check("Save closes the panel", not Gui.Control.activeDialog())
-    from bruceworx import vault_setup as vs
+    from heuretes_freecad import vault_setup as vs
 
     st = vs.load_settings(V["root"])
     progs = {getattr(x, "code", x): getattr(x, "description", "") for x in st.programs}
@@ -494,7 +494,7 @@ def vault_settings_edit():
 
 @C.step(600)
 def break_lock_from_settings():
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     s = vc().session()
     br = V["pns"].get("bracket.FCStd")

@@ -353,7 +353,7 @@ class ViewProviderKiCadDocument:
 
     def getIcon(self):
         kind = getattr(getattr(self, "Object", None), "KiCadKind", "board")
-        name = "BruceWorx_InsertBoard.svg" if kind == "board" else "preferences-bruceworx.svg"
+        name = "Heuretes_InsertBoard.svg" if kind == "board" else "preferences-heuretes.svg"
         return os.path.join(bb.HERE, name)
 
     def doubleClicked(self, vobj):
@@ -376,7 +376,7 @@ class ViewProviderKiCadDocument:
 def library_for(root):
     """The Standard Libraries vault for an open vault: itself when it is that vault, else its
     neighbour (vault_setup.library_beside), else ""."""
-    from bruceworx import vault_setup as vs
+    from heuretes_freecad import vault_setup as vs
 
     if not root:
         return ""

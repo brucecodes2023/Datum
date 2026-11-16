@@ -66,7 +66,7 @@ class TestFileMapping(unittest.TestCase):
 class TestStatusPresentation(unittest.TestCase):
     def test_codes_agree_with_the_engine(self):
         try:
-            from bruceworx import pdm_workspace as ws
+            from heuretes_freecad import pdm_workspace as ws
         except ImportError:
             self.skipTest("hooks add-on not installed")
         for name in ("NOT_IN_VAULT", "CHECKED_OUT_OTHER", "MODIFIED", "CHECKED_OUT", "NEWER", "RELEASED",
@@ -272,7 +272,7 @@ class TestCheckInLinks(unittest.TestCase):
     def setUp(self):
         import shutil
 
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         self.vs = vs
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-links-"))
@@ -291,7 +291,7 @@ class TestCheckInLinks(unittest.TestCase):
         self.addCleanup(setattr, vc, "_writer", self.writer)
 
     def test_outside_file_is_imported_and_linked_by_number(self):
-        from bruceworx import pdm_workspace as ws
+        from heuretes_freecad import pdm_workspace as ws
 
         washer = _fcstd(os.path.join(self.tmp, "elsewhere", "washer.FCStd"))
         _fcstd(self.s.work.path(self.frame), "Assembly::AssemblyObject",
@@ -337,7 +337,7 @@ class TestNewPartInVault(unittest.TestCase):
         import shutil
 
         import FreeCAD
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-new-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
@@ -388,7 +388,7 @@ class TestRenumberInVault(unittest.TestCase):
         import shutil
 
         import FreeCAD
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-renum-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
@@ -437,7 +437,7 @@ class TestRenumberInVault(unittest.TestCase):
         path = s.vault.fetch(new, os.path.join(self.tmp, "out"))
         doc = self.FreeCAD.openDocument(path, hidden=True)
         try:
-            from bruceworx import freecad_io
+            from heuretes_freecad import freecad_io
 
             self.assertEqual(freecad_io.main_object(doc).PartNumber, new)
         finally:
@@ -524,7 +524,7 @@ class TestVaultCategories(unittest.TestCase):
     def test_panel_groups_hides_and_remembers(self):
         import shutil
 
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-cat-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
@@ -694,7 +694,7 @@ class TestFilesTableColumns(unittest.TestCase):
     def test_choose_columns_in_the_panel(self):
         import shutil
 
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
         from PySide import QtCore
 
         tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-vc-cols-"))
@@ -804,7 +804,7 @@ class TestICloudDownload(unittest.TestCase):
     def test_a_stand_in_that_never_downloads_gives_a_clear_message(self):
         import plistlib
 
-        from bruceworx import pdm_workspace as ws
+        from heuretes_freecad import pdm_workspace as ws
 
         path = os.path.join(self.tmp, "b.FCStd")
         with open(os.path.join(self.tmp, ".b.FCStd.icloud"), "wb") as handle:

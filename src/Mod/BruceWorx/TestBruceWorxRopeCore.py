@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Headless tests of the flexible wires (BW-ROU-08): cut length, taut, gravity axis, the Assembly
-drag stop. The rope maths itself is tested in addons/BruceWorx/tests/test_rope.py."""
+drag stop. The rope maths itself is tested in addons/Heuretes/tests/test_rope.py."""
 
 import math
 import os

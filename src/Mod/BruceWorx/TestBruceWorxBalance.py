@@ -297,7 +297,7 @@ class BalanceTests(Fixture):
         self.assertAlmostEqual(typed.flight_min, 2 * result.flight_min, places=9)
 
     def test_no_motors_and_bad_file(self):
-        from bruceworx import balance
+        from heuretes_freecad import balance
 
         asm = xframe(self.doc)
         with self.assertRaises(balance.ThrustError):

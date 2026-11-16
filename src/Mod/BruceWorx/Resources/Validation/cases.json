@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "SIM-05 validation cases of Vector Labs: published reference values with citations (numbers only), and the parameters of the geometry builders in bruceworx_validation_cases.py. Run by bruceworx_validation.py.",
+ "description": "SIM-05 validation cases of Heuretes FreeCAD: published reference values with citations (numbers only), and the parameters of the geometry builders in bruceworx_validation_cases.py. Run by bruceworx_validation.py.",
  "cfd": [
   {
    "id": "B-CF4",

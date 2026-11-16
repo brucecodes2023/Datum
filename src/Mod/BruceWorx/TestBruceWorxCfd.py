@@ -87,7 +87,7 @@ class TestRunDir(unittest.TestCase):
     @needs_foam
     def test_a_case_path_with_a_space_runs(self):
         with tempfile.TemporaryDirectory() as t:
-            folder = os.path.join(t, "Vector Labs", "cfd", "case")
+            folder = os.path.join(t, "Heuretes FreeCAD", "cfd", "case")
             os.makedirs(folder)
             alias = cfd.run_dir(folder)
             self.assertNotIn(" ", alias)
@@ -105,7 +105,7 @@ class TestRunDir(unittest.TestCase):
         cfd.MPI_MIN_CELLS, cfd.mpi_known_broken = 0, lambda *a: False
         try:
             with tempfile.TemporaryDirectory() as t:
-                folder = os.path.join(t, "Vector Labs", "cfd", "sphere")
+                folder = os.path.join(t, "Heuretes FreeCAD", "cfd", "sphere")
                 info = cfd.write_case(folder, sphere_parts(), cfd.Setup(speed=0.015, turbulence="laminar",
                                                                          preset="coarse", n_procs=2))
                 self.assertEqual(info["n_procs"], 2)

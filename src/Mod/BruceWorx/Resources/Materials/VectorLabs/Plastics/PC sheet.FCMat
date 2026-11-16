@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "4f180985-c664-4d3e-9252-153d3ecb4642"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "PC sheet"
   Description: "Polycarbonate sheet (Lexan 9030, Makrolon GP): guards, covers, windows. Tough; cold-bendable."
   ReferenceSource: "SABIC Lexan 9030 / Covestro Makrolon GP sheet typical"
   SourceURL: "https://www.sabic.com/en/products/specialties/sheet"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Plastics"
 Models:
   LinearElastic:

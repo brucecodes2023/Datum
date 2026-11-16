@@ -29,13 +29,13 @@ colouring and the PDF are in bruceworx_sim_gui.
   ``SFColors`` (30 Oct, S2): n thresholds make n + 1 bands; the defaults come
   from the preference ``Mod/BruceWorx/Sim`` (1 and 2: red, amber, green).
 * ``find_ccx`` looks for the solver in the FEM preference, then beside the
-  program (Vector Labs bundles it as ``Contents/bin/ccx``), then the pixi
+  program (Heuretes FreeCAD bundles it as ``Contents/bin/ccx``), then the pixi
   environment of a development tree, then PATH. ``ensure_ccx_pref`` writes the
   first find into the preference once, so a fresh profile solves without a
   visit to the FEM settings.
 * ``write_report`` writes the study report as LaTeX (report.tex and the
   renders in a folder beside the document) and ``compile_report`` makes the
-  PDF with Tectonic (bundled in Vector Labs), else latexmk or pdflatex (MacTeX);
+  PDF with Tectonic (bundled in Heuretes FreeCAD), else latexmk or pdflatex (MacTeX);
   without any, the .tex folder stays for the user (30 Oct, S4).
 
 Theory (plan chapter 60): static K u = f; sigma_vM from the stress tensor
@@ -115,7 +115,7 @@ def ccx_candidates():
     if pref:
         found.append(pref)
     home = _home()
-    found.append(os.path.join(home, "bin", "ccx"))  # Vector Labs: Contents/bin/ccx (make-vectorlabs.sh)
+    found.append(os.path.join(home, "bin", "ccx"))  # Heuretes FreeCAD: Contents/bin/ccx (make-vectorlabs.sh)
     found.append(os.path.join(home, "..", "..", ".pixi", "envs", "default", "bin", "ccx"))  # build/release
     which = shutil.which("ccx")
     if which:
@@ -222,7 +222,7 @@ def _number_in(value, unit):
 
 
 def _card_hdt(uuid):
-    """The heat deflection temperature (deg C) a Vector Labs card records in its BruceWorx block, or None."""
+    """The heat deflection temperature (deg C) a Heuretes FreeCAD card records in its BruceWorx block, or None."""
     try:
         import bruceworx_materials
 
@@ -281,12 +281,12 @@ def material_manager():
     return Materials.MaterialManager()
 
 
-LIBRARY = "Vector Labs"  # the material library with yield strengths (S1, 30 Oct; the materials agent's cards)
+LIBRARY = "Heuretes FreeCAD"  # the material library with yield strengths (S1, 30 Oct; the materials agent's cards)
 STOCK_LIBRARY = "System"  # FreeCAD's own cards, the FEM ones among them
 
 
 def library_rank(library):
-    """The order of the libraries in the material picker: Vector Labs, the vault's, the stock cards, the rest."""
+    """The order of the libraries in the material picker: Heuretes FreeCAD, the vault's, the stock cards, the rest."""
     if library == LIBRARY:
         return 0
     if "vault" in (library or "").lower():
@@ -297,7 +297,7 @@ def library_rank(library):
 
 
 def material_cards(manager=None):
-    """Every card with E and nu, as card_values dicts: the Vector Labs library first, then the vault's,
+    """Every card with E and nu, as card_values dicts: the Heuretes FreeCAD library first, then the vault's,
     then the stock (FEM) cards, then the others; by name within a library."""
     manager = manager or material_manager()
     cards = []
@@ -1812,7 +1812,7 @@ def precheck(analysis, results=True):
     if m["solver"] is None:
         issues.append(("error", "No solver: New Study makes a CalculiX solver"))
     if not find_ccx():
-        issues.append(("error", "CalculiX (ccx) not found: Vector Labs bundles it; set FEM > CalculiX > binary otherwise"))
+        issues.append(("error", "CalculiX (ccx) not found: Heuretes FreeCAD bundles it; set FEM > CalculiX > binary otherwise"))
     return issues
 
 
@@ -2506,7 +2506,7 @@ def report_source(data, figures=()):
     measure = (res or {}).get("measure") or data.get("measure") or DEFAULT_MEASURE
     lines = [
         r"\documentclass[10pt,a4paper]{article}",
-        "% Vector Labs simulation report (BruceWorx SIM-01). Compile with tectonic, latexmk -pdf or pdflatex.",
+        "% Heuretes FreeCAD simulation report (BruceWorx SIM-01). Compile with tectonic, latexmk -pdf or pdflatex.",
         r"\usepackage{iftex}",
         r"\ifXeTeX\usepackage{fontspec}\else\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\fi",
         r"\usepackage[margin=20mm]{geometry}",
@@ -2526,7 +2526,7 @@ def report_source(data, figures=()):
         import bruceworx_cfd as cfd
 
         lines += [r"\begin{document}", rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",
-                  rf"{{\small\color{{black!60}} Vector Labs simulation report, {e(data['date'])}}}", ""]
+                  rf"{{\small\color{{black!60}} Heuretes FreeCAD simulation report, {e(data['date'])}}}", ""]
         if data.get("airflow"):
             lines.append(cfd.report_section(data["airflow"]))
             lines.append(cfd.paraview().report_figures_tex(data.get("airflow_figures")))
@@ -2544,7 +2544,7 @@ def report_source(data, figures=()):
     lines += [
         r"\begin{document}",
         rf"{{\Large\bfseries {e(data['name'])}}}\\[2pt]",
-        rf"{{\small\color{{black!60}} Vector Labs simulation report, {e(data['date'])}}}",
+        rf"{{\small\color{{black!60}} Heuretes FreeCAD simulation report, {e(data['date'])}}}",
         "",
         r"\section*{Study}",
         r"\begin{tabular}{@{}ll@{}}",
@@ -2576,7 +2576,7 @@ def report_source(data, figures=()):
         if not part and not (heat and data["type"] == "thermal") and data["allowable"] and "ultimate" in (data["basis"] or ""):
             lines.append(r"\par\textbf{Note:} the card has no yield strength, so the safety factor divides the "
                          r"ultimate tensile strength. It says how far the part is from breaking, not from yielding; "
-                         r"pick a card with a yield strength (the Vector Labs library has them) for a yield check.")
+                         r"pick a card with a yield strength (the Heuretes FreeCAD library has them) for a yield check.")
     else:
         lines.append("No material.")
     mesh = data.get("mesh") or {}
@@ -2745,7 +2745,7 @@ def tex_candidates():
     if pref and _tex_kind(pref):
         found.append((_tex_kind(pref), pref))
     home = _home()
-    found.append(("tectonic", os.path.join(home, "bin", "tectonic")))  # Vector Labs: Contents/bin/tectonic
+    found.append(("tectonic", os.path.join(home, "bin", "tectonic")))  # Heuretes FreeCAD: Contents/bin/tectonic
     found.append(("tectonic", os.path.join(home, "..", "..", ".pixi", "envs", "default", "bin", "tectonic")))
     for kind in ("tectonic", "latexmk", "pdflatex"):
         which = shutil.which(kind)
@@ -2773,17 +2773,17 @@ def tex_command(kind, path, tex="report.tex"):
     return [path, "-interaction=nonstopmode", "-halt-on-error", tex]
 
 
-TECTONIC_SEED = os.path.join("Resources", "tectonic-cache")  # in Vector Labs' Contents (make-vectorlabs.sh)
+TECTONIC_SEED = os.path.join("Resources", "tectonic-cache")  # in Heuretes FreeCAD' Contents (make-vectorlabs.sh)
 
 
 def tectonic_cache(home=None, user_cache=None):
-    """Vector Labs' Tectonic cache, or None without a bundled seed: the seed (Contents/Resources/tectonic-cache,
-    made at bundle time) copied once into ~/Library/Caches/Vector Labs/tectonic, writable, and copied again when
+    """Heuretes FreeCAD' Tectonic cache, or None without a bundled seed: the seed (Contents/Resources/tectonic-cache,
+    made at bundle time) copied once into ~/Library/Caches/Heuretes FreeCAD/tectonic, writable, and copied again when
     the bundle's seed is newer. The first report then compiles offline (30 Oct follow-up 3)."""
     seed = os.path.join(home or _home(), TECTONIC_SEED)
     if not os.path.isdir(seed):
         return None
-    target = user_cache or os.path.join(os.path.expanduser("~"), "Library", "Caches", "Vector Labs", "tectonic")
+    target = user_cache or os.path.join(os.path.expanduser("~"), "Library", "Caches", "Heuretes FreeCAD", "tectonic")
     stamp = os.path.join(target, ".vectorlabs-seed")
     want = f"{os.path.getmtime(seed):.0f}"
     try:
@@ -2803,7 +2803,7 @@ def tectonic_cache(home=None, user_cache=None):
 
 def tex_environment(path):
     """os.environ with the compiler's folder (and MacTeX's) on PATH: latexmk runs pdflatex by name.
-    Vector Labs' Tectonic gets TECTONIC_CACHE_DIR, its pre-seeded cache (tectonic_cache)."""
+    Heuretes FreeCAD' Tectonic gets TECTONIC_CACHE_DIR, its pre-seeded cache (tectonic_cache)."""
     env = dict(os.environ)
     folders = [os.path.dirname(path), MACTEX_BIN]
     env["PATH"] = os.pathsep.join(folders + [env.get("PATH", "")])

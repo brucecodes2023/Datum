@@ -1704,7 +1704,7 @@ bool Document::saveAs()
         name = QString::fromUtf8(getDocument()->Label.getValue());
     }
     // BW PDM-14: a simulation document (a .vlsim file, or a copy that records its source part) lists the
-    // Vector Labs simulation filter first; a normal document offers FCStd only.
+    // Heuretes FreeCAD simulation filter first; a normal document offers FCStd only.
     QString filter = QStringLiteral("%1 %2 (*.FCStd)").arg(exe, QObject::tr("Document"));
     bool isSimulation = name.endsWith(QStringLiteral(".vlsim"), Qt::CaseInsensitive);
     if (!isSimulation) {
@@ -1716,7 +1716,7 @@ bool Document::saveAs()
         }
     }
     if (isSimulation) {
-        filter = QObject::tr("Vector Labs simulation (*.vlsim)") + QStringLiteral(";;") + filter;
+        filter = QObject::tr("Heuretes FreeCAD simulation (*.vlsim)") + QStringLiteral(";;") + filter;
     }
     QString fn = FileDialog::getSaveFileName(
         getMainWindow(),

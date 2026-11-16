@@ -31,18 +31,18 @@ DISTANCE_PREF = "OffsetPlaneDistance"
 DEFAULT_DISTANCE = 10.0  # mm, the first time
 COMMAND = "BruceWorx_Plane"
 STOCK = "PartDesign_Plane"
-ICON = "BruceWorx_Plane.svg"
+ICON = "Heuretes_Plane.svg"
 MAX_COUNT = 200
 PARALLEL_TOL = 1e-6
 # kind: (command, FreeCAD's command, object type, attacher, icon, menu text, tooltip)
 DATUMS = {
     "axis": ("BruceWorx_Axis", "PartDesign_Line", "PartDesign::Line", "Attacher::AttachEngineLine",
-             "BruceWorx_Axis.svg", "Axis",
+             "Heuretes_Axis.svg", "Axis",
              "A construction axis. From the selection at once: the axis of a cylinder or a circle, the line "
              "through two points, the intersection of two planes, a line along an edge. Otherwise: pick what "
              "to attach it to."),
     "point": ("BruceWorx_Point", "PartDesign_Point", "PartDesign::Point", "Attacher::AttachEnginePoint",
-              "BruceWorx_Point.svg", "Point",
+              "Heuretes_Point.svg", "Point",
               "A construction point. From the selection at once: on a vertex, the centre of a circle or an "
               "arc, the centre of a face. Otherwise: pick what to attach it to."),
 }

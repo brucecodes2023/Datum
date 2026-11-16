@@ -124,7 +124,7 @@ def vault_units(root=None) -> str:
     if not root:
         return ""
     try:
-        from bruceworx import drawing_standards
+        from heuretes_freecad import drawing_standards
 
         return norm_units(drawing_standards.load(root).units)
     except Exception:  # noqa: BLE001

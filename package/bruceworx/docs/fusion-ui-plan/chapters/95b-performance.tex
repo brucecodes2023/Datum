@@ -57,18 +57,18 @@ everything else is copied byte for byte. Each shape is compared with the origina
 box) and any difference stops the run before anything is recorded. One \code{migrate\_storage} journal event
 maps old to new; replay moves versions, drawings' made-from, released files and BOM versions to the new hashes,
 \code{FolderVault.canonical} keeps old work-copy bases current, and unchanged work copies are refreshed. Old
-objects stay, so an older Vector Labs still reads the vault. On a copy of the vault: 114 of 165 stored files,
+objects stay, so an older Heuretes FreeCAD still reads the vault. On a copy of the vault: 114 of 165 stored files,
 767 shapes, 26.9 to 18.5\,MB, statuses unchanged, 37 of 37 files open in FreeCAD with identical shapes.
 \end{epic}
 
-\begin{epic}{PRF-05}{Vector Labs worker: headless background jobs}{M5}{\stTodo}{Bruce 2 Nov (tonight)}
-Bruce, 2 Nov: \emph{a headless Vector Labs that doesn't trigger a program to run, a lighter version that can run
+\begin{epic}{PRF-05}{Heuretes FreeCAD worker: headless background jobs}{M5}{\stTodo}{Bruce 2 Nov (tonight)}
+Bruce, 2 Nov: \emph{a headless Heuretes FreeCAD that doesn't trigger a program to run, a lighter version that can run
 in the background}. Today a background job (a vault import with its BOMs, an interference check, a render, a
 KiCad board insert) starts the full GUI app with its window made invisible, because Qt's offscreen platform
 crashes on macOS (no OpenGL): it appears in the Dock as \emph{FreeCAD}, loads every workbench, and while a long
 boolean runs macOS shows it \emph{Not Responding} (three runs were force-quit that way on 2 Nov).
 
-The worker is an App-only process (\code{FreeCADCmd} underneath, named \emph{Vector Labs worker}, no Dock icon)
+The worker is an App-only process (\code{FreeCADCmd} underneath, named \emph{Heuretes FreeCAD worker}, no Dock icon)
 at macOS background priority, loading only the modules a job needs. The pieces those jobs use today from GUI
 modules move to App-level code: the vault session and its check-in hooks (the BOM), the board insert, the
 interference check. Renders come without a window, from offscreen GL or from the vault's preview meshes

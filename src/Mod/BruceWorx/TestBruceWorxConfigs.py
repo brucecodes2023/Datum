@@ -372,7 +372,7 @@ class VaultAndBom(unittest.TestCase):
     of the file, and an assembly BOM with one line per configuration."""
 
     def setUp(self):
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         self.tmp = os.environ.get("BW_CONFIGS_DIR") or tempfile.mkdtemp(prefix="bwcfgv")
         self.vault = vs.create_vault(vs.VaultSetup(name="Configs", folder=os.path.join(self.tmp, "vault")),
@@ -410,7 +410,7 @@ class VaultAndBom(unittest.TestCase):
 
     def test_items_bom_and_refusals(self):
         import bruceworx_bom as bb
-        from bruceworx import bom
+        from heuretes_freecad import bom
 
         short, standard = self._configure()
         wanted = bc.configuration_items(self.doc, self.pn)
@@ -452,7 +452,7 @@ class VaultAndBom(unittest.TestCase):
             bc.configuration_items(self.doc, self.pn)  # two rows with one P/N
 
     def test_vault_writes_the_file_number_into_the_table(self):
-        from bruceworx import freecad_io
+        from heuretes_freecad import freecad_io
 
         self._configure()
         freecad_io.set_part_number(self.doc.getObject("Part"), "XX-01-04242-001")

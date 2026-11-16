@@ -48,7 +48,7 @@ class TestText(unittest.TestCase):
 
 class TestOnThePage(unittest.TestCase):
     def setUp(self):
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bw-drw05-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)

@@ -84,7 +84,7 @@ def _bh():
 
 
 def _hw():
-    from bruceworx import hardware
+    from heuretes_freecad import hardware
 
     return hardware
 

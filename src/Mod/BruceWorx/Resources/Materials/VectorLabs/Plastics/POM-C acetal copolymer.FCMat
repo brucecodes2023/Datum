@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "b4724f5a-ceea-46cc-8827-bdc5b94eb37e"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "POM-C acetal copolymer"
   Description: "Acetal copolymer stock shapes (POM-C: TECAFORM AH, Acetron GP, Hostaform). Machined gears, bushings, jigs."
   ReferenceSource: "Ensinger TECAFORM AH natural (ASTM D638) / Boedeker typical"
   SourceURL: "https://www.ensingerplastics.com/en-us/shapes/acetal-tecaform-ah-natural"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Plastics"
 Models:
   LinearElastic:

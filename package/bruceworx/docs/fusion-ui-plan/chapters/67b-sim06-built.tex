@@ -5,7 +5,7 @@
 Phase 1 of \S\ref{sec:sim06-plan} is in (commit \code{SIM-06: airflow with OpenFOAM, phase 1}): the case writer and
 runner in \file{src/Mod/BruceWorx/bruceworx\_cfd.py} (no FreeCAD needed to test it), the panels in
 \file{bruceworx\_cfd\_gui.py}, and small hooks in the study frame (\file{bruceworx\_sim.py}, \file{bruceworx\_sim\_gui.py}).
-Your answers O1--O9 were followed; nothing is installed by Vector Labs.
+Your answers O1--O9 were followed; nothing is installed by Heuretes FreeCAD.
 
 \paragraph{What you can do now.}
 \begin{itemize}[nosep]
@@ -18,7 +18,7 @@ Your answers O1--O9 were followed; nothing is installed by Vector Labs.
         with an \emph{Install OpenFOAM\ldots} button (opens the openfoam-app page; the text also gives
         \code{brew install gerlero/openfoam/openfoam@2606}). It also checks that every part is watertight, estimates
         the cell count and $y^+$, and warns when the Reynolds number points to the other turbulence choice.
-  \item \textbf{Run} writes the case under \file{\textasciitilde/Library/Caches/Vector Labs/cfd/<document>/<study>/}
+  \item \textbf{Run} writes the case under \file{\textasciitilde/Library/Caches/Heuretes FreeCAD/cfd/<document>/<study>/}
         (one STL per part, \code{blockMesh} box from the bounding box with editable upstream, downstream and sideways
         factors, \code{snappyHexMesh}, \code{simpleFoam}, forces and force coefficients per part, the inlet and outlet flow
         rate) and runs it in the background with a live residual plot, a live drag plot and a Stop button.
@@ -49,7 +49,7 @@ SST with wall layers, 70\,k cells) converged in 172 iterations and 17\,s.
         same $C_d=1.110$. Parallel is used from 50k cells: a 115k-cell pipe took 534\,s serial, 314\,s on 4 ranks and
         190\,s on 8. The 25\,s fallback to one core stays as a guard.
   \item \textbf{Spaces in the folder.} OpenFOAM aborts on a case path with a space, and the cache folder is
-        \file{Vector Labs}; the runner works through a space-free symlink in the temp folder.
+        \file{Heuretes FreeCAD}; the runner works through a space-free symlink in the temp folder.
   \item \textbf{Convergence.} The solver stops at residuals of $10^{-5}$, ten times under the limit, so the report's
         $10^{-4}$ holds with room. A run stopped early is judged on the forces of its last half (at least 50
         iterations) instead of 200, so the start-up transient does not count.
@@ -58,6 +58,6 @@ SST with wall layers, 70\,k cells) converged in 172 iterations and 17\,s.
         (\code{SoFCColorGradient::setMarkerLabel}, known since 27 Oct), so the GUI converts to VTK and relies on ParaView
         until that is fixed. This build has no streamline filter either.
 \end{itemize}
-\paragraph{Open.} Surface pressure and the cut plane now show inside Vector Labs (\S\ref{sec:sim06-post-built}); streamlines
+\paragraph{Open.} Surface pressure and the cut plane now show inside Heuretes FreeCAD (\S\ref{sec:sim06-post-built}); streamlines
 stay with ParaView, which is installed (6.2.0). The preset cell counts
 (about 0.3\,M, 1\,M, 3\,M for a drone-sized model) are estimates until measured on the SP-01 frame in phase 2.

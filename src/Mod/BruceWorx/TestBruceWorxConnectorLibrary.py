@@ -17,7 +17,7 @@ import unittest
 import FreeCAD as App
 
 import bruceworx_routing_ports as bp
-from bruceworx import connector_library as cl
+from heuretes_freecad import connector_library as cl
 
 SAMPLES = ("XHP-4", "B4B-XH-A", "S4B-XH-A", "GHR-03V-S", "43025-0600", "43020-0600", "XT60-M", "XT30PW-M",
            "DT04-6P", "DT06-6S", "BULLET-3.5-M", "67996-106HLF")
@@ -155,7 +155,7 @@ class ConnectorLibraryTests(unittest.TestCase):
             self.assertTrue(a.Placement.isSame(b.Placement, 1e-9))
 
     def test_vault_sees_a_part(self):
-        from bruceworx import vault_setup  # noqa: PLC0415
+        from heuretes_freecad import vault_setup  # noqa: PLC0415
 
         candidate = vault_setup.scan_for_import(self.tmp)
         kinds = {os.path.basename(c.path): c.kind for c in candidate}

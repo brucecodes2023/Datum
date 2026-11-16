@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""The Files tab's tree (bruceworx/vault_trees.py): assemblies, their parts, every item's drawings."""
+
+import os
+import shutil
+import sys
+import tempfile
+import unittest
+import zipfile
+from types import SimpleNamespace
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from heuretes_freecad import vault_trees as vt  # noqa: E402
+
+
+def item(kind, description="", drawing_of=None, state="WIP", rev="01"):
+    return SimpleNamespace(item_type=kind, description=description, drawing_of=drawing_of, state=state,
+                           latest=SimpleNamespace(code=rev), obsolete=False)
+
+
+def gearbox(bom=None, links=None):
+    """The Leonardo gearbox, cut down: an assembly of a housing, a sun and three planets; the housing
+    has a drawing. ``bom``: recorded lines; else ``links`` stand in for the assembly file."""
+    items = {
+        "LE-02-01002-001": item("assembly", "NEMA 17 planetary gearbox 5:1"),
+        "LE-01-01003-001": item("part", "Housing"),
+        "LE-01-01009-001": item("part", "Sun gear"),
+        "LE-01-01008-001": item("part", "Planet gear"),
+        "LE-03-01003-001": item("drawing", "Housing drawing", drawing_of="LE-01-01003-001"),
+    }
+    vault = SimpleNamespace(items=items, bom=bom or {})
+    structure = vt.structure(vault, links=lambda pn: (links or {}).get(pn, {}))
+    return vault, structure
+
+
+class TestStructure(unittest.TestCase):
+    def test_lines_come_from_the_file_links_without_a_recorded_bom(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01003-001": 1, "LE-01-01009-001": 1,
+                                                   "LE-01-01008-001": 3, "XX-99-99999-999": 2}})
+        self.assertEqual(s["sources"], {"LE-02-01002-001": "links"})
+        # a file that is not a vault item is not a line
+        self.assertEqual(dict(map(tuple, s["bom"]["LE-02-01002-001"])),
+                         {"LE-01-01003-001": 1, "LE-01-01008-001": 3, "LE-01-01009-001": 1})
+
+    def test_a_recorded_bom_wins(self):
+        _v, s = gearbox(bom={"LE-02-01002-001": [("LE-01-01003-001", 1)]},
+                        links={"LE-02-01002-001": {"LE-01-01008-001": 3}})
+        self.assertEqual(s["sources"], {"LE-02-01002-001": "bom"})
+        self.assertEqual(s["bom"]["LE-02-01002-001"], [["LE-01-01003-001", 1]])
+
+
+class TestTops(unittest.TestCase):
+    def test_a_cycle_has_no_top(self):
+        _v, s = gearbox()
+        s = dict(s)
+        s["bom"] = {"LE-02-01002-001": [["LE-01-01003-001", 1]], "LE-01-01003-001": [["LE-02-01002-001", 1]]}
+        self.assertEqual(vt.tops(s), [])  # each uses the other: neither is a top
+
+    def test_tops_are_the_unused_assemblies(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01008-001": 3}})
+        self.assertEqual(vt.tops(s), ["LE-02-01002-001"])
+
+
+class TestFileTree(unittest.TestCase):
+    def test_assembly_parts_and_drawings_then_the_loose_files(self):
+        vault, _s = gearbox()
+        vault.items["LE-01-01020-001"] = item("part", "Bracket")
+        vault.items["LE-03-01020-001"] = item("drawing", "Bracket drawing", drawing_of="LE-01-01020-001")
+        vault.items["LE-03-09999-001"] = item("drawing", "Lost drawing", drawing_of="LE-01-09999-001")
+        s = vt.structure(vault, links=lambda pn: {"LE-01-01003-001": 1, "LE-01-01008-001": 3,
+                                                  "LE-01-01009-001": 1})
+        tree = vt.file_tree(s)
+        top, loose = tree
+        self.assertEqual(top["pn"], "LE-02-01002-001")
+        self.assertEqual([(c["pn"], c["qty"]) for c in top["children"]],
+                         [("LE-01-01003-001", 1), ("LE-01-01008-001", 3), ("LE-01-01009-001", 1)])
+        self.assertEqual([c["pn"] for c in top["children"][0]["children"]], ["LE-03-01003-001"])
+        self.assertEqual(loose["group"], vt.LOOSE)
+        self.assertEqual([c["pn"] for c in loose["children"]], ["LE-01-01020-001", "LE-03-09999-001"])
+        self.assertEqual([c["pn"] for c in loose["children"][0]["children"]], ["LE-03-01020-001"])
+
+        def every(nodes):
+            for n in nodes:
+                if n["pn"]:
+                    yield n["pn"]
+                yield from every(n["children"])
+
+        self.assertEqual(set(every(tree)), set(vault.items))
+
+    def test_no_loose_group_when_everything_is_used(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01003-001": 1, "LE-01-01009-001": 1,
+                                                   "LE-01-01008-001": 3}})
+        self.assertEqual([n["pn"] for n in vt.file_tree(s)], ["LE-02-01002-001"])
+
+    def test_a_cycle_still_lists_every_item(self):
+        _v, s = gearbox()
+        s = dict(s)
+        s["bom"] = {"LE-02-01002-001": [["LE-01-01003-001", 1]], "LE-01-01003-001": [["LE-02-01002-001", 1]]}
+        tree = vt.file_tree(s)  # neither is a top: both land in the loose group, one inside the other
+
+        def every(nodes):
+            for n in nodes:
+                yield n["pn"]
+                yield from every(n["children"])
+
+        self.assertEqual([n.get("group") for n in tree], [vt.LOOSE])
+        self.assertTrue({"LE-02-01002-001", "LE-01-01003-001"} <= set(every(tree)))
+
+
+class TestPrograms(unittest.TestCase):
+    def test_program_is_the_first_field(self):
+        self.assertEqual(vt.program_code("LE-01-01001-001"), "LE")
+        self.assertEqual(vt.program_code("le-02-01001-001-A"), "LE")
+        self.assertEqual(vt.program_code("not a number"), "")
+
+    def test_a_part_used_by_its_program_is_not_a_second_root(self):
+        _v, s = gearbox(links={"LE-02-01002-001": {"LE-01-01003-001": 1, "LE-01-01009-001": 1,
+                                                   "LE-01-01008-001": 3}})
+        s = dict(s)
+        s["items"] = dict(s["items"])
+        s["items"]["OW-01-01001-001"] = {"type": "part", "description": "Deck", "obsolete": False}
+        self.assertEqual(vt.program_roots(s, "LE"), ["LE-02-01002-001"])
+        self.assertEqual(vt.program_roots(s, "OW"), ["OW-01-01001-001"])
+
+
+class TestFileLinks(unittest.TestCase):
+    def test_links_and_arrays_are_counted(self):
+        tmp = tempfile.mkdtemp(prefix="bw-trees-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        path = os.path.join(tmp, "LE-02-01002-001.FCStd")
+
+        def link(name, target, count=None):
+            extra = (f'<Property name="ElementCount" type="App::PropertyInteger"><Integer value="{count}"/></Property>'
+                     if count else "")
+            return (f'<Object name="{name}"><Properties Count="2">'
+                    f'<Property name="LinkedObject" type="App::PropertyXLink"><XLink file="{target}" name="Part"/>'
+                    f'</Property>{extra}</Properties></Object>')
+
+        objects = [("Planet1", "App::Link"), ("Planet2", "App::Link"), ("Pins", "App::Link"), ("Body", "PartDesign::Body")]
+        xml = ('<Document><Objects Count="4">' + "".join(f'<Object type="{t}" name="{n}"/>' for n, t in objects)
+               + '</Objects><ObjectData Count="4">'
+               + link("Planet1", "LE-01-01008-001.FCStd") + link("Planet2", "LE-01-01008-001.FCStd")
+               + link("Pins", "LE-01-01012-001.FCStd", count=3)
+               + '<Object name="Body"><Properties Count="0"/></Object></ObjectData></Document>')
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("Document.xml", xml)
+        self.assertEqual(vt.file_links(path), {"LE-01-01008-001": 2, "LE-01-01012-001": 3})
+
+
+class TestFlatList(unittest.TestCase):
+    """The flat file list's helpers (PDM-13)."""
+
+    def setUp(self):
+        _vault, self.s = gearbox(bom={"LE-02-01002-001": [("LE-01-01003-001", 1), ("LE-01-01009-001", 1),
+                                                         ("LE-01-01008-001", 3)]})
+
+    def test_used_in(self):
+        used = vt.used_in(self.s)
+        self.assertEqual(used["LE-01-01008-001"], [("LE-02-01002-001", 3)])
+        self.assertNotIn("LE-02-01002-001", used)
+
+    def test_contents_reach_parts_and_drawings(self):
+        self.assertEqual(vt.contents(self.s, "LE-02-01002-001"),
+                         {"LE-02-01002-001", "LE-01-01003-001", "LE-01-01009-001", "LE-01-01008-001", "LE-03-01003-001"})
+        self.assertEqual(vt.contents(self.s, "nope"), set())
+
+    def test_missing_drawing_counts_assemblies_not_drawings_or_cots(self):
+        self.assertTrue(vt.missing_drawing(self.s, "LE-02-01002-001"))  # an assembly without one counts (1 Nov)
+        self.assertFalse(vt.missing_drawing(self.s, "LE-01-01003-001"))
+        self.assertTrue(vt.missing_drawing(self.s, "LE-01-01009-001"))
+        self.assertFalse(vt.missing_drawing(self.s, "LE-03-01003-001"))
+        self.s["items"]["LE-01-01009-001"]["description"] = "Sun gear (COTS)"
+        self.assertFalse(vt.missing_drawing(self.s, "LE-01-01009-001"))
+
+    def test_drawing_owner_and_type_order(self):
+        self.assertEqual(vt.drawing_owner(self.s, "LE-03-01003-001"), "LE-01-01003-001")
+        self.assertEqual(sorted(["drawing", "part", "assembly"], key=vt.type_rank), ["assembly", "part", "drawing"])
+
+
+if __name__ == "__main__":
+    unittest.main()

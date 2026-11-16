@@ -80,7 +80,7 @@ def register_materials():
         return False
     if group.GetString("ModuleDir", "") != MATERIAL_DIR:
         group.SetString("ModuleDir", MATERIAL_DIR)
-    icon = os.path.join(HERE, "preferences-bruceworx.svg")
+    icon = os.path.join(HERE, "preferences-heuretes.svg")
     if group.GetString("ModuleIcon", "") != icon:
         group.SetString("ModuleIcon", icon)
     group.SetBool("ModuleReadOnly", True)
@@ -130,9 +130,9 @@ def appearance(key_or_uuid):
 
 def bridge():
     try:
-        from bruceworx import kicad_bridge
+        from heuretes_freecad import kicad_bridge
     except ImportError as exc:
-        raise RuntimeError("the Vector Labs hooks add-on is off (Preferences > Vector Labs > Hooks add-on); "
+        raise RuntimeError("the Heuretes FreeCAD hooks add-on is off (Preferences > Heuretes FreeCAD > Hooks add-on); "
                            "it holds the KiCad bridge") from exc
     return kicad_bridge
 
@@ -306,7 +306,7 @@ def _pause_part_observer():
     took most of a large board's import (ESC board, 31 Oct: 51 of 53 s). Returns the observer
     to resume, or None."""
     try:
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         observer = partprops._OBSERVER
     except Exception:
@@ -325,7 +325,7 @@ def _resume_part_observer(observer, part=None):
     if part is None:
         return
     try:
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         for obj in [part] + [p for p in part.InList if part in (getattr(p, "Group", None) or [])]:
             partprops.refresh(obj)
@@ -382,7 +382,7 @@ def load_mass_table(vault=None):
     kb = bridge()
     if vault is None:
         try:
-            from bruceworx import partprops
+            from heuretes_freecad import partprops
 
             vault = partprops.vault_path() or None
         except Exception:
@@ -532,7 +532,7 @@ def _board_props(part, path, info, opts, result):
 def _apply_part_schema(part, info, stem):
     """Part properties (P/N, Description, MaterialName, Mass ...) as on any part."""
     try:
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
     except ImportError:
         return
     try:
@@ -560,9 +560,9 @@ KIND_LABELS = {"project": "Project", "schematic": "Schematic", "board": "PCB"}
 
 def _ecad():
     try:
-        from bruceworx import ecad_vault
+        from heuretes_freecad import ecad_vault
     except ImportError as exc:
-        raise RuntimeError("the Vector Labs hooks add-on is off (Preferences > Vector Labs > Hooks add-on); "
+        raise RuntimeError("the Heuretes FreeCAD hooks add-on is off (Preferences > Heuretes FreeCAD > Hooks add-on); "
                            "it holds the KiCad vault items") from exc
     return ecad_vault
 
@@ -590,7 +590,7 @@ def apply_item_values(part, values):
             continue
         if name == "LifecycleState":
             try:
-                from bruceworx import partprops
+                from heuretes_freecad import partprops
 
                 partprops.set_state(part, val)
             except Exception:
@@ -610,7 +610,7 @@ def _apply_vault_item(part, path):
         found = ev.item_for_path(path)
         if found is None:
             return
-        from bruceworx.pdm_folder import FolderVault
+        from heuretes_freecad.pdm_folder import FolderVault
 
         root, _actor, pn = found
         vault = FolderVault(root)

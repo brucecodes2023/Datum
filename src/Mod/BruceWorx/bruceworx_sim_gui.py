@@ -183,7 +183,7 @@ def band_colors(nodes, factors, bands):
 
 
 def _brittle(uuid):
-    """True for a Vector Labs card marked brittle (acrylic, CFRP, G10: the materials agent's BruceWorx block)."""
+    """True for a Heuretes FreeCAD card marked brittle (acrylic, CFRP, G10: the materials agent's BruceWorx block)."""
     try:
         import bruceworx_materials
 
@@ -997,7 +997,7 @@ def _make_classes():
 
         # --- boxes
         def _build_study(self):
-            w = box("Study", os.path.join(HERE, "BruceWorx_NewStudy.svg"))
+            w = box("Study", os.path.join(HERE, "Heuretes_NewStudy.svg"))
             lay = form_layout()
             self.name_edit = QtWidgets.QLineEdit(f"Study {len(sim.studies(self.doc)) + 1}")
             lay.addRow("Name", self.name_edit)
@@ -1296,7 +1296,7 @@ def _make_classes():
 
         # --- boxes
         def _build_setup(self):
-            w = box(f"Study: {sim.summary_name(self.analysis)}", os.path.join(HERE, "BruceWorx_NewStudy.svg"))
+            w = box(f"Study: {sim.summary_name(self.analysis)}", os.path.join(HERE, "Heuretes_NewStudy.svg"))
             self.members_list = QtWidgets.QListWidget()
             self.members_list.setMaximumHeight(120)
             self.members_list.itemDoubleClicked.connect(slot(self._edit_member))
@@ -1429,7 +1429,7 @@ def _make_classes():
 
         def _build_thermal(self):
             """The thermal results: temperature and bands, the time step, the numbers, the probe, the report."""
-            w = box("Results", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"))
+            w = box("Results", os.path.join(HERE, "Heuretes_SafetyFactor.svg"))
             self.summary = hint("Not solved yet.")
             w.layout().addWidget(self.summary)
             row = QtWidgets.QHBoxLayout()
@@ -1620,7 +1620,7 @@ def _make_classes():
             """The modal or buckling results: the table, play and scale, the timeline, the checks, the report."""
             a = self.analysis
             title = "Modes" if self.kind == "modal" else "Buckling load factors"
-            w = box(title, os.path.join(HERE, "BruceWorx_MotionStudy.svg"))
+            w = box(title, os.path.join(HERE, "Heuretes_MotionStudy.svg"))
             self.summary = hint("Not solved yet.")
             w.layout().addWidget(self.summary)
             headers = (["Mode", "f (Hz)", "X %", "Y %", "Z %"] if self.kind == "modal" else ["Mode", "λ", ""])
@@ -1879,7 +1879,7 @@ def _make_classes():
             return text
 
         def _build_results(self):
-            w = box("Results", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"))
+            w = box("Results", os.path.join(HERE, "Heuretes_SafetyFactor.svg"))
             self.summary = hint("Not solved yet.")
             w.layout().addWidget(self.summary)
             row = QtWidgets.QHBoxLayout()
@@ -2574,7 +2574,7 @@ def _make_classes():
             self.frames = self.frame_count()
             self.frame = 0
             self.scale = eigen.mode_scale(analysis, result)
-            w = box(f"Motion Study: {result.Label}", os.path.join(HERE, "BruceWorx_MotionStudy.svg"))
+            w = box(f"Motion Study: {result.Label}", os.path.join(HERE, "Heuretes_MotionStudy.svg"))
             w.setObjectName("bwModeTimeline")
             lay = form_layout()
             self.cycles_spin = count_spin(self.cycles, 100)
@@ -2736,7 +2736,7 @@ def _make_classes():
             f3.addRow("Mesh limit (nodes)", self.max_nodes)
             row = QtWidgets.QHBoxLayout()
             self.tex = QtWidgets.QLineEdit()
-            self.tex.setPlaceholderText("automatic: Tectonic in Vector Labs, else latexmk or pdflatex")
+            self.tex.setPlaceholderText("automatic: Tectonic in Heuretes FreeCAD, else latexmk or pdflatex")
             row.addWidget(self.tex, 1)
             row.addWidget(button("…", self.browse_tex, "Pick a tectonic, latexmk or pdflatex binary"))
             f3.addRow("TeX compiler", row)
@@ -3316,11 +3316,11 @@ def run_add(key):
 
 
 COMMANDS = (
-    ("BruceWorx_NewStudy", "New Study", os.path.join(HERE, "BruceWorx_NewStudy.svg"),
+    ("BruceWorx_NewStudy", "New Study", os.path.join(HERE, "Heuretes_NewStudy.svg"),
      "Set up a simulation study: type, model, material, mesh; then its loads and constraints", _with_doc, open_new_study),
-    ("BruceWorx_Study", "Study", os.path.join(HERE, "BruceWorx_NewStudy.svg"),
+    ("BruceWorx_Study", "Study", os.path.join(HERE, "Heuretes_NewStudy.svg"),
      "The study's loads, constraints, mesh, solve and results panel", _with_study, open_study_panel),
-    ("BruceWorx_StudyPreCheck", "Pre-check", os.path.join(HERE, "BruceWorx_PreCheck.svg"),
+    ("BruceWorx_StudyPreCheck", "Pre-check", os.path.join(HERE, "Heuretes_PreCheck.svg"),
      "List what the study still needs before it can solve", _with_study, run_precheck),
     ("BruceWorx_StudyMesh", "Mesh", "FEM_MeshNetgenFromShape",
      "Generate the study's Netgen mesh", _with_study, run_mesh),
@@ -3332,13 +3332,13 @@ COMMANDS = (
      "Colour the result by von Mises stress", _with_result, lambda: run_show("stress")),
     ("BruceWorx_ShowDisplacement", "Displacement", "FEM_PostFilterWarp",
      "Colour the result by displacement, shape exaggerated", _with_result, lambda: run_show("displacement")),
-    ("BruceWorx_ShowSafetyFactor", "Safety Factor", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),
+    ("BruceWorx_ShowSafetyFactor", "Safety Factor", os.path.join(HERE, "Heuretes_SafetyFactor.svg"),
      "Colour the result by safety factor: red below 1", _with_result, lambda: run_show("safety")),
-    ("BruceWorx_StudyProbe", "Probe", os.path.join(HERE, "BruceWorx_Probe.svg"),
+    ("BruceWorx_StudyProbe", "Probe", os.path.join(HERE, "Heuretes_Probe.svg"),
      "Read stress, displacement and safety factor at a clicked point", _with_result, run_probe),
-    ("BruceWorx_SafetyFactorBands", "SF Bands", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),
+    ("BruceWorx_SafetyFactorBands", "SF Bands", os.path.join(HERE, "Heuretes_SafetyFactor.svg"),
      "Safety-factor bands of the study: thresholds and colours, saved as the default if you like", _with_study, run_bands),
-    ("BruceWorx_ModeShapes", "Mode Shapes", os.path.join(HERE, "BruceWorx_MotionStudy.svg"),
+    ("BruceWorx_ModeShapes", "Mode Shapes", os.path.join(HERE, "Heuretes_MotionStudy.svg"),
      "Play the mode shapes of a modal or buckling study (Motion Study puts one on the timeline)", _with_modes, run_modes),
     ("BruceWorx_SimTemperature", "Temperature", "FEM_ConstraintTemperature",
      "Fix the temperature of the selected faces (a thermal study)", _with_thermal_study, lambda: run_add("temperature")),
@@ -3357,10 +3357,10 @@ COMMANDS = (
      _with_result, lambda: run_show("hoop")),
     ("BruceWorx_ShowTemperature", "Temperature", "FEM_ResultShow",
      "Colour the result by temperature", _with_result, lambda: run_show("temperature")),
-    ("BruceWorx_ShowHDTBands", "HDT bands", os.path.join(HERE, "BruceWorx_SafetyFactor.svg"),
+    ("BruceWorx_ShowHDTBands", "HDT bands", os.path.join(HERE, "Heuretes_SafetyFactor.svg"),
      "Colour the temperature against the heat deflection temperature: red above, amber within the margin",
      _with_result, lambda: run_show("tempbands")),
-    ("BruceWorx_StudyReport", "Report", os.path.join(HERE, "BruceWorx_StudyReport.svg"),
+    ("BruceWorx_StudyReport", "Report", os.path.join(HERE, "Heuretes_StudyReport.svg"),
      "Write the study report (LaTeX with renders, compiled to a PDF) beside the document", _with_result, run_report),
 )
 
@@ -3390,7 +3390,7 @@ def install():
     for name, text, icon, tip, active, handler in COMMANDS:
         Gui.addCommand(name, _Command(name, text, icon, tip, active, handler))
     try:  # Preferences > BruceWorx > Simulation (30 Oct follow-up 5)
-        Gui.addPreferencePage(classes()["SimPreferencesPage"], "BruceWorx")
+        Gui.addPreferencePage(classes()["SimPreferencesPage"], "Heuretes FreeCAD")
     except Exception as exc:
         _warn(f"The Simulation preferences page was not added: {exc}")
     try:  # a mode shape plays on the Motion Study timeline (ROB-05) when one is selected

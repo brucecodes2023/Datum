@@ -457,7 +457,7 @@ def _obj_alive(obj):
 def part_order():
     """The part-property names in schema order, [] without the add-on."""
     try:
-        from bruceworx.partprops import load_schema
+        from heuretes_freecad.partprops import load_schema
 
         return list(load_schema().properties)
     except Exception:
@@ -678,7 +678,7 @@ def body_facts(obj):
     if shape.Solids:
         facts.append(("Volume", FreeCAD.Units.Quantity(shape.Volume, FreeCAD.Units.Volume).UserString))
     try:
-        from bruceworx.partprops import computed_mass, computed_material
+        from heuretes_freecad.partprops import computed_mass, computed_material
 
         mass = computed_mass(obj)
         material = computed_material(obj)
@@ -1215,7 +1215,7 @@ class Controller:
         body = body_of(part)
         material = None
         try:
-            from bruceworx.partprops import computed_material
+            from heuretes_freecad.partprops import computed_material
 
             material = computed_material(part)
         except Exception:

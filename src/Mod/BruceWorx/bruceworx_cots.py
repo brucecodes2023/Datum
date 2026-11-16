@@ -373,7 +373,7 @@ def catalogue_key(item: Entry) -> str:
 def make_item_file(path, pn, item: Entry, vault_root):
     """Write the vault file of a bought part: the part (make_part) with the vault's part properties, its
     part number, revision 01 and ItemType cots, and the maker's name and part number. Saved and closed."""
-    from bruceworx import partprops, pdm
+    from heuretes_freecad import partprops, pdm
 
     App = _app()
     doc = App.newDocument(pn.replace("-", "_"), hidden=True) if App.GuiUp else App.newDocument(pn.replace("-", "_"))
@@ -405,8 +405,8 @@ def ensure_item(s, item: Entry, program=""):
     """The vault part number of this bought part, made (numbered, typed cots, its file checked in as WIP 01)
     when the vault has none; recorded in the vault's hardware.json with the maker's name and part number.
     ``s``: the vault client's Session (or anything with .vault and .root). Returns (part number, made)."""
-    from bruceworx import hardware as hw
-    from bruceworx import vault_setup
+    from heuretes_freecad import hardware as hw
+    from heuretes_freecad import vault_setup
 
     key = catalogue_key(item)
     catalogue = hw.load_catalogue(s.root)
@@ -769,7 +769,7 @@ def insert_chosen(item, assembly, seat=None):
 
 class _InsertCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_CotsInsert.svg"), "MenuText": "Insert Bought Part…",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_CotsInsert.svg"), "MenuText": "Insert Bought Part…",
                 "ToolTip": "Insert a bought part (motor, bearing, board) from the library into the assembly, with "
                            "its mounting frame. With a seat selected it is fixed on that seat at once."}
 
@@ -794,7 +794,7 @@ class _InsertCommand:
 
 class _SeatCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_CotsSeat.svg"), "MenuText": "Mounting Holes for Bought Part…",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_CotsSeat.svg"), "MenuText": "Mounting Holes for Bought Part…",
                 "ToolTip": "On the selected flat face: the mounting holes of a bought part (clearance holes for its "
                            "screws) and a Seat frame to fix the part on."}
 
@@ -827,7 +827,7 @@ class _SeatCommand:
 
 class _JoinCommand:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_CotsJoin.svg"), "MenuText": "Fix Bought Part on Seat",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_CotsJoin.svg"), "MenuText": "Fix Bought Part on Seat",
                 "ToolTip": "Select a bought part and a seat (its coordinate system or its mounting holes): the part "
                            "is fixed on the seat by its mounting frame."}
 

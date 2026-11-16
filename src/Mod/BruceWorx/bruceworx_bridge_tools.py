@@ -390,7 +390,7 @@ def t_measure(args):
     if material is not None:
         out["material"] = getattr(material, "Name", "")
     try:
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         mass = partprops.computed_mass(obj)
         if mass is not None:
@@ -594,13 +594,13 @@ def t_export_step(args):
     if args["objects"]:
         objects = [_obj(doc, str(name)) for name in args["objects"]]
     else:
-        from bruceworx.numbering import part_objects
+        from heuretes_freecad.numbering import part_objects
 
         objects = part_objects(doc)
         if not objects:
             raise ToolError(f"{doc.Name} has no solid to export; name the objects")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    from bruceworx.freecad_io import export_step
+    from heuretes_freecad.freecad_io import export_step
 
     export_step(objects, path)
     return {"path": path, "bytes": os.path.getsize(path), "objects": [o.Name for o in objects]}
@@ -1256,7 +1256,7 @@ def t_add_component(args):
         App.setActiveDocument(doc.Name)
     if source is doc:
         raise ToolError("a document cannot be a component of itself")
-    from bruceworx.freecad_io import main_object
+    from heuretes_freecad.freecad_io import main_object
 
     part = main_object(source)
     if part is None:
@@ -1547,8 +1547,8 @@ class _Vault:
 
         import FreeCAD
 
-        from bruceworx import pdm_workspace as ws
-        from bruceworx.pdm_folder import FolderVault, default_actor, find_ref_file
+        from heuretes_freecad import pdm_workspace as ws
+        from heuretes_freecad.pdm_folder import FolderVault, default_actor, find_ref_file
 
         path = path or FreeCAD.ParamGet(PREFS_PATH).GetString("VaultPath", "").strip()
         if not path:
@@ -1580,7 +1580,7 @@ def _status(st):
 
 def _vault_errors(func):
     def wrapped(args):
-        from bruceworx.pdm_folder import LifecycleError
+        from heuretes_freecad.pdm_folder import LifecycleError
 
         try:
             return func(args)
@@ -1620,8 +1620,8 @@ def t_vault_my_work(args):
 
 
 def _numbering(v):
-    from bruceworx.sources import JsonNumberSource
-    from bruceworx.vault_setup import numbering_path
+    from heuretes_freecad.sources import JsonNumberSource
+    from heuretes_freecad.vault_setup import numbering_path
 
     path = numbering_path(v.root)
     if not os.path.isfile(path):
@@ -1643,7 +1643,7 @@ def t_vault_next_part_number(args):
 
 @_vault_errors
 def t_vault_assign_part_number(args):
-    from bruceworx.numbering import assign_part_numbers
+    from heuretes_freecad.numbering import assign_part_numbers
 
     doc = _doc(args["doc"])
     v = _Vault(args["vault"])
@@ -1714,7 +1714,7 @@ def _candidate(c):
 
 @_vault_errors
 def t_vault_import(args):
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     v = _Vault(args["vault"])
     folder = os.path.abspath(os.path.expanduser(args["folder"]))
@@ -1731,7 +1731,7 @@ def t_vault_import(args):
         writer = bruceworx_vaultwizard._writer(v.root)  # imported files take the vault's units (PDM-09)
     except Exception:
         try:
-            from bruceworx import freecad_io
+            from heuretes_freecad import freecad_io
 
             writer = getattr(freecad_io, "write_part_number", None)
         except Exception:
@@ -1745,7 +1745,7 @@ def t_vault_import(args):
 
 @_vault_errors
 def t_vault_settings_csv(args):
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     v = _Vault(args["vault"])
     settings = vault_setup.load_settings(v.root)

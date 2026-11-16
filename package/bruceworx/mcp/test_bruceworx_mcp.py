@@ -470,7 +470,7 @@ class TestHeadlessEndToEnd(unittest.TestCase):
 
     def test_4_vault(self):
         sys.path.insert(0, os.path.join(REPO, "addons", "BruceWorx"))
-        from bruceworx import vault_setup
+        from heuretes_freecad import vault_setup
 
         root = os.path.join(self.tmp, "Vault")
         vault_setup.create_vault(vault_setup.VaultSetup(name="Test", folder=root), actor="claude@test")

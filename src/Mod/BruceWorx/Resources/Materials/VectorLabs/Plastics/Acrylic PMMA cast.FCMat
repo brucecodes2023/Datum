@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "9dce0679-67fa-44ea-a20f-4a5361603bc4"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Acrylic PMMA cast"
   Description: "Cast acrylic sheet (PLEXIGLAS GS, Perspex) for laser cutting. Brittle and notch-sensitive: use a large safety factor (3 or more)."
   ReferenceSource: "Roehm PLEXIGLAS GS (cast) typical"
   SourceURL: "https://www.plexiglas.de/en/products/plexiglas-gs"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Plastics"
 Models:
   LinearElastic:

@@ -21,7 +21,7 @@ vortex shedding.
 
 \paragraph{Why not the CfdOF add-on.} The roadmap named CfdOF, the FreeCAD add-on that drives OpenFOAM. It
 lists macOS as ``not widely tested'' and points Mac users to a Docker container. It also leans on cfMesh and
-HiSA, which the native Apple-silicon OpenFOAM build does not ship. Vector Labs already drives CalculiX
+HiSA, which the native Apple-silicon OpenFOAM build does not ship. Heuretes FreeCAD already drives CalculiX
 directly from its own study frame (\S\ref{sec:sim01-built}), so CFD follows the same pattern: the study writes
 an OpenFOAM case folder, runs the solver as a separate program, and reads the results back. CfdOF is LGPL and
 its dictionary templates can be borrowed where useful.
@@ -31,7 +31,7 @@ OpenFOAM releases as a native macOS app: OpenFOAM-v2606, Apple silicon, macOS 14
 download. It is installable from Homebrew or as a zip, and is started with
 \file{OpenFOAM-v2606.app/Contents/Resources/etc/openfoam}. It includes everything this plan uses:
 \code{blockMesh}, \code{snappyHexMesh}, \code{simpleFoam}, the actuator-disk source, \code{foamToVTK}, and MPI
-for parallel runs. OpenFOAM is GPL-3. Like CalculiX, it runs as a separate program, so Vector Labs' own
+for parallel runs. OpenFOAM is GPL-3. Like CalculiX, it runs as a separate program, so Heuretes FreeCAD' own
 licence is unaffected. Bundling it means shipping its licence and a pointer to its source (question O1).
 
 %----------------------------------------------------------------------
@@ -179,7 +179,7 @@ Flat plate, heated & Air at 5\,m/s along a 50\,mm plate, laminar: $Re_L=1.66\tim
 %----------------------------------------------------------------------
 \paragraph{Questions for you.}
 \begin{enumerate}[label=O\arabic*.]
-  \item \textbf{Getting OpenFOAM.} (a) Bundle it inside Vector Labs, like CalculiX and Tectonic: one download,
+  \item \textbf{Getting OpenFOAM.} (a) Bundle it inside Heuretes FreeCAD, like CalculiX and Tectonic: one download,
         always the tested version, but the app grows by about 270\,MB zipped and more unpacked. (b) Use an
         installed \emph{OpenFOAM.app}: the study finds it, and if none is installed it offers an
         \emph{Install OpenFOAM\ldots} button (Homebrew or the download). \emph{Recommendation:} (b), with the
@@ -194,7 +194,7 @@ Flat plate, heated & Air at 5\,m/s along a 50\,mm plate, laminar: $Re_L=1.66\tim
         suggests it below $Re\approx2000$). \emph{Recommendation:} yes.
   \item \textbf{Mesh.} \code{snappyHexMesh} with the coarse, medium and fine presets and an automatic domain,
         all editable. \emph{Recommendation:} yes.
-  \item \textbf{Results.} Inside Vector Labs (planes, streamlines, surface pressure, forces table), plus
+  \item \textbf{Results.} Inside Heuretes FreeCAD (planes, streamlines, surface pressure, forces table), plus
         \emph{Open in ParaView} when it is installed. \emph{Recommendation:} yes.
   \item \textbf{Linking to the other studies.} (a) The convection map feeds the thermal study. (b) The wall
         pressure becomes a load on a static study (for example, the arms under prop wash).
@@ -207,12 +207,12 @@ Flat plate, heated & Air at 5\,m/s along a 50\,mm plate, laminar: $Re_L=1.66\tim
         \emph{Recommendation:} yes.
 \end{enumerate}
 
-\paragraph{Your answers (31 Oct).} O1--O9 as recommended. OpenFOAM is \emph{not} bundled: Vector Labs finds
+\paragraph{Your answers (31 Oct).} O1--O9 as recommended. OpenFOAM is \emph{not} bundled: Heuretes FreeCAD finds
 an installed \emph{OpenFOAM-v2606.app} (the tested version; any other version triggers a warning) and offers
 \emph{Install OpenFOAM\ldots} when none is installed. Prop wash and external flow come first, then cooling with
 the convection map. Propellers are actuator disks fed by the thrust tables, with swirl off by default.
 Turbulence is $k$--$\omega$ SST, with laminar as an option. The mesh uses \code{snappyHexMesh} presets with an
-automatic domain. Results show inside Vector Labs, with \emph{Open in ParaView} when it is installed. The links
+automatic domain. Results show inside Heuretes FreeCAD, with \emph{Open in ParaView} when it is installed. The links
 to the other studies are the convection map (built first) and wall pressure as a static load. Cases live in
-\file{\textasciitilde/Library/Caches/Vector Labs/cfd/}. The four benchmarks are the acceptance, and they will
+\file{\textasciitilde/Library/Caches/Heuretes FreeCAD/cfd/}. The four benchmarks are the acceptance, and they will
 be joined by the open validation data now being gathered.

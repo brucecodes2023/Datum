@@ -45,7 +45,7 @@ INSTALL_COMMAND = "brew install gerlero/openfoam/openfoam@2606"
 PARAVIEW_APPS = ("/Applications/ParaView*.app", os.path.expanduser("~/Applications/ParaView*.app"))
 SIM_PREFS = "User parameter:BaseApp/Preferences/Mod/BruceWorx/Sim"
 PREF_PATH = "OpenFOAMPath"
-CACHE_ROOT = os.path.expanduser("~/Library/Caches/Vector Labs/cfd")
+CACHE_ROOT = os.path.expanduser("~/Library/Caches/Heuretes FreeCAD/cfd")
 
 CONVERGED_RESIDUAL = 1.0e-4
 FORCE_WINDOW = 200  # iterations
@@ -118,7 +118,7 @@ def find_openfoam(pref=None):
         m = re.search(r"OpenFOAM-(v\d+)", os.path.basename(app))
         version = m.group(1) if m else "unknown"
         tested = version == TESTED_VERSION
-        warning = "" if tested else (f"OpenFOAM {version} is installed; Vector Labs is tested with OpenFOAM "
+        warning = "" if tested else (f"OpenFOAM {version} is installed; Heuretes FreeCAD is tested with OpenFOAM "
                                      f"{TESTED_VERSION}. Results may differ or the case may not run.")
         return {"app": app, "launcher": launcher, "version": version, "tested": tested, "warning": warning}
     return None
@@ -449,7 +449,7 @@ def estimate(parts, setup, geo=None):
 # ----- dictionaries ------------------------------------------------------------------------------------
 
 HEADER = """/*--------------------------------*- C++ -*----------------------------------*\\
-  Written by Vector Labs (SIM-06). OpenFOAM v2606.
+  Written by Heuretes FreeCAD (SIM-06). OpenFOAM v2606.
 \\*---------------------------------------------------------------------------*/
 FoamFile
 {{
@@ -829,7 +829,7 @@ def momentum_properties(turb, nu):
 
 
 ALLRUN = """#!/bin/sh
-# Written by Vector Labs. Run inside the OpenFOAM environment (openfoam -c ./Allrun) from this folder.
+# Written by Heuretes FreeCAD. Run inside the OpenFOAM environment (openfoam -c ./Allrun) from this folder.
 cd "$(dirname "$0")" || exit 1
 stage() {{ echo "@@ stage: $1"; }}
 fail() {{ echo "@@ failed: $1"; exit 1; }}
@@ -1120,7 +1120,7 @@ def _clean_env():
 
 def run_dir(folder):
     """The path OpenFOAM runs in. It chokes on spaces in the case path (fileName::stripInvalid is fatal), and the
-    default cache folder is 'Vector Labs', so a space gets a space-free symlink to the folder."""
+    default cache folder is 'Heuretes FreeCAD', so a space gets a space-free symlink to the folder."""
     if " " not in folder:
         return folder
     import hashlib

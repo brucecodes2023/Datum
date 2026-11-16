@@ -274,7 +274,7 @@ class BalancePanel:
     accept = reject
 
     def refresh(self):
-        from bruceworx import balance
+        from heuretes_freecad import balance
 
         self.report = report = mr.build_report(self.doc, self.objects)
         self.motors = mr.motors_of(report)
@@ -404,11 +404,11 @@ def install():
     import FreeCADGui as Gui
 
     Gui.addCommand("BruceWorx_MassReport", _Command(
-        "mass", "BruceWorx_MassProperties.svg", "Mass Report",
+        "mass", "Heuretes_MassProperties.svg", "Mass Report",
         "Every part of the assembly with quantity, mass source, mass and share, the total, the centre of gravity "
         "and the inertia; export CSV and show the CG on the model."))
     Gui.addCommand("BruceWorx_DroneBalance", _Command(
-        "balance", "BruceWorx_DroneBalance.svg", "Drone Balance",
+        "balance", "Heuretes_DroneBalance.svg", "Drone Balance",
         "Thrust to weight, hover throttle and current, flight time, CG offset from the thrust centre and each "
         "motor's hover share, with checks."))
     _state["installed"] = True

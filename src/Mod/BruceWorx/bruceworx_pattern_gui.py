@@ -546,7 +546,7 @@ class _PatternCommand:
             f"{self.kind} Pattern. Features: uses PartDesign's {self.kind.lower()} pattern. "
             "Bodies, solids and assembly components: linked or independent copies, "
             "with symmetric directions and suppressed instances. "
-            "Select an existing Vector Labs pattern to edit it."
+            "Select an existing Heuretes FreeCAD pattern to edit it."
         )
         return {
             "Pixmap": os.path.join(HERE, name + ".svg"),

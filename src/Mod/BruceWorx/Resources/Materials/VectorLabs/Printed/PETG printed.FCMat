@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "b4e991ce-42af-48ad-acbc-40e7f1de3a52"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "PETG printed"
   Description: "Printed PETG (Bambu PETG Basic; Prusament PETG agrees: 47 MPa, 1.5 GPa X-Y). For high-speed PETG use PETG HF printed. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 39 MPa, modulus 1120 MPa, elongation 5.7 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (PETG Basic)"
   SourceURL: "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PETG_Basic_Technical_Data_Sheet.pdf"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Printed"
 Models:
   LinearElastic:

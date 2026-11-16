@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "5b903760-2960-4bec-b622-20683a6b91e4"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "G10-FR4 laminate"
   Description: "Glass-epoxy laminate sheet (G10 / FR-4) for plates, spacers and insulators; in-plane, lengthwise values. Crosswise strength is about 15 % lower."
   ReferenceSource: "NEMA LI 1 G-10/FR-4 typical (lengthwise), e.g. Professional Plastics / Curbell data sheets"
   SourceURL: "https://www.professionalplastics.com/G10FR4GLASSEPOXYSHEET"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Composites"
 Models:
   LinearElastic:

@@ -18,10 +18,10 @@ elements. Cause: the environment moved to Coin 4.0.10 on 25 Oct, which shrank \c
 128 bytes (\code{CC\_STRING\_MIN\_SIZE} became $128-\mathrm{sizeof(char*)}-\mathrm{sizeof(size\_t)}$), but conda keeps
 the original modification time of a package's headers (22 June), so ninja never recompiled the 414 objects that
 include Inventor headers and were older than the update. They went on using the old layout against the new library.
-Nothing in \code{SoFCColorGradient} or the FEM view provider was wrong, and no Vector Labs commit touched them. The
+Nothing in \code{SoFCColorGradient} or the FEM view provider was wrong, and no Heuretes FreeCAD commit touched them. The
 fix was to delete those objects and let ninja recompile them (about 25\,min on 18 cores, no source change), then
 \file{package/bruceworx/rebuild-stale-objects.sh <package> [-f]} lists or deletes the objects older than any conda
-package so the same thing cannot hide after the next \code{pixi} update. \textbf{The staged Vector Labs.app was
+package so the same thing cannot hide after the next \code{pixi} update. \textbf{The staged Heuretes FreeCAD.app was
 built from these stale objects too}; it needs one rebuild from this tree to get the fix. The crash reports in
 \file{DiagnosticReports} from the app (\code{vectorlabs-2026-10-31-*.ips}, \code{Keystone-*.ips}) show other stacks
 (TechDraw \code{QGSPage::findParent}, a Python-callback in Coin's dragger, \code{DocInfo::slotDeleteDocument}); the

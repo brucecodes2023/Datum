@@ -17,7 +17,7 @@ import Part
 import Sketcher  # noqa: F401  -- registers Sketcher::SketchObject
 
 import bruceworx_hardware as bh
-from bruceworx import hardware as hw
+from heuretes_freecad import hardware as hw
 
 try:
     import FastenersCmd  # noqa: F401
@@ -368,8 +368,8 @@ class _VaultSession:
     """What the vault client's Session gives these functions: .vault, .root, .work, refresh()."""
 
     def __init__(self, folder):
-        from bruceworx import pdm_workspace as ws
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import pdm_workspace as ws
+        from heuretes_freecad import vault_setup as vs
 
         setup = vs.VaultSetup(name="Hardware", folder=folder,
                               numbering=vs.NumberingSetup(programs=[vs.ProgramSetup("LE")]))
@@ -392,7 +392,7 @@ class MarkCotsTests(Tmp):
                          ("LE-01-01001-001", "Motor adapter plate")):
             s.vault.create_item(pn, "part", text)
         part = self.doc.addObject("App::Part", "Part")
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         partprops.load_schema(user_layer=False).apply(part)
         part.PartNumber = "LE-01-01014-001"
@@ -444,7 +444,7 @@ class FastenersAddonTests(Tmp):
             bh.make_fastener(self.doc, "NOPE123", "M3")
 
     def test_insert_fastener_reuses_the_vaults_item(self):
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         s = _VaultSession(os.path.join(self.tmp, "vault"))
         # The GUI syncs opened parts from the configured vault (BruceWorx/VaultPath), not this one.

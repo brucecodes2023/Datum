@@ -8,7 +8,7 @@ rigid joints''} and \emph{``make sure we touch motion to have those capabilities
 mate bar, a first scope of Standard + Advanced + Mechanical mates with a degrees-of-freedom (DOF) readout, and the
 TL printer's Fixed joints converted automatically.
 
-The work is split three ways. The Vector Labs session builds the \textbf{mate bar} (pick two faces, edges or
+The work is split three ways. The Heuretes FreeCAD session builds the \textbf{mate bar} (pick two faces, edges or
 points; the mates that fit are offered, with a value, Flip and OK) and the \textbf{printer conversion}. This plan
 covers the \textbf{fork work}, B1--B3 below. B4 (the right-panel drawer stays closed while a command is open) and
 B5 (a dragged part stays under the cursor) are already built and installed (1.1.4-bw.1+5de7697d).
@@ -22,7 +22,7 @@ B5 (a dragged part stays under the cursor) are already built and installed (1.1.
         pinion, Screw and Belt are joints of their own. Several joints between two parts stack.
   \item \textbf{One trap for the mate bar:} a cylinder--cylinder Distance of 0 means the cylinders \emph{touch}
         (the solver adds both radii), not that they are concentric. Concentric is the Cylindrical joint;
-        Concentric + Coincident is the Revolute (Hinge). The Vector Labs session has been told.
+        Concentric + Coincident is the Revolute (Hinge). The Heuretes FreeCAD session has been told.
   \item The solver reports no degrees of freedom. The assembly's ``Under-constrained: $n$ DOF'' text exists, but
         its number is a placeholder (6 per part) that is never computed, and \code{solve()} returns only
         ``solved'', ``nothing grounded'' or ``failed''.

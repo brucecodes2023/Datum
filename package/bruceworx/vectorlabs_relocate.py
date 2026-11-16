@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Make a staged Vector Labs.app self-contained (used by make-vectorlabs.sh).
+"""Make a staged Heuretes FreeCAD.app self-contained (used by make-vectorlabs.sh).
 
 The build installs FreeCAD with absolute rpaths into the pixi environment. This walks every
 Mach-O file in the bundle and:

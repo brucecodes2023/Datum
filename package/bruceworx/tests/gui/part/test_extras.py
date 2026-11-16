@@ -296,7 +296,7 @@ def t_material_mass():
     H._cleanup_dialog()
     name = body.ShapeMaterial.Name
     H.check("material.set_on_body", "steel" in name.lower(), f"ShapeMaterial={name!r} picked={S.get('material_text')!r}")
-    from bruceworx.partprops import computed_mass
+    from heuretes_freecad.partprops import computed_mass
     mass = computed_mass(part)
     kg = App.Units.Quantity(mass).getValueAs("kg").Value if mass else 0
     expect = body.Shape.Volume * 7.8e-6  # steel, ~7800 kg/m^3

@@ -273,7 +273,7 @@ def material_info(obj):
     """
     material = getattr(obj, "ShapeMaterial", None)
     try:
-        from bruceworx import partprops as pp
+        from heuretes_freecad import partprops as pp
 
         chosen = pp._chosen(material)
         density = pp._density_kg_per_mm3(material) if chosen else None

@@ -66,7 +66,7 @@ class Job:
 
         exe = freecadcmd()
         if exe is None:
-            return self._finish({"run": None, "files": None, "message": "FreeCADCmd was not found next to Vector Labs"})
+            return self._finish({"run": None, "files": None, "message": "FreeCADCmd was not found next to Heuretes FreeCAD"})
         self.tmp = tempfile.mkdtemp(prefix="bw-validation-job-")
         self.out_json = os.path.join(self.tmp, "run.json")
         env = QtCore.QProcessEnvironment.systemEnvironment()
@@ -294,7 +294,7 @@ def open_dialog():
 
 class _Command:
     def GetResources(self):
-        return {"Pixmap": os.path.join(HERE, "BruceWorx_Validation.svg"), "MenuText": "Validation",
+        return {"Pixmap": os.path.join(HERE, "Heuretes_Validation.svg"), "MenuText": "Validation",
                 "ToolTip": "Run the published benchmark and closed-form cases on this build (fast or slow set) and write the report"}
 
     def IsActive(self):

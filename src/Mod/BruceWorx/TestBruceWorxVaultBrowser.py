@@ -66,12 +66,12 @@ class TestScope(unittest.TestCase):
 class TestNavigation(unittest.TestCase):
     def test_entries(self):
         s, rows = turbojet()
-        entries = vb.nav_entries(s, rows, {"VL": "Vector Labs propulsion"})
+        entries = vb.nav_entries(s, rows, {"VL": "Heuretes FreeCAD propulsion"})
         keys = [e[0] for e in entries]
         self.assertEqual(entries[0][4], "section")
         self.assertLess(keys.index("program:LE"), keys.index("program:VL"))
         vl = keys.index("program:VL")
-        self.assertEqual(entries[vl][1], "VL · Vector Labs propulsion")
+        self.assertEqual(entries[vl][1], "VL · Heuretes FreeCAD propulsion")
         self.assertEqual(keys[vl + 1:vl + 4], ["asm:VL-02-01001-001", "asm:VL-02-01002-001", "asm:VL-02-01003-001"])
         self.assertEqual(entries[keys.index("asm:VL-02-01002-001")][2], 5)  # the stand and what it uses
         self.assertEqual(entries[keys.index(vb.ALL)][2], 7)  # files only: the ECR is not one
@@ -141,7 +141,7 @@ class TestSimulations(unittest.TestCase):
         nodes = [{"pn": pn, "qty": None, "children": []} for pn in sorted(self.rows)]
         kinds = [g.get("kind") for g in vc.group_by_type(nodes, self.rows)]
         self.assertEqual(kinds, ["assembly", "part", "drawing", "simulation", None])
-        from bruceworx import vault_trees
+        from heuretes_freecad import vault_trees
 
         self.assertEqual(vault_trees.parts_with_changed_simulation(self.s), {"VL-01-01001-001": ["VL-04-01001-001"]})
 

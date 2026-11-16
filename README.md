@@ -1,3 +1,12 @@
+# Heuretes FreeCAD
+
+This repository is **Heuretes FreeCAD**, a modified distribution of FreeCAD 1.1.4.
+FreeCAD remains LGPL-2.1-or-later and this project is not affiliated with or
+endorsed by the FreeCAD project. Build and install instructions, including the
+Mac app (`/Applications/Heuretes FreeCAD.app`, built from `build/release`), are
+in [BUILDING-BRUCEWORX.md](BUILDING-BRUCEWORX.md). See [NOTICE](NOTICE) for the
+license and upstream attribution.
+
 <a href="https://freecad.org"><img src="/src/Gui/Icons/freecad.svg" height="100px" width="100px"></a>
 
 ### Your own 3D Parametric Modeler

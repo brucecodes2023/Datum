@@ -1,11 +1,40 @@
-# Building FreeCAD BruceWorx
+# Building Heuretes FreeCAD
 
-BruceWorx is a lightly modified FreeCAD distribution. The `main` branch is
-FreeCAD **1.1.4** plus our `[BW]` commits, and it builds the same way upstream
-FreeCAD does: with [pixi](https://pixi.sh) (conda-forge dependencies) and CMake
-presets. Every command below is a task defined in the repository's own
-`pixi.toml`, which uses the presets in `CMakePresets.json`. We have not added
-any tasks of our own.
+Heuretes FreeCAD is this FreeCAD fork. The `main` branch is FreeCAD **1.1.4**
+plus our `[BW]` commits, and it builds the same way upstream FreeCAD does: with
+[pixi](https://pixi.sh) (conda-forge dependencies) and CMake presets. Every
+command below is a task defined in the repository's own `pixi.toml`, which uses
+the presets in `CMakePresets.json`. We have not added any tasks of our own.
+
+## Install the app on a Mac (Apple Silicon)
+
+This is the app that gets installed in `/Applications`. From the repo root:
+
+```sh
+pixi install
+pixi run configure-release
+package/bruceworx/make-heuretes.sh
+```
+
+`make-heuretes.sh` compiles `build/release` itself (`cmake --build build/release`)
+and then installs the bundle. If `build/release` is already built, pass
+`--no-build`.
+
+| | |
+|---|---|
+| Build directory | `build/release` |
+| Installed app | `/Applications/Heuretes FreeCAD.app` |
+| CFBundleExecutable | `/Applications/Heuretes FreeCAD.app/Contents/MacOS/Heuretes FreeCAD` |
+| FreeCAD binary in the bundle | `/Applications/Heuretes FreeCAD.app/Contents/MacOS/heuretes-freecad` |
+| Open | `open -a "Heuretes FreeCAD"` |
+
+`--dest DIR` installs somewhere other than `/Applications`. `--dmg` also writes
+`dist/Heuretes-FreeCAD-<version>-macOS-arm64.dmg`.
+
+`pixi run freecad-release` launches the development build at
+`build/release/bin/FreeCAD`. That build keeps the FreeCAD settings folders so
+it does not share preferences with Heuretes FreeCAD.app. Its splash still comes
+from `build/release/bin/branding.xml`.
 
 Supported targets:
 
@@ -30,7 +59,7 @@ symlink, or "apply" step after `pixi run build-release`.
 | Overlay (floating) model tree | `src/Mod/BruceWorx` | on | Preferences → BruceWorx → Floating model tree |
 | BruceWorx preference pack | `src/Gui/PreferencePacks`, `src/Mod/BruceWorx/bruceworx_defaults.py` | applied once on first start | Preferences → BruceWorx → BruceWorx preference pack (restores your previous values) |
 | History Timeline dock | `package/bruceworx/mods/HistoryTimeline` → `Mod/HistoryTimeline` | on | BruceWorx → History Timeline, Preferences → BruceWorx, or close the dock |
-| Hooks / part numbers | `addons/BruceWorx` → `Mod/BruceWorxHooks` | on | Preferences → BruceWorx → Hooks add-on (next start) |
+| Hooks / part numbers | `addons/Heuretes` → `Mod/HeuretesHooks` | on | Preferences → BruceWorx → Hooks add-on (next start) |
 
 First-start preference pack: when the pack has never been applied and the
 switch is on, BruceWorx applies the light pack once, before the startup
@@ -145,11 +174,11 @@ Jobs that run on pull requests and on pushes to `main`:
   `bw-pixi-linux-x86_64`), the upstream C++ and Python CLI tests, the `bw.1`
   version check, a STEP import of `data/tests/Step/as1-ac-214.stp` through
   `package/bruceworx/step-import-check.py`, and
-  `addons/BruceWorx/tests/run_freecad_smoke.sh` (STEP export, re-import,
+  `addons/Heuretes/tests/run_freecad_smoke.sh` (STEP export, re-import,
   document tree, part-number rename, `hooks.py`).
 * **BruceWorx hooks unit tests** (GitHub-hosted `ubuntu-latest`): `python3 -m
-  unittest discover -s addons/BruceWorx/tests`. No compile. CLI usage is in
-  `addons/BruceWorx/README.md`.
+  unittest discover -s addons/Heuretes/tests`. No compile. CLI usage is in
+  `addons/Heuretes/README.md`.
 * **pixi lock** on `ubuntu-latest` and GitHub-hosted `macos-15` (Apple
   Silicon): `pixi lock --check` on both, and `pixi install --locked` on
   macOS so the `osx-arm64` environment from `pixi.lock` is installed without

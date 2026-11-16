@@ -40,9 +40,9 @@ _NOT_READERS = ("App::Link", "App::LinkElement", "App::LinkGroup")
 CMD_LINK = "BruceWorx_LinkSkeleton"
 CMD_CHECK = "BruceWorx_CheckReferences"
 CMD_REBUILD = "BruceWorx_RebuildFromTop"
-ICON_LINK = "BruceWorx_LinkSkeleton.svg"
-ICON_CHECK = "BruceWorx_CheckReferences.svg"
-ICON_REBUILD = "BruceWorx_RebuildFromTop.svg"
+ICON_LINK = "Heuretes_LinkSkeleton.svg"
+ICON_CHECK = "Heuretes_CheckReferences.svg"
+ICON_REBUILD = "Heuretes_RebuildFromTop.svg"
 
 _state = {"observer": None, "busy": False, "box": None, "used_in_pending": False}
 

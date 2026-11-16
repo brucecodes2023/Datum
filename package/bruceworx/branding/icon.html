@@ -1,50 +1,7 @@
 <!doctype html>
-<!-- Vector Labs app icon. Rendered by make-vectorlabs.sh at 1024x1024 into the .icns (and a PNG for the
-     window icon). The macOS icon grid: an 824 px rounded square centred on the 1024 px canvas. The mark is
-     the splash screen's (splash.html): an arrow with its x and y components. -->
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  html, body { margin: 0; padding: 0; background: transparent; }
-  body { width: 1024px; height: 1024px; position: relative; overflow: hidden; }
-  .tile {
-    position: absolute; left: 100px; top: 100px; width: 824px; height: 824px; border-radius: 185px;
-    background: radial-gradient(120% 120% at 50% 30%, #243041 0%, #141b25 55%, #0b0f15 100%);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-  }
-  .grid {
-    position: absolute; inset: 0;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.05) 2px, transparent 2px),
-      linear-gradient(90deg, rgba(255,255,255,0.05) 2px, transparent 2px);
-    background-size: 103px 103px;
-    -webkit-mask-image: radial-gradient(70% 70% at 50% 45%, #000 30%, transparent 100%);
-  }
-  svg { position: absolute; left: 0; top: 0; }
-</style>
-</head>
-<body>
-<div class="tile"><div class="grid"></div></div>
-<svg id="mark" width="1024" height="1024" viewBox="0 0 300 300"></svg>
-<script>
-  const svg = document.getElementById("mark");
-  const NS = "http://www.w3.org/2000/svg";
-  function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; }
-  const defs = el("defs", {});
-  defs.innerHTML = '<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2f7bff" stop-opacity="0.6"/><stop offset="1" stop-color="#2f7bff" stop-opacity="0"/></radialGradient>' +
-                   '<linearGradient id="k" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1f5fd6"/><stop offset="1" stop-color="#6aa6ff"/></linearGradient>';
-  const ox = 78, oy = 222, tx = 224, ty = 76;
-  el("circle", { cx: tx, cy: ty, r: 52, fill: "url(#g)" });
-  el("line", { x1: ox, y1: oy, x2: tx, y2: oy, stroke: "rgba(143,186,255,0.6)", "stroke-width": 1.6, "stroke-dasharray": "5 5" });
-  el("line", { x1: tx, y1: oy, x2: tx, y2: ty, stroke: "rgba(143,186,255,0.6)", "stroke-width": 1.6, "stroke-dasharray": "5 5" });
-  const ang = Math.atan2(oy - ty, tx - ox), hl = 42, hw = 0.42;
-  const bx = tx - hl * 0.8 * Math.cos(ang), by = ty + hl * 0.8 * Math.sin(ang);
-  el("line", { x1: ox, y1: oy, x2: bx, y2: by, stroke: "url(#k)", "stroke-width": 11, "stroke-linecap": "round" });
-  const hp = [[tx, ty], [tx - hl * Math.cos(ang - hw), ty + hl * Math.sin(ang - hw)], [tx - hl * Math.cos(ang + hw), ty + hl * Math.sin(ang + hw)]];
-  el("path", { d: `M${hp[0]} L${hp[1]} L${hp[2]} Z`, fill: "#6aa6ff", stroke: "#a9c9ff", "stroke-width": 1.6, "stroke-linejoin": "round" });
-  el("circle", { cx: ox, cy: oy, r: 8, fill: "#141b25", stroke: "#a9c9ff", "stroke-width": 3 });
-</script>
-</body>
-</html>
+<!-- The icon source is heuretes-freecad.svg. make-heuretes.sh uses
+     heuretes_icon_1024.png and heuretes-freecad.icns. -->
+<html><head><meta charset="utf-8"><title>Heuretes FreeCAD</title></head>
+<body style="margin:0;background:#F4F1EA">
+<img src="heuretes-freecad.svg" width="1024" height="1024" alt="Heuretes FreeCAD">
+</body></html>

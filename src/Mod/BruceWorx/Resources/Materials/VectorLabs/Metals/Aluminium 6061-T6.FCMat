@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "6c52eca0-5547-4e8f-b587-bf487bb48f6b"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "Aluminium 6061-T6"
   Description: "General CNC aluminium, plate and bar (UNS A96061, T6/T651). Strengths are ASTM B209 minimums (typical: yield 276 MPa, UTS 310 MPa, elongation 12 %)."
   ReferenceSource: "ASTM B209/B221 minimum strengths; ASM/MatWeb typical elastic and thermal values"
   SourceURL: "https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=ma6061t6"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Metals"
 Models:
   LinearElastic:

@@ -30,7 +30,7 @@ THREAD_TYPES = ("NPT", "BSPP", "Metric thread")
 
 
 def _ft():
-    from bruceworx import fittings
+    from heuretes_freecad import fittings
 
     return fittings
 
@@ -255,7 +255,7 @@ class ViewProviderFitting:
             colour(obj)
 
     def getIcon(self):
-        return os.path.join(HERE, "BruceWorx_RouteFitting.svg")
+        return os.path.join(HERE, "Heuretes_RouteFitting.svg")
 
     def dumps(self):
         return None
@@ -322,7 +322,7 @@ def _schema_apply(part):
     """The part-properties schema on the fitting (PartNumber, Description, Vendor, ...); plain
     strings when the schema cannot be loaded."""
     try:
-        from bruceworx import partprops
+        from heuretes_freecad import partprops
 
         partprops.load_schema().apply(part, compute=False)
     except Exception:
@@ -355,7 +355,7 @@ def describe(part, lay):
 def _vendor_data(part, lay):
     """McMaster-Carr part number, manufacturer and MPN when the table has a verified row for this
     fitting; the dimensions source says whether the numbers are McMaster's or approximate."""
-    from bruceworx import fittings as ft
+    from heuretes_freecad import fittings as ft
 
     if "DimensionsSource" not in part.PropertiesList:
         part.addProperty("App::PropertyString", "DimensionsSource", "BruceWorx", "McMaster-Carr or approximate")

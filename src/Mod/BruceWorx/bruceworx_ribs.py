@@ -32,7 +32,7 @@ import re
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF = "RibStations"
 COMMAND = "BruceWorx_RibStations"
-ICON = "BruceWorx_RibStations.svg"
+ICON = "Heuretes_RibStations.svg"
 SET_TYPE = "BruceWorxRibStations"  # the controller's Proxy.Type
 MIN_COUNT, MAX_COUNT = 2, 200
 DEFAULTS = {"count": 4, "span": 100.0, "taper": 1.0}  # what the panel shows first; not a design rule

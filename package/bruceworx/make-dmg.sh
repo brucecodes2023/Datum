@@ -7,13 +7,14 @@
 # Usage: package/bruceworx/make-dmg.sh [PREFIX] [OUTDIR]
 #   PREFIX  install prefix (default: $CONDA_PREFIX, i.e. run via `pixi run`)
 #   OUTDIR  output directory (default: ./dist)
-# Env: BW_VERSION (default 1.1.4-bw.1), BW_ADHOC_SIGN=1 to ad-hoc sign.
+# Env: HEU_VERSION (default 1.1.4-heu.1; BW_VERSION still works), HEU_ADHOC_SIGN=1 (or BW_ADHOC_SIGN) to ad-hoc sign.
+# The app installed on a Mac is built by make-heuretes.sh, not this script.
 set -euo pipefail
 
 prefix="${1:-${CONDA_PREFIX:-}}"
 outdir="${2:-dist}"
-version="${BW_VERSION:-1.1.4-bw.1}"
-app_name="FreeCAD BruceWorx"
+version="${HEU_VERSION:-${BW_VERSION:-1.1.4-heu.1}}"
+app_name="Heuretes FreeCAD"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
@@ -42,8 +43,8 @@ exec "$here/bin/FreeCAD" "$@"
 LAUNCH
 chmod +x "$app/Contents/MacOS/FreeCAD"
 
-icon="$repo/src/MacAppBundle/FreeCAD.app/Contents/Resources/freecad.icns"
-[[ -f "$icon" ]] && cp "$icon" "$app/Contents/Resources/freecad.icns"
+icon="$repo/package/bruceworx/branding/heuretes-freecad.icns"
+[[ -f "$icon" ]] && cp "$icon" "$app/Contents/Resources/heuretes-freecad.icns"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -51,9 +52,9 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <plist version="1.0"><dict>
   <key>CFBundleName</key><string>${app_name}</string>
   <key>CFBundleDisplayName</key><string>${app_name}</string>
-  <key>CFBundleIdentifier</key><string>com.bruceworx.freecad</string>
+  <key>CFBundleIdentifier</key><string>com.heuretes.freecad</string>
   <key>CFBundleExecutable</key><string>FreeCAD</string>
-  <key>CFBundleIconFile</key><string>freecad.icns</string>
+  <key>CFBundleIconFile</key><string>heuretes-freecad.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${version}</string>
   <key>CFBundleVersion</key><string>${version}</string>
@@ -63,7 +64,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
-if [[ "${BW_ADHOC_SIGN:-0}" == "1" ]]; then
+if [[ "${HEU_ADHOC_SIGN:-${BW_ADHOC_SIGN:-0}}" == "1" ]]; then
     echo "Ad-hoc codesigning (no identity, not notarized)"
     codesign --force --deep --sign - "$app"
 fi
@@ -71,7 +72,7 @@ fi
 "$app/Contents/Resources/bin/FreeCADCmd" --version || true
 
 mkdir -p "$outdir"
-dmg="$outdir/FreeCAD-BruceWorx-${version}-macOS-arm64.dmg"
+dmg="$outdir/Heuretes-FreeCAD-${version}-macOS-arm64.dmg"
 ln -s /Applications "$stage/Applications"
 rm -f "$dmg"
 hdiutil create -volname "$app_name $version" -srcfolder "$stage" -ov -format UDZO "$dmg"

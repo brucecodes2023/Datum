@@ -25,7 +25,7 @@ import os
 PREFS_PATH = "User parameter:BaseApp/Preferences/BruceWorx"
 PREF = "AutoDrawing"
 COMMAND = "BruceWorx_AutoDrawing"
-ICON = "BruceWorx_AutoDrawing.svg"
+ICON = "Heuretes_AutoDrawing.svg"
 ISO_DIRECTION = (1.0, -1.0, 1.0)  # from the front-right-top, as the 3D view's isometric
 HORIZONTAL, VERTICAL = 0, 1  # TechDraw.makeExtentDim directions
 DIM_GAP = 9.0  # mm from the outline to a dimension's text

@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "6eed5199-f3b1-4c53-af4c-e2d1713f6f2d"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "ASA-CF printed"
   Description: "Printed carbon-fibre ASA (Bambu ASA-CF), annealed and dried: outdoor and UV-exposed parts that must stay stiff and dimensionally stable. Much stiffer than ASA (4.2 against 2.45 GPa) but weaker in X-Y (34 against 52 MPa): choose it for stiffness, not strength. Printed ISO 527 specimens, 100 % infill, X-Y (in-layer); the X-Y tensile strength is used as the yield. Z (between layers) tensile strength 30 MPa, modulus 2290 MPa, elongation 4.4 %. Thermal values are bulk-polymer estimates."
   ReferenceSource: "Bambu Lab TDS (ASA-CF, V1.0)"
   SourceURL: "https://store.bblcdn.com/s7/default/44b0a48ab1d84e819647c980eb179ae9/Bambus_ASA-CF_Technical_Data_Sheet.pdf"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Printed"
 Models:
   LinearElastic:

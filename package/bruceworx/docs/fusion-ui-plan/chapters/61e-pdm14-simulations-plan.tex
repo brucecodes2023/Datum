@@ -74,7 +74,7 @@ its check-in (with the picture and mesh); the study stores the fingerprint of th
 \emph{current} when $g_\text{part}=g_\text{study}$ and \emph{part changed} otherwise. A view \emph{Simulation out of
 date} lists the second kind, as \emph{Missing a drawing} does for drawings.
 
-\paragraph{Listing without opening.} At every save of a study file Vector Labs writes three things into its zip: the
+\paragraph{Listing without opening.} At every save of a study file Heuretes FreeCAD writes three things into its zip: the
 picture of the shown result, the light preview mesh, and a summary JSON (study type, solver, material, mesh size,
 maximum stress and displacement, minimum safety factor, burst margin for spinning parts, the pre-check verdict, when it
 was solved and the part fingerprint). The Files list, the part's \emph{Simulations} tab and the project tab read only
@@ -116,7 +116,7 @@ there are project pages, the same list is the Files list scoped to the project a
         existing study file.
   \item \textbf{Release.} The release-check warning and the ECO releasing a simulation with its part.
 \end{enumerate}
-Every Vector Labs copy that reads the vault must be updated before the first simulation is checked in, because an older
+Every Heuretes FreeCAD copy that reads the vault must be updated before the first simulation is checked in, because an older
 copy logs the new journal fields as unknown. On this Mac that is one app.
 
 %----------------------------------------------------------------------
@@ -153,6 +153,6 @@ results go in (a \emph{Include results} box, remembered), until studies are made
 rule and no release warning; a part whose simulation is out of date gets a small bubble flag in the vault file
 explorer. \textbf{P7:} the Simulations list goes on the project page, and the project pages of your mockup are built
 now (\S\ref{sec:pdm15-plan}). \textbf{P8:} simulation files get their own extension, \file{.vlsim} (the same zip
-inside; Vector Labs opens and saves it, Finder opens it with Vector Labs); the impeller study is imported as
+inside; Heuretes FreeCAD opens and saves it, Finder opens it with Heuretes FreeCAD); the impeller study is imported as
 \code{VL-04-01001-001}. \textbf{P9:} build now, without waiting for the SIM-07 acceptance; the UI can change once
 everything is wired up. SIM-07 P2 starts at the same time.

@@ -61,7 +61,7 @@ def apply_units(doc, units):
     except Exception:
         pass
     try:
-        from bruceworx.freecad_io import set_units
+        from heuretes_freecad.freecad_io import set_units
 
         set_units(doc, units)
     except Exception:
@@ -90,7 +90,7 @@ def library_root(project_root) -> str:
     except Exception:
         pass
     try:
-        from bruceworx import vault_setup
+        from heuretes_freecad import vault_setup
 
         return vault_setup.library_beside(project_root)
     except Exception:
@@ -102,7 +102,7 @@ def _library_vault(root):
     if not path:
         return None
     try:
-        from bruceworx.pdm_folder import FolderVault
+        from heuretes_freecad.pdm_folder import FolderVault
 
         return FolderVault(path)
     except Exception:
@@ -112,7 +112,7 @@ def _library_vault(root):
 def vault_units(root) -> str:
     """The vault's default units (drawing_standards.json), "mm" when unknown."""
     try:
-        from bruceworx import drawing_standards as ds
+        from heuretes_freecad import drawing_standards as ds
 
         return ds.load(root).units or "mm"
     except Exception:
@@ -161,7 +161,7 @@ def _gui_up():
 
 
 def _schema(vault_root):
-    from bruceworx import partprops
+    from heuretes_freecad import partprops
 
     return partprops.load_schema(extra_layers=partprops.vault_layers(vault_root))
 
@@ -219,7 +219,7 @@ def _open_hidden(path):
 
 
 def _main(doc):
-    from bruceworx import freecad_io
+    from heuretes_freecad import freecad_io
 
     obj = freecad_io.main_object(doc)
     if obj is None:
@@ -356,7 +356,7 @@ def add_views(page, settings=None, vault_root=None):
     import FreeCAD
 
     import bruceworx_drawing
-    from bruceworx import drawing_standards as ds
+    from heuretes_freecad import drawing_standards as ds
 
     model = getattr(page, MODEL_PROP, None)
     if model is None:
@@ -397,7 +397,7 @@ def number_file(path, pn, units, vault_root):
     the number too. Opens the file hidden, saves and closes it."""
     import FreeCAD
 
-    from bruceworx import freecad_io, pdm, release_check
+    from heuretes_freecad import freecad_io, pdm, release_check
 
     doc, _opened = _open_hidden(path)
     try:
@@ -434,7 +434,7 @@ def number_file(path, pn, units, vault_root):
 def fingerprint_of_document(doc):
     """The geometry fingerprint of a part document (product_tree.make_fingerprint), or None when it
     holds no solid yet."""
-    from bruceworx import numbering, product_tree
+    from heuretes_freecad import numbering, product_tree
 
     shapes = []
     for obj in numbering.part_objects(doc):
@@ -568,9 +568,9 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
     """Steps 2-4 of the plan on a checked plan (``plan.ok``). ``vault`` is a FolderVault, ``work`` its
     pdm_workspace.Workspace. ``progress(text, done, total)`` may return False to stop (before anything
     is in the vault; after the numbers are taken it runs to the end)."""
-    from bruceworx import numbering, pdm, product_tree, project_setup as ps, vault_setup
-    from bruceworx.pdm_workspace import Workspace, clear_link_errors, rewrite_links
-    from bruceworx.sources import JsonNumberSource
+    from heuretes_freecad import numbering, pdm, product_tree, project_setup as ps, vault_setup
+    from heuretes_freecad.pdm_workspace import Workspace, clear_link_errors, rewrite_links
+    from heuretes_freecad.sources import JsonNumberSource
 
     if not plan.ok:
         raise ValueError("; ".join(i.text for i in plan.errors) or "the structure is not complete")
@@ -793,9 +793,9 @@ def create_project(vault, work, plan, options: Options, progress=None) -> Report
 def new_drawing_item(vault, work, pn, units=None, insert_views=False, vault_root=None):
     """Create drawing (Structure view): a drawing file for an item that has none, numbered with the
     drawing document type, checked in as WIP 01 with made_from. Returns the drawing's P/N."""
-    from bruceworx import pdm, product_tree, vault_setup
-    from bruceworx.pdm_workspace import clear_link_errors, rewrite_links
-    from bruceworx.sources import JsonNumberSource
+    from heuretes_freecad import pdm, product_tree, vault_setup
+    from heuretes_freecad.pdm_workspace import clear_link_errors, rewrite_links
+    from heuretes_freecad.sources import JsonNumberSource
 
     item = vault.items[pn]
     if item.item_type not in ("part", "assembly"):
@@ -872,7 +872,7 @@ def _programs(root):
     """(code, description) of the vault's programs that are not retired."""
     try:
         import bruceworx_vaultwizard as vw
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         return vw._vault_programs(vs, root)
     except Exception:
@@ -881,7 +881,7 @@ def _programs(root):
 
 def _retired(root):
     try:
-        from bruceworx import vault_setup as vs
+        from heuretes_freecad import vault_setup as vs
 
         return vs.load_settings(root).retired
     except Exception:
@@ -891,8 +891,8 @@ def _retired(root):
 def _make_classes():
     from PySide import QtCore, QtGui, QtWidgets
 
-    from bruceworx import drawing_standards as ds
-    from bruceworx import project_setup as ps
+    from heuretes_freecad import drawing_standards as ds
+    from heuretes_freecad import project_setup as ps
 
     def box(title, icon=None):
         """A task box: the widget's title and icon become its header (as the vault wizard's)."""
@@ -1247,7 +1247,7 @@ def new_project():
 
     s = _vc().session()
     if s is None:
-        _message("New Project", "Open a vault first (the Start page, or Preferences > Vector Labs).")
+        _message("New Project", "Open a vault first (the Start page, or Preferences > Heuretes FreeCAD).")
         return False
     if FreeCADGui.Control.activeDialog():
         _message("New Project", "Another command is open in the task panel. Close it (OK or Cancel) first.")
@@ -1255,7 +1255,7 @@ def new_project():
     try:
         panel = classes()["NewProjectPanel"](s)
     except ImportError as exc:
-        _message("New Project", f"New Project needs the Vector Labs hooks add-on: {exc}", "warning")
+        _message("New Project", f"New Project needs the Heuretes FreeCAD hooks add-on: {exc}", "warning")
         return False
     _state["panel"] = panel
     FreeCADGui.Control.showDialog(panel)

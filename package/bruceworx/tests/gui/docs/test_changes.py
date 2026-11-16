@@ -134,7 +134,7 @@ def fill_drawing(pn, part=None):
 
 @C.step(2500)
 def setup():
-    from bruceworx import drawing_standards as ds
+    from heuretes_freecad import drawing_standards as ds
 
     C.setup_window()
     vault = C.new_vault("Changes Test")
@@ -455,7 +455,7 @@ def final_card():
         C.log("card states", states)
         C.check("card shows RELEASED and OBSOLETE states", "Released" in states.values() and
                 "Obsolete" in states.values(), states)
-    from bruceworx.pdm_folder import FolderVault
+    from heuretes_freecad.pdm_folder import FolderVault
 
     again = FolderVault(s().root, actor=s().me)
     C.check("journal replays clean", again.problems == [], again.problems)

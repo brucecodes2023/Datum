@@ -21,7 +21,7 @@ import os
 
 import FreeCAD as App
 
-LIBRARY_NAME = "Vector Labs"
+LIBRARY_NAME = "Heuretes FreeCAD"
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIBRARY_DIR = os.path.join(HERE, "Resources", "Materials", "VectorLabs")
 MODULES_PARAM = "User parameter:BaseApp/Preferences/Mod/Material/Resources/Modules"
@@ -66,21 +66,20 @@ CARDS = {
 FAMILIES = ("Metals", "Plastics", "Printed", "Composites")
 
 
-OLD_LIBRARY_NAME = "Keystone"  # the library's name before the Vector Labs rename (31 Oct)
+OLD_LIBRARY_NAMES = ("Keystone", "Vector Labs")  # previous display names; folders stay VectorLabs
 
 
 def _drop_old_registration():
-    """Remove the "Keystone" registration an older profile holds (it would list the same cards twice,
-    or point at a folder that no longer exists). Only when its ModuleDir is this workbench's own
-    Materials/Vector Labs or Materials/VectorLabs folder, never a library the user added by that name."""
+    """Drop a previous name (Keystone, Vector Labs) when it points at this library."""
     modules = App.ParamGet(MODULES_PARAM)
-    if OLD_LIBRARY_NAME not in modules.GetGroups():
-        return
-    old_dir = modules.GetGroup(OLD_LIBRARY_NAME).GetString("ModuleDir", "")
-    tail = os.path.normpath(old_dir).replace(os.sep, "/")
-    if (not old_dir or tail.endswith("Resources/Materials/Keystone")
-            or tail.endswith("Resources/Materials/VectorLabs") or not os.path.isdir(old_dir)):
-        modules.RemGroup(OLD_LIBRARY_NAME)
+    for old_name in OLD_LIBRARY_NAMES:
+        if old_name not in modules.GetGroups():
+            continue
+        old_dir = modules.GetGroup(old_name).GetString("ModuleDir", "")
+        tail = os.path.normpath(old_dir).replace(os.sep, "/")
+        if (not old_dir or tail.endswith("Resources/Materials/Keystone")
+                or tail.endswith("Resources/Materials/VectorLabs") or not os.path.isdir(old_dir)):
+            modules.RemGroup(old_name)
 
 
 def register_library():
@@ -94,7 +93,7 @@ def register_library():
     group = App.ParamGet(f"{MODULES_PARAM}/{LIBRARY_NAME}")
     if group.GetString("ModuleDir", "") != LIBRARY_DIR:
         group.SetString("ModuleDir", LIBRARY_DIR)
-    icon = os.path.join(HERE, "preferences-bruceworx.svg")
+    icon = os.path.join(HERE, "preferences-heuretes.svg")
     if group.GetString("ModuleIcon", "") != icon:
         group.SetString("ModuleIcon", icon)
     if not group.GetBool("ModuleReadOnly", False):

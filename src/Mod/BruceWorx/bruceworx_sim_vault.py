@@ -23,7 +23,7 @@ import json
 import os
 
 import bruceworx_sim as sim
-from bruceworx import vault_simulations as vs
+from heuretes_freecad import vault_simulations as vs
 
 SOURCE_LABEL = "Simulation source"
 SOURCE_PROP = "Source"

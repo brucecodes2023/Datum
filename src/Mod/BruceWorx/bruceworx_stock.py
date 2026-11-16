@@ -12,7 +12,7 @@ item, where the BOM walker (bruceworx_bom) reads them. The maths and the purchas
 
 import FreeCAD as App
 
-from bruceworx import stock as st
+from heuretes_freecad import stock as st
 
 CATEGORY = st.CATEGORY
 
@@ -47,7 +47,7 @@ def stock_of(obj):
 def make_stock_file(path, pn, kind, key, description, manufacturer, mpn, scrap, unit, vault_root):
     """Write the file of a Stock material item: an App::Part with the vault's part properties (ItemType cots, the
     description, revision 01) and the stock properties above. Saved and closed."""
-    from bruceworx import partprops, pdm
+    from heuretes_freecad import partprops, pdm
 
     doc = App.newDocument(pn.replace("-", "_"), hidden=True)
     try:
@@ -91,7 +91,7 @@ def ensure_stock_item(s, kind, key, description, manufacturer="", mpn="", scrap=
     """The part number of the stock item with this key, made (numbered, WIP 01, filed under "Stock material")
     when the vault has none. ``s``: the vault client's Session (or anything with .vault and .root).
     Returns (part number, made)."""
-    from bruceworx import vault_setup
+    from heuretes_freecad import vault_setup
 
     pn = st.find_by_key(s.vault, key)
     if pn:

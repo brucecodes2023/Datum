@@ -12,7 +12,7 @@ import bruceworx_preview as preview
 import bruceworx_sim as sim
 import bruceworx_sim_model as model
 import bruceworx_sim_vault as sv
-from bruceworx import vault_simulations as vs
+from heuretes_freecad import vault_simulations as vs
 
 
 BOX_40_20_10 = "7c4ec29572c5"  # H("geo", geometry_settings) of a 40 x 20 x 10 box, recorded with the code before PDM-14 follow-up 3

@@ -83,7 +83,7 @@ transparent), a distinct colour per filament, black carbon and green-yellow G10.
 (\file{Metals}, \file{Plastics}, \file{Printed}, \file{Composites}; the file name is the name FreeCAD shows). FreeCAD
 1.1 reads extra libraries from \code{Preferences/Mod/Material/Resources/Modules/<name>}
 (\file{MaterialManagerLocal.cpp}); \file{Init.py} calls \code{bruceworx\_materials.register\_library()}, which writes
-\code{ModuleDir} (rewritten on every start, so it follows the build folder or \file{Keystone.app}), the Vector Labs icon
+\code{ModuleDir} (rewritten on every start, so it follows the build folder or \file{Keystone.app}), the Heuretes FreeCAD icon
 and \code{ModuleReadOnly = true} in the group \code{Keystone}. Being in \file{Init.py}, not \file{InitGui.py}, it works
 headless. \file{CMakeLists.txt} copies the cards into \file{build/release/Mod/BruceWorx/Resources/...} and installs
 them, so \file{make-keystone.sh}'s \code{cmake --install} puts them into \file{Keystone.app} with no change to the

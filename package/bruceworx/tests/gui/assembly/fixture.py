@@ -44,7 +44,7 @@ def _sketch(body, name, z=0.0):
 
 def _props(part, pn, rev, desc):
     try:
-        from bruceworx.partprops import load_schema
+        from heuretes_freecad.partprops import load_schema
 
         load_schema().apply(part)
     except Exception as exc:  # the add-on is optional for these checks

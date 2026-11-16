@@ -39,13 +39,13 @@ def _br():
 
 
 def _rt():
-    from bruceworx import routing
+    from heuretes_freecad import routing
 
     return routing
 
 
 def _rp():
-    from bruceworx import rope
+    from heuretes_freecad import rope
 
     return rope
 
@@ -906,7 +906,7 @@ class _GravityCommand:
     def GetResources(self):
         import os
 
-        return {"Pixmap": os.path.join(os.path.dirname(os.path.abspath(__file__)), "BruceWorx_RouteWire.svg"),
+        return {"Pixmap": os.path.join(os.path.dirname(os.path.abspath(__file__)), "Heuretes_RouteWire.svg"),
                 "MenuText": "Gravity", "Accel": SHORTCUT, "Checkable": True,
                 "ToolTip": "Let the flexible wires sag under gravity (on) or only keep their length, bend limit and "
                            "contacts (off, saves recompute time). Acts on the active assembly or the selected wire's."}

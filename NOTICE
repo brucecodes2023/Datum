@@ -1,5 +1,5 @@
-FreeCAD BruceWorx
-=================
+Heuretes FreeCAD
+================
 
 This is a MODIFIED distribution of FreeCAD (https://www.freecad.org),
 based on upstream FreeCAD release 1.1.4.
@@ -10,8 +10,8 @@ See the LICENSE file for the full license text. Individual files carry
 their own copyright and SPDX license headers, which remain authoritative.
 This distribution is not affiliated with or endorsed by the FreeCAD project.
 
-BruceWorx changes
------------------
+Heuretes FreeCAD changes
+------------------------
 All modifications are identifiable as commits prefixed "[BW]" on top of
 the upstream release tag. Current changes:
 
@@ -19,9 +19,9 @@ the upstream release tag. Current changes:
   * Added UPSTREAM-SYNC.md (upstream rebase policy)
   * Added this NOTICE file
   * Added .github/workflows/bruceworx-ci.yml (fork CI)
-  * Added addons/BruceWorx (headless hooks and part numbering; Python only)
+  * Added addons/Heuretes (headless hooks and part numbering; Python only)
 
-This list will be updated as features are added. BruceWorx changes are
+This list will be updated as features are added. Heuretes FreeCAD changes are
 intended to be add-ons and preference changes on standard FreeCAD rather
 than rewrites of FreeCAD core code.
 
@@ -56,6 +56,6 @@ of the 41 packages with versions is in package/bruceworx/vendor/VENDOR.txt:
 Source code
 -----------
 The complete corresponding source code, including all modifications, is
-provided with every BruceWorx release, both as release source archives and
+provided with every Heuretes FreeCAD release, both as release source archives and
 in the public repository:
-https://github.com/brucecodes2023/FreeCAD_BruceWorx
+https://github.com/brucecodes2023/Heuretes-FreeCAD

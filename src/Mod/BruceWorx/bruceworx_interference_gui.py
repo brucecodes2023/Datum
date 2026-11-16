@@ -16,7 +16,7 @@ import bruceworx_interference as itf
 from bruceworx_slots import slot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ICON = os.path.join(HERE, "BruceWorx_Interference.svg")
+ICON = os.path.join(HERE, "Heuretes_Interference.svg")
 OVERLAY_NAME = "BruceWorxInterference"
 STEP_SECONDS = 0.05  # work per timer tick; the view redraws in between
 GROUPS = ((itf.CLASH, "Clashes"), (itf.FIT, "Fits"), (itf.CLEARANCE, "Clearance"), (itf.CONTACT, "Contacts"))

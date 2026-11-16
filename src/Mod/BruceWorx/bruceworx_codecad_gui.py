@@ -32,10 +32,10 @@ ENABLED_KEY = "CodeCad"
 USED_KEY = "CodeCadUsed"  # set once a code part exists: later sessions load the libraries early
 DOCK = "BWCodeEditor"
 DOCK_TITLE = "Code Part"
-ICON = "BruceWorx_CodePart.svg"
-ICON_ERROR = "BruceWorx_CodePartError.svg"
-ICON_LOCKED = "BruceWorx_CodePartLocked.svg"
-ICON_REBUILD = "BruceWorx_CodePartRebuild.svg"
+ICON = "Heuretes_CodePart.svg"
+ICON_ERROR = "Heuretes_CodePartError.svg"
+ICON_LOCKED = "Heuretes_CodePartLocked.svg"
+ICON_REBUILD = "Heuretes_CodePartRebuild.svg"
 NEW, EDIT, REBUILD, SOLID, APPROVE = ("BruceWorx_CodePartNew", "BruceWorx_CodePartEdit", "BruceWorx_CodePartRebuild",
                                       "BruceWorx_CodePartToSolid", "BruceWorx_CodePartApprove")
 KEYWORDS = ("and as assert break class continue def del elif else except finally for from global if import in is "

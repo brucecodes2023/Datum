@@ -13,7 +13,7 @@
 #                      repository variable BW_MAC_RUNNER == 'true'. Leave it false
 #                      (parked). These jobs must not be pointed at GitHub-hosted labels.
 
-name: BruceWorx CI
+name: Heuretes FreeCAD CI
 
 on:
   push:
@@ -140,18 +140,18 @@ jobs:
           ver="$(pixi run FreeCADCmd -c "import FreeCAD; print(FreeCAD.Version())" 2>&1)"
           echo "FreeCAD.Version() output:"
           echo "$ver"
-          if echo "$ver" | grep -qF "bw.1"; then
-            echo "BW version check: PASS - suffix bw.1 found in FreeCAD.Version()"
+          if echo "$ver" | grep -qF "heu.1"; then
+            echo "BW version check: PASS - suffix heu.1 found in FreeCAD.Version()"
             exit 0
           fi
-          echo "BW version check: bw.1 NOT in FreeCAD.Version(); checking generated Version.h"
+          echo "BW version check: heu.1 NOT in FreeCAD.Version(); checking generated Version.h"
           hdr="${builddir}src/Build/Version.h"
-          if [ -f "$hdr" ] && grep -F 'FCVersionSuffix' "$hdr" | grep -qF -- "-bw.1"; then
-            echo "BW version check: PASS - suffix -bw.1 found in header $hdr:"
+          if [ -f "$hdr" ] && grep -F 'FCVersionSuffix' "$hdr" | grep -qF -- "-heu.1"; then
+            echo "BW version check: PASS - suffix -heu.1 found in header $hdr:"
             grep -F 'FCVersionSuffix' "$hdr"
             exit 0
           fi
-          echo "BW version check: FAIL - -bw.1 found in neither FreeCAD.Version() nor $hdr"
+          echo "BW version check: FAIL - -heu.1 found in neither FreeCAD.Version() nor $hdr"
           [ -f "$hdr" ] && grep -F 'FCVersion' "$hdr"
           exit 1
 
@@ -200,7 +200,7 @@ jobs:
   macos-arm64:
     name: macOS arm64 (pixi, self-hosted)
     # Never run on fork PRs: self-hosted runner is Bruce's Mac.
-    if: vars.BW_MAC_RUNNER == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: (vars.HEU_MAC_RUNNER == 'true' || vars.BW_MAC_RUNNER == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 360
     env:
@@ -281,18 +281,18 @@ jobs:
           ver="$(pixi run FreeCADCmd -c "import FreeCAD; print(FreeCAD.Version())" 2>&1)"
           echo "FreeCAD.Version() output:"
           echo "$ver"
-          if echo "$ver" | grep -qF "bw.1"; then
-            echo "BW version check: PASS - suffix bw.1 found in FreeCAD.Version()"
+          if echo "$ver" | grep -qF "heu.1"; then
+            echo "BW version check: PASS - suffix heu.1 found in FreeCAD.Version()"
             exit 0
           fi
-          echo "BW version check: bw.1 NOT in FreeCAD.Version(); checking generated Version.h"
+          echo "BW version check: heu.1 NOT in FreeCAD.Version(); checking generated Version.h"
           hdr="${builddir}src/Build/Version.h"
-          if [ -f "$hdr" ] && grep -F 'FCVersionSuffix' "$hdr" | grep -qF -- "-bw.1"; then
-            echo "BW version check: PASS - suffix -bw.1 found in header $hdr:"
+          if [ -f "$hdr" ] && grep -F 'FCVersionSuffix' "$hdr" | grep -qF -- "-heu.1"; then
+            echo "BW version check: PASS - suffix -heu.1 found in header $hdr:"
             grep -F 'FCVersionSuffix' "$hdr"
             exit 0
           fi
-          echo "BW version check: FAIL - -bw.1 found in neither FreeCAD.Version() nor $hdr"
+          echo "BW version check: FAIL - -heu.1 found in neither FreeCAD.Version() nor $hdr"
           [ -f "$hdr" ] && grep -F 'FCVersion' "$hdr"
           exit 1
 
@@ -334,7 +334,7 @@ jobs:
   macos-arm64-dmg:
     name: macOS arm64 .dmg (unsigned, internal)
     needs: macos-arm64
-    if: vars.BW_MAC_RUNNER == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: (vars.HEU_MAC_RUNNER == 'true' || vars.BW_MAC_RUNNER == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 360
     env:
@@ -395,7 +395,7 @@ jobs:
       builddir: ${{ github.workspace }}/build/release/
       logdir: ${{ github.workspace }}/logs/
       cacheKey: bw-pixi-macos-15-arm64
-      BW_ARTIFACT: FreeCAD_BruceWorx-1.1.4-bw.1-macos-arm64-unsigned
+      BW_ARTIFACT: Heuretes-FreeCAD-1.1.4-heu.1-macos-arm64-unsigned
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0

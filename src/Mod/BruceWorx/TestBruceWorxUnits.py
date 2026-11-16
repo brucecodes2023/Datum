@@ -15,7 +15,7 @@ import FreeCAD
 
 import bruceworx_defaults
 import bruceworx_units as units
-from bruceworx import vault_setup as vs
+from heuretes_freecad import vault_setup as vs
 
 
 def _scratch_vault(tmp, unit, name="Shop"):
@@ -135,7 +135,7 @@ class TestDocument(unittest.TestCase):
         self.assertEqual(units.document_units(doc2), "mm")
 
     def test_import_writer_takes_the_vault_units(self):
-        from bruceworx import freecad_io
+        from heuretes_freecad import freecad_io
 
         doc = self._doc()
         part = doc.addObject("App::Part", "Part")
@@ -288,7 +288,7 @@ class TestInchVaultAcceptance(unittest.TestCase):
 
     def test_inch_vault_then_mm_vault(self):
         import bruceworx_drawing as drawing
-        from bruceworx import drawing_standards as ds
+        from heuretes_freecad import drawing_standards as ds
 
         self.prefs.SetString("VaultPath", self.refs["in"])
         doc = self._new_part_with_cube("Inch cube")

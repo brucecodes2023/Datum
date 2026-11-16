@@ -3,19 +3,19 @@
  <class>BruceWorxPreferences</class>
  <widget class="QWidget" name="BruceWorxPreferences">
   <property name="windowTitle">
-   <string>Vector Labs</string>
+   <string>Heuretes FreeCAD</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QGroupBox" name="groupDefaults">
      <property name="title">
-      <string>Vector Labs features</string>
+      <string>Heuretes FreeCAD features</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayoutDefaults">
       <item>
        <widget class="QLabel" name="labelDefaults">
         <property name="text">
-         <string>Everything Vector Labs adds is on by default. Uncheck a box to turn that feature off.</string>
+         <string>Everything Heuretes FreeCAD adds is on by default. Uncheck a box to turn that feature off.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -25,10 +25,10 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="PreferencePack">
         <property name="toolTip">
-         <string>On by default. Applied once on first start (theme, millimetres, Fusion-like navigation, PartDesign startup). Your previous values are saved first. Uncheck to restore them (same as the BruceWorx Off pack); check to apply the light pack again. Preferences &gt; General &gt; Theme still picks BruceWorx Dark or another theme.</string>
+         <string>On by default. Applied once on first start (theme, millimetres, Fusion-like navigation, PartDesign startup). Your previous values are saved first. Uncheck to restore them (same as the Heuretes FreeCAD Off pack); check to apply the light pack again. Preferences &gt; General &gt; Theme still picks Heuretes FreeCAD Dark or another theme.</string>
         </property>
         <property name="text">
-         <string>BruceWorx preference pack</string>
+         <string>Heuretes FreeCAD preference pack</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -44,7 +44,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="HistoryTimelineEnabled">
         <property name="toolTip">
-         <string>On by default. Same switch as Vector Labs &gt; History Timeline. Closing the dock also turns it off.</string>
+         <string>On by default. Same switch as Heuretes FreeCAD &gt; History Timeline. Closing the dock also turns it off.</string>
         </property>
         <property name="text">
          <string>History timeline (bottom bar: PartDesign history, assembly order)</string>
@@ -82,10 +82,10 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="LoadHooks">
         <property name="toolTip">
-         <string>On by default. Loads the Vector Labs hooks add-on (Mod/BruceWorxHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.</string>
+         <string>On by default. Loads the Heuretes FreeCAD hooks add-on (Mod/HeuretesHooks). Takes effect on the next start. The FreeCADCmd hooks.py CLI does not depend on this box.</string>
         </property>
         <property name="text">
-         <string>Hooks add-on (part numbers: Vector Labs &gt; Assign Part Number…)</string>
+         <string>Hooks add-on (part numbers: Heuretes FreeCAD &gt; Assign Part Number…)</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -101,7 +101,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="VaultStateSync">
         <property name="toolTip">
-         <string>On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by BruceWorx/VaultPath when a document opens. Needs the hooks add-on.</string>
+         <string>On by default. A part's Lifecycle State (WIP, In Review, Released, Obsolete) follows the vault: it is written on every vault transition made in FreeCAD, and taken from the vault named by Heuretes FreeCAD/VaultPath when a document opens. Needs the hooks add-on.</string>
         </property>
         <property name="text">
          <string>Lifecycle state of parts follows the vault</string>
@@ -120,7 +120,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="DrawingAutoFill">
         <property name="toolTip">
-         <string>On by default. Drawings on the Vector Labs sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard, projection, who drew, checked and approved). Fields you type yourself are kept. Needs the hooks add-on.</string>
+         <string>On by default. Drawings on the Heuretes FreeCAD sheet templates fill their title block from the part (number, revision, title, material, finish, mass) and the open vault (company, logo, tolerances, standard, projection, who drew, checked and approved). Fields you type yourself are kept. Needs the hooks add-on.</string>
         </property>
         <property name="text">
          <string>Fill drawing title blocks from the part and the vault</string>
@@ -158,7 +158,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="ClaudeBridge">
         <property name="toolTip">
-         <string>On by default. Lets Claude Code (the Vector Labs MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick "Don't ask again" to be asked only once); a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
+         <string>On by default. Lets Claude Code (the Heuretes FreeCAD MCP server in this repository) read and change FreeCAD over a local connection from this Mac only. The first call asks you (tick "Don't ask again" to be asked only once); a "Claude connected" chip in the status bar disconnects it. Every call is listed in the Report view and in bridge.log in the FreeCAD user data folder.</string>
         </property>
         <property name="text">
          <string>Claude Code bridge</string>
@@ -196,7 +196,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="ClaudeBridgeAlways">
         <property name="toolTip">
-         <string>Set by the Allow prompt's "Don't ask again on this Mac" box (or Vector Labs &gt; Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the "Claude connected" chip showing. Untick it, Deny, or click the chip to be asked again.</string>
+         <string>Set by the Allow prompt's "Don't ask again on this Mac" box (or Heuretes FreeCAD &gt; Allow Claude Code). On, every start of FreeCAD lets Claude Code in without asking, with the "Claude connected" chip showing. Untick it, Deny, or click the chip to be asked again.</string>
         </property>
         <property name="text">
          <string>Allow Claude Code without asking (remembered)</string>
@@ -234,7 +234,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="PatternCommands">
         <property name="toolTip">
-         <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Vector Labs menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
+         <string>On by default. Adds Rectangular Pattern and Circular Pattern to the PartDesign and Assembly toolbars and to the Heuretes FreeCAD menu. They pattern features (through PartDesign), bodies and assembly components. Takes effect on the next workbench switch.</string>
         </property>
         <property name="text">
          <string>Rectangular and Circular Pattern commands</string>
@@ -253,7 +253,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="KiCadBoards">
         <property name="toolTip">
-         <string>On by default. Adds Insert Board… (Assemble group and Vector Labs menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems at the board origin and mounting holes.</string>
+         <string>On by default. Adds Insert Board… (Assemble group and Heuretes FreeCAD menu): a KiCad board as one part, exported to STEP by KiCad, with FR-4, copper and component materials, its mass, and coordinate systems at the board origin and mounting holes.</string>
         </property>
         <property name="text">
          <string>KiCad boards (Insert Board command)</string>
@@ -272,7 +272,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="SheetMetalAddon">
         <property name="toolTip">
-         <string>On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design &gt; Sheet Metal tab: base wall, flanges, relief, unfold, and Vector Labs's sheet-metal rules and Export Flat (shop DXF). Off skips any SheetMetal add-on, a copy from the Addon Manager too. Takes effect on the next start.</string>
+         <string>On by default. Loads the bundled SheetMetal add-on (Mod/SheetMetal) and shows the Design &gt; Sheet Metal tab: base wall, flanges, relief, unfold, and Heuretes FreeCAD's sheet-metal rules and Export Flat (shop DXF). Off skips any SheetMetal add-on, a copy from the Addon Manager too. Takes effect on the next start.</string>
         </property>
         <property name="text">
          <string>Sheet metal add-on (Design &gt; Sheet Metal tab)</string>
@@ -351,7 +351,7 @@
          <string>On by default. Add-ons that replace the toolbar area (FreeCAD-Ribbon) are not loaded while this is on; they stay installed, and stock FreeCAD still loads them. Takes effect on the next start.</string>
         </property>
         <property name="text">
-         <string>Vector Labs top bar (turns the FreeCAD-Ribbon add-on off)</string>
+         <string>Heuretes FreeCAD top bar (turns the FreeCAD-Ribbon add-on off)</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -500,10 +500,10 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="StartPage">
         <property name="toolTip">
-         <string>On by default. The Start tab shows the Vector Labs page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off brings back FreeCAD's own Start page.</string>
+         <string>On by default. The Start tab shows the Heuretes FreeCAD page: New and Open on the left with the vault summary, recent files as cards and as a table with part number, revision and state, and the examples. Off brings back FreeCAD's own Start page.</string>
         </property>
         <property name="text">
-         <string>Vector Labs Start page</string>
+         <string>Heuretes FreeCAD Start page</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -538,7 +538,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="FollowSystemAppearance">
         <property name="toolTip">
-         <string>On by default. Switches between the BruceWorx and BruceWorx Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences &gt; General.</string>
+         <string>On by default. Switches between the Heuretes FreeCAD and Heuretes FreeCAD Dark values (theme, viewport, view cube, edges) when macOS changes appearance. Uncheck to keep the theme picked on Preferences &gt; General.</string>
         </property>
         <property name="text">
          <string>Follow the macOS light/dark setting</string>
@@ -763,7 +763,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="StudioShading">
         <property name="toolTip">
-         <string>On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ivory, PETG charcoal...). A colour you set by hand is kept. Same switch as Vector Labs &gt; Studio Shading. Off: FreeCAD's own shading, exactly. Drawn while the preference pack is applied.</string>
+         <string>On by default. Fusion-like studio look in the 3D view: soft lights and studio reflections on every face, each part coloured and finished from its material (aluminium brushed silver, steel darker, ABS ivory, PETG charcoal...). A colour you set by hand is kept. Same switch as Heuretes FreeCAD &gt; Studio Shading. Off: FreeCAD's own shading, exactly. Drawn while the preference pack is applied.</string>
         </property>
         <property name="text">
          <string>Studio shading (soft lights, reflections, colours from materials)</string>
@@ -1450,7 +1450,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="StatusReadouts">
         <property name="toolTip">
-         <string>On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by BruceWorx/VaultPath.</string>
+         <string>On by default. The status bar reads as text: Report (warnings and errors, click to open the Report view), units, navigation style, view size, and the vault named by Heuretes FreeCAD/VaultPath.</string>
         </property>
         <property name="text">
          <string>Status bar as text readouts</string>
@@ -1545,7 +1545,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="BrowserBadges">
         <property name="toolTip">
-         <string>On by default. A part with the BruceWorx part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.</string>
+         <string>On by default. A part with the Heuretes FreeCAD part properties shows its part number and lifecycle state (WIP 02, REV A) after its name; an assembly component shows them as quiet text.</string>
         </property>
         <property name="text">
          <string>Part number and state badges in the Browser</string>
@@ -1602,7 +1602,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="BrowserGroupCaptions">
         <property name="toolTip">
-         <string>On by default. Property groups are small-caps captions instead of grey bars (BruceWorx theme).</string>
+         <string>On by default. Property groups are small-caps captions instead of grey bars (Heuretes FreeCAD theme).</string>
         </property>
         <property name="text">
          <string>Quiet property group captions</string>
@@ -1716,7 +1716,7 @@
       <item>
        <widget class="Gui::PrefCheckBox" name="ShowTaskWatcher">
         <property name="toolTip">
-         <string>The BruceWorx pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.</string>
+         <string>The Heuretes FreeCAD pack turns this off. FreeCAD's task watchers: the workbench's command lists (such as Insert, Constraints, Exploded View) shown in the task panel. They repeat the toolbar.</string>
         </property>
         <property name="text">
          <string>Show workbench command lists in the task panel</string>

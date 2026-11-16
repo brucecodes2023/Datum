@@ -1,15 +1,15 @@
-# Vector Labs material library (SIM-01). Values for engineering estimates; check your supplier's certificate
+# Heuretes FreeCAD material library (SIM-01). Values for engineering estimates; check your supplier's certificate
 # or data sheet for critical parts. Strength basis and source are in the BruceWorx block below.
 General:
   UUID: "409524fe-7bec-47e7-bb46-580e86212f7e"
-  Author: "BruceWorx (Vector Labs)"
+  Author: "BruceWorx (Heuretes FreeCAD)"
   License: "LGPL-2.1-or-later"
   Name: "PA6 extruded dry"
   Description: "Nylon 6 stock shapes, dry as moulded. Conditioned at 23 C / 50 % RH (in service): yield 45 MPa, E 1425 MPa."
   ReferenceSource: "Mitsubishi Chemical Ertalon 6 SA (ISO 527, dry)"
   SourceURL: "https://www.materialhub.de/en/materials/mitsubishi-chemical-advanced-materials-ertalon-6-sa"
   Tags:
-    - "Vector Labs"
+    - "Heuretes FreeCAD"
     - "Plastics"
 Models:
   LinearElastic:

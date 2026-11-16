@@ -22,15 +22,15 @@ import bruceworx_printprep as pp
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 COMMANDS = {
-    "BruceWorx_PrintPrep": ("Print Prep", "BruceWorx_PrintPrep.svg",
+    "BruceWorx_PrintPrep": ("Print Prep", "Heuretes_PrintPrep.svg",
                             "Print orientation, size against the bed, support area, 3MF export and slicer for "
                             "the selected parts."),
-    "BruceWorx_PlaceOnBed": ("Place on Bed", "BruceWorx_PlaceOnBed.svg",
+    "BruceWorx_PlaceOnBed": ("Place on Bed", "Heuretes_PlaceOnBed.svg",
                              "Select a flat face: the part prints resting on it. The overhang map opens in that "
                              "direction."),
-    "BruceWorx_Export3MF": ("Export 3MF", "BruceWorx_Export3MF.svg",
+    "BruceWorx_Export3MF": ("Export 3MF", "Heuretes_Export3MF.svg",
                             "The selected parts as one 3MF plate, each in its print orientation, on the bed."),
-    "BruceWorx_SendToSlicer": ("Send to Slicer", "BruceWorx_SendToSlicer.svg",
+    "BruceWorx_SendToSlicer": ("Send to Slicer", "Heuretes_SendToSlicer.svg",
                                "Export the selected parts as a 3MF plate and open it in the slicer."),
 }
 _state = {"dialog": None, "last_file": None, "message": None}

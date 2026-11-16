@@ -18,8 +18,8 @@ if "CloudDocs" in folder:
     raise SystemExit("refusing to write into iCloud Drive")
 
 import bwmodel  # noqa: E402
-from bruceworx.partprops import load_schema  # noqa: E402
-from bruceworx.pdm_folder import FolderVault  # noqa: E402
+from heuretes_freecad.partprops import load_schema  # noqa: E402
+from heuretes_freecad.pdm_folder import FolderVault  # noqa: E402
 
 vault = FolderVault.init(folder, "Leonardo", actor="test-part")
 tmp = os.path.join(folder + "-src")

@@ -355,7 +355,7 @@ GEOMETRY_KINDS = ("part", "assembly", "cots")  # the items whose files carry a s
 
 def _geometry_missing(s, version) -> bool:
     """True when no shape fingerprint is known for ``version``: neither in the file nor in the cache."""
-    from bruceworx import vault_simulations
+    from heuretes_freecad import vault_simulations
 
     return vault_simulations.geometry_of_version(s.vault, version) is None
 
@@ -363,7 +363,7 @@ def _geometry_missing(s, version) -> bool:
 def _record_geometry(s, version, doc) -> None:
     """Store the fingerprint of the opened ``doc`` in the cache for ``version`` unless one is known. A document
     without a solid records an empty fingerprint, so it is not opened again for this."""
-    from bruceworx import vault_simulations
+    from heuretes_freecad import vault_simulations
 
     if not _geometry_missing(s, version):
         return

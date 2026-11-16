@@ -32,31 +32,31 @@ NODE_NAME = "BWContinuity"
 COLOURS = {"G2": (0.20, 0.70, 0.30), "G1": (0.95, 0.80, 0.10), "G0": (1.00, 0.50, 0.10), "none": (0.90, 0.10, 0.10)}
 
 COMMANDS = {
-    "trim": ("BruceWorx_SurfaceTrim", "Trim", "BruceWorx_SurfaceTrim.svg",
+    "trim": ("BruceWorx_SurfaceTrim", "Trim", "Heuretes_SurfaceTrim.svg",
              "Cut a surface with curves projected onto it: select the surface, then a sketch or edges. "
              "Keeps the outside of a closed curve (change Keep in the properties)."),
-    "untrim": ("BruceWorx_SurfaceUntrim", "Untrim", "BruceWorx_SurfaceUntrim.svg",
+    "untrim": ("BruceWorx_SurfaceUntrim", "Untrim", "Heuretes_SurfaceUntrim.svg",
                "Give a trimmed face its holes back (Mode Natural: the whole underlying surface)."),
-    "extend": ("BruceWorx_SurfaceExtend", "Extend", "BruceWorx_SurfaceExtend.svg",
+    "extend": ("BruceWorx_SurfaceExtend", "Extend", "Heuretes_SurfaceExtend.svg",
                "Carry a face on past its boundary edges by a distance: Natural continues the surface "
                "itself (curvature continuous), Tangent runs straight on (G1). Select the face and its edges."),
-    "patch": ("BruceWorx_SurfacePatch", "Patch", "BruceWorx_SurfacePatch.svg",
+    "patch": ("BruceWorx_SurfacePatch", "Patch", "Heuretes_SurfacePatch.svg",
               "Fill the hole a free edge borders, tangent to the faces round it (Surface Filling). "
               "Select one edge of the hole."),
-    "stitch": ("BruceWorx_SurfaceStitch", "Stitch", "BruceWorx_SurfaceStitch.svg",
+    "stitch": ("BruceWorx_SurfaceStitch", "Stitch", "Heuretes_SurfaceStitch.svg",
                "Sew surfaces into one shell, and into a solid when it closes. Reports the edges left open."),
-    "thicken": ("BruceWorx_SurfaceThicken", "Thicken", "BruceWorx_SurfaceThicken.svg",
+    "thicken": ("BruceWorx_SurfaceThicken", "Thicken", "Heuretes_SurfaceThicken.svg",
                 "Make a surface into a solid of a thickness: outside, inside or both sides."),
-    "replace": ("BruceWorx_ReplaceFace", "Replace Face", "BruceWorx_ReplaceFace.svg",
+    "replace": ("BruceWorx_ReplaceFace", "Replace Face", "Heuretes_ReplaceFace.svg",
                 "Swap a face of a solid for a surface; the sides are carried to the surface. Select the "
                 "face, then the surface."),
-    "continuity": ("BruceWorx_ContinuityCheck", "Continuity", "BruceWorx_Continuity.svg",
+    "continuity": ("BruceWorx_ContinuityCheck", "Continuity", "Heuretes_Continuity.svg",
                    "Check G0/G1/G2 across the edges where surfaces meet: gap, angle and curvature change, "
                    "coloured in the view (OCCT's limits by default)."),
 }
-ICONS = {bs.TRIM: "BruceWorx_SurfaceTrim.svg", bs.UNTRIM: "BruceWorx_SurfaceUntrim.svg",
-         bs.EXTEND: "BruceWorx_SurfaceExtend.svg", bs.STITCH: "BruceWorx_SurfaceStitch.svg",
-         bs.THICKEN: "BruceWorx_SurfaceThicken.svg", bs.REPLACE: "BruceWorx_ReplaceFace.svg"}
+ICONS = {bs.TRIM: "Heuretes_SurfaceTrim.svg", bs.UNTRIM: "Heuretes_SurfaceUntrim.svg",
+         bs.EXTEND: "Heuretes_SurfaceExtend.svg", bs.STITCH: "Heuretes_SurfaceStitch.svg",
+         bs.THICKEN: "Heuretes_SurfaceThicken.svg", bs.REPLACE: "Heuretes_ReplaceFace.svg"}
 _state = {"panel": None}
 
 
@@ -77,7 +77,7 @@ class SurfacingView:
         self.Object = vobj.Object
 
     def getIcon(self):
-        return os.path.join(HERE, ICONS.get(getattr(self.Object, bs.KIND, ""), "BruceWorx_SurfaceTrim.svg"))
+        return os.path.join(HERE, ICONS.get(getattr(self.Object, bs.KIND, ""), "Heuretes_SurfaceTrim.svg"))
 
     def _inputs(self):
         out = []
